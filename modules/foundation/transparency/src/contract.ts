@@ -1,6 +1,5 @@
 import type { Changes, Finding, FlowState } from "@mod/authority-rules";
 import { contract, extensionPoint } from "@mod/kernel";
-import type { Space } from "@mod/store";
 import type {
 	AppendAnswer,
 	AppendRequest,
@@ -15,7 +14,6 @@ import type { End, Ending, Refused } from "./frame/frame.ts";
  * share (one per intent unit), the log's axis the adapters provide, and the frame's store interface.
  */
 
-export { frameParts, frameStoreOver } from "./frame-store/frame-store.ts";
 export type { End, Ending, Refused };
 
 /** Plain JSON data, as a frame and its parts' records are kept. */
@@ -39,12 +37,6 @@ export interface PartRecord {
 }
 /** What a part record becomes in a flow's one write: a value, removed, or kept as it is (none). */
 export type PartNext = { readonly value: Json } | { readonly remove: true } | undefined;
-
-/** Where a part's records are kept: the space its owner's wiring declares and binds to it. */
-export interface FramePart {
-	readonly name: string;
-	readonly space: Space;
-}
 
 /** What a read of a unit's frame and part records saw, which the one write is held to. */
 export interface FrameRead {

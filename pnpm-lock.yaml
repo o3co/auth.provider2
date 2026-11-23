@@ -538,9 +538,6 @@ importers:
       '@mod/kernel':
         specifier: workspace:*
         version: link:../kernel
-      '@mod/store':
-        specifier: workspace:*
-        version: link:../store
       '@mod/transparency-wire':
         specifier: workspace:*
         version: link:../../wire/transparency-wire
