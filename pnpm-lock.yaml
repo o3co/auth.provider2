@@ -209,6 +209,31 @@ importers:
         specifier: 5.0.5
         version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(vite@8.3.3(@types/node@26.6.5)(yaml@2.9.1))
 
+  modules/foundation/external-jwt:
+    dependencies:
+      '@mod/kernel':
+        specifier: workspace:*
+        version: link:../kernel
+      '@mod/keys':
+        specifier: workspace:*
+        version: link:../keys
+      '@mod/outbound':
+        specifier: workspace:*
+        version: link:../outbound
+      jose:
+        specifier: 6.2.15
+        version: 6.2.15
+      zod:
+        specifier: 4.6.7
+        version: 4.6.7
+    devDependencies:
+      '@mod/tls-options':
+        specifier: workspace:*
+        version: link:../tls-options
+      '@mod/url-setting':
+        specifier: workspace:*
+        version: link:../url-setting
+
   modules/foundation/host-entries:
     dependencies:
       '@mod/address-reach':

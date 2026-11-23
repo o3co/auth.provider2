@@ -1,0 +1,156 @@
+import { assemble, BootRefused, defineModule, kernelConfig, Unavailable } from "@mod/kernel";
+import { quietRuntime, takesUnused } from "@mod/kernel/testing";
+import { outbound } from "@mod/outbound";
+import outboundModule from "@mod/outbound/module";
+import { tlsOptionsForTests } from "@mod/tls-options/testing";
+import { expect, it } from "vitest";
+import { externalJwt } from "../src/contract.ts";
+import externalJwtModule from "../src/module.ts";
+import { testSigner } from "../src/testing.ts";
+
+it("offers verifiers to a composition with outbound, knowing the asymmetric algorithms only", async () => {
+	const app = await assemble({
+		modules: [outboundModule, tlsOptionsForTests, externalJwtModule],
+		config: { ...kernelConfig(), outbound: {} },
+	});
+	const jwt = app.get(externalJwt);
+	expect([...jwt.algorithms].sort()).toEqual(
+		[
+			"EdDSA",
+			"ES256",
+			"ES384",
+			"ES512",
+			"PS256",
+			"PS384",
+			"PS512",
+			"RS256",
+			"RS384",
+			"RS512",
+		].sort(),
+	);
+	const signer = await testSigner("EdDSA");
+	const token = await signer.sign({ exp: Math.floor(Date.now() / 1000) + 60 });
+	const verified = await jwt
+		.verifierOf({ inline: [signer.jwk] }, { algorithms: jwt.algorithms, skewMs: 0 })
+		.verify(token);
+	expect(verified.kind).toBe("valid");
+});
+
+/** A composition over a key set whose source can go down, on a clock the test moves. */
+async function composed(section: Record<string, unknown> | undefined) {
+	const signer = await testSigner("EdDSA", "k1");
+	let now = 1_800_000_000_000;
+	let up = true;
+	let fetches = 0;
+	const fake = defineModule({ name: "fake-outbound", replicaSafe: false, takes: [] }, (m) => [
+		m.provide(outbound).by(() => ({
+			fetch: async () => {
+				fetches++;
+				if (!up) throw new Unavailable("outbound");
+				return {
+					status: 200,
+					headers: new Map(),
+					body: new TextEncoder().encode(JSON.stringify({ keys: [signer.jwk] })),
+				};
+			},
+		})),
+	]);
+	const app = await assemble({
+		modules: [fake, externalJwtModule],
+		config: { ...kernelConfig(), ...(section ? { "external-jwt": section } : {}) },
+		runtime: quietRuntime({
+			clock: { now: () => now },
+			random: { bytes: (n: number) => new Uint8Array(n) },
+		}),
+	});
+	const verifier = app
+		.get(externalJwt)
+		.verifierOf(
+			{ jwks: { url: "https://issuer.example/jwks", hosts: ["issuer.example"] } },
+			{ algorithms: ["EdDSA"], skewMs: 0 },
+		);
+	return {
+		checked: async () =>
+			(await verifier.verify(await signer.sign({ exp: Math.floor(now / 1000) + 60 }))).kind,
+		/** The source goes down and the clock moves on. */
+		downFor: (ms: number) => {
+			up = false;
+			now += ms;
+		},
+		/** The clock moves on, the source still up. */
+		advance: (ms: number) => {
+			now += ms;
+		},
+		fetches: () => fetches,
+	};
+}
+
+it("uses a set it cannot renew for a day by default", async () => {
+	const set = await composed(undefined);
+	expect(await set.checked()).toBe("valid");
+	set.downFor(86_399_000);
+	expect(await set.checked()).toBe("valid");
+	set.downFor(1_000);
+	expect(await set.checked()).toBe("unavailable");
+});
+
+it("uses a set it cannot renew as long as the operator's section says", async () => {
+	const set = await composed({ "key-set-max-age": "2h" });
+	expect(await set.checked()).toBe("valid");
+	set.downFor(7_199_000);
+	expect(await set.checked()).toBe("valid");
+	set.downFor(1_000);
+	expect(await set.checked()).toBe("unavailable");
+});
+
+it("fetches a set again once key-set-refresh has passed since its fetch, an hour by default", async () => {
+	for (const [section, refreshMs] of [
+		[undefined, 3_600_000],
+		[{ "key-set-refresh": "10m" }, 600_000],
+	] as const) {
+		const set = await composed(section);
+		expect(await set.checked()).toBe("valid");
+		set.advance(refreshMs - 1);
+		expect(await set.checked()).toBe("valid");
+		expect(set.fetches(), JSON.stringify(section)).toBe(1);
+		set.advance(1);
+		expect(await set.checked()).toBe("valid");
+		expect(set.fetches(), JSON.stringify(section)).toBe(2);
+	}
+});
+
+it("refuses a section outside its bounds", async () => {
+	for (const refused of [
+		{ "key-set-refresh": "59999ms" },
+		{ "key-set-refresh": "2592000001ms" },
+		{ "key-set-refresh": "2h", "key-set-max-age": "1h" },
+		{ "key-set-max-age": "3599999ms" },
+		{ "key-set-max-age": "2592000001ms" },
+		{ "key-set-max-age": 7_200_000 },
+		{ "key-set-max-age": "7200000" },
+		{ "key-set-max-age-ms": "2h" },
+	]) {
+		await expect(
+			assemble({
+				modules: [outboundModule, tlsOptionsForTests, externalJwtModule],
+				config: { ...kernelConfig(), outbound: {}, "external-jwt": refused },
+			}),
+			JSON.stringify(refused),
+		).rejects.toBeInstanceOf(BootRefused);
+	}
+});
+
+it("takes every handle its takes name", async () => {
+	const fake = defineModule({ name: "fake-outbound", replicaSafe: true, takes: [] }, (m) => [
+		m.provide(outbound).by(() => ({
+			fetch: async () => {
+				throw new Unavailable("outbound");
+			},
+		})),
+	]);
+	expect(
+		(await takesUnused({ modules: [fake, externalJwtModule], config: kernelConfig() }))[
+			"external-jwt"
+		],
+	).toBeUndefined();
+});
