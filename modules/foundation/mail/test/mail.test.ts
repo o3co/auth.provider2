@@ -1,0 +1,191 @@
+import {
+	assemble,
+	BootRefused,
+	defineModule,
+	kernelConfig,
+	type Module,
+	Unavailable,
+} from "@mod/kernel";
+import { quietRuntime, recordingLog, takesUnused } from "@mod/kernel/testing";
+import { expect, it } from "vitest";
+import {
+	mail,
+	mailPurposes,
+	mailTemplates,
+	plainText,
+	preparer,
+	preparerTakes,
+} from "../src/contract.ts";
+import mailModule from "../src/module.ts";
+import { section } from "../src/section.ts";
+import { contractTemplates, mailConfig, mailContract, remoteWords } from "../src/testing.ts";
+
+const recorded = recordingLog();
+const runtime = quietRuntime({
+	random: { bytes: (n: number) => new Uint8Array(n).fill(7) },
+	log: recorded.log,
+});
+const bootWith = async (sender: Module, modules: readonly Module[], config: object) =>
+	(
+		await assemble({
+			modules: [sender, ...modules],
+			config: { ...kernelConfig(), ...config },
+			runtime,
+		})
+	).get(mail);
+const boot = (modules: readonly Module[], config: object = mailConfig()) =>
+	bootWith(mailModule, modules, config);
+
+mailContract("logging only", { boot });
+
+/** A stand-in relay: it accepts, answers with a limit, or fails saying the remote words. */
+async function relay(how?: "limit" | "down"): Promise<"accepted" | "limit"> {
+	if (how === "down") throw new Error(`554 ${remoteWords}`);
+	return how ?? "accepted";
+}
+
+/** A sender through the stand-in relay that allows one mail per address and then answers limited. */
+const onePerAddress = (how?: "limit" | "down") =>
+	defineModule({ name: "one-per-address", replicaSafe: false, takes: preparerTakes }, (m) => [
+		m.provide(mail).by(async (c) => {
+			const prepare = await preparer(c);
+			const reached = new Set<string>();
+			return {
+				send: async (input) => {
+					const { message } = prepare(input);
+					const answer = await relay(how).catch(() => {
+						throw new Unavailable("mail");
+					});
+					if (answer === "limit" || reached.has(message.to)) return "limited";
+					reached.add(message.to);
+					return "sent";
+				},
+			};
+		}),
+	]);
+
+mailContract("one mail per address", {
+	boot: (modules) => bootWith(onePerAddress(), modules, {}),
+	refusing: (how, modules) => bootWith(onePerAddress(how), modules, {}),
+});
+
+const reset = defineModule({ name: "reset-owner", replicaSafe: true, takes: [] }, (m) => [
+	m.contribute(mailPurposes).by(() => ({ purpose: "reset" })),
+	m
+		.contribute(mailTemplates)
+		.by(() => plainText("reset", { subject: "Reset", text: "Your code is {code}." })),
+]);
+
+it("logs the purpose, a hash of the address and the value names, never the values", async () => {
+	const sender = await boot([reset]);
+	const from = recorded.lines().length;
+	await expect(
+		sender.send({ purpose: "reset", to: "someone@example.test", values: { code: "424242" } }),
+	).resolves.toBe("sent");
+	const lines = recorded.lines().slice(from);
+	expect(lines).toHaveLength(1);
+	const [line] = lines;
+	expect([line?.level, line?.event]).toEqual(["info", "mail.not_sent"]);
+	expect(line?.fields).toMatchObject({ purpose: "reset", values: "code" });
+	expect(line?.fields?.to).toMatch(/^[0-9a-f]{16}$/);
+	expect(JSON.stringify(line)).not.toMatch(/424242|someone|example/);
+});
+
+it("takes a domain in IDNA's ASCII form or its Unicode form, in either case", async () => {
+	const sender = await boot([reset]);
+	const send = (to: string) => sender.send({ purpose: "reset", to, values: { code: "1" } });
+	for (const to of [
+		"a@Example.TEST",
+		"a@\u4f8b\u3048.jp",
+		"a@xn--r8jz45g.jp",
+		"a@stra\u00dfe.de",
+		"a@1.2.3.4",
+	]) {
+		await expect(send(to), to).resolves.toBe("sent");
+	}
+});
+
+it("accepts letters beyond ASCII and up to 254 bytes in UTF-8, and refuses one byte more", async () => {
+	const sender = await boot([reset]);
+	const send = (to: string) => sender.send({ purpose: "reset", to, values: { code: "1" } });
+	await expect(send("\u00fc@\u4f8b\u3048.jp")).resolves.toBe("sent");
+	await expect(send(`${"\u00fc".repeat(32)}@example.test`)).resolves.toBe("sent");
+	const domain = (last: number) => [..."bcd"].map((c) => c.repeat(61)).concat("e".repeat(last));
+	// 64 + 1 + 61 * 3 + 3 + 3 = 254 bytes.
+	await expect(send(`${"a".repeat(64)}@${domain(3).join(".")}`)).resolves.toBe("sent");
+	await expect(send(`${"a".repeat(64)}@${domain(4).join(".")}`)).rejects.toBeInstanceOf(TypeError);
+});
+
+it("refuses to boot unless the operator accepts that nothing is sent, and on many instances", async () => {
+	await expect(boot([reset], { mail: {} })).rejects.toBeInstanceOf(BootRefused);
+	await expect(
+		boot([reset], { ...kernelConfig({ deployment: "multi" }), ...mailConfig() }),
+	).rejects.toBeInstanceOf(BootRefused);
+	await expect(boot([contractTemplates])).resolves.toBeDefined();
+});
+
+it("warns at every start that the logging-only sender sends nothing", async () => {
+	const warned = async () => {
+		const from = recorded.lines().length;
+		await boot([reset]);
+		return recorded
+			.lines()
+			.slice(from)
+			.filter((line) => line.level === "warn");
+	};
+	const once = [
+		{
+			level: "warn",
+			event: "mail.unsent_accepted",
+			fields: { reason: "the logging-only sender sends nothing" },
+		},
+	];
+	expect(await warned()).toEqual(once);
+	expect(await warned()).toEqual(once);
+});
+
+it("names the purpose that has no template when it refuses to boot", async () => {
+	const bare = defineModule({ name: "bare-owner", replicaSafe: true, takes: [] }, (m) => [
+		m.contribute(mailPurposes).by(() => ({ purpose: "bare" })),
+	]);
+	const booting = boot([bare]);
+	await expect(booting).rejects.toBeInstanceOf(BootRefused);
+	await expect(booting).rejects.toMatchObject({
+		refusals: [{ where: "mail.templates", reason: expect.stringContaining("bare") }],
+	});
+});
+
+it("names the purpose a template words when nothing declares it, refusing to boot", async () => {
+	const stray = defineModule({ name: "stray-wording", replicaSafe: true, takes: [] }, (m) => [
+		m.contribute(mailTemplates).by(() => plainText("stray", { subject: "Stray", text: "x\n" })),
+	]);
+	const booting = boot([stray]);
+	await expect(booting).rejects.toBeInstanceOf(BootRefused);
+	await expect(booting).rejects.toMatchObject({
+		refusals: [{ where: "mail.templates", reason: "a template for an undeclared purpose: stray" }],
+	});
+});
+
+it("fills the plain-text wording literally, the same for every locale", () => {
+	const t = plainText("p", { subject: "Code {code}", text: "Use {code} before {until}.\n" });
+	const values = { code: "{until}", until: "noon" };
+	expect(t.render(values)).toEqual({ subject: "Code {until}", text: "Use {until} before noon.\n" });
+	expect(t.render(values, "ja")).toEqual(t.render(values));
+});
+
+it("refuses a missing value and a value that breaks a line", () => {
+	const t = plainText("p", { subject: "Code {code}", text: "Use {code} before {until}.\n" });
+	expect(() => t.render({ code: "1" })).toThrow(TypeError);
+	expect(() => t.render({ code: "1\r\nBcc: x", until: "noon" })).toThrow(TypeError);
+});
+
+it("refuses the logging-only sender unless the operator accepts that it sends nothing", () => {
+	expect(section.parse({})).toEqual({ "accept-unsent": false });
+});
+
+it("takes every handle its takes name", async () => {
+	const config = { ...kernelConfig(), ...mailConfig() };
+	expect(
+		(await takesUnused({ modules: [mailModule, contractTemplates], config })).mail,
+	).toBeUndefined();
+});

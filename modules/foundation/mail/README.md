@@ -1,0 +1,43 @@
+# mail
+
+## Responsibilities
+- Owns the contract for sending mail: the sending side gives a purpose, one address, values, and optionally a locale and an expiry.
+- Collects the purposes sending sides declare and the templates (wording per purpose); refuses boot when a declared purpose has no template, or a template's purpose is undeclared (its owner not composed, or no longer sending it).
+- Prepares each message for every sender: copies and checks it, renders it, checks the rendered result.
+- Holds a plain-text template part and the logging-only sender.
+
+## Not here
+- The list of purposes and what they mean: the sending side's vocabulary.
+- Any wording: templates, contributed apart.
+- Delivery over a network, and its limits: the sender (an adapter).
+
+## Offers
+- `mail` contract: send (purpose, to, values, locale, expiry) → sent / limited.
+- Purpose declarations (`mailPurposes`) and templates (`mailTemplates`: values, locale → subject, text), both keyed by purpose. A deployment changes the wording by replacing the module that contributes the template.
+- `plainText`: one wording (English by default) for every locale, `{name}` replaced by that value as it is.
+- `preparer`, for senders: called at build, it gives the function that turns a message into what may be sent, or refuses. `preparerTakes`, what it takes (`mailTemplates`, `mailPurposes`), for a sender's module to name in its takes.
+- Composition definition: the logging-only sender. It logs the purpose, a per-process keyed hash of the address, and the value names.
+- Operator section (logging-only sender): `accept-unsent`, default false; set true to accept that nothing is sent.
+- `./testing`: `mailContract`, the contract tests, `contractTemplates`, the module they compose with, and `mailConfig`. A sender's harness may make its remote side answer with a limit or fail, saying `remoteWords`, words no failure may carry.
+
+## Invariants
+- One address per send; anything else (a list, a line break, a display name) is a TypeError.
+- An address is one `mail-address` takes (`isAddress`), else a TypeError.
+- Values that are not a plain object of strings, a locale that is not a string, and an undeclared purpose are TypeErrors.
+- A template whose subject is not one line, or whose text holds control characters other than line feed and tab, is a TypeError.
+- A message whose expiry has come is unavailable and is not sent.
+- Every template is for a declared purpose, and every declared purpose has one; otherwise boot is refused at `mail.templates`, naming the purpose.
+- Failures are unavailable or limited, never with the remote side's words.
+- The plain-text part refuses a missing value and a value that breaks a line, and never reads a placeholder inside a value.
+- The logging-only sender refuses boot unless `accept-unsent` is set, which every start warns of (`mail.unsent_accepted`); it is not safe on multiple instances, and logs no address and no value.
+
+## Data
+- None stored; the logging-only sender's hash key lives for the process.
+
+## Depends on
+- `kernel`, `mail-address` (the address rule)
+
+## Vocabulary
+- purpose: a name the sending side gives a kind of message; templates are chosen by it.
+- template: the wording of one purpose, contributed apart from the sending side so a deployment can replace it.
+- sender: the implementation of the contract that delivers.
