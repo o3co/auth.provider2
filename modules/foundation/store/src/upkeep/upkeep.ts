@@ -1,0 +1,137 @@
+import { contract } from "@mod/kernel";
+import type { Guarantee, Json, Key, Space } from "../contract.ts";
+
+/** An owner's value in the control record, with the epoch it was written in (null before any epoch). */
+export interface Mark {
+	readonly value: Json;
+	readonly epoch: string | null;
+}
+
+/**
+ * The one control record of a store's data. Every change is checked against its epoch, new on
+ * each entry to maintenance and never one the data had, null where none ever was. `requires` names
+ * the spaces every process must declare to start. `marks` are values their owners name, prefixed
+ * with the owner's name as space names are; store keeps them and never reads them.
+ *
+ * A process is refused at start (kernel's `BuildRefused`), judged on the same read of the record it
+ * takes the epoch from: under the maintenance key, unless it may build under it (this one first,
+ * where both apply); without a space `requires` names, unless it may build under the key and is
+ * under it. A refused process writes nothing: it takes no epoch and adds nothing to the ledger.
+ * A process that took its epoch under the key, by starting under it or entering it, changes only
+ * while the key is held: once the record shows no key, each change it makes is unavailable.
+ */
+export interface Control {
+	readonly epoch: string | null;
+	readonly maintenance: boolean;
+	readonly requires: readonly string[];
+	readonly marks: Readonly<Record<string, Mark>>;
+}
+
+/** Reading the control record, apart from changing it. */
+export interface StoreControl {
+	/** The control record, confirmed. */
+	control(): Promise<Control>;
+}
+
+/**
+ * Whether the store gives a set of guarantees now: checked, taken from what the operator declared
+ * where the store could not check (those settings named), or not, with why. Where it gives them, a
+ * witness of the server and its history: equal witnesses, the same server and history, nothing
+ * evicted between; the store never compares them, its reader does.
+ */
+export type Honours =
+	| { readonly kind: "verified"; readonly witness: string }
+	| { readonly kind: "declared"; readonly settings: readonly string[]; readonly witness: string }
+	| { readonly kind: "unmet"; readonly reasons: readonly string[] };
+
+/**
+ * Whether this process is alone on the store's data: `alone` only where every other process the
+ * storing side would now let run any part of a store operation on the data was seen, and none is
+ * attached; `accompanied` with the implementation's count of those attached, for the operator to read, never
+ * compared; `unchecked` where it could not look, with why, as codes that name a server only as
+ * `primary` or `replica N` in the configured order, never an endpoint, address, host or user name,
+ * run id or witness. A read disturbed while looking is unavailable: when in doubt, never `alone`. A
+ * setting may say how to look, never what the answer is.
+ */
+export type Alone =
+	| { readonly kind: "alone" }
+	| { readonly kind: "accompanied"; readonly count: number }
+	| { readonly kind: "unchecked"; readonly reasons: readonly string[] };
+
+/** A space the store has seen declared, and whether any declaration may have held a subject's data. */
+export interface KeptSpace {
+	readonly name: string;
+	readonly subjectDataEver: boolean;
+}
+
+/**
+ * Keeping the store's data as a whole: the control record's changes, the ledger of spaces, the
+ * guarantees as they stand, and a walk that removes what expired. A process whose epoch is not the
+ * control record's changes nothing here either: each change is unavailable.
+ */
+export interface StoreUpkeep {
+	/** Writes an owner's mark, in the present epoch, confirmed. */
+	mark(name: string, value: Json): Promise<{ readonly kind: "marked" }>;
+	/** Replaces `requires`, confirmed; only under the maintenance key, and never with none. */
+	require(
+		names: readonly string[],
+	): Promise<{ readonly kind: "required" } | { readonly kind: "not-in-maintenance" }>;
+	/** Sets the maintenance key and a new epoch, confirmed, in one write; this process takes the epoch. */
+	enterMaintenance(): Promise<{ readonly kind: "entered"; readonly epoch: string }>;
+	/** Lifts the maintenance key, confirmed; the epoch stays. */
+	leaveMaintenance(): Promise<{ readonly kind: "left" }>;
+	/** Every space ever declared to the store's data, until retired. */
+	kept(): Promise<readonly KeptSpace[]>;
+	/** Takes a space off the ledger, under the maintenance key alone; never one this process declares. */
+	retire(
+		name: string,
+	): Promise<
+		| { readonly kind: "retired" }
+		| { readonly kind: "declared" }
+		| { readonly kind: "missing" }
+		| { readonly kind: "not-in-maintenance" }
+	>;
+	/** Checks again, on every call, whether the store gives these guarantees now. */
+	honours(guarantees: readonly Guarantee[]): Promise<Honours>;
+	/**
+	 * A page of a space's live value keys, the space named as this process declares it, as `scan`
+	 * walks, removing for good each expired one it meets, confirmed as a write; `server` names the
+	 * server the page ran on, so a walker starts over when it changes. A name this process does not
+	 * declare is a caller's error (`TypeError`).
+	 */
+	sweep(name: string, cursor?: string): Promise<Swept>;
+	/**
+	 * Reads anew, on every call, whether another process is attached to the store's data; unavailable
+	 * where a read is disturbed. Where the implementation offers no way to look, `unchecked` with
+	 * store's own code, `no-look-offered`.
+	 */
+	alone(): Promise<Alone>;
+	/** The spaces this process declares, in declaration order, as checked: the declarations themselves, in a frozen array. */
+	declared(): readonly Space[];
+}
+
+/** A page of a space's walk: its live value keys, the next cursor, and the server it ran on. */
+export interface Swept {
+	readonly keys: readonly Key[];
+	readonly cursor?: string;
+	readonly server: string;
+}
+
+/**
+ * The upkeep an implementation answers; `checkedUpkeep` adds the rest (`declared`), answers
+ * `alone()` where the implementation offers none, and hands `sweep` the declared space a name names.
+ */
+export type UpkeepImplementation = Omit<StoreUpkeep, "declared" | "alone" | "sweep"> & {
+	alone?(): Promise<Alone>;
+	sweep(space: Space, cursor?: string): Promise<Swept>;
+};
+
+/**
+ * Its owner lets it go unprovided until 0.22: a taker reads a mark it cannot read as unknown, failing
+ * closed, as long as store adapters of 0.19 provide none.
+ */
+export const storeControl = contract<StoreControl>("store.control", { optional: true });
+/** Taken by account erasure's wiring alone, which alone keeps the store's data whole. */
+export const storeUpkeep = contract<StoreUpkeep>("store.upkeep", {
+	takenBy: ["account-erasure-store"],
+});

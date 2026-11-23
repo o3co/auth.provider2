@@ -1,0 +1,40 @@
+{
+	"name": "@mod/store",
+	"private": true,
+	"license": "Apache-2.0",
+	"type": "module",
+	"kind": "foundation",
+	"forWiring": true,
+	"asks": [
+		"Store in memory: one instance only, the memory store accepted (`store.accept-volatile = true`)."
+	],
+	"takenBy": {
+		"./subject-writer": [
+			"@mod/subject-records"
+		],
+		"storeUpkeep": [
+			"@mod/account-erasure-store"
+		]
+	},
+	"exports": {
+		".": "./src/store.ts",
+		"./testing": "./src/testing.ts",
+		"./module": "./src/module.ts",
+		"./subject-writer": "./src/writer/subject-writer.ts"
+	},
+	"dependencies": {
+		"@mod/kernel": "workspace:*",
+		"zod": "4.6.7"
+	},
+	"peerDependencies": {
+		"vitest": "5.0.5"
+	},
+	"peerDependenciesMeta": {
+		"vitest": {
+			"optional": true
+		}
+	},
+	"devDependencies": {
+		"vitest": "5.0.5"
+	}
+}
