@@ -1,0 +1,6 @@
+http {
+	host = 127.0.0.1
+	port = 8080
+	public-origin = "https://login.example.invalid"
+	insecure-origin = false
+}

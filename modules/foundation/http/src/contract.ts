@@ -1,0 +1,223 @@
+import { type Clock, contract, extensionPoint, type Log, type Unavailable } from "@mod/kernel";
+import type { Source, TrustedProxies } from "@mod/request-source";
+import type { PolicyUse } from "./policies/policies.ts";
+import type { Values } from "./values/values.ts";
+
+export type { GuardedRoute, GuardedRoutes } from "./guards/guards.ts";
+export {
+	applying,
+	marks,
+	type Policy,
+	type PolicyMark,
+	type PolicyRule,
+	type PolicyUse,
+	policies,
+	policy,
+	type RouteGuarantee,
+	use,
+} from "./policies/policies.ts";
+export type { Values } from "./values/values.ts";
+
+export type Method = "GET" | "POST" | "PUT" | "DELETE";
+
+export interface HttpRequest {
+	readonly method: string;
+	readonly path: string;
+	readonly query: Values;
+	/** An `application/x-www-form-urlencoded` body; empty for other bodies. */
+	readonly form: Values;
+	/** A JSON object body, frozen, for a route that takes JSON. */
+	readonly json?: Readonly<Record<string, unknown>>;
+	/** The body's values by name: a form's fields, or a JSON object's strings. */
+	readonly fields: Values;
+	/** The names of a JSON object's members that are not strings, so no field; none when there are none. */
+	readonly mistyped?: ReadonlySet<string>;
+	/** Lower-case names; repeated headers are joined with ", ". */
+	readonly headers: ReadonlyMap<string, string>;
+	readonly source: Source;
+}
+
+export type Body = string | Uint8Array | { readonly json: unknown };
+
+/** What a page loads: its answer's policy allows these and nothing else. */
+export interface Loads {
+	/** The origins it frames, as `scheme://host[:port]`. */
+	readonly frames?: readonly string[];
+	/** The text of each inline script it runs. */
+	readonly scripts?: readonly string[];
+	/** Where its forms post: to this origin alone (`self`); none where it says nothing. */
+	readonly forms?: "self";
+}
+
+export interface HttpResponse {
+	readonly status: number;
+	readonly headers?: Readonly<Record<string, string>>;
+	/** `Set-Cookie` values, one header each. */
+	readonly cookies?: readonly string[];
+	readonly body?: Body;
+	readonly loads?: Loads;
+}
+
+/** A form is `application/x-www-form-urlencoded`; JSON is `application/json`; none is no body at all. */
+export type BodyKind = "form" | "json" | "none";
+
+/** A route that takes cross-origin requests from the origins the operator lists; never with credentials. */
+export interface CorsRule {
+	/** Request headers a page may send beyond the safelisted ones, lower case. */
+	readonly headers?: readonly string[];
+	/** Response headers a page may read beyond the safelisted ones, lower case. */
+	readonly exposes?: readonly string[];
+}
+
+/**
+ * A method, a path and a handler, with what the route declares.
+ *
+ * - A GET route also answers HEAD, with the same headers and no body, unless it changes state.
+ * - Paths: a middle `*` segment takes exactly one non-empty segment, and a last `/*` everything under it.
+ * - Of the declared paths reaching a path, the one with a literal at the first segment they differ comes first,
+ *   and a middle `*` before a last (so an exact path first).
+ * - The handler reads the URL parser's path (dot segments resolved, percent-encoding kept as sent, so an
+ *   escaped `/` stays in its segment); a `*` handler checks the segments it takes by its own rules.
+ * - `unavailable` is its answer to Unavailable. Its `noted` is called first, and its fields join the server's one
+ *   warning, `http.unavailable`, with what was unavailable and the route's declared path; a `noted` that
+ *   throws is logged `http.failed` by kind and the answer stands.
+ */
+export interface Route {
+	readonly method: Method;
+	readonly path: string;
+	/** Applied in this order before `handle`; the first that answers ends the request. */
+	readonly uses?: readonly PolicyUse[];
+	/** The bodies the route takes, by type; any other is `415`. Without it, only a form is read. */
+	readonly takes?: readonly BodyKind[];
+	/** Takes cross-origin requests; without it, none is answered as one. */
+	readonly cors?: CorsRule;
+	/** Whether it changes what the server keeps or the access a cookie gives; a GET says, any other method does. */
+	readonly changesState?: boolean;
+	/** Why a route changing state takes requests that other sites send. */
+	readonly crossSite?: string;
+	/** Why a route changing state takes any number of requests from one source. */
+	readonly unlimited?: string;
+	/** The answer when a policy or the handler throws Unavailable; without it, the server's own. */
+	readonly unavailable?: UnavailableAnswer;
+	/** The listener that serves it; without it, `ordinary`. */
+	readonly exposure?: Exposure;
+	handle(request: HttpRequest): HttpResponse | Promise<HttpResponse>;
+}
+
+/**
+ * Which listener serves a route. `ordinary`: the listener that serves requests. `probe`: a check of this
+ * instance (readiness, liveness), for a probe listener, one that serves such checks and nothing else; a server
+ * with a probe listener serves it there alone, and a server without one serves it as any other route.
+ */
+export type Exposure = "ordinary" | "probe";
+
+/** A route's answer to Unavailable, given after the server's one warning of it. */
+export interface UnavailableAnswer {
+	readonly response: HttpResponse;
+	/** What only the route knows: fields for the server's warning, and anything it records itself (an audit event). */
+	noted?(
+		request: HttpRequest,
+		unavailable: Unavailable,
+	): Readonly<Record<string, string>> | undefined;
+}
+
+export interface Listening {
+	port(): number;
+}
+
+export const routes = extensionPoint<Route>("http.routes", {
+	multiplicity: "keyed",
+	keyOf: (route) => `${route.method} ${route.path}`,
+});
+
+export const listening = contract<Listening>("http.listening");
+
+/** Where browsers reach this deployment. */
+export interface Site {
+	/** Undefined when the operator did not state it. */
+	readonly origin: string | undefined;
+	/** Whether cookies can be made secure (`__Host-` and Secure): false only for a plain-http origin. */
+	readonly secureCookies: boolean;
+	/** Whether it is reached through a proxy it trusts (`trusted-proxies` names one): only then can a request's scheme be https or its source be told past the proxy. */
+	readonly proxied: boolean;
+}
+
+export const site = contract<Site>("http.site");
+
+/** A request's end, once per request, when it was answered or its connection closed. */
+export interface RequestEnd {
+	/** The method as sent. */
+	readonly method: string;
+	/** The declared path of the route the request reached; none when it reached none. */
+	readonly route?: string;
+	/** The status written, or `closed` when the client closed before any answer was written. */
+	readonly status: number | "closed";
+	/** Milliseconds from the request's arrival to its end; never negative. */
+	readonly ms: number;
+	/** Set where the server's fallback took the request, which reached no route; none otherwise. */
+	readonly fallback?: true;
+}
+
+/** Hears each request's end, after the request and asynchronously; what it throws or rejects is dropped, never reaching the request or the others. */
+export interface RequestEndObserver {
+	ended(end: RequestEnd): void;
+}
+
+export const requestEnds = extensionPoint<RequestEndObserver>("http.request-ends", {
+	multiplicity: "many",
+});
+
+/** Headers keeping an answer out of every cache, HTTP/1.0 ones included (RFC 6749 §5.1). */
+export const noStore = Object.freeze({ "cache-control": "no-store", pragma: "no-cache" });
+
+/** A JSON answer kept out of caches, with any cookies and headers it adds; a header given replaces `noStore`'s of its name. */
+export const jsonAnswer = (
+	status: number,
+	json: unknown,
+	extra: { readonly cookies?: readonly string[]; readonly headers?: Record<string, string> } = {},
+): HttpResponse => ({
+	status,
+	headers: { ...noStore, ...extra.headers },
+	body: { json },
+	...(extra.cookies?.length ? { cookies: extra.cookies } : {}),
+});
+
+/** The section's values a server serves by: where it listens, whose forwarded addresses it believes, the origins it answers across origins, and its limits. */
+export interface ServerSettings {
+	readonly host: string;
+	readonly port: number;
+	readonly proxies: TrustedProxies;
+	readonly origins: ReadonlySet<string>;
+	/** How long a request's headers, and the whole request, may take to arrive; and the connections held at once. */
+	readonly limits: {
+		readonly headersMs: number;
+		readonly requestMs: number;
+		readonly connections: number;
+	};
+}
+
+/** What http hands a server at start: the routes declared, one a method and path, its settings, those who hear each request's end, the log and the clock. */
+export interface ServerInput {
+	readonly routes: readonly Route[];
+	readonly settings: ServerSettings;
+	readonly ends: readonly RequestEndObserver[];
+	readonly log: Log;
+	readonly clock: Clock;
+}
+
+/** A server serving: the port it took, and its drain, cut short as the signal ends. */
+export interface RunningServer {
+	readonly port: number;
+	drain(signal: AbortSignal): Promise<void>;
+}
+
+/** What serves a deployment's routes: http calls `serve` at start and the drain at stop; reading requests, guarding the routes by `guardedRoutes` (refusing boot on what it finds) and applying the guards is the server's own. */
+export interface HttpServer {
+	serve(input: ServerInput): Promise<RunningServer>;
+}
+
+/** The one server that serves the routes, contributed by the composition's adapter of the http axis; with none, or two, boot is refused. */
+export const httpServers = extensionPoint<HttpServer>("http.servers", {
+	multiplicity: "one",
+	missing: "compose one adapter of the http axis",
+});
