@@ -1,0 +1,27 @@
+{
+	"name": "@mod/discovery",
+	"private": true,
+	"license": "Apache-2.0",
+	"type": "module",
+	"kind": "feature",
+	"appEntries": [
+		{
+			"script": "discovery-publish",
+			"shape": "call",
+			"contract": "discovery",
+			"member": "publish"
+		}
+	],
+	"exports": {
+		".": "./src/contract.ts",
+		"./module": "./src/module.ts"
+	},
+	"dependencies": {
+		"@mod/issuer": "workspace:*",
+		"@mod/kernel": "workspace:*"
+	},
+	"devDependencies": {
+		"@mod/http": "workspace:*",
+		"@mod/http-server": "workspace:*"
+	}
+}
