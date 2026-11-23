@@ -1,7 +1,6 @@
 import { extensionPoint, isUnavailable, type Random } from "@mod/kernel";
 import type { BatchWrite, Condition, Key, Space, Store } from "@mod/store";
-import type { Flow } from "@mod/transparency-wire";
-import type { FramePart, FrameStore, PartNext, PartRecord } from "../contract.ts";
+import type { FramePart, FrameStore, IntentUnit, PartNext, PartRecord } from "../contract.ts";
 
 /** The parts' places, keyed by part name, each contributed by the wiring of the part's owner. */
 export const frameParts = extensionPoint<FramePart>("transparency.frame-parts", {
@@ -44,8 +43,9 @@ export function frameStoreOver(p: {
 		);
 	}
 	const spaceOf = new Map(p.parts.map((part) => [part.name, part.space]));
-	const keyOf = (flow: Flow, r?: PartRecord): Key => {
-		const partition = `${flow.of}:${flow.id}`;
+	const keyOf = (unit: IntentUnit, r?: PartRecord): Key => {
+		const op = "op" in unit ? `\n${unit.op}` : "";
+		const partition = `${unit.flow.of}:${unit.flow.id}${op}`;
 		if (!r) return { space: p.space, partition, name: "frame" };
 		const space = spaceOf.get(r.part);
 		if (!space) throw new TypeError(`transparency-store: no part ${r.part} is bound`);
@@ -53,22 +53,23 @@ export function frameStoreOver(p: {
 	};
 	return {
 		parts: [...spaceOf.keys()],
-		async read(flow, records) {
-			const keys = [keyOf(flow), ...records.map((r) => keyOf(flow, r))];
+		async read(unit, records) {
+			const keys = [keyOf(unit), ...records.map((r) => keyOf(unit, r))];
 			const reads = await Promise.all(keys.map((key) => p.store.get(key)));
 			return {
-				flow,
+				unit,
 				records,
 				frame: reads[0]?.entry?.value,
 				held: reads.slice(1).map((r) => r.entry?.value),
 				now: reads[0]?.now ?? 0,
-				versions: reads.map((r) => r.entry?.version ?? null),
+				basis: reads.map((r) => r.entry?.version ?? null),
 			};
 		},
 		async write(read, next, deadline) {
-			const keys = [keyOf(read.flow), ...read.records.map((r) => keyOf(read.flow, r))];
+			const keys = [keyOf(read.unit), ...read.records.map((r) => keyOf(read.unit, r))];
+			const versions = read.basis as readonly (string | null)[];
 			const conditions = keys.map((key, i): Condition => {
-				const version = read.versions[i];
+				const version = versions[i];
 				return version === null || version === undefined ? { key, absent: true } : { key, version };
 			});
 			const nexts: PartNext[] = [
@@ -82,7 +83,15 @@ export function frameStoreOver(p: {
 					? [{ key, remove: true }]
 					: [{ key, put: n.value, expiry: { kind: "never" } }];
 			});
-			if (writes.length === 0) return "written";
+			// Writing nothing confirms the read by a mark of its own, held by the same conditions.
+			const [frameKey] = keys;
+			if (writes.length === 0 && frameKey) {
+				writes.push({
+					key: { ...frameKey, name: "settled" },
+					put: true,
+					expiry: { kind: "after", ms: 1 },
+				});
+			}
 			const idempotency = Buffer.from(p.random.bytes(16)).toString("base64url");
 			for (let sent = 1; ; sent++) {
 				try {

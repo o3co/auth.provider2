@@ -11,7 +11,7 @@ export function logBook(now: () => number) {
 	const flows = new Map<string, Placed[]>();
 	const digests = new Map<string, string>();
 	let n = 0;
-	const sent: { readonly instance: string; readonly stage: Stage; readonly prev: number }[] = [];
+	const sent: { readonly instance: string; readonly stage: Stage; readonly prev?: number }[] = [];
 	const onFlow = (flow: Flow) => {
 		const placed = flows.get(flowKey(flow)) ?? [];
 		flows.set(flowKey(flow), placed);
@@ -51,7 +51,7 @@ export function logBook(now: () => number) {
 		writer: { instance, generation },
 		digest: (preimage: Preimage) => digest(JSON.stringify(preimage)),
 		async append(stage, prev) {
-			sent.push({ instance, stage, prev });
+			sent.push({ instance, stage, ...(prev === undefined ? {} : { prev }) });
 			const plaintextDigest = digest(JSON.stringify(stage.preimage));
 			const placed = onFlow(stage.flow);
 			const same = placed.find((p) => p.record.op === stage.op && p.record.stage === stage.stage);
@@ -72,6 +72,15 @@ export function logBook(now: () => number) {
 		},
 		head: async (flow) => onFlow(flow).length,
 		at: async (flow, position) => onFlow(flow)[position - 1],
+		of: async (flow, op) => {
+			const placed = onFlow(flow).map((p) => p.record);
+			return {
+				stages: placed.filter((r) => r.op === op).length,
+				last: placed.some((r) => r.op === op && r.last),
+				abandonments: placed.filter((r) => r.kind === "abandonment" && r.abandons?.op === op)
+					.length,
+			};
+		},
 	});
 	return {
 		as,

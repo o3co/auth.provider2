@@ -1,6 +1,6 @@
 import type { Changes, Finding, FlowState } from "@mod/authority-rules";
 import { contract, extensionPoint } from "@mod/kernel";
-import type { Json, Space } from "@mod/store";
+import type { Space } from "@mod/store";
 import type {
 	AppendAnswer,
 	AppendRequest,
@@ -12,11 +12,25 @@ import type { End, Ending, Refused } from "./frame/frame.ts";
 
 /**
  * The Core's side of the transparency log: the contract its writers take, the intent frame they
- * share (one per flow), the log's axis the adapters provide, and the frame's store interface.
+ * share (one per intent unit), the log's axis the adapters provide, and the frame's store interface.
  */
 
 export { frameParts, frameStoreOver } from "./frame-store/frame-store.ts";
 export type { End, Ending, Refused };
+
+/** Plain JSON data, as a frame and its parts' records are kept. */
+export type Json =
+	| null
+	| boolean
+	| number
+	| string
+	| readonly Json[]
+	| { readonly [key: string]: Json };
+
+/** What one intent frame is the frame of (V17): a subject's flow, or one op of a client's flow. */
+export type IntentUnit =
+	| { readonly flow: { readonly of: "subject"; readonly id: string } }
+	| { readonly flow: { readonly of: "client"; readonly id: string }; readonly op: string };
 
 /** One of a part's records: a part is a writer's or a state owner's records, in a place its wiring binds. */
 export interface PartRecord {
@@ -32,27 +46,28 @@ export interface FramePart {
 	readonly space: Space;
 }
 
-/** What a read of a flow's frame and part records saw, which the one write is held to. */
+/** What a read of a unit's frame and part records saw, which the one write is held to. */
 export interface FrameRead {
-	readonly flow: Flow;
+	readonly unit: IntentUnit;
 	readonly records: readonly PartRecord[];
 	readonly frame: Json | undefined;
 	/** Each record's value, in the order named; none where it holds none. */
 	readonly held: readonly (Json | undefined)[];
 	/** The store clock's time at the read. */
 	readonly now: number;
-	/** The versions read, the frame's first, then each record's; none where absent. Opaque. */
-	readonly versions: readonly (string | null)[];
+	/** Opaque to the caller: what the frame store holds the write to. */
+	readonly basis: unknown;
 }
 
-/** The frame's store interface: a flow's frame and the part records named, read, then written as one. */
+/** The frame's store interface: a unit's frame and the part records named, read, then written as one. */
 export interface FrameStore {
 	/** The part names bound to a place; every registration's parts are among them. */
 	readonly parts: readonly string[];
-	read(flow: Flow, records: readonly PartRecord[]): Promise<FrameRead>;
+	read(unit: IntentUnit, records: readonly PartRecord[]): Promise<FrameRead>;
 	/**
 	 * Writes the frame (none keeps it) and the records as one, held to every version the read saw,
-	 * refused past `deadline` on the store clock; nothing expires. Unavailable means it may have applied.
+	 * refused past `deadline` on the store clock; nothing expires. Writing nothing is held to the read
+	 * all the same. Unavailable means it may have applied.
 	 */
 	write(
 		read: FrameRead,
@@ -89,18 +104,32 @@ export interface Placed {
 	readonly changes?: Changes;
 }
 
+/** What a flow holds of an op, whatever their judgments: its stages placed, its last among them, its abandonments. */
+export interface OpOnFlow {
+	readonly stages: number;
+	/** Whether its last stage is placed (`InLogKey`). */
+	readonly last: boolean;
+	/** How many abandonment records of it are placed (`Abn(o, ·)`). */
+	readonly abandonments: number;
+}
+
 /** The log's axis: how this Core's writer appends and reads its flows; an adapter provides it. */
 export interface TransparencyLog {
 	/** The writer this replica appends as: its instance, and its Core generation (`Gen(w)`). */
 	readonly writer: { readonly instance: string; readonly generation: number };
 	/** A preimage's plaintext digest, as its append names it. */
 	digest(preimage: Preimage): string;
-	/** A stage's conditional append after `prev`, its preimage sealed to the shard's monitor keys. */
-	append(stage: Stage, prev: number): Promise<AppendAnswer>;
+	/**
+	 * A stage's append, its preimage sealed to the shard's monitor keys: after `prev` on a conditional
+	 * flow, with none on an unconditional one (a client's).
+	 */
+	append(stage: Stage, prev?: number): Promise<AppendAnswer>;
 	/** How many records the flow has. */
 	head(flow: Flow): Promise<number>;
 	/** The record at a flow's position; none where none is placed. */
 	at(flow: Flow, position: number): Promise<Placed | undefined>;
+	/** What the flow holds of an op, by the op ids its records name. */
+	of(flow: Flow, op: string): Promise<OpOnFlow>;
 }
 
 /** What two hooks hold around a bundle: its tokens' digests before its append, their signing after its receipts. */
@@ -109,7 +138,7 @@ export interface BundleSigning<P> {
 		readonly prepared: P;
 		readonly tokens: NonNullable<AppendRequest["tokens"]>;
 	}>;
-	/** The tokens signed, each carrying its receipt, once the bundle's end is the owner's `took`. */
+	/** The tokens signed, each carrying its receipt, once the bundle's end is the owner's `took`, its write committed. */
 	sign(prepared: P, receipts: readonly string[]): Promise<readonly string[]>;
 }
 
@@ -148,7 +177,10 @@ export interface StateOwner {
 	readonly write: (state: FlowState, held: readonly (Json | undefined)[]) => readonly PartNext[];
 }
 
-/** The writer's part of KE-C01, on the applied state and its kind's records: the op, or why not. */
+/**
+ * The writer's part of KE-C01, on the applied state and its kind's records: the op, or why not. Its
+ * `eff` is the writer's to keep equal to `effectOf` of the record it sends (Eff(preimage)).
+ */
 export type Deciding = (
 	state: FlowState,
 	held: readonly (Json | undefined)[],
@@ -160,9 +192,15 @@ export type Deciding = (
 	  }
 	| { readonly refused: string };
 
-/** The contract the Core's writers take: their ops on the flow's one intent, each write one CAS. */
+/**
+ * The contract the Core's writers take: their ops on a subject flow's one intent, each write one CAS.
+ * Any other flow is refused (`notSubject`): a client's intent is per op (`IntentUnit`).
+ */
 export interface Transparency {
-	/** KE-C01: decides the op on the applied state, in one write with its kind's records. */
+	/**
+	 * KE-C01: decides the op on the applied state, in one write with its kind's records; never an op
+	 * whose last stage is on the flow. A writer refused `open` or `notReady` tends the flow and decides again.
+	 */
 	decide(p: {
 		readonly kind: string;
 		readonly flow: Flow;
@@ -170,7 +208,7 @@ export interface Transparency {
 		readonly decide: Deciding;
 	}): Promise<
 		| { readonly prev: number }
-		| Refused<"sealed" | "notReady" | "open" | "ended" | "moved" | "late" | string>
+		| Refused<"notSubject" | "sealed" | "notReady" | "open" | "ended" | "moved" | "late" | string>
 	>;
 	/** KE-C02: the owner's stage, after `prev`; its first stage's prevMismatch closes the op. */
 	send(p: {
@@ -178,8 +216,13 @@ export interface Transparency {
 		readonly op: string;
 		readonly stage: Stage;
 		readonly prev: number;
-	}): Promise<{ readonly answer: AppendAnswer; readonly end?: End } | Refused<"notOwner">>;
-	/** The owner, the flow taken in to its head, re-checks its op there: moves its prev, or closes it. */
+	}): Promise<
+		{ readonly answer: AppendAnswer; readonly end?: End } | Refused<"notSubject" | "notOwner">
+	>;
+	/**
+	 * The owner, the flow taken in to its head, re-checks its op there: moves its prev, or closes it.
+	 * `recheck` is pure, on the state alone. An op with no stage placed is refused (`unplaced`).
+	 */
 	rebase(p: {
 		readonly flow: Flow;
 		readonly op: string;
@@ -187,28 +230,49 @@ export interface Transparency {
 	}): Promise<
 		| { readonly prev: number }
 		| { readonly end: End }
-		| Refused<"notOwner" | "notReady" | "moved" | "late">
+		| Refused<"notSubject" | "notOwner" | "notReady" | "unplaced" | "moved" | "late">
 	>;
-	/** KE-C04: takes in the next record; `own`: the caller owns that op and is in its apply phase. */
+	/**
+	 * KE-C04: takes in the next record; `own`: the caller owns that op and is in its apply phase. An
+	 * end the owner gives output for (`owner`, `took`) is answered once its write committed. A replica
+	 * with no registration of the open intent's kind takes in nothing (`stuck`).
+	 */
 	step(p: {
 		readonly flow: Flow;
 		readonly own?: string;
 	}): Promise<
 		| { readonly position: number; readonly end?: End }
-		| Refused<"atHead" | "unjudged" | "sealed" | "notNext" | "waits" | "stuck" | "moved" | "late">
+		| Refused<
+				| "notSubject"
+				| "atHead"
+				| "unjudged"
+				| "sealed"
+				| "notNext"
+				| "waits"
+				| "stuck"
+				| "moved"
+				| "late"
+		  >
 	>;
 	/** An idle replica's turn on a flow: takes it in to its head, claims an orphan, sends an abandonment. */
-	tend(flow: Flow): Promise<{
-		readonly stepped: number;
-		readonly did?: "marked" | "tookOver" | "abandonment";
-		readonly answer?: AppendAnswer;
-	}>;
-	/** A change of a writer's records held to the frame: only while the flow has no open intent. */
+	tend(flow: Flow): Promise<
+		| {
+				readonly stepped: number;
+				readonly did?: "marked" | "tookOver" | "abandonment";
+				readonly answer?: AppendAnswer;
+		  }
+		| Refused<"notSubject">
+	>;
+	/**
+	 * A change of a kind's records held to the frame: only while the flow has no open intent. A kind's
+	 * owner changes them so alone, never in the store directly.
+	 */
 	changeHeld(p: {
+		readonly kind: string;
 		readonly flow: Flow;
 		readonly records: readonly PartRecord[];
 		readonly change: (held: readonly (Json | undefined)[]) => readonly PartNext[];
-	}): Promise<{ readonly changed: true } | Refused<"open" | "moved" | "late">>;
+	}): Promise<{ readonly changed: true } | Refused<"notSubject" | "open" | "moved" | "late">>;
 }
 
 export const transparency = contract<Transparency>("transparency");

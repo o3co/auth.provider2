@@ -1,7 +1,6 @@
 import type { FlowState } from "@mod/authority-rules";
-import type { Json } from "@mod/store";
 import type { Flow } from "@mod/transparency-wire";
-import type { OperationKind, PartNext, Stage, StateOwner } from "../../src/contract.ts";
+import type { Json, OperationKind, PartNext, Stage, StateOwner } from "../../src/contract.ts";
 
 /** A state owner keeping its fields of a flow's state in one record of its own part. */
 function fieldsOwner(name: string, holds: readonly (keyof FlowState)[]): StateOwner {

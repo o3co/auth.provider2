@@ -26,6 +26,9 @@ const held: Finding = { verdict: "held", outcome: "took" };
 const family: Changes = { family: { approval: "a1" } };
 const bundles = (kind: string) => kind === "issue";
 const fresh = frameOf(undefined, 1);
+/** What the log holds of an op: nothing, or its last stage. */
+const none = { stages: 0, last: false, abandonments: 0 };
+const lastOn = { stages: 1, last: true, abandonments: 0 };
 
 /** The frame with an op decided by w1 at time 0: a bundle op (`issue`) or a key change (`key`). */
 function decidedBy(kind: "issue" | "key", frame: Frame = fresh, op = "op1"): Frame {
@@ -35,6 +38,7 @@ function decidedBy(kind: "issue" | "key", frame: Frame = fresh, op = "op1"): Fra
 		digest: "d1",
 		eff: kind === "issue" ? family : {},
 		head: frame.applied,
+		placed: none,
 		leaseMs,
 	});
 	if (!("frame" in next)) throw new Error(`not decided: ${next.refused}`);
@@ -92,16 +96,14 @@ describe("KE-C01, deciding an op", () => {
 			by: "w1",
 			leaseEnd: leaseMs,
 			generation: 1,
-			abandonments: 0,
 			family: null,
-			lastTaken: false,
 			taken: false,
 		});
 		expect(frame.applied).toBe(0);
 	});
 
 	it("decides nothing while the flow is not taken in to its head, an intent is open, or the frame is another generation's", () => {
-		const ask = { op: "op2", kind: "issue", digest: "d", eff: {}, leaseMs };
+		const ask = { op: "op2", kind: "issue", digest: "d", eff: {}, placed: none, leaseMs };
 		expect(decided(fresh, at("w1", 0), { ...ask, head: 1 })).toEqual({ refused: "notReady" });
 		const open = decidedBy("issue");
 		expect(decided(open, at("w2", 9000), { ...ask, head: 0 })).toEqual({ refused: "open" });
@@ -113,18 +115,28 @@ describe("KE-C01, deciding an op", () => {
 		expect(decided(fresh, at("w1", 0, 2), { ...ask, head: 0 })).toEqual({ refused: "sealed" });
 	});
 
-	it("does not decide an op again once its last stage was taken in (~InLogKey)", () => {
-		const done = step(decidedBy("key"), at("w1", 100), keyRecord(1, "op1"), true).frame;
+	it("never decides an op whose last stage is on the flow, whatever its judgment or the ops since (~InLogKey)", () => {
 		const again = { op: "op1", kind: "key", digest: "d1", eff: {}, head: 1, leaseMs };
-		expect(decided(done, at("w1", 200), again)).toEqual({ refused: "ended" });
-		const failed = step(decidedBy("key"), at("w1", 100), keyRecord(1, "op1", didNotTake), true);
-		expect(decided(failed.frame, at("w1", 200), again)).toEqual({ refused: "ended" });
-		const heldKey = step(decidedBy("key"), at("w1", 100), keyRecord(1, "op1", held), true);
-		expect(decided(heldKey.frame, at("w1", 200), again)).toEqual({ refused: "ended" });
-		expect("frame" in decided(done, at("w1", 200), { ...again, op: "op2" })).toBe(true);
+		for (const finding of [verified, didNotTake, held]) {
+			const ended = step(decidedBy("key"), at("w1", 100), keyRecord(1, "op1", finding), true);
+			expect(decided(ended.frame, at("w1", 200), { ...again, placed: lastOn })).toEqual({
+				refused: "ended",
+			});
+			// Another op decided and ended between: the frame no longer names op1, the flow does.
+			const other = decidedBy("key", ended.frame, "op2");
+			const between = step(other, at("w1", 300), keyRecord(2, "op2"), true).frame;
+			expect(between.intent?.op).toBe("op2");
+			expect(decided(between, at("w1", 400), { ...again, head: 2, placed: lastOn })).toEqual({
+				refused: "ended",
+			});
+		}
+		const done = step(decidedBy("key"), at("w1", 100), keyRecord(1, "op1"), true).frame;
+		expect("frame" in decided(done, at("w1", 200), { ...again, op: "op2", placed: none })).toBe(
+			true,
+		);
 	});
 
-	it("decides an op again after its empty abandonment closed it, counting on from its attempts (W_ReDecided)", () => {
+	it("decides an op again after its empty abandonment closed it (W_ReDecided)", () => {
 		const orphan = marked(decidedBy("key"), at("w2", 6000), 0);
 		if (!("frame" in orphan)) throw new Error("not marked");
 		const closed = step(orphan.frame, at("w2", 6100), abandonment(1, "op1", 1)).frame;
@@ -135,10 +147,11 @@ describe("KE-C01, deciding an op", () => {
 			digest: "d1",
 			eff: {},
 			head: 1,
+			placed: { last: false },
 			leaseMs,
 		});
 		if (!("frame" in again)) throw new Error("not decided");
-		expect(again.frame.intent).toMatchObject({ state: "pending", prev: 1, abandonments: 1 });
+		expect(again.frame.intent).toMatchObject({ state: "pending", prev: 1 });
 	});
 });
 
@@ -156,7 +169,7 @@ describe("the owner rule", () => {
 		const frame = decidedBy("issue");
 		const closed = closedByOwner(frame, at("w1", 10), "op1");
 		expect(closed).toMatchObject({
-			frame: { intent: { state: "closed", eff: null, lastTaken: false } },
+			frame: { intent: { state: "closed", eff: null } },
 			ownerUntil: leaseMs - 1,
 			end: { op: "op1", kind: "issue", ending: "refused", owner: true },
 		});
@@ -216,7 +229,7 @@ describe("KE-C04, the one Step", () => {
 			refused: "waits",
 		});
 		const done = step(started.frame, at("w1", 20), last, true);
-		expect(done.frame.intent).toMatchObject({ state: "done", eff: null, lastTaken: true });
+		expect(done.frame.intent).toMatchObject({ state: "done", eff: null });
 		expect(done.end).toEqual({ op: "op1", kind: "issue", ending: "took", owner: true });
 		expect(done.ownerUntil).toBe(leaseMs - 1);
 	});
@@ -256,6 +269,7 @@ describe("KE-C04, the one Step", () => {
 			digest: "d1",
 			eff: { rotate: "f0" },
 			head: 0,
+			placed: none,
 			leaseMs,
 		});
 		if (!("frame" in frame)) throw new Error("not decided");
@@ -268,7 +282,7 @@ describe("KE-C04, the one Step", () => {
 		const owner = step(decidedBy("key"), at("w1", 10), keyRecord(1, "op1"), true);
 		expect(owner.end).toEqual({ op: "op1", kind: "key", ending: "took", owner: true });
 		const orphan = step(decidedBy("key"), at("w2", leaseMs), keyRecord(1, "op1", didNotTake));
-		expect(orphan.frame.intent).toMatchObject({ state: "closed", lastTaken: true });
+		expect(orphan.frame.intent).toMatchObject({ state: "closed" });
 		expect(orphan.end).toEqual({ op: "op1", kind: "key", ending: "didNotTake", owner: false });
 		const markedKey = marked(decidedBy("key"), at("w2", leaseMs), 0);
 		if (!("frame" in markedKey)) throw new Error("not marked");
@@ -277,19 +291,14 @@ describe("KE-C04, the one Step", () => {
 		expect(late.end).toMatchObject({ ending: "held", owner: false });
 	});
 
-	it("closes the op on its verified abandonment, dropping its family; a held one changes nothing but the count", () => {
+	it("closes the op on its verified abandonment, dropping its family; a held one changes no intent", () => {
 		const left = step(decidedBy("issue"), at("w2", leaseMs), core(1, "op1", true)).frame;
 		const held1 = step(left, at("w1", leaseMs + 1), abandonment(2, "op1", 1, held));
-		expect(held1.frame.intent).toMatchObject({ state: "abandoning", abandonments: 1 });
+		expect(held1.frame.intent).toEqual(left.intent);
 		expect(held1.changes).toEqual({ abandon: "r1" });
 		expect(held1.end).toBeUndefined();
 		const closed = step(held1.frame, at("w2", leaseMs + 2), abandonment(3, "op1", 2));
-		expect(closed.frame.intent).toMatchObject({
-			state: "closed",
-			eff: null,
-			abandonments: 2,
-			lastTaken: false,
-		});
+		expect(closed.frame.intent).toMatchObject({ state: "closed", eff: null });
 		expect(closed.end).toEqual({ op: "op1", kind: "issue", ending: "abandoned", owner: false });
 	});
 
@@ -332,6 +341,18 @@ describe("KE-C04, the one Step", () => {
 		);
 		expect(next.changes).toEqual({});
 		expect(next.frame.intent?.family).toBeNull();
+	});
+
+	it("ends an op whose last stage is a noEffect as not taken, however the noEffect is judged, but held", () => {
+		const noEffect = (finding: Finding): Taken => ({
+			...core(1, "op1", true, finding),
+			kind: "noEffect",
+		});
+		const took = step(decidedBy("issue"), at("w1", 10), noEffect(verified), true);
+		expect(took.end).toEqual({ op: "op1", kind: "issue", ending: "didNotTake", owner: true });
+		expect(took.frame.intent?.state).toBe("closed");
+		const heldOne = step(decidedBy("issue"), at("w1", 10), noEffect(held), true);
+		expect(heldOne.end).toMatchObject({ ending: "held" });
 	});
 });
 
@@ -378,21 +399,24 @@ describe("KE-C14 and KE-C10, claiming an orphan", () => {
 describe("KE-C09, the abandonment record", () => {
 	it("is sent only for an abandoning op, at the head the same read shows (AbnNoMark)", () => {
 		const frame = decidedBy("issue");
-		expect(abandonStage(frame, at("w2", leaseMs), 0)).toEqual({ refused: "notAbandoning" });
+		expect(abandonStage(frame, at("w2", leaseMs), 0, none)).toEqual({ refused: "notAbandoning" });
 		const claimed = marked(frame, at("w2", leaseMs), 0);
 		if (!("frame" in claimed)) throw new Error("not marked");
-		expect(abandonStage(claimed.frame, at("w1", leaseMs), 1)).toEqual({ refused: "notReady" });
-		expect(abandonStage(claimed.frame, at("w1", leaseMs), 0)).toEqual({
+		expect(abandonStage(claimed.frame, at("w1", leaseMs), 1, none)).toEqual({
+			refused: "notReady",
+		});
+		expect(abandonStage(claimed.frame, at("w1", leaseMs), 0, none)).toEqual({
 			op: opIds.abandonment("op1", 1),
 			abandons: { op: "op1", attempt: 1, digest: "d1" },
 			prev: 0,
 		});
 	});
 
-	it("counts its attempts from the held ones taken in", () => {
+	it("counts its attempts from the op's abandonment records on the flow, whichever intents sent them", () => {
 		const left = step(decidedBy("issue"), at("w2", leaseMs), core(1, "op1", true)).frame;
 		const held1 = step(left, at("w1", leaseMs), abandonment(2, "op1", 1, held)).frame;
-		expect(abandonStage(held1, at("w1", leaseMs), 2)).toMatchObject({
+		const onFlow = { stages: 1, last: true, abandonments: 1 };
+		expect(abandonStage(held1, at("w1", leaseMs), 2, onFlow)).toMatchObject({
 			op: opIds.abandonment("op1", 2),
 			abandons: { attempt: 2 },
 			prev: 2,

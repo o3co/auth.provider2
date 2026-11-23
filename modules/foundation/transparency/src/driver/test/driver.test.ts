@@ -1,5 +1,4 @@
 import type { Finding } from "@mod/authority-rules";
-import type { Json } from "@mod/store";
 import { opIds } from "@mod/transparency-wire";
 import { beforeEach, describe, expect, it } from "vitest";
 import { memoryFrames } from "../../../test/fixtures/frames.ts";
@@ -14,13 +13,14 @@ import {
 	reservationRecord,
 	seeded,
 } from "../../../test/fixtures/registrations.ts";
-import type { Stage } from "../../contract.ts";
+import type { Json, Stage, TransparencyLog } from "../../contract.ts";
 import { transparencyOver } from "../driver.ts";
 
 const flow = { of: "subject", id: "s1" } as const;
 const leaseMs = 5000;
 const verified: Finding = { verdict: "verified", outcome: "took" };
 const held: Finding = { verdict: "held", outcome: "took" };
+const didNotTake: Finding = { verdict: "verified", outcome: "didNotTake" };
 const reservation: Reservation = {
 	version: "res1",
 	state: "verified",
@@ -42,11 +42,14 @@ let world: ReturnType<typeof makeWorld>;
 function makeWorld() {
 	const store = memoryFrames(allParts);
 	const log = logBook(store.clock.now);
-	const replica = (instance: string) =>
+	const replica = (
+		instance: string,
+		p: { kinds?: (typeof keyChange)[]; log?: (l: TransparencyLog) => TransparencyLog } = {},
+	) =>
 		transparencyOver({
 			frames: store.frames,
-			log: log.as(instance),
-			kinds: [issue, keyChange],
+			log: (p.log ?? ((l) => l))(log.as(instance)),
+			kinds: p.kinds ?? [issue, keyChange],
 			owners,
 			leaseMs,
 		});
@@ -59,7 +62,17 @@ function makeWorld() {
 	const part = (name: string) =>
 		store.value(flow, { part: name, name: "state" }) as Record<string, Json>;
 	const res = () => store.value(flow, reservationRecord) as unknown as Reservation;
-	return { store, log, w1: replica("w1"), w2: replica("w2"), w3: replica("w3"), frame, part, res };
+	return {
+		store,
+		log,
+		replica,
+		w1: replica("w1"),
+		w2: replica("w2"),
+		w3: replica("w3"),
+		frame,
+		part,
+		res,
+	};
 }
 beforeEach(() => {
 	world = makeWorld();
@@ -187,7 +200,12 @@ describe("the key change's reservation is the writer's record, held to the frame
 			{ value: { ...(r[0] as object), state: "cancelled" } as Json },
 		];
 		expect(
-			await world.w2.changeHeld({ flow, records: [reservationRecord], change: cancel }),
+			await world.w2.changeHeld({
+				kind: "key",
+				flow,
+				records: [reservationRecord],
+				change: cancel,
+			}),
 		).toEqual({ refused: "open" });
 		expect(world.res().state).toBe("verified");
 	});
@@ -203,6 +221,7 @@ describe("the key change's reservation is the writer's record, held to the frame
 		expect(Object.keys(world.part("keys").keys as object).sort()).toEqual(["k1", "r1"]);
 		expect(
 			await world.w2.changeHeld({
+				kind: "key",
 				flow,
 				records: [reservationRecord],
 				change: () => [{ value: { ...reservation, version: "res2" } as unknown as Json }],
@@ -216,7 +235,7 @@ describe("the key change's reservation is the writer's record, held to the frame
 		world.log.judge(flow, 1, held);
 		await world.w1.step({ flow, own: "res1" });
 		expect(world.res().state).toBe("ended");
-		expect(world.frame()).toMatchObject({ intent: { state: "closed", lastTaken: true } });
+		expect(world.frame()).toMatchObject({ intent: { state: "closed" } });
 	});
 
 	it("closes the op without a record on its first stage's prevMismatch, releasing the version to decide again", async () => {
@@ -232,7 +251,7 @@ describe("the key change's reservation is the writer's record, held to the frame
 			answer: { result: "refused", refusal: "prevMismatch" },
 			end: { ending: "refused", owner: true },
 		});
-		expect(world.frame()).toMatchObject({ intent: { state: "closed", lastTaken: false } });
+		expect(world.frame()).toMatchObject({ intent: { state: "closed" } });
 		expect(world.res().state).toBe("verified");
 	});
 });
@@ -309,9 +328,13 @@ describe("orphans: the Mark, the takeover and the abandonment record", () => {
 		await decideIssue();
 		world.store.clock.set(leaseMs);
 		await world.w2.tend(flow);
-		const [a, b] = await Promise.all([world.w2.tend(flow), world.w3.tend(flow)]);
-		expect([a.answer?.result, b.answer?.result]).toEqual(["accepted", "accepted"]);
+		const both = await Promise.all([world.w2.tend(flow), world.w3.tend(flow)]);
+		const accepted = { did: "abandonment", answer: { result: "accepted", position: 1 } };
+		expect(both).toMatchObject([accepted, accepted]);
 		expect(world.log.records(flow)).toHaveLength(1);
+		// Every replica sends the same abandonment: its id, the op's digest, the empty preimage.
+		const [first, second] = world.log.sent.map((sent) => sent.stage);
+		expect(second).toEqual(first);
 		expect(world.frame()).toMatchObject({ intent: { state: "abandoning" } });
 	});
 
@@ -361,5 +384,129 @@ describe("the owner's next stage after a record landed between its stages", () =
 			end: { op: "op1", kind: "issue", ending: "refused", owner: true },
 		});
 		expect(world.frame()).toMatchObject({ intent: { state: "closed" } });
+	});
+});
+
+describe("the flow holds what an op did, though another op's intent came between (~InLogKey, Abn(o, ·))", () => {
+	const decideKeyAgain = () => decideKey(world.w2);
+	/** Another op, decided and taken in to its end between. */
+	async function anotherOp(op: string) {
+		const prev = world.log.records(flow).length;
+		expect(await decideIssue(op)).toEqual({ prev });
+		await world.w1.send({ flow, op, stage: bundleStage(op), prev });
+		world.log.judge(flow, prev + 1, verified);
+		expect(await world.w1.step({ flow, own: op })).toMatchObject({ end: { ending: "took" } });
+	}
+
+	it("never decides a key change again once its record is on the flow, held or not taken", async () => {
+		for (const finding of [held, didNotTake]) {
+			world = makeWorld();
+			await decideKey();
+			await world.w1.send({ flow, op: "res1", stage: keyStage(flow, reservation), prev: 0 });
+			world.log.judge(flow, 1, finding);
+			await world.w1.step({ flow, own: "res1" });
+			await anotherOp("op2");
+			expect(await decideKeyAgain()).toEqual({ refused: "ended" });
+		}
+	});
+
+	it("never decides a bundle's op again once its bundle is on the flow, though held", async () => {
+		await decideIssue("op1");
+		await world.w1.send({ flow, op: "op1", stage: bundleStage("op1"), prev: 0 });
+		world.log.judge(flow, 1, held);
+		await world.w1.step({ flow, own: "op1" });
+		await anotherOp("op2");
+		expect(await decideIssue("op1")).toEqual({ refused: "ended" });
+	});
+
+	it("decides an op again after its empty abandonment, its next abandonment taking the next attempt", async () => {
+		await decideIssue("op1");
+		world.store.clock.set(leaseMs);
+		await world.w2.tend(flow);
+		await world.w2.tend(flow);
+		world.log.judge(flow, 1, verified);
+		await world.w3.tend(flow);
+		expect(world.frame()).toMatchObject({ applied: 1, intent: { state: "closed" } });
+		world.store.clock.set(0);
+		await anotherOp("op2");
+		expect(await decideIssue("op1")).toEqual({ prev: 2 });
+		world.store.clock.set(leaseMs);
+		await world.w2.tend(flow);
+		expect(await world.w3.tend(flow)).toMatchObject({
+			did: "abandonment",
+			answer: { result: "accepted", position: 3 },
+		});
+		expect(world.log.sent.at(-1)?.stage.op).toBe(opIds.abandonment("op1", 2));
+		world.log.judge(flow, 3, verified);
+		await world.w2.tend(flow);
+		expect(world.frame()).toMatchObject({ applied: 3, intent: { op: "op1", state: "closed" } });
+	});
+});
+
+describe("what a replica does not run", () => {
+	it("takes in, claims and ends nothing of an intent whose kind it has no registration of", async () => {
+		const unaware = world.replica("w3", { kinds: [issue] });
+		await decideKey();
+		await world.w1.send({ flow, op: "res1", stage: keyStage(flow, reservation), prev: 0 });
+		world.log.judge(flow, 1, verified);
+		world.store.clock.set(leaseMs);
+		expect(await unaware.step({ flow })).toEqual({ refused: "stuck" });
+		expect(await unaware.tend(flow)).toEqual({ stepped: 0 });
+		expect(world.frame()).toMatchObject({ applied: 0, intent: { state: "pending" } });
+		expect(world.res().state).toBe("verified");
+		expect(await world.w2.tend(flow)).toEqual({ stepped: 1 });
+		expect(world.res().state).toBe("active");
+	});
+
+	it("refuses every event on a flow not of a subject: a client's intent is per op", async () => {
+		const client = { of: "client", id: "c1" } as const;
+		const decide = () => ({ digest: "d", eff: {}, records: [] });
+		expect(await world.w1.decide({ kind: "issue", flow: client, op: "o", decide })).toEqual({
+			refused: "notSubject",
+		});
+		const stage = { ...bundleStage("o"), flow: client };
+		expect(await world.w1.send({ flow: client, op: "o", stage, prev: 0 })).toEqual({
+			refused: "notSubject",
+		});
+		expect(await world.w1.rebase({ flow: client, op: "o", recheck: () => true })).toEqual({
+			refused: "notSubject",
+		});
+		expect(await world.w1.step({ flow: client })).toEqual({ refused: "notSubject" });
+		expect(await world.w1.tend(client)).toEqual({ refused: "notSubject" });
+		expect(
+			await world.w1.changeHeld({ kind: "key", flow: client, records: [], change: () => [] }),
+		).toEqual({ refused: "notSubject" });
+		expect(world.log.sent).toEqual([]);
+	});
+
+	it("rebases no op with no stage on the flow: its first stage is not put again (A16)", async () => {
+		await decideIssue();
+		expect(await world.w1.rebase({ flow, op: "op1", recheck: () => true })).toEqual({
+			refused: "unplaced",
+		});
+	});
+
+	it("changes no record of a part not the kind's own", async () => {
+		await expect(
+			world.w1.changeHeld({ kind: "issue", flow, records: [reservationRecord], change: () => [] }),
+		).rejects.toThrow(TypeError);
+	});
+
+	it("marks an orphan its taker could not end, rather than taking it over again", async () => {
+		const refusing = world.replica("w2", {
+			log: (l) => ({
+				...l,
+				append: async () => ({ v: 1, result: "refused", refusal: "holdLimit" }),
+			}),
+		});
+		await decideKey();
+		world.store.clock.set(leaseMs);
+		expect(await refusing.tend(flow)).toMatchObject({
+			did: "tookOver",
+			answer: { refusal: "holdLimit" },
+		});
+		world.store.clock.set(2 * leaseMs);
+		expect(await world.w3.tend(flow)).toEqual({ stepped: 0, did: "marked" });
+		expect(world.frame()).toMatchObject({ intent: { state: "abandoning", by: "w3" } });
 	});
 });

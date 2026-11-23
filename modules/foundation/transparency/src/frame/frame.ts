@@ -1,4 +1,10 @@
-import { type Changes, type Finding, type RecordKind, ruleSchemas } from "@mod/authority-rules";
+import {
+	abandonedFamily,
+	type Changes,
+	type Finding,
+	type RecordKind,
+	ruleSchemas,
+} from "@mod/authority-rules";
 import { opIds, type Writer } from "@mod/transparency-wire";
 import { z } from "zod";
 
@@ -22,12 +28,8 @@ export interface Intent {
 	/** Store-clock ms the lease holds before; past it, the intent stays and has no owner. */
 	readonly leaseEnd: number;
 	readonly generation: number;
-	/** The op's abandonment records taken in. */
-	readonly abandonments: number;
 	/** The family the op's bundle, taken in, made or rotated: what its abandonment drops. */
 	readonly family: string | null;
-	/** Whether it ended by taking in its last stage. */
-	readonly lastTaken: boolean;
 	/** Whether its owner took it over (KE-C10): that replica's tending is then its apply phase. */
 	readonly taken: boolean;
 }
@@ -46,7 +48,10 @@ export interface At {
 	readonly now: number;
 }
 
-/** How an op ended: its last stage took, did not, was held; its abandonment closed it; its owner refused it. */
+/**
+ * How an op ended: its last stage took, did not (a noEffect not held, however judged, too), was held;
+ * its abandonment closed it; its owner refused it.
+ */
 export type Ending = "took" | "didNotTake" | "held" | "abandoned" | "refused";
 /** An op's end, and whether its live owner ended it, so that owner alone gives its output. */
 export interface End {
@@ -90,9 +95,7 @@ const intent = z
 		by: z.string().min(1),
 		leaseEnd: count,
 		generation: z.number().int().positive(),
-		abandonments: count,
 		family: z.string().min(1).nullable(),
-		lastTaken: z.boolean(),
 		taken: z.boolean(),
 	})
 	.strict();
@@ -121,16 +124,14 @@ export const isOwner = (i: Intent | null, at: At) =>
 export const isOrphan = (i: Intent | null, at: At) =>
 	i?.state === "pending" && at.now >= i.leaseEnd;
 
-const ended = (i: Intent, state: "done" | "closed", lastTaken: boolean): Intent => ({
-	...i,
-	state,
-	eff: null,
-	lastTaken,
-});
+const ended = (i: Intent, state: "done" | "closed"): Intent => ({ ...i, state, eff: null });
 /** The last store-clock ms an owner's write may commit at: before its lease ends. */
 const until = (i: Intent) => i.leaseEnd - 1;
 
-/** KE-C01: the op's intent, decided on the applied state, when the flow is ready and has none open. */
+/**
+ * KE-C01: the op's intent, decided on the applied state, when the flow is ready and has none open,
+ * and the flow holds no last stage of the op (`placed`, read from the log).
+ */
 export function decided(
 	f: Frame,
 	at: At,
@@ -140,6 +141,7 @@ export function decided(
 		readonly digest: string;
 		readonly eff: Changes;
 		readonly head: number;
+		readonly placed: { readonly last: boolean };
 		readonly leaseMs: number;
 	},
 ): Written | Refused<"sealed" | "notReady" | "open" | "ended"> {
@@ -147,7 +149,7 @@ export function decided(
 	if (f.applied !== p.head) return { refused: "notReady" };
 	const it = intentOf(f, at);
 	if (isOpen(it)) return { refused: "open" };
-	if (it?.op === p.op && it.lastTaken) return { refused: "ended" };
+	if (p.placed.last) return { refused: "ended" };
 	const next: Intent = {
 		op: p.op,
 		kind: p.kind,
@@ -158,10 +160,7 @@ export function decided(
 		by: at.replica,
 		leaseEnd: at.now + p.leaseMs,
 		generation: at.generation,
-		// The op's abandonment records on the flow keep counting, so a later one takes a new id.
-		abandonments: it?.op === p.op ? it.abandonments : 0,
 		family: null,
-		lastTaken: false,
 		taken: false,
 	};
 	return { frame: { ...f, intent: next } };
@@ -176,7 +175,7 @@ export function closedByOwner(
 	const it = intentOf(f, at);
 	if (!it || !isOwner(it, at) || it.op !== op) return { refused: "notOwner" };
 	return {
-		frame: { ...f, intent: ended(it, "closed", false) },
+		frame: { ...f, intent: ended(it, "closed") },
 		ownerUntil: until(it),
 		end: { op, kind: it.kind, ending: "refused", owner: true },
 	};
@@ -222,11 +221,15 @@ export function takenOver(
 	return { frame: { ...f, intent: next } };
 }
 
-/** KE-C09: the abandonment record of the abandoning op, after the head the same read shows. */
+/**
+ * KE-C09: the abandonment record of the abandoning op, after the head the same read shows; its
+ * attempt is one past the op's abandonment records on the flow (`placed`, read from the log).
+ */
 export function abandonStage(
 	f: Frame,
 	at: At,
 	head: number,
+	placed: { readonly abandonments: number },
 ):
 	| {
 			readonly op: string;
@@ -238,7 +241,7 @@ export function abandonStage(
 	const it = intentOf(f, at);
 	if (it?.state !== "abandoning") return { refused: "notAbandoning" };
 	if (f.applied !== head) return { refused: "notReady" };
-	const attempt = it.abandonments + 1;
+	const attempt = placed.abandonments + 1;
 	return {
 		op: opIds.abandonment(it.op, attempt),
 		abandons: { op: it.op, attempt, digest: it.digest },
@@ -253,9 +256,11 @@ export function whileClosed(f: Frame, at: At): { readonly closed: true } | Refus
 
 const acceptable = (j: Finding) =>
 	(j.verdict === "verified" || j.verdict === "unsupported") && j.outcome === "took";
-/** The family a bundle made (named by its record) or rotated. */
-const familyOf = (r: Taken, eff: Changes | null) =>
-	r.kind !== "bundle" ? null : eff?.family ? r.id : (eff?.rotate ?? null);
+/** How a last stage ends its op: a noEffect reports the op did not take, however it is judged. */
+const endingOf = (r: Taken): Ending => {
+	if (r.finding.verdict === "held") return "held";
+	return r.kind !== "noEffect" && acceptable(r.finding) ? "took" : "didNotTake";
+};
 
 /**
  * KE-C04: takes in the record at the applied position's next, by the end-of-intent table. The
@@ -287,24 +292,22 @@ export function stepped(
 	const owned = held ? { ownerUntil: until(it) } : {};
 	const took = acceptable(r.finding);
 	if (abandonment) {
-		const counted = {
-			...it,
-			abandonments: Math.max(it.abandonments, r.abandons?.attempt ?? 0),
-		};
 		const changes: Changes = it.family === null ? {} : { abandon: it.family };
-		if (!took) return { frame: advanced(counted), changes };
+		if (!took) return { frame: advanced(it), changes };
 		const end: End = { op: it.op, kind: it.kind, ending: "abandoned", owner: false };
-		return { frame: advanced(ended(counted, "closed", false)), changes, end };
+		return { frame: advanced(ended(it, "closed")), changes, end };
 	}
 	const changes = r.kind === "noEffect" ? {} : (it.eff ?? {});
 	if (!r.last) return { frame: advanced(it), changes, ...owned };
-	const ending: Ending = took ? "took" : r.finding.verdict === "held" ? "held" : "didNotTake";
+	const ending = endingOf(r);
 	const end: End = { op: it.op, kind: it.kind, ending, owner: held };
 	if (p.bundle(it.kind) && !held) {
 		// A bundle left alone is abandoned, never delivered; an abandoning op stays so (A40).
 		const by = it.state === "pending" ? at.replica : it.by;
-		const left = { ...it, state: "abandoning" as const, by, family: familyOf(r, it.eff) };
+		const family = abandonedFamily({ envelope: r, changes }) ?? null;
+		const left = { ...it, state: "abandoning" as const, by, family };
 		return { frame: advanced(left), changes };
 	}
-	return { frame: advanced(ended(it, took ? "done" : "closed", true)), changes, end, ...owned };
+	const state = ending === "took" ? "done" : "closed";
+	return { frame: advanced(ended(it, state)), changes, end, ...owned };
 }

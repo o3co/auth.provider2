@@ -1,6 +1,5 @@
-import type { Json } from "@mod/store";
 import { describe, expect, it } from "vitest";
-import type { FrameStore } from "./contract.ts";
+import type { FrameStore, IntentUnit, Json } from "./contract.ts";
 
 /** What an implementation of the frame's store interface gives its contract test. */
 export interface FrameStoreHarness {
@@ -10,8 +9,9 @@ export interface FrameStoreHarness {
 
 /** The contract of the frame's store interface, run against any implementation. */
 export function frameStoreContract(name: string, harness: FrameStoreHarness): void {
-	const flow = { of: "subject", id: "s1" } as const;
-	const other = { of: "subject", id: "s2" } as const;
+	const flow: IntentUnit = { flow: { of: "subject", id: "s1" } };
+	const other: IntentUnit = { flow: { of: "subject", id: "s2" } };
+	const client = (op: string): IntentUnit => ({ flow: { of: "client", id: "c1" }, op });
 	const frame = (applied: number): Json => ({ applied });
 	describe(`frame store contract: ${name}`, () => {
 		it("names the part it binds", async () => {
@@ -22,7 +22,7 @@ export function frameStoreContract(name: string, harness: FrameStoreHarness): vo
 		it("reads a new flow as holding nothing", async () => {
 			const { frames, part } = await harness.open();
 			const read = await frames.read(flow, [{ part, name: "r" }]);
-			expect(read).toMatchObject({ frame: undefined, held: [undefined], versions: [null, null] });
+			expect(read).toMatchObject({ frame: undefined, held: [undefined] });
 			expect(typeof read.now).toBe("number");
 		});
 
@@ -51,6 +51,29 @@ export function frameStoreContract(name: string, harness: FrameStoreHarness): vo
 				frame: undefined,
 				held: [undefined, 2],
 			});
+		});
+
+		it("keeps a client's ops apart: each op is a unit of its own", async () => {
+			const { frames, part } = await harness.open();
+			const records = [{ part, name: "a" }];
+			const read = await frames.read(client("o1"), records);
+			await frames.write(read, { frame: frame(1), records: [{ value: 1 }] }, read.now + 10_000);
+			expect(await frames.read(client("o2"), records)).toMatchObject({
+				frame: undefined,
+				held: [undefined],
+			});
+			expect((await frames.read(client("o1"), records)).frame).toEqual(frame(1));
+		});
+
+		it("holds a write of nothing to the read all the same", async () => {
+			const { frames, part } = await harness.open();
+			const records = [{ part, name: "a" }];
+			const read = await frames.read(flow, records);
+			expect(await frames.write(read, { records: [undefined] }, read.now + 10_000)).toBe("written");
+			const stale = await frames.read(flow, records);
+			const fresh = await frames.read(flow, records);
+			await frames.write(fresh, { records: [{ value: 1 }] }, fresh.now + 10_000);
+			expect(await frames.write(stale, { records: [undefined] }, stale.now + 10_000)).toBe("moved");
 		});
 
 		it("removes a record, keeping the frame where none is given", async () => {

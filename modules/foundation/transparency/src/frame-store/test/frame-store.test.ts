@@ -91,8 +91,8 @@ describe("frames over a store", () => {
 			random,
 			refuse,
 		});
-		const flow = { of: "subject", id: "s1" } as const;
-		const read = await over.read(flow, [{ part: "p", name: "a" }]);
+		const unit = { flow: { of: "subject", id: "s1" } } as const;
+		const read = await over.read(unit, [{ part: "p", name: "a" }]);
 		await over.write(read, { frame: { applied: 1 }, records: [{ value: 1 }] }, read.now + 1000);
 		const frameEntry = await s.get({ space: frames, partition: "subject:s1", name: "frame" });
 		const record = await s.get({ space: part, partition: "subject:s1", name: "a" });
@@ -103,7 +103,7 @@ describe("frames over a store", () => {
 		const { s, frames } = await storeWith();
 		const over = frameStoreOver({ store: s, space: frames, parts: [], random, refuse });
 		await expect(
-			over.read({ of: "subject", id: "s1" }, [{ part: "x", name: "a" }]),
+			over.read({ flow: { of: "subject", id: "s1" } }, [{ part: "x", name: "a" }]),
 		).rejects.toThrow(TypeError);
 	});
 });

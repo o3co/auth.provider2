@@ -3,7 +3,7 @@
 Internal module of `transparency`: the frame's store interface over `store`, which a wiring builds.
 
 ## Responsibilities
-- Keeps a flow's frame and part records under the flow's partition, the frame in the frames' space and each record in its part's, and writes them as one by the store's batch across.
+- Keeps a unit's frame and part records under the unit's partition, the frame in the frames' space and each record in its part's, and writes them as one by the store's batch across.
 
 ## Not here
 - Which space holds the frames, and each part's: the wirings'.
@@ -13,7 +13,7 @@ Internal module of `transparency`: the frame's store interface over `store`, whi
 
 ## Invariants
 - Refuses through `refuse` a store with no batch across, and a part whose space declares other guarantees than the frames'.
-- A write is held to every version read, an absent one too; nothing it writes expires. One whose answer was lost is sent again under its mark, three sends at most.
+- A write is held to every version read, an absent one too, a write of nothing by a mark of its own; nothing it writes expires. One whose answer was lost is sent again under its mark, three sends at most.
 - A record of a part not bound is a TypeError.
 
 ## Depends on

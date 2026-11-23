@@ -1,8 +1,13 @@
-import { type Changes, type Finding, type FlowState, fold } from "@mod/authority-rules";
-import type { Json } from "@mod/store";
+import {
+	abandonedFamily,
+	type Changes,
+	type Finding,
+	type FlowState,
+	fold,
+} from "@mod/authority-rules";
 import fc from "fast-check";
 import { expect, it } from "vitest";
-import type { Stage, Transparency } from "../src/contract.ts";
+import type { Json, Stage, Transparency } from "../src/contract.ts";
 import { transparencyOver } from "../src/driver/driver.ts";
 import { memoryFrames } from "./fixtures/frames.ts";
 import { logBook } from "./fixtures/log.ts";
@@ -35,7 +40,10 @@ type Intent = {
 	prev: number;
 } | null;
 
-/** Step023 and RegAbandon023's events on three replicas, in the order fast-check draws them. */
+/**
+ * Step023 and RegAbandon023's events on three replicas, in the order fast-check draws them. The
+ * third has no registration of the key change; an op is decided again under its id after others.
+ */
 function world() {
 	const store = memoryFrames(allParts);
 	const log = logBook(store.clock.now);
@@ -47,13 +55,14 @@ function world() {
 		transparencyOver({
 			frames: store.frames,
 			log: log.as(name),
-			kinds: [issue, keyChange],
+			kinds: name === "w3" ? [issue] : [issue, keyChange],
 			owners,
 			leaseMs,
 		}),
 	);
 	const effOf = new Map<string, Changes>();
 	const delivered = new Set<string>();
+	const issues: string[] = [];
 	let ops = 0;
 	const frame = () =>
 		(store.value(flow) ?? { applied: 0, intent: null }) as { applied: number; intent: Intent };
@@ -76,11 +85,12 @@ function world() {
 			const r = p.record;
 			let e: Changes = p.changes ?? {};
 			if (r.writer.role === "core" && r.kind === "abandonment") {
-				const bundle = placed.find(
-					(q) => q.record.kind === "bundle" && q.record.op === r.abandons?.op,
-				);
+				const op = r.abandons?.op ?? "";
+				const bundle = placed.find((q) => q.record.kind === "bundle" && q.record.op === op);
 				const made = bundle && bundle.record.position < r.position;
-				e = made ? { abandon: bundle.record.id } : {};
+				const family =
+					made && abandonedFamily({ envelope: bundle.record, changes: effOf.get(op) ?? {} });
+				e = family ? { abandon: family } : {};
 			} else if (r.writer.role === "core") e = effOf.get(r.op) ?? {};
 			if (!p.finding) throw new Error(`position ${r.position} taken in unjudged`);
 			state = fold(state, { ...r, kind: r.kind }, e, p.finding);
@@ -94,11 +104,21 @@ function world() {
 		const it = frame().intent;
 		switch (event % 7) {
 			case 0: {
-				ops += 1;
-				const op = `o${ops}`;
-				const key = pick % 2 === 1;
-				const eff = key ? { key: { credential: `c${op}`, publicKey: `p${op}` } } : bundleEff;
+				// Now and then an issuing op is decided again under its id, other ops between.
+				const again = pick % 3 === 2 ? issues[pick % Math.max(issues.length, 1)] : undefined;
+				if (!again) ops += 1;
+				const op = again ?? `o${ops}`;
+				const key = !again && pick % 2 === 1;
+				// An issuing op makes a family, or rotates a live one.
+				const live = Object.keys(held().families);
+				const rotated = live[pick % Math.max(live.length, 1)];
+				const issued = pick % 3 === 0 && rotated ? { rotate: rotated } : bundleEff;
+				const made = key ? { key: { credential: `c${op}`, publicKey: `p${op}` } } : issued;
+				const eff = (again && effOf.get(again)) || made;
 				effOf.set(op, eff);
+				if (!key && !again) issues.push(op);
+				// The third replica has no key change to decide.
+				const decider = key && who % 3 === 2 ? (replicas[0] as Transparency) : w;
 				if (key) {
 					const r: Reservation = {
 						version: op,
@@ -106,14 +126,15 @@ function world() {
 						credential: `c${op}`,
 						publicKey: `p${op}`,
 					};
-					const changed = await w.changeHeld({
+					const changed = await decider.changeHeld({
+						kind: "key",
 						flow,
 						records: [reservationRecord],
 						change: () => [{ value: r as unknown as Json }],
 					});
 					if (!("changed" in changed)) return;
 				}
-				await w.decide({
+				await decider.decide({
 					kind: key ? "key" : "issue",
 					flow,
 					op,
@@ -141,7 +162,9 @@ function world() {
 								tokens: [{ frame: "accessToken", digest: "A".repeat(43) }],
 								preimage: { v: 1, evidence: [], content: { via: "code" } },
 							};
-				await owner.send({ flow, op: it.op, stage, prev: it.prev });
+				// Now and then the same id with other content: once placed, the log answers sameIdOther.
+				const other = pick % 3 === 0 ? { preimage: { ...stage.preimage, parent: "x" } } : {};
+				await owner.send({ flow, op: it.op, stage: { ...stage, ...other }, prev: it.prev });
 				return;
 			}
 			case 2: {
@@ -192,11 +215,17 @@ function world() {
 				expect(delivered.has(p.record.abandons?.op ?? "")).toBe(false); // KP-13
 		}
 		const r = reservation();
-		if (r?.state === "active") {
+		if (r) {
 			const key = log
 				.records(flow)
 				.find((p) => p.record.op === r.version && p.record.kind === "keyChange");
-			expect(key && key.record.position <= applied && key.finding?.outcome === "took").toBe(true); // RegAgree
+			const verdict = key?.finding?.verdict;
+			const took =
+				key !== undefined &&
+				key.record.position <= applied &&
+				(verdict === "verified" || verdict === "unsupported") &&
+				key.finding?.outcome === "took";
+			expect(r.state === "active").toBe(took); // RegAgree, both ways
 		}
 	}
 
@@ -222,7 +251,7 @@ function world() {
 it("keeps the models' invariants on every interleaving, and ends every intent on a fair run", async () => {
 	const event = fc.tuple(fc.nat(6), fc.nat(2), fc.nat(11));
 	await fc.assert(
-		fc.asyncProperty(fc.array(event, { maxLength: 50 }), async (events) => {
+		fc.asyncProperty(fc.array(event, { maxLength: 50, size: "max" }), async (events) => {
 			const w = world();
 			for (const [e, who, pick] of events) {
 				await w.act(e, who, pick);
@@ -230,6 +259,6 @@ it("keeps the models' invariants on every interleaving, and ends every intent on
 			}
 			expect(await w.settle()).toBe(true);
 		}),
-		{ numRuns: 300 },
+		{ numRuns: 1000 },
 	);
 });

@@ -14,10 +14,10 @@ Internal module of `transparency`: the intent frame's pure core (kernel-spec §5
 
 ## Invariants
 - Pure: a frame, who reads it at which store time, and the event's input in; the next frame, or a refusal, out. An owner's write carries `ownerUntil`, its last store-clock ms before the lease ends.
-- KE-C01 decides only on a frame sealed by the reader's generation, taken in to the log's head, with no open intent, and never an op whose last stage it took in; an op decided again keeps counting its abandonments.
+- KE-C01 decides only on a frame sealed by the reader's generation, taken in to the log's head, with no open intent, and never an op whose last stage the flow holds, as the caller read the log.
 - A Step moves one position. Another writer's record changes no intent. A Core record of no open intent, or of another op, is taken in by no one. A live owner's record waits for it, its last stage for its apply phase.
-- The end table: a start changes nothing; a live owner's last stage ends its op done or closed; a bundle left alone turns abandoning, keeping its family; any other last stage ends alike, owner or not; a verified abandonment closes, a held one counts.
-- Marking and taking over claim an orphan alone; a bundle is never taken over; an abandonment goes for an abandoning op alone, after the head the same read shows.
+- The end table: a start changes nothing; a live owner's last stage ends its op done or closed; a bundle left alone turns abandoning, keeping the family `abandonedFamily` names; any other last stage ends alike, owner or not; a verified abandonment closes, a held one changes no intent. A noEffect ends its op not taken, unless held.
+- Marking and taking over claim an orphan alone; a bundle is never taken over; an abandonment goes for an abandoning op alone, after the head the same read shows, its attempt one past the op's abandonments on the flow.
 
 ## Depends on
-- `authority-rules` (its types, the changes' schema), `transparency-wire` (`opIds`), `zod`.
+- `authority-rules` (its types, the changes' schema, `abandonedFamily`), `transparency-wire` (`opIds`), `zod`.

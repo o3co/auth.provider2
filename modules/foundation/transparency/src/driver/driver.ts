@@ -1,9 +1,10 @@
 import { type Envelope, emptyState, type FlowState, fold, ruleSchemas } from "@mod/authority-rules";
 import { Unavailable } from "@mod/kernel";
-import type { Json } from "@mod/store";
 import type { Flow } from "@mod/transparency-wire";
 import type {
 	FrameStore,
+	IntentUnit,
+	Json,
 	OperationKind,
 	PartNext,
 	PartRecord,
@@ -21,6 +22,7 @@ import {
 	type Frame,
 	frameOf,
 	intentOf,
+	isOpen,
 	isOrphan,
 	isOwner,
 	marked,
@@ -52,8 +54,11 @@ export function transparencyOver(p: {
 }): Transparency {
 	const { frames, log, owners, leaseMs } = p;
 	const kinds = new Map(p.kinds.map((k) => [k.name, k]));
-	// A kind no longer registered is taken for a bundle: never taken over.
-	const bundle = (kind: string) => kinds.get(kind)?.bundle ?? true;
+	const bundle = (kind: string) => kinds.get(kind)?.bundle === true;
+	/** The unit of a subject's flow; none for any other, which the driver does not run. */
+	const unitOf = (flow: Flow): IntentUnit | undefined =>
+		flow.of === "subject" ? { flow: { of: "subject", id: flow.id } } : undefined;
+	const notSubject = { refused: "notSubject" } as const;
 	const atNow = (now: number): At => ({
 		replica: log.writer.instance,
 		generation: log.writer.generation,
@@ -71,13 +76,13 @@ export function transparencyOver(p: {
 	};
 
 	/** One read: the frame, every owner's records, then `extra`; the state the owners' records hold. */
-	async function snapshot(flow: Flow, extra: readonly PartRecord[]) {
-		const owned = owners.map((o) => named(o, o.records(flow)));
+	async function snapshot(unit: IntentUnit, extra: readonly PartRecord[]) {
+		const owned = owners.map((o) => named(o, o.records(unit.flow)));
 		const records = [...owned.flat(), ...extra];
 		const keys = records.map((r) => `${r.part}\n${r.name}`);
 		if (new Set(keys).size !== keys.length)
 			throw new TypeError("a record is named twice in one read");
-		const read = await frames.read(flow, records);
+		const read = await frames.read(unit, records);
 		const at = atNow(read.now);
 		const frame = frameOf(read.frame, at.generation);
 		let from = 0;
@@ -94,18 +99,23 @@ export function transparencyOver(p: {
 	}
 	type Snapshot = Awaited<ReturnType<typeof snapshot>>;
 	/** The frame alone, and who reads it when. */
-	async function frameAt(flow: Flow) {
-		const read = await frames.read(flow, []);
+	async function frameAt(unit: IntentUnit) {
+		const read = await frames.read(unit, []);
 		const at = atNow(read.now);
 		return { at, frame: frameOf(read.frame, at.generation) };
 	}
 	const kindOf = (s: { readonly frame: Frame; readonly at: At }) =>
 		kinds.get(intentOf(s.frame, s.at)?.kind ?? "");
+	/** An open intent of a kind this replica has no registration of: it takes in, claims and ends nothing. */
+	const unregistered = (s: { readonly frame: Frame; readonly at: At }) => {
+		const it = intentOf(s.frame, s.at);
+		return isOpen(it) && !kinds.has(it?.kind ?? "");
+	};
 	/** A read with the records of the intent's kind, read again while the intent's kind moves under it. */
-	async function withKind(flow: Flow) {
-		let kind = kindOf(await frameAt(flow));
+	async function withKind(unit: IntentUnit) {
+		let kind = kindOf(await frameAt(unit));
 		for (let read = 0; read < kindReads; read++) {
-			const snap = await snapshot(flow, kind ? named(kind, kind.records(flow)) : []);
+			const snap = await snapshot(unit, kind ? named(kind, kind.records(unit.flow)) : []);
 			const now = kindOf(snap);
 			if (now === kind) return { snap, kind };
 			kind = now;
@@ -160,8 +170,10 @@ export function transparencyOver(p: {
 		};
 	};
 
-	async function step(flow: Flow, own?: string) {
-		const { snap, kind } = await withKind(flow);
+	async function step(unit: IntentUnit, own?: string) {
+		const { flow } = unit;
+		const { snap, kind } = await withKind(unit);
+		if (unregistered(snap)) return { refused: "stuck" as const };
 		const placed = await log.at(flow, snap.frame.applied + 1);
 		if (!placed) return { refused: "atHead" as const };
 		if (!placed.finding) return { refused: "unjudged" as const };
@@ -204,9 +216,11 @@ export function transparencyOver(p: {
 		readonly stage: Stage;
 		readonly prev: number;
 	}) {
-		const { snap, kind } = await withKind(q.flow);
+		const unit = unitOf(q.flow);
+		if (!unit) return notSubject;
+		const { snap, kind } = await withKind(unit);
 		const it = intentOf(snap.frame, snap.at);
-		if (!isOwner(it, snap.at) || it?.op !== q.op || q.stage.op !== q.op) {
+		if (!kind || !isOwner(it, snap.at) || it?.op !== q.op || q.stage.op !== q.op) {
 			return { refused: "notOwner" as const };
 		}
 		const answer = await log.append(q.stage, q.prev);
@@ -220,12 +234,15 @@ export function transparencyOver(p: {
 		return { answer, end: closed.end };
 	}
 
-	async function claim(flow: Flow) {
-		const { snap, kind } = await withKind(flow);
+	async function claim(unit: IntentUnit) {
+		const { flow } = unit;
+		const { snap, kind } = await withKind(unit);
+		if (unregistered(snap)) return {};
 		const it = intentOf(snap.frame, snap.at);
 		const head = await log.head(flow);
 		if (isOrphan(it, snap.at) && it) {
-			const resend = kind?.resend?.(flow, it.op, snap.extra);
+			// An orphan its taker could not end is marked: taking it over again would meet the same refusal.
+			const resend = it.taken ? undefined : kind?.resend?.(flow, it.op, snap.extra);
 			const over = resend ? takenOver(snap.frame, snap.at, { leaseMs, bundle }) : undefined;
 			if (resend && over && "frame" in over) {
 				if ((await write(snap, { frame: over.frame })) !== "written") return {};
@@ -236,7 +253,8 @@ export function transparencyOver(p: {
 			if (!("frame" in mark) || (await write(snap, { frame: mark.frame })) !== "written") return {};
 			return { did: "marked" as const };
 		}
-		const abandon = abandonStage(snap.frame, snap.at, head);
+		if (it?.state !== "abandoning") return {};
+		const abandon = abandonStage(snap.frame, snap.at, head, await log.of(flow, it.op));
 		if ("refused" in abandon) return {};
 		const stage: Stage = {
 			kind: "abandonment",
@@ -254,14 +272,18 @@ export function transparencyOver(p: {
 		async decide(q) {
 			const kind = kinds.get(q.kind);
 			if (!kind) throw new TypeError(`no kind of operation ${q.kind} is registered`);
-			const snap = await snapshot(q.flow, named(kind, kind.records(q.flow)));
+			const unit = unitOf(q.flow);
+			if (!unit) return notSubject;
+			const snap = await snapshot(unit, named(kind, kind.records(q.flow)));
 			const head = await log.head(q.flow);
+			const placed = await log.of(q.flow, q.op);
 			const guard = decided(snap.frame, snap.at, {
 				op: q.op,
 				kind: q.kind,
 				digest: "-",
 				eff: {},
 				head,
+				placed,
 				leaseMs,
 			});
 			if ("refused" in guard) return guard;
@@ -272,6 +294,7 @@ export function transparencyOver(p: {
 				op: q.op,
 				kind: q.kind,
 				head,
+				placed,
 				leaseMs,
 			});
 			if ("refused" in next) return next;
@@ -280,10 +303,15 @@ export function transparencyOver(p: {
 		},
 		send,
 		async rebase(q) {
-			const { snap, kind } = await withKind(q.flow);
+			const unit = unitOf(q.flow);
+			if (!unit) return notSubject;
+			const { snap, kind } = await withKind(unit);
+			if (!kind) return { refused: "notOwner" as const };
 			const head = await log.head(q.flow);
 			const moved = rebased(snap.frame, snap.at, q.op, head);
 			if ("refused" in moved) return moved;
+			// The first stage is never put again (A16): its refusal closes the op in `send`.
+			if ((await log.of(q.flow, q.op)).stages === 0) return { refused: "unplaced" as const };
 			if (q.recheck(snap.state))
 				return settled(await frameWrite(snap, kind, moved)) ?? { prev: head };
 			const closed = closedByOwner(snap.frame, snap.at, q.op);
@@ -291,22 +319,31 @@ export function transparencyOver(p: {
 			const answer = await frameWrite(snap, kind, closed);
 			return answer === "written" ? { end: closed.end } : { refused: answer };
 		},
-		step: (q) => step(q.flow, q.own),
+		async step(q) {
+			const unit = unitOf(q.flow);
+			return unit ? step(unit, q.own) : notSubject;
+		},
 		async tend(flow) {
+			const unit = unitOf(flow);
+			if (!unit) return notSubject;
 			let count = 0;
 			for (; count < tendSteps; count++) {
-				const first = await frameAt(flow);
+				const first = await frameAt(unit);
 				const it = intentOf(first.frame, first.at);
 				// A replica's tending is the apply phase of an op it took over.
 				const own = it?.taken && isOwner(it, first.at) ? it.op : undefined;
-				const next = await step(flow, own);
+				const next = await step(unit, own);
 				if (!("position" in next)) break;
 			}
-			const claimed = await claim(flow);
+			const claimed = await claim(unit);
 			return { stepped: count, ...claimed };
 		},
 		async changeHeld(q) {
-			const snap = await snapshot(q.flow, q.records);
+			const kind = kinds.get(q.kind);
+			if (!kind) throw new TypeError(`no kind of operation ${q.kind} is registered`);
+			const unit = unitOf(q.flow);
+			if (!unit) return notSubject;
+			const snap = await snapshot(unit, named(kind, q.records));
 			const closed = whileClosed(snap.frame, snap.at);
 			if ("refused" in closed) return closed;
 			return settled(await write(snap, { extra: q.change(snap.extra) })) ?? { changed: true };
