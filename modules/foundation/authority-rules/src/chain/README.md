@@ -20,7 +20,7 @@ Internal module of `authority-rules`: Allowed(r, S), the time rules and the chan
 - A bundle: the last stage, after its op's start, naming that start and a root; never after a forged start (a forged parent's descendant); the root the start's wherever the start's preimage was read; a live approval with its code unused and the start within the code's lifetime of it, whatever the start's verdict, or a live family at its rotation; and no stage before it acceptable yet not taken.
 - A noEffect: after a stage of its op that is not acceptable and taken. An abandonment: always, its family the one the abandoned op's bundle made or rotated, or none.
 - TimeOK, each bound held at its edge: an approval within T's times, a first key within its statements', a code's start within L of its approval, a refresh within its family's lifetime, a bundle within the issue window of its start; noEffect and abandonment have none.
-- An abandonment's family comes from the abandoned op's bundle entry's changes: where the monitor could not read that bundle's preimage (J5, J6) they are empty, so the monitor names no family where the Core's intent names one (kernel-spec §6.3's contract 1 leaves this open).
+- An abandonment's family comes from the abandoned op's bundle entry's changes, by `fold`'s `abandonedFamily`: where the monitor could not read that bundle's preimage (J5, J6) they are empty, so the monitor names no family where the Core's intent names one (kernel-spec §6.3's contract 1 leaves this open).
 
 ## Depends on
 - `transparency-wire` (the request's fields). The package's `evidence` and `fold`.

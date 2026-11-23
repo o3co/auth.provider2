@@ -13,7 +13,14 @@ import {
 	statements,
 	within,
 } from "../evidence/evidence.ts";
-import { acceptable, type Changes, type FlowEntry, type FlowState, own } from "../fold/fold.ts";
+import {
+	abandonedFamily,
+	acceptable,
+	type Changes,
+	type FlowEntry,
+	type FlowState,
+	own,
+} from "../fold/fold.ts";
 
 /** The fields a Core writer names, in its request and its record alike. */
 export type Named = Pick<
@@ -329,8 +336,7 @@ export function effectOf(ask: Ask): Changes {
 		case "abandonment": {
 			const op = ask.record.abandons?.op;
 			const bundle = ask.prior.find((e) => e.envelope.kind === "bundle" && e.envelope.op === op);
-			if (!bundle) return {};
-			const family = bundle.changes.family ? bundle.envelope.id : bundle.changes.rotate;
+			const family = bundle && abandonedFamily(bundle);
 			return family === undefined ? {} : { abandon: family };
 		}
 		default:

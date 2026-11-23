@@ -14,7 +14,7 @@
 - `allowed` (an `Ask`: the record's named fields, its opened preimage, its flow's state and judged prefix, the `Checks`, the `Context`) → `Allowance`, the first rule broken (internal module `chain`).
 - `timely` (an `Ask`, the acceptance time): TimeOK. `effectOf` (an `Ask`): Eff(r), the changes a Core record makes, the same in the Core's intent and the monitor's fold.
 - `judge` (a `Reading`: the placed record, what opening its preimage gave or another writer's verified body, the key sets, the versions' windows, the prefix) → `Ruling`: the flow entry with its verdict and outcome, the row J0–J13, whether counted; or a wait (internal module `judgment`). `outcomeOf` (a `Reading`, a verdict).
-- `fold` (state, `Envelope`, `Changes`, `Finding`) → the state; `foldFlow` (flow, entries) → transparency-wire's stateOf; `emptyState` (internal module `fold`).
+- `fold` (state, `Envelope`, `Changes`, `Finding`) → the state; `foldFlow` (flow, entries) → transparency-wire's stateOf; `emptyState`; `abandonedFamily` (a bundle's envelope and changes) → the family an abandonment of its op drops, for the Core's intent and `effectOf` alike (internal module `fold`).
 - `ruleSchemas`: `flowState`, `changes`, and `contents`, each Core kind's preimage content (internal module `evidence`).
 - Types: `Ask`, `Named`, `Allowance`, `Checks`, `Context`, `RuleTimes`, `Reading`, `Opening`, `Window`, `Ruling`, `Row`, `FlowRecord`, `FlowEntry`, `FlowState`, `Changes`, `Envelope`, `Finding`, `RecordKind`.
 

@@ -11,6 +11,7 @@ import { changes, flowState } from "./fold/fold.ts";
 export { type Allowance, type Ask, allowed, type Named, timely } from "./chain/chain.ts";
 export type { Checks, Context, RuleTimes } from "./evidence/evidence.ts";
 export {
+	abandonedFamily,
 	type Changes,
 	type Envelope,
 	emptyState,

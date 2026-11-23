@@ -12,6 +12,7 @@ Internal module of `authority-rules`: a flow's state and the one fold over it (k
 ## Offers
 - `flowState`, `changes` (schemas), `FlowState`, `Changes`, `Envelope` (`Env(r)` with the record's id), `Finding` (verdict, outcome), `FlowEntry` (with the parent and, for a start or a bundle, `via`), `RecordKind`, `emptyState`, `acceptable`, `own` (an item by id).
 - `fold` (state, envelope, changes, finding) → the state. `foldFlow` (flow, entries) → stateOf.
+- `abandonedFamily` (a bundle's envelope and changes) → the family an abandonment of its op drops, by the name the fold gives it.
 
 ## Invariants
 - A record changes the state only when verified or unsupported and took; then one effect by kind: a denial revokes, an abandonment drops its family, an erasure boundary moves the key generation on, a confirmation and a tombstone change nothing, any other adds its changes.

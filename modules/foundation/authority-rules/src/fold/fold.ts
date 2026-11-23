@@ -114,6 +114,19 @@ export const own = <T>(items: Readonly<Record<string, T>>, id: string): T | unde
 /** Whether a verdict lets a record be received: verified or unsupported. */
 export const acceptable = (verdict: Verdict) => verdict === "verified" || verdict === "unsupported";
 
+/**
+ * The family an abandonment of a bundle's op drops, from the bundle's envelope and its changes: the
+ * one it made (named by its record's id, as the fold names it) or rotated; none for any other record.
+ * The Core's intent and the monitor's Eff of the abandonment both take it from here.
+ */
+export function abandonedFamily(bundle: {
+	readonly envelope: Pick<Envelope, "id" | "kind">;
+	readonly changes: Changes;
+}): string | undefined {
+	if (bundle.envelope.kind !== "bundle") return undefined;
+	return bundle.changes.family ? bundle.envelope.id : bundle.changes.rotate;
+}
+
 type Item = { readonly chain: readonly string[] };
 const under = (itemId: string, item: Item, x: string) => itemId === x || item.chain.includes(x);
 const keep = <T extends Item>(items: Readonly<Record<string, T>>, x: string) =>

@@ -2,6 +2,7 @@ import { schemas } from "@mod/transparency-wire";
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import {
+	abandonedFamily,
 	type Changes,
 	changes as changesSchema,
 	type Envelope,
@@ -192,6 +193,19 @@ describe("Revoke, Abandon and NextGen (kernel-spec §6.3)", () => {
 		expect(a.consumed).toEqual(s.consumed);
 		expect(step(a, env("abandonment"), { abandon: "b1" })).toEqual(a);
 		expect(step(s, env("abandonment"), {})).toEqual(s);
+	});
+
+	it("names what an abandonment of a bundle's op drops: the family the bundle made, by its record's id, or the one it rotated (Step023 AbnFam, LastFam)", () => {
+		const made = env("bundle", { id: "b9" });
+		expect(abandonedFamily({ envelope: made, changes: { family: { approval: "a1" } } })).toBe("b9");
+		expect(abandonedFamily({ envelope: made, changes: { rotate: "f0" } })).toBe("f0");
+		expect(abandonedFamily({ envelope: made, changes: {} })).toBeUndefined();
+		const start = env("start", { id: "s9" });
+		expect(abandonedFamily({ envelope: start, changes: { rotate: "f0" } })).toBeUndefined();
+		// The name the fold gives the family the bundle made.
+		const s = login(firstKey(emptyState, "k1"), "k1", "a1", "b1");
+		const bundle = { envelope: { ...made, id: "b1" }, changes: { family: { approval: "a1" } } };
+		expect(Object.keys(s.families)).toEqual([abandonedFamily(bundle)]);
 	});
 
 	it("moves the key generation on and drops every key, approval and family at an erasure boundary (Rules023e Fold `rst` -> {}; NextGen)", () => {
