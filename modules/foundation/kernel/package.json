@@ -1,0 +1,26 @@
+{
+	"name": "@mod/kernel",
+	"private": true,
+	"license": "Apache-2.0",
+	"type": "module",
+	"kind": "common",
+	"asks": [
+		{
+			"line": "`kernel.deployment`: `single` for one instance, `multi` for several.",
+			"decides": true
+		}
+	],
+	"exports": {
+		".": "./src/contract.ts",
+		"./testing": "./src/testing.ts"
+	},
+	"dependencies": {
+		"@o3co/ts.hocon": "1.14.3"
+	},
+	"peerDependencies": {
+		"zod": "^4.6.0"
+	},
+	"devDependencies": {
+		"zod": "4.6.7"
+	}
+}

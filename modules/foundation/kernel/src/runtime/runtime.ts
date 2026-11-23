@@ -1,0 +1,88 @@
+import { randomBytes } from "node:crypto";
+
+export interface Clock {
+	/** Epoch ms. */
+	now(): number;
+	/**
+	 * Milliseconds from an origin this process picks, never going back; only differences taken in
+	 * this process mean anything: never comparable to `now()`, never kept or sent. A clock a test
+	 * writes may give `now()` alone.
+	 */
+	monotonic?(): number;
+}
+
+export interface Random {
+	bytes(length: number): Uint8Array;
+}
+
+export type LogFields = Readonly<Record<string, string | number | boolean>>;
+
+/**
+ * A call never throws: kernel guards every log it hands out, so no caller wraps one in try. No field
+ * takes a line's own name (level, event, at), which a sink writes beside the fields as one object.
+ */
+export interface Log {
+	trace<
+		F extends LogFields & { readonly level?: never; readonly event?: never; readonly at?: never },
+	>(event: string, fields?: F): void;
+	debug<
+		F extends LogFields & { readonly level?: never; readonly event?: never; readonly at?: never },
+	>(event: string, fields?: F): void;
+	info<
+		F extends LogFields & { readonly level?: never; readonly event?: never; readonly at?: never },
+	>(event: string, fields?: F): void;
+	warn<
+		F extends LogFields & { readonly level?: never; readonly event?: never; readonly at?: never },
+	>(event: string, fields?: F): void;
+	error<
+		F extends LogFields & { readonly level?: never; readonly event?: never; readonly at?: never },
+	>(event: string, fields?: F): void;
+	fatal<
+		F extends LogFields & { readonly level?: never; readonly event?: never; readonly at?: never },
+	>(event: string, fields?: F): void;
+}
+
+export type LogLevel = "trace" | "debug" | "info" | "warn" | "error" | "fatal";
+
+export interface LogLine {
+	readonly level: LogLevel;
+	readonly event: string;
+	/** Epoch ms, on the kernel's clock. */
+	readonly at: number;
+	readonly fields: LogFields;
+}
+
+/** Where log lines go; contributed to `logSinks`. */
+export interface LogSink {
+	write(line: LogLine): void;
+}
+
+export interface Runtime {
+	readonly clock: Clock;
+	readonly random: Random;
+	readonly log: Log;
+}
+
+export const systemClock: Clock = Object.freeze({
+	now: () => Date.now(),
+	monotonic: () => performance.now(),
+});
+
+export const systemRandom: Random = Object.freeze({
+	bytes: (length: number) => new Uint8Array(randomBytes(length)),
+});
+
+/** The process's streams heard already, so however many compositions start, each gets one listener. */
+const heard = new WeakSet<NodeJS.WritableStream>();
+
+/**
+ * Hears the process's standard output and error: once its reader has gone, a write fails and the
+ * stream emits 'error', which unheard would end the process. Heard, the write alone fails.
+ */
+export function hearStandardStreams(): void {
+	for (const stream of [process.stdout, process.stderr]) {
+		if (heard.has(stream)) continue;
+		heard.add(stream);
+		stream.on("error", () => {});
+	}
+}
