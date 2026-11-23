@@ -35,8 +35,16 @@ export const maxRequestBody = 24 * 1024;
 /** The greatest reply body. */
 export const maxReplyBody = 64 * 1024;
 
+/**
+ * The source the Front determined for the request (its address, as the Front's trusted proxies tell
+ * it), the first field of every operation; of length 0 where the Front could not determine one. The
+ * Front's declaration: the Core counts by it while the Front is honest.
+ */
+const source = field("source", "visible", 0, 45);
+
 /** A sealed request of the first key's path: its nonce, the screen's keys, and the HPKE encapsulation and ciphertext only the Core opens. */
 const sealed = Object.freeze([
+	source,
 	field("nonce", "b64url", 43, 43),
 	field("eEnc", "bytes", 65, 65),
 	field("eSigX", "bytes", 32, 32),
@@ -51,6 +59,7 @@ export const requests = Object.freeze({
 	loginStart: Object.freeze({
 		code: 0x01,
 		fields: Object.freeze([
+			source,
 			field("clientId", "visible", 1, 64),
 			field("request", "jws", 1, 8192),
 			field("eEnc", "bytes", 65, 65),
@@ -62,6 +71,7 @@ export const requests = Object.freeze({
 	loginFinish: Object.freeze({
 		code: 0x02,
 		fields: Object.freeze([
+			source,
 			field("statement", "jws", 1, 4096),
 			field("assertion", "utf8", 1, 8192),
 		] as const),
@@ -70,6 +80,7 @@ export const requests = Object.freeze({
 	token: Object.freeze({
 		code: 0x03,
 		fields: Object.freeze([
+			source,
 			field("grantType", "enum", 1, 1, 2),
 			field("code", "b64url", 1, 128),
 			field("redirectUri", "visible", 1, 512),
@@ -85,6 +96,7 @@ export const requests = Object.freeze({
 	refresh: Object.freeze({
 		code: 0x04,
 		fields: Object.freeze([
+			source,
 			field("refreshToken", "b64url", 1, 128),
 			field("scope", "utf8", 0, 512),
 			field("clientAssertionType", "enum", 1, 1, 2),
@@ -97,7 +109,7 @@ export const requests = Object.freeze({
 	/** A nonce of the first key's path: stage 0 for its start, 1 for the mail's side. */
 	firstKeyNonce: Object.freeze({
 		code: 0x05,
-		fields: Object.freeze([field("stage", "enum", 1, 1, 2)] as const),
+		fields: Object.freeze([source, field("stage", "enum", 1, 1, 2)] as const),
 	}),
 	/** The first key's start, sealed (inside: the identifier, and a password where the deployment asks one). */
 	firstKeyStart: Object.freeze({ code: 0x06, fields: sealed }),
@@ -107,6 +119,7 @@ export const requests = Object.freeze({
 	firstKeyContinue: Object.freeze({
 		code: 0x08,
 		fields: Object.freeze([
+			source,
 			field("statement", "jws", 1, 4096),
 			field("seq", "enum", 1, 1, 16),
 			field("response", "utf8", 1, 8192),
@@ -117,6 +130,7 @@ export const requests = Object.freeze({
 	firstKeyFinish: Object.freeze({
 		code: 0x09,
 		fields: Object.freeze([
+			source,
 			field("statement", "jws", 1, 4096),
 			field("assertion", "utf8", 1, 8192),
 		] as const),
@@ -152,6 +166,8 @@ export const replies = Object.freeze({
 		field("error", "enum", 1, 1, 255),
 		field("detail", "utf8", 0, 400),
 		field("dpopNonce", "b64url", 0, 64),
+		/** When to ask again, in whole seconds as decimal digits; of length 0 where none is said. */
+		field("retryAfter", "visible", 0, 10),
 	] as const),
 	rejected: Object.freeze([field("code", "enum", 1, 1, 255)] as const),
 });
@@ -169,7 +185,117 @@ export const refusals = Object.freeze([
 	"use_dpop_nonce",
 	"temporarily_unavailable",
 	"server_error",
+	"rate_limited",
+	"too_many_attempts",
 ] as const);
+
+/** An enum field carried as text: the value each text gives, and the value any other text gives; without `other`, any other is refused. */
+export interface EnumTexts {
+	readonly texts: Readonly<Record<string, number>>;
+	readonly other?: number;
+}
+
+/**
+ * One operation as HTTP: a POST to `path`, its body a form or a JSON object. A field is carried in the
+ * body under its own name, or the one `bodyNames` gives, or in the header `headerNames` gives; a
+ * `bytes` field as base64url text without padding, an enum as `enumTexts` gives it or else as its
+ * number in decimal, and any other as its text. An empty text is no value: a field of length 0 is not
+ * sent. The `source` field is no part of the request: the Front fills it from the source it determined.
+ */
+export interface OverHttp {
+	readonly path: string;
+	readonly body: "form" | "json";
+	/** Where operations share a path, the body's value that picks this one; it is sent with the request. */
+	readonly discriminator?: { readonly name: string; readonly value: string };
+	readonly bodyNames?: Readonly<Record<string, string>>;
+	/** Header names, lower case. */
+	readonly headerNames?: Readonly<Record<string, string>>;
+	readonly enumTexts?: Readonly<Record<string, EnumTexts>>;
+	/** The status the operation's success is answered with; without it, 200. */
+	readonly successStatus?: number;
+	/** Called by a page of another origin (the login screen): the request headers it sends beyond the safelisted ones. */
+	readonly crossOrigin?: { readonly headers: readonly string[] };
+}
+
+const screen = (path: string, more: Partial<OverHttp> = {}): OverHttp =>
+	Object.freeze({
+		path,
+		body: "json",
+		crossOrigin: Object.freeze({ headers: Object.freeze(["content-type"]) }),
+		...more,
+	});
+
+/** The token endpoint's names (RFC 6749 §4.1.3, §6; RFC 7521 §4.2; RFC 9396; RFC 9449). */
+const tokenNames = Object.freeze({
+	clientAssertionType: "client_assertion_type",
+	clientAssertion: "client_assertion",
+	clientId: "client_id",
+	authorizationDetails: "authorization_details",
+});
+const tokenEnumTexts = Object.freeze({
+	clientAssertionType: Object.freeze({
+		texts: Object.freeze({ "urn:ietf:params:oauth:client-assertion-type:jwt-bearer": 1 }),
+		other: 0,
+	}),
+	authorizationDetails: Object.freeze({ texts: Object.freeze({ "": 0 }), other: 1 }),
+});
+const dpopHeader = Object.freeze({ dpop: "dpop" });
+
+/**
+ * How each operation crosses the Front: the request the Front takes for it and the Core's route serves,
+ * and the status each refusal is answered with, every other 400 (RFC 6749 §5.2); a refusal's
+ * `retryAfter` is sent as `Retry-After`. An `ok` reply's body is the JSON the Core's route answered
+ * with the operation's success status. An enum value no text names is sent as the text `other`.
+ * `declaredSource` names the field every operation carries the Front's source in.
+ */
+export const overHttp = Object.freeze({
+	declaredSource: "source" as const,
+	operations: Object.freeze({
+		loginStart: screen("/login/start"),
+		loginFinish: screen("/login/finish"),
+		token: Object.freeze({
+			path: "/token",
+			body: "form",
+			bodyNames: Object.freeze({
+				grantType: "grant_type",
+				redirectUri: "redirect_uri",
+				codeVerifier: "code_verifier",
+				...tokenNames,
+			}),
+			headerNames: dpopHeader,
+			enumTexts: Object.freeze({
+				grantType: Object.freeze({ texts: Object.freeze({ authorization_code: 1 }), other: 0 }),
+				...tokenEnumTexts,
+			}),
+		}),
+		refresh: Object.freeze({
+			path: "/token",
+			body: "form",
+			discriminator: Object.freeze({ name: "grant_type", value: "refresh_token" }),
+			bodyNames: Object.freeze({ refreshToken: "refresh_token", ...tokenNames }),
+			headerNames: dpopHeader,
+			enumTexts: tokenEnumTexts,
+		}),
+		firstKeyNonce: screen("/first-key/nonce", {
+			enumTexts: Object.freeze({
+				stage: Object.freeze({ texts: Object.freeze({ start: 0, mail: 1 }) }),
+			}),
+		}),
+		firstKeyStart: screen("/first-key/start"),
+		firstKeyMail: screen("/first-key/mail"),
+		firstKeyContinue: screen("/first-key/continue"),
+		firstKeyFinish: screen("/first-key/finish"),
+	} satisfies Record<keyof typeof requests, OverHttp>) as Readonly<
+		Record<keyof typeof requests, OverHttp>
+	>,
+	statuses: Object.freeze({
+		invalid_client: 401,
+		temporarily_unavailable: 503,
+		server_error: 500,
+		rate_limited: 429,
+		too_many_attempts: 429,
+	}) as Readonly<Partial<Record<(typeof refusals)[number], number>>>,
+});
 
 export type RequestKind = keyof typeof requests;
 export type Outcome = keyof typeof outcomes;
