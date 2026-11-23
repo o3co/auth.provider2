@@ -61,7 +61,8 @@ function world() {
 		}),
 	);
 	const effOf = new Map<string, Changes>();
-	const delivered = new Set<string>();
+	/** `out`: the positions of the bundles whose owner answered took. */
+	const delivered = new Set<number>();
 	const issues: string[] = [];
 	let ops = 0;
 	const frame = () =>
@@ -184,8 +185,14 @@ function world() {
 					next.end?.owner &&
 					next.end.ending === "took" &&
 					next.end.kind === "issue"
-				)
-					delivered.add(next.end.op);
+				) {
+					const op = next.end.op;
+					const bundle = log
+						.records(flow)
+						.find((p) => p.record.kind === "bundle" && p.record.op === op);
+					if (!bundle) throw new Error(`${op} took with no bundle placed`);
+					delivered.add(bundle.record.position);
+				}
 				return;
 			}
 			case 4:
@@ -210,9 +217,21 @@ function world() {
 		expect(held()).toEqual(expected(applied)); // KP-06
 		if (intent?.state === "abandoning")
 			expect(store.clock.now()).toBeGreaterThanOrEqual(intent.leaseEnd); // ClaimExclusive
-		for (const p of log.records(flow)) {
-			if (p.record.kind === "abandonment")
-				expect(delivered.has(p.record.abandons?.op ?? "")).toBe(false); // KP-13
+		// KP-13: no abandonment record abandons a delivered bundle of its op placed before it
+		// (Step023's BundleOf(o, n)). A bundle placed after it belongs to the op decided again under
+		// its id (RegAbandon023's Decide on ~InLogKey), which that abandonment does not abandon.
+		for (const n of log.records(flow)) {
+			if (n.record.kind !== "abandonment") continue;
+			const op = n.record.abandons?.op;
+			const before = log
+				.records(flow)
+				.filter(
+					(q) =>
+						q.record.kind === "bundle" &&
+						q.record.op === op &&
+						q.record.position < n.record.position,
+				);
+			expect(before.filter((q) => delivered.has(q.record.position))).toEqual([]);
 		}
 		const r = reservation();
 		if (r) {
@@ -245,8 +264,37 @@ function world() {
 		}
 		return false;
 	}
-	return { act, check, settle, frame };
+	return { act, check, settle, frame, records: () => log.records(flow), delivered };
 }
+
+it("lets an op decided again after an abandonment that abandoned nothing deliver its bundle (KP-13)", async () => {
+	// fast-check's shrunk run: o1's intent outlives its lease, an empty abandonment closes it, and
+	// o1 is decided again under its id; its bundle lands after the abandonment and is delivered.
+	const w = world();
+	const events = [
+		[0, 0, 0],
+		[5, 0, 3],
+		[4, 0, 0],
+		[4, 0, 0],
+		[2, 0, 0],
+		[3, 0, 0],
+		[0, 0, 5],
+		[1, 0, 0],
+		[2, 0, 0],
+		[3, 0, 0],
+	] as const;
+	for (const [e, who, pick] of events) {
+		await w.act(e, who, pick);
+		w.check();
+	}
+	const placed = w.records().map((p) => [p.record.kind, p.record.op, p.record.position]);
+	expect(placed).toEqual([
+		["abandonment", "abandonment:1:o1", 1],
+		["bundle", "o1", 2],
+	]);
+	expect([...w.delivered]).toEqual([2]);
+	expect(await w.settle()).toBe(true);
+});
 
 it("keeps the models' invariants on every interleaving, and ends every intent on a fair run", async () => {
 	const event = fc.tuple(fc.nat(6), fc.nat(2), fc.nat(11));
