@@ -89,7 +89,11 @@ describe("a round trip", () => {
 	it("reads each reply's outcome back", () => {
 		for (const reply of [
 			{ outcome: "ok", id: 7, message: { body: randomBytes(40), dpopNonce: "nonce" } },
-			{ outcome: "refused", id: 8, message: { error: 3, detail: "bad grant", dpopNonce: "" } },
+			{
+				outcome: "refused",
+				id: 8,
+				message: { error: 3, detail: "bad grant", dpopNonce: "", retryAfter: "30" },
+			},
 			{ outcome: "rejected", id: 9, message: { code: wireErrors.kind } },
 		] as const) {
 			const read = decodeReply(encodeReply(reply));
@@ -100,6 +104,7 @@ describe("a round trip", () => {
 
 	it("refuses to encode a field outside its spec, naming the field", () => {
 		const message = {
+			source: "",
 			clientId: "",
 			request: "a.b.c",
 			eEnc: randomBytes(65),

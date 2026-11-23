@@ -5,7 +5,9 @@ import {
 	maxReplyBody,
 	maxRequestBody,
 	type Outcome,
+	type OverHttp,
 	outcomes,
+	overHttp,
 	type RequestKind,
 	replies,
 	requests,
@@ -278,4 +280,122 @@ export function frameSplitter(
 			held = held.slice(headerLength + header.length);
 		}
 	};
+}
+
+/**
+ * An operation's request as HTTP carries it: the body's values by name, in the order sent, and the
+ * headers by lower-case name; and apart from them, the source the Front determined, none where it
+ * determined none.
+ */
+export interface Carried {
+	readonly values: ReadonlyMap<string, readonly string[]>;
+	readonly headers: ReadonlyMap<string, string>;
+	readonly source?: string;
+}
+
+/** A message read from HTTP, or the field it cannot carry and the code of why. */
+export type Read<K extends RequestKind> =
+	| { readonly ok: true; readonly message: Message<K> }
+	| { readonly ok: false; readonly field: string; readonly error: WireErrorName };
+
+const kinds = Object.keys(requests) as RequestKind[];
+const sideOf = (kind: RequestKind): OverHttp => overHttp.operations[kind];
+const nameOf = (side: OverHttp, field: string) => side.bodyNames?.[field] ?? field;
+/** An enum value no text names is sent as this text, which no `texts` holds. */
+const otherText = "other";
+const base64url = /^[A-Za-z0-9_-]*$/;
+const decimal = /^(0|[1-9][0-9]{0,2})$/;
+
+/** The operation a request to `method` and `path` is, by the body value telling apart those sharing it; none where none is. */
+export function operationAt(
+	method: string,
+	path: string,
+	values: ReadonlyMap<string, readonly string[]>,
+): RequestKind | undefined {
+	if (method !== "POST") return undefined;
+	const at = kinds.filter((kind) => sideOf(kind).path === path);
+	const picked = at.find((kind) => {
+		const discriminator = sideOf(kind).discriminator;
+		const sent = discriminator && values.get(discriminator.name);
+		return sent?.length === 1 && sent[0] === discriminator?.value;
+	});
+	return picked ?? at.find((kind) => !sideOf(kind).discriminator);
+}
+
+/** One field's value from its text, or the code of why it holds none. */
+function fieldValue(
+	spec: FieldSpec,
+	side: OverHttp,
+	text: string,
+): { readonly value: unknown } | { readonly error: WireErrorName } {
+	if (spec.type === "enum") {
+		const texts = side.enumTexts?.[spec.name];
+		const value = texts
+			? Object.hasOwn(texts.texts, text)
+				? texts.texts[text]
+				: texts.other
+			: decimal.test(text)
+				? Number(text)
+				: undefined;
+		return value === undefined ? { error: "enumRange" } : { value };
+	}
+	if (spec.type !== "bytes") return { value: text };
+	const bytes = base64url.test(text) ? Buffer.from(text, "base64url") : undefined;
+	// Only the one text of its bytes: padding, or bits past the last byte, are refused.
+	return bytes?.toString("base64url") === text
+		? { value: new Uint8Array(bytes) }
+		: { error: "fieldSyntax" };
+}
+
+/**
+ * The message an operation's HTTP request carries, by `overHttp`: each field from its body name or its
+ * header, a name sent more than once refused, and the declared source from `carried.source` alone,
+ * never from the request. Each field's spec is the frame's encoder's to check after.
+ */
+export function messageOf<K extends RequestKind>(kind: K, carried: Carried): Read<K> {
+	const side = sideOf(kind);
+	const message: Record<string, unknown> = Object.create(null);
+	for (const spec of requests[kind].fields as readonly FieldSpec[]) {
+		if (spec.name === overHttp.declaredSource) {
+			message[spec.name] = carried.source ?? "";
+			continue;
+		}
+		const header = side.headerNames?.[spec.name];
+		const sent = header
+			? [carried.headers.get(header) ?? ""]
+			: carried.values.get(nameOf(side, spec.name));
+		if (sent && sent.length > 1) return { ok: false, field: spec.name, error: "fieldSyntax" };
+		const read = fieldValue(spec, side, sent?.[0] ?? "");
+		if ("error" in read) return { ok: false, field: spec.name, error: read.error };
+		message[spec.name] = read.value;
+	}
+	return { ok: true, message: message as Message<K> };
+}
+
+/** One field's text, as `messageOf` reads it back. */
+function textOf(spec: FieldSpec, side: OverHttp, value: unknown): string {
+	if (spec.type === "bytes") return Buffer.from(value as Uint8Array).toString("base64url");
+	if (spec.type !== "enum") return value as string;
+	const texts = side.enumTexts?.[spec.name];
+	if (!texts) return String(value);
+	return Object.entries(texts.texts).find(([, v]) => v === value)?.[0] ?? otherText;
+}
+
+/** The HTTP request carrying a message, as the Core's route reads it: the value telling the operation apart first, then each field sent, an empty text not sent; the declared source apart, where there is one. */
+export function carriedOf<K extends RequestKind>(kind: K, message: Message<K>): Carried {
+	const side = sideOf(kind);
+	const values = new Map<string, readonly string[]>();
+	const headers = new Map<string, string>();
+	let source: string | undefined;
+	const { discriminator } = side;
+	if (discriminator) values.set(discriminator.name, [discriminator.value]);
+	for (const spec of requests[kind].fields as readonly FieldSpec[]) {
+		const text = textOf(spec, side, (message as Record<string, unknown>)[spec.name]);
+		if (text === "") continue;
+		const header = side.headerNames?.[spec.name];
+		if (spec.name === overHttp.declaredSource) source = text;
+		else if (header) headers.set(header, text);
+		else values.set(nameOf(side, spec.name), [text]);
+	}
+	return source === undefined ? { values, headers } : { values, headers, source };
 }

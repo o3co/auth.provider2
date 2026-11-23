@@ -1,17 +1,18 @@
 # front-core-codec
 
 ## Responsibilities
-- Encodes and decodes the frames of the Front to Core wire, as `front-core-wire`'s schema gives them: the one implementation the Front's relay and the Core's entrance both use, so the two read every field alike.
+- Encodes and decodes the frames of the Front to Core wire, as `front-core-wire`'s schema gives them, and reads and writes each operation's message as HTTP carries it, as its `overHttp` gives it: the one implementation the Front's relay and the Core's entrance both use, so the two read every field alike.
 
 ## Not here
 - The wire's contract (the frame's form, the operations, their fields, the codes): `front-core-wire`.
-- Reading what a field means: the Core's verifier of each. The connection and who may reach it: the http axis's adapters.
+- Reading what a field means: the Core's verifier of each. The connection and who may reach it, and reading or writing HTTP itself (bodies, headers, statuses): the http axis's adapters.
 
 ## Offers
 - `encodeRequest` (kind, id, message) and `encodeReply` (reply): a frame, each field held to its spec; a field outside it throws `WireEncodeError`, naming the field and the code, for the honest side's own log.
 - `decodeRequest` and `decodeReply` (bytes): a `Decoded` value, the frame's kind or outcome, its id and its fields, or the code it is rejected with and the id its header gave. They never throw.
 - `readHeader` (bytes, the body's limit) and `frameSplitter` (the limit, `onFrame`, `onError`): a stream cut into whole frames.
 - `checkField` (spec, bytes): the one check of a field's length and characters both sides run.
+- `operationAt` (method, path, the body's values): the operation a request is, by the body value telling apart those sharing a path, or none. `messageOf` (kind, `Carried`: the body's values, the headers, and apart the source the Front determined) → the message, or the field it cannot carry and the code (`Read`); `carriedOf` (kind, message) → what the Core's route reads, the discriminator first, the declared source apart.
 - `Message`, `WireRequest`, `WireReply`, `Decoded`, `Rejected`, `Header`, `FieldsOf` and `Value`: the values, typed from the schema.
 - `./testing`: `fuzzer` (seed): well-formed frames of a kind and mutations of a frame, reproducible from the seed.
 
@@ -20,6 +21,7 @@
 - Only canonical frames are read: a frame read encodes back to the same bytes.
 - A stream's splitter stops at the first header whose version or length is wrong, calling `onError` once and reading nothing after, before the body is waited for.
 - A decoded field is a copy, so a buffer reused by the caller changes nothing read.
+- Every message `carriedOf` writes, `messageOf` reads back the same. The declared source is read from `Carried`'s own member alone, never from the body or a header. It refuses a name sent twice, an enum text its `texts` lack where no `other` is, a number not in plain decimal, and bytes not in the one base64url text of them; a field's length and characters stay the encoder's to check.
 
 ## Depends on
 - `front-core-wire` (the schema).
