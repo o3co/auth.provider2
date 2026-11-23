@@ -1,0 +1,26 @@
+{
+	"name": "@mod/front-relay",
+	"private": true,
+	"license": "Apache-2.0",
+	"type": "module",
+	"kind": "adapter",
+	"adapts": "@mod/http",
+	"network": "wire",
+	"exports": {
+		"./module": "./src/module.ts",
+		"./testing": "./src/testing.ts"
+	},
+	"dependencies": {
+		"@mod/front-core-codec": "workspace:*",
+		"@mod/front-core-wire": "workspace:*",
+		"@mod/http": "workspace:*",
+		"@mod/http-server": "workspace:*",
+		"@mod/kernel": "workspace:*",
+		"@mod/tls-options": "workspace:*",
+		"zod": "4.6.7"
+	},
+	"devDependencies": {
+		"@mod/http-ops": "workspace:*",
+		"vitest": "5.0.5"
+	}
+}
