@@ -1,0 +1,39 @@
+{
+	"name": "@mod/keys",
+	"private": true,
+	"license": "Apache-2.0",
+	"type": "module",
+	"kind": "foundation",
+	"appEntries": [
+		{
+			"script": "keys-publish",
+			"shape": "call",
+			"contract": "keys",
+			"member": "publish"
+		}
+	],
+	"exports": {
+		".": "./src/contract.ts",
+		"./testing": "./src/testing.ts",
+		"./module": "./src/module.ts",
+		"./holder": "./src/holder.ts"
+	},
+	"dependencies": {
+		"@mod/kernel": "workspace:*",
+		"@mod/promises": "workspace:*",
+		"@mod/sdk-core-wire": "workspace:*",
+		"@mod/transparency-wire": "workspace:*",
+		"jose": "6.2.15",
+		"zod": "4.6.7"
+	},
+	"devDependencies": {
+		"@mod/authority-rules": "workspace:*",
+		"vitest": "5.0.5"
+	},
+	"takenBy": {
+		"./holder": [
+			"@mod/keys-kms",
+			"@mod/keys-local"
+		]
+	}
+}
