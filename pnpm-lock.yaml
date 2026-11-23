@@ -582,6 +582,9 @@ importers:
       '@mod/transparency':
         specifier: workspace:*
         version: link:../transparency
+      '@mod/transparency-frames':
+        specifier: workspace:*
+        version: link:../transparency-frames
     devDependencies:
       vitest:
         specifier: 5.0.5

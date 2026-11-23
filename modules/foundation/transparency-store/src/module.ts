@@ -1,6 +1,7 @@
 import { defineModule } from "@mod/kernel";
 import { type Guarantee, type Space, spaces, store } from "@mod/store";
-import { frameParts, frameStore, type frameStoreNeeds, frameStoreOver } from "@mod/transparency";
+import { frameStore, type frameStoreNeeds } from "@mod/transparency";
+import { frameParts, frameStoreOver } from "@mod/transparency-frames";
 
 /** Each need transparency states for its frames, as the guarantee the frames' space declares. */
 const guaranteeFor: Record<keyof typeof frameStoreNeeds, Guarantee> = {
@@ -28,6 +29,7 @@ export default defineModule(
 				space: frames,
 				parts: await c.collect(frameParts),
 				random: c.random,
+				where: "transparency-store",
 				refuse: (where, reason) => c.refuse(where, reason),
 			}),
 		),

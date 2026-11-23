@@ -3,8 +3,9 @@ import { quietRuntime } from "@mod/kernel/testing";
 import { type Guarantee, type Space, type Store, spaces, store } from "@mod/store";
 import storeModule from "@mod/store/module";
 import { simulatedStore, storeConfig } from "@mod/store/testing";
-import { frameParts, frameStore } from "@mod/transparency";
+import { frameStore } from "@mod/transparency";
 import { frameStoreContract } from "@mod/transparency/testing";
+import { frameParts } from "@mod/transparency-frames";
 import { describe, expect, it } from "vitest";
 import wiring from "../src/module.ts";
 
@@ -17,9 +18,12 @@ const all: Guarantee[] = [
 ];
 let parts = 0;
 /** A part's owner's wiring: its space declared, and bound to the part. */
-function partModule(guarantees: readonly Guarantee[] = all) {
+function partModule(
+	guarantees: readonly Guarantee[] = all,
+	subjectData: Space["subjectData"] = "none",
+) {
 	parts += 1;
-	const space: Space = { name: `part${parts}`, guarantees: [...guarantees], subjectData: "none" };
+	const space: Space = { name: `part${parts}`, guarantees: [...guarantees], subjectData };
 	const module = defineModule({ name: `part${parts}`, replicaSafe: true, takes: [] }, (m) => [
 		m.contribute(spaces).by(() => space),
 		m.contribute(frameParts).by(() => ({ name: "p", space })),
@@ -95,6 +99,21 @@ describe("transparency-store", () => {
 		})
 			.then(() => "booted")
 			.catch(refusal);
-		expect(refused).toMatch(/transparency-store: part p declares other guarantees/);
+		expect(refused).toMatch(
+			/transparency-store: space part\d+ declares other guarantees than transparency-store\.frames/,
+		);
+	});
+
+	it("refuses to boot when a part's space holds a subject's data, which a Step's write cannot reach", async () => {
+		const refused = await assemble({
+			modules: [storeModule, wiring, partModule(all, "online-indexed")],
+			config: config(),
+			runtime: quietRuntime(),
+		})
+			.then(() => "booted")
+			.catch(refusal);
+		expect(refused).toMatch(
+			/transparency-store: space part\d+ holds a subject's data, or an index of one/,
+		);
 	});
 });
