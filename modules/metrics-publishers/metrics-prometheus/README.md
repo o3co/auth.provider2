@@ -15,7 +15,7 @@
 - The answer is `200` with `text/plain; version=0.0.4; charset=utf-8`, `no-store` and `Pragma: no-cache`.
 - The body is what `metrics` samples at the scrape, then the process defaults prefixed `auth_provider_`.
 - Operator section `metrics-prometheus`: `path` (default `/metrics`), from `/`, not ending in `/*`, with no query, fragment, whitespace or control character.
-- It comes by default with `http` and `metrics`, and a deployment that does not publish leaves it out.
+- It comes by default with `http` and `metrics`, and a deployment that does not publish leaves it out. It is the metrics axis's default: a composition naming no adapter of that axis composes it.
 
 ## Invariants
 - An instrument the text cannot hold refuses boot by name: a histogram label named `le`, or a name the process or another instrument takes, `_bucket`, `_sum` and `_count` included.

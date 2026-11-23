@@ -5,6 +5,7 @@
 	"type": "module",
 	"kind": "adapter",
 	"adapts": "@mod/metrics",
+	"default": true,
 	"joins": [
 		"@mod/http",
 		"@mod/metrics"
