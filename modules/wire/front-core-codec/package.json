@@ -1,0 +1,17 @@
+{
+	"name": "@mod/front-core-codec",
+	"private": true,
+	"license": "Apache-2.0",
+	"type": "module",
+	"kind": "foundation",
+	"exports": {
+		".": "./src/contract.ts",
+		"./testing": "./src/testing.ts"
+	},
+	"dependencies": {
+		"@mod/front-core-wire": "workspace:*"
+	},
+	"devDependencies": {
+		"vitest": "5.0.5"
+	}
+}

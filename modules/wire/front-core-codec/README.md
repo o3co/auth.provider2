@@ -1,0 +1,25 @@
+# front-core-codec
+
+## Responsibilities
+- Encodes and decodes the frames of the Front to Core wire, as `front-core-wire`'s schema gives them: the one implementation the Front's relay and the Core's entrance both use, so the two read every field alike.
+
+## Not here
+- The wire's contract (the frame's form, the operations, their fields, the codes): `front-core-wire`.
+- Reading what a field means: the Core's verifier of each. The connection and who may reach it: the http axis's adapters.
+
+## Offers
+- `encodeRequest` (kind, id, message) and `encodeReply` (reply): a frame, each field held to its spec; a field outside it throws `WireEncodeError`, naming the field and the code, for the honest side's own log.
+- `decodeRequest` and `decodeReply` (bytes): a `Decoded` value, the frame's kind or outcome, its id and its fields, or the code it is rejected with and the id its header gave. They never throw.
+- `readHeader` (bytes, the body's limit) and `frameSplitter` (the limit, `onFrame`, `onError`): a stream cut into whole frames.
+- `checkField` (spec, bytes): the one check of a field's length and characters both sides run.
+- `Message`, `WireRequest`, `WireReply`, `Decoded`, `Rejected`, `Header`, `FieldsOf` and `Value`: the values, typed from the schema.
+- `./testing`: `fuzzer` (seed): well-formed frames of a kind and mutations of a frame, reproducible from the seed.
+
+## Invariants
+- A frame is read whole or rejected: a wrong version, kind or length, a truncated body or field, a field's length or characters outside its spec, an enum past its count and bytes after the last field each have their code; no piece of the input goes into a rejection.
+- Only canonical frames are read: a frame read encodes back to the same bytes.
+- A stream's splitter stops at the first header whose version or length is wrong, calling `onError` once and reading nothing after, before the body is waited for.
+- A decoded field is a copy, so a buffer reused by the caller changes nothing read.
+
+## Depends on
+- `front-core-wire` (the schema).
