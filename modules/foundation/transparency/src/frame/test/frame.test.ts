@@ -147,11 +147,22 @@ describe("KE-C01, deciding an op", () => {
 			digest: "d1",
 			eff: {},
 			head: 1,
-			placed: { last: false },
+			placed: { stages: 0 },
 			leaseMs,
 		});
 		if (!("frame" in again)) throw new Error("not decided");
 		expect(again.frame.intent).toMatchObject({ state: "pending", prev: 1 });
+	});
+
+	it("never decides again an op whose first stage was placed, even after its abandonment closed it (A16)", () => {
+		const orphan = marked(decidedBy("key"), at("w2", 6000), 0);
+		if (!("frame" in orphan)) throw new Error("not marked");
+		const closed = step(orphan.frame, at("w2", 6100), abandonment(1, "op1", 1)).frame;
+		expect(closed.intent?.state).toBe("closed");
+		// The log answers what the flow holds of op1: here a first stage before its abandonment.
+		const ask = { op: "op1", kind: "key", digest: "d1", eff: {}, head: 1, leaseMs };
+		const placed = { stages: 1, last: false, abandonments: 1 };
+		expect(decided(closed, at("w1", 7000), { ...ask, placed })).toEqual({ refused: "ended" });
 	});
 });
 

@@ -130,7 +130,7 @@ const until = (i: Intent) => i.leaseEnd - 1;
 
 /**
  * KE-C01: the op's intent, decided on the applied state, when the flow is ready and has none open,
- * and the flow holds no last stage of the op (`placed`, read from the log).
+ * and the flow holds no stage of the op (`placed`, read from the log; the card says why).
  */
 export function decided(
 	f: Frame,
@@ -141,7 +141,7 @@ export function decided(
 		readonly digest: string;
 		readonly eff: Changes;
 		readonly head: number;
-		readonly placed: { readonly last: boolean };
+		readonly placed: { readonly stages: number };
 		readonly leaseMs: number;
 	},
 ): Written | Refused<"sealed" | "notReady" | "open" | "ended"> {
@@ -149,7 +149,7 @@ export function decided(
 	if (f.applied !== p.head) return { refused: "notReady" };
 	const it = intentOf(f, at);
 	if (isOpen(it)) return { refused: "open" };
-	if (p.placed.last) return { refused: "ended" };
+	if (p.placed.stages > 0) return { refused: "ended" };
 	const next: Intent = {
 		op: p.op,
 		kind: p.kind,

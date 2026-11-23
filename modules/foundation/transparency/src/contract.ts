@@ -191,7 +191,7 @@ export type Deciding = (
 export interface Transparency {
 	/**
 	 * KE-C01: decides the op on the applied state, in one write with its kind's records; never an op
-	 * whose last stage is on the flow. A writer refused `open` or `notReady` tends the flow and decides again.
+	 * with a stage on the flow (again only after an empty abandonment). A writer refused `open` or `notReady` tends the flow and decides again.
 	 */
 	decide(p: {
 		readonly kind: string;
