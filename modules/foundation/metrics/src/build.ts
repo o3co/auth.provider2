@@ -1,6 +1,6 @@
 import type { BuildContext } from "@mod/kernel";
 import { instruments, type Metrics } from "./contract.ts";
-import { sampledGauge } from "./gauge.ts";
+import { sampledGauge } from "./gauge/gauge.ts";
 import { attach } from "./instrument.ts";
 import { kept, problemsOf } from "./registry.ts";
 

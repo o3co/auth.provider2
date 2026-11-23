@@ -18,7 +18,7 @@
 - Recording before that, or with no `metrics` composed, does nothing.
 - `metrics.read()` gives every instrument with its declared label names and series, and no series for a gauge.
 - A histogram's counts are cumulative per bucket, then one for all.
-- `metrics.sample()` gives what `read()` gives, with every gauge read now, each within 2 seconds: a fixed bound under any scrape timeout (Prometheus's default is 10 s), as a source slower than that fails requests too.
+- `metrics.sample()` gives what `read()` gives, with every gauge read now, each within 2 seconds (internal module `gauge`): a fixed bound under any scrape timeout (Prometheus's default is 10 s), as a source slower than that fails requests too.
 - `./testing` gives `metricsContract`, the contract test of gauges, and `metricsStandIn`, a stand-in that decides by the same rules within a bound the test sets.
 - Composition definition: comes by default with `http`, with no operator section and no store.
 
@@ -30,8 +30,6 @@
 - The label values and buckets are copied when made, so the emitter cannot change them later.
 - A record is dropped when a label is missing or undeclared, a value is outside its set, the number is not finite, or a counter step is negative.
 - A dropped record never throws or changes the emitter's answer, and each instrument warns once, by name, when it first drops.
-- A gauge's read that throws, fails, is late, or gives a series undeclared, not finite or given twice leaves that gauge with no series.
-- Each such read warns with the name and why, never the error, and the sample still answers.
 - A reading is frozen, so later records do not change it.
 - A histogram's `count` equals its last count, and `sum` is the sum of the values.
 - Data: the counts of each instance, in the process, with a series starting at its first record.

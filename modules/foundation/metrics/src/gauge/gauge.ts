@@ -1,7 +1,7 @@
 import type { Log } from "@mod/kernel";
-import type { Reading } from "./contract.ts";
-import { type Gauge, type Labels, readOf } from "./instrument.ts";
-import { declared } from "./registry.ts";
+import type { Reading } from "../contract.ts";
+import { type Gauge, type Labels, readOf } from "../instrument.ts";
+import { declared } from "../registry.ts";
 
 type Series = { readonly labels: Labels<string>; readonly value: number };
 
