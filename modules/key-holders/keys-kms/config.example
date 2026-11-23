@@ -1,0 +1,8 @@
+keys-kms {
+	region = eu-west-1
+	keys = [
+		{ kid = authority-1, key-id = "arn:aws:kms:eu-west-1:111122223333:key/REPLACE-AUTHORITY-KEY-ID" }
+		{ kid = core-1, key-id = "arn:aws:kms:eu-west-1:111122223333:key/REPLACE-CORE-KEY-ID" }
+		{ kid = sealing-1, key-id = "arn:aws:kms:eu-west-1:111122223333:key/REPLACE-SEALING-KEY-ID" }
+	]
+}
