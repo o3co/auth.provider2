@@ -28,6 +28,57 @@ importers:
         specifier: 5.0.5
         version: 5.0.5(@types/node@26.6.5)(vite@8.3.3(@types/node@26.6.5)(yaml@2.9.1))
 
+  modules/erasure/account-erasure:
+    dependencies:
+      '@mod/erasure-journal':
+        specifier: workspace:*
+        version: link:../../foundation/erasure-journal
+      '@mod/kernel':
+        specifier: workspace:*
+        version: link:../../foundation/kernel
+    devDependencies:
+      vitest:
+        specifier: 5.0.5
+        version: 5.0.5(@types/node@26.6.5)(vite@8.3.3(@types/node@26.6.5)(yaml@2.9.1))
+
+  modules/erasure/account-erasure-store:
+    dependencies:
+      '@mod/account-erasure':
+        specifier: workspace:*
+        version: link:../account-erasure
+      '@mod/kernel':
+        specifier: workspace:*
+        version: link:../../foundation/kernel
+      '@mod/store':
+        specifier: workspace:*
+        version: link:../../foundation/store
+      '@mod/subject-records':
+        specifier: workspace:*
+        version: link:../../foundation/subject-records
+    devDependencies:
+      '@mod/erasure-journal-file':
+        specifier: workspace:*
+        version: link:../erasure-journal-file
+      vitest:
+        specifier: 5.0.5
+        version: 5.0.5(@types/node@26.6.5)(vite@8.3.3(@types/node@26.6.5)(yaml@2.9.1))
+
+  modules/erasure/erasure-journal-file:
+    dependencies:
+      '@mod/erasure-journal':
+        specifier: workspace:*
+        version: link:../../foundation/erasure-journal
+      '@mod/kernel':
+        specifier: workspace:*
+        version: link:../../foundation/kernel
+      zod:
+        specifier: 4.6.7
+        version: 4.6.7
+    devDependencies:
+      vitest:
+        specifier: 5.0.5
+        version: 5.0.5(@types/node@26.6.5)(vite@8.3.3(@types/node@26.6.5)(yaml@2.9.1))
+
   modules/foundation/added-claims:
     dependencies:
       '@mod/kernel':
@@ -143,6 +194,19 @@ importers:
         specifier: 5.0.5
         version: 5.0.5(@types/node@26.6.5)(vite@8.3.3(@types/node@26.6.5)(yaml@2.9.1))
 
+  modules/foundation/records:
+    dependencies:
+      '@mod/kernel':
+        specifier: workspace:*
+        version: link:../kernel
+      '@mod/store':
+        specifier: workspace:*
+        version: link:../store
+    devDependencies:
+      '@mod/erasure-extensions':
+        specifier: workspace:*
+        version: link:../erasure-extensions
+
   modules/foundation/secret-hash:
     dependencies:
       '@mod/kernel':
@@ -154,6 +218,38 @@ importers:
       zod:
         specifier: 4.6.7
         version: 4.6.7
+
+  modules/foundation/store:
+    dependencies:
+      '@mod/kernel':
+        specifier: workspace:*
+        version: link:../kernel
+      zod:
+        specifier: 4.6.7
+        version: 4.6.7
+    devDependencies:
+      vitest:
+        specifier: 5.0.5
+        version: 5.0.5(@types/node@26.6.5)(vite@8.3.3(@types/node@26.6.5)(yaml@2.9.1))
+
+  modules/foundation/subject-records:
+    dependencies:
+      '@mod/erasure-extensions':
+        specifier: workspace:*
+        version: link:../erasure-extensions
+      '@mod/kernel':
+        specifier: workspace:*
+        version: link:../kernel
+      '@mod/records':
+        specifier: workspace:*
+        version: link:../records
+      '@mod/store':
+        specifier: workspace:*
+        version: link:../store
+    devDependencies:
+      vitest:
+        specifier: 5.0.5
+        version: 5.0.5(@types/node@26.6.5)(vite@8.3.3(@types/node@26.6.5)(yaml@2.9.1))
 
   modules/foundation/tls-options:
     dependencies:
