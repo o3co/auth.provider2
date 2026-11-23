@@ -216,6 +216,21 @@ importers:
         specifier: workspace:*
         version: link:../erasure-extensions
 
+  modules/foundation/request-source:
+    dependencies:
+      '@mod/address-reach':
+        specifier: workspace:*
+        version: link:../address-reach
+      '@mod/client-certificate':
+        specifier: workspace:*
+        version: link:../client-certificate
+      '@mod/kernel':
+        specifier: workspace:*
+        version: link:../kernel
+      zod:
+        specifier: 4.6.7
+        version: 4.6.7
+
   modules/foundation/secret-hash:
     dependencies:
       '@mod/kernel':
