@@ -1,0 +1,30 @@
+# audit-http
+
+## Responsibilities
+- Contributes the audit receiver `http` to `audit`, posting each event to the operator's URL through `outbound`.
+
+## Not here
+- Which events there are and what they carry: the emitting side's.
+- Whether the URL may be reached, plain http included, and how long a request may run: `outbound`'s policy.
+- Counting and logging a failed delivery: `audit`'s.
+
+## Offers
+- Composition definition: the receiver `http`.
+- Operator section: `url` (required), an http or https URL as `url-setting` takes it.
+- Operator section: `authorization` (optional), the whole value of the Authorization header the collector asks for, a secret.
+- `./testing`: `auditHttpConfig`, a test configuration builder: an https URL and a new Authorization value, unless a test sets them.
+
+## Invariants
+- One request per event: `POST`, `content-type: application/json`, and the event as one JSON object, values included.
+- The Authorization value is sent only when given, by `outbound` as its `credential`; it is printable ASCII on one line, no space at either end, and is never logged or told in a refusal.
+- An Authorization value beginning `REPLACE-`, the fragment's placeholder, refuses boot.
+- With an Authorization value, the URL must be one `outbound.credentials` sends a credential to: https, or a `plain-loopback` or `plain-internal` pair; boot is refused otherwise (at `url`, in `credentialRefusalText`'s words).
+- Boot is refused, saying why and which of `outbound`'s keys to set (`outbound.refusals`), when its destination policy refuses the URL.
+- Events go to the configured URL alone; a redirect is a failure, never followed. The URL is named to `outbound` as the operator's own (`internal`, the URL itself; `narrower`: `internal`), so a collector at a host in `internal-hosts`, or over plain http at a `host:port` `plain-internal` names, is reached at a private address, at that URL's origin (scheme, host and port) alone.
+- Any answer other than 2xx, a refused destination, or no usable answer is this receiver failing; the event is not sent again.
+
+## Data
+- None, so it is safe on many instances.
+
+## Depends on
+- `kernel`, `audit`, `url-setting`, `outbound`, `outbound-policy`; its takes name `credentialPolicy` (`outbound.credentials`) with or without an `authorization`, as `outbound` provides it beside `outbound`, so a module of your own providing `outbound` provides it too

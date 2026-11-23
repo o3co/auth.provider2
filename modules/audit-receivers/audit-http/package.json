@@ -1,0 +1,29 @@
+{
+	"name": "@mod/audit-http",
+	"private": true,
+	"license": "Apache-2.0",
+	"type": "module",
+	"kind": "adapter",
+	"narrower": "internal",
+	"adapts": "@mod/audit",
+	"default": true,
+	"registersAs": "http",
+	"asks": [
+		"Audit events posted to a receiver (`audit-http.url`)."
+	],
+	"exports": {
+		"./testing": "./src/testing.ts",
+		"./module": "./src/module.ts"
+	},
+	"dependencies": {
+		"@mod/audit": "workspace:*",
+		"@mod/kernel": "workspace:*",
+		"@mod/outbound": "workspace:*",
+		"@mod/outbound-policy": "workspace:*",
+		"@mod/url-setting": "workspace:*",
+		"zod": "4.6.7"
+	},
+	"devDependencies": {
+		"vitest": "5.0.5"
+	}
+}
