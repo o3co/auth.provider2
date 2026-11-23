@@ -1,0 +1,229 @@
+import type { Changes, Finding, FlowState } from "@mod/authority-rules";
+import { contract, extensionPoint } from "@mod/kernel";
+import type { Json, Space } from "@mod/store";
+import type {
+	AppendAnswer,
+	AppendRequest,
+	Flow,
+	LogRecord,
+	Preimage,
+} from "@mod/transparency-wire";
+import type { End, Ending, Refused } from "./frame/frame.ts";
+
+/**
+ * The Core's side of the transparency log: the contract its writers take, the intent frame they
+ * share (one per flow), the log's axis the adapters provide, and the frame's store interface.
+ */
+
+export { frameParts, frameStoreOver } from "./frame-store/frame-store.ts";
+export type { End, Ending, Refused };
+
+/** One of a part's records: a part is a writer's or a state owner's records, in a place its wiring binds. */
+export interface PartRecord {
+	readonly part: string;
+	readonly name: string;
+}
+/** What a part record becomes in a flow's one write: a value, removed, or kept as it is (none). */
+export type PartNext = { readonly value: Json } | { readonly remove: true } | undefined;
+
+/** Where a part's records are kept: the space its owner's wiring declares and binds to it. */
+export interface FramePart {
+	readonly name: string;
+	readonly space: Space;
+}
+
+/** What a read of a flow's frame and part records saw, which the one write is held to. */
+export interface FrameRead {
+	readonly flow: Flow;
+	readonly records: readonly PartRecord[];
+	readonly frame: Json | undefined;
+	/** Each record's value, in the order named; none where it holds none. */
+	readonly held: readonly (Json | undefined)[];
+	/** The store clock's time at the read. */
+	readonly now: number;
+	/** The versions read, the frame's first, then each record's; none where absent. Opaque. */
+	readonly versions: readonly (string | null)[];
+}
+
+/** The frame's store interface: a flow's frame and the part records named, read, then written as one. */
+export interface FrameStore {
+	/** The part names bound to a place; every registration's parts are among them. */
+	readonly parts: readonly string[];
+	read(flow: Flow, records: readonly PartRecord[]): Promise<FrameRead>;
+	/**
+	 * Writes the frame (none keeps it) and the records as one, held to every version the read saw,
+	 * refused past `deadline` on the store clock; nothing expires. Unavailable means it may have applied.
+	 */
+	write(
+		read: FrameRead,
+		next: { readonly frame?: Json; readonly records: readonly PartNext[] },
+		deadline: number,
+	): Promise<"written" | "moved" | "late">;
+}
+
+/** What the frame's place must be, each need a guarantee its wiring declares. */
+export const frameStoreNeeds = Object.freeze({
+	/** A frame dropped for room would let a second intent open on its flow. */
+	neverEvicted: "never evicted",
+	/** A crash losing a frame would lose an intent whose append may be on the log. */
+	survivesCrash: "survives a crash",
+	survivesFailover: "survives a failover",
+	/** The owner rule reads another replica's owner and lease to mark or take over. */
+	readsConfirmed: "reads confirmed",
+	/** A frame written outside the provider would open or close an op the provider never did. */
+	authenticated: "written by the provider alone",
+});
+
+/** One stage a Core writer puts on its flow: the fields it names, its preimage unsealed. */
+export type Stage = Omit<
+	AppendRequest,
+	"v" | "prev" | "preimage" | "plaintextDigest" | "signed"
+> & {
+	readonly preimage: Preimage;
+};
+/** A record placed on a flow, with its judgment once the monitor judged it. */
+export interface Placed {
+	readonly record: Extract<LogRecord, { readonly position: number }>;
+	readonly finding?: Finding;
+	/** For a record no Core writer writes: the changes its verified body leaves. */
+	readonly changes?: Changes;
+}
+
+/** The log's axis: how this Core's writer appends and reads its flows; an adapter provides it. */
+export interface TransparencyLog {
+	/** The writer this replica appends as: its instance, and its Core generation (`Gen(w)`). */
+	readonly writer: { readonly instance: string; readonly generation: number };
+	/** A preimage's plaintext digest, as its append names it. */
+	digest(preimage: Preimage): string;
+	/** A stage's conditional append after `prev`, its preimage sealed to the shard's monitor keys. */
+	append(stage: Stage, prev: number): Promise<AppendAnswer>;
+	/** How many records the flow has. */
+	head(flow: Flow): Promise<number>;
+	/** The record at a flow's position; none where none is placed. */
+	at(flow: Flow, position: number): Promise<Placed | undefined>;
+}
+
+/** What two hooks hold around a bundle: its tokens' digests before its append, their signing after its receipts. */
+export interface BundleSigning<P> {
+	prepare(): Promise<{
+		readonly prepared: P;
+		readonly tokens: NonNullable<AppendRequest["tokens"]>;
+	}>;
+	/** The tokens signed, each carrying its receipt, once the bundle's end is the owner's `took`. */
+	sign(prepared: P, receipts: readonly string[]): Promise<readonly string[]>;
+}
+
+/** A kind of operation, registered by its writer: pure functions the driver calls. */
+export interface OperationKind {
+	readonly name: string;
+	/** Whether its last stage is a bundle: one left alone is abandoned, never taken over. */
+	readonly bundle: boolean;
+	/** The parts its records are in. */
+	readonly parts: readonly string[];
+	/** The records its ops hold besides the frame (a reservation), read and written with it. */
+	readonly records: (flow: Flow) => readonly PartRecord[];
+	/** What its records become as an op ends, in the same write as the end (a confirm, a release). */
+	readonly end: (
+		end: { readonly op: string; readonly ending: Ending },
+		held: readonly (Json | undefined)[],
+	) => readonly PartNext[];
+	/** For a kind that is no bundle: the stage a taker resends, the same id and content, from its records. */
+	readonly resend?: (
+		flow: Flow,
+		op: string,
+		held: readonly (Json | undefined)[],
+	) => Stage | undefined;
+}
+
+/** An owner of part of a flow's state, registered by it: its records ↔ its fields of the state. Pure. */
+export interface StateOwner {
+	readonly name: string;
+	/** The fields of the state it holds; every field is held by one owner. */
+	readonly holds: readonly (keyof FlowState)[];
+	readonly parts: readonly string[];
+	readonly records: (flow: Flow) => readonly PartRecord[];
+	/** Its fields of the state, from what its records hold. */
+	readonly read: (held: readonly (Json | undefined)[]) => Partial<FlowState>;
+	/** What its records become, from the state after the fold and what they held. */
+	readonly write: (state: FlowState, held: readonly (Json | undefined)[]) => readonly PartNext[];
+}
+
+/** The writer's part of KE-C01, on the applied state and its kind's records: the op, or why not. */
+export type Deciding = (
+	state: FlowState,
+	held: readonly (Json | undefined)[],
+) =>
+	| {
+			readonly digest: string;
+			readonly eff: Changes;
+			readonly records: readonly PartNext[];
+	  }
+	| { readonly refused: string };
+
+/** The contract the Core's writers take: their ops on the flow's one intent, each write one CAS. */
+export interface Transparency {
+	/** KE-C01: decides the op on the applied state, in one write with its kind's records. */
+	decide(p: {
+		readonly kind: string;
+		readonly flow: Flow;
+		readonly op: string;
+		readonly decide: Deciding;
+	}): Promise<
+		| { readonly prev: number }
+		| Refused<"sealed" | "notReady" | "open" | "ended" | "moved" | "late" | string>
+	>;
+	/** KE-C02: the owner's stage, after `prev`; its first stage's prevMismatch closes the op. */
+	send(p: {
+		readonly flow: Flow;
+		readonly op: string;
+		readonly stage: Stage;
+		readonly prev: number;
+	}): Promise<{ readonly answer: AppendAnswer; readonly end?: End } | Refused<"notOwner">>;
+	/** The owner, the flow taken in to its head, re-checks its op there: moves its prev, or closes it. */
+	rebase(p: {
+		readonly flow: Flow;
+		readonly op: string;
+		readonly recheck: (state: FlowState) => boolean;
+	}): Promise<
+		| { readonly prev: number }
+		| { readonly end: End }
+		| Refused<"notOwner" | "notReady" | "moved" | "late">
+	>;
+	/** KE-C04: takes in the next record; `own`: the caller owns that op and is in its apply phase. */
+	step(p: {
+		readonly flow: Flow;
+		readonly own?: string;
+	}): Promise<
+		| { readonly position: number; readonly end?: End }
+		| Refused<"atHead" | "unjudged" | "sealed" | "notNext" | "waits" | "stuck" | "moved" | "late">
+	>;
+	/** An idle replica's turn on a flow: takes it in to its head, claims an orphan, sends an abandonment. */
+	tend(flow: Flow): Promise<{
+		readonly stepped: number;
+		readonly did?: "marked" | "tookOver" | "abandonment";
+		readonly answer?: AppendAnswer;
+	}>;
+	/** A change of a writer's records held to the frame: only while the flow has no open intent. */
+	changeHeld(p: {
+		readonly flow: Flow;
+		readonly records: readonly PartRecord[];
+		readonly change: (held: readonly (Json | undefined)[]) => readonly PartNext[];
+	}): Promise<{ readonly changed: true } | Refused<"open" | "moved" | "late">>;
+}
+
+export const transparency = contract<Transparency>("transparency");
+/** The log's axis, which an adapter provides. */
+export const transparencyLog = contract<TransparencyLog>("transparency.log");
+/** The frame's store interface, which a store wiring provides. */
+export const frameStore = contract<FrameStore>("transparency.frame-store");
+
+/** The kinds of operation, keyed by name. */
+export const operationKinds = extensionPoint<OperationKind>("transparency.operation-kinds", {
+	multiplicity: "keyed",
+	keyOf: (kind) => kind.name,
+});
+/** The owners of a flow's state, keyed by name. */
+export const stateOwners = extensionPoint<StateOwner>("transparency.state-owners", {
+	multiplicity: "keyed",
+	keyOf: (owner) => owner.name,
+});
