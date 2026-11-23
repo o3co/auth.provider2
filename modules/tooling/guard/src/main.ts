@@ -1,0 +1,35 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { readWorkspace } from "@mod/guard-imports";
+import { branchingImports, heavyDependencyCards } from "./budget/budget.ts";
+import { budgetOf, check } from "./check.ts";
+import { unlistedExports } from "./offers/offers.ts";
+import { readDocuments } from "./workspace.ts";
+
+const root = process.env.INIT_CWD ?? process.cwd();
+const budget = budgetOf(
+	JSON.parse(readFileSync(join(import.meta.dirname, "..", "budget.json"), "utf8")),
+);
+const packages = readWorkspace(root);
+const violations = check(packages, budget, readDocuments(root));
+// Reported, not refused: an internal module pulling in what the rest of its package does not.
+for (const { where, packages: alone } of branchingImports(packages, budget)) {
+	process.stdout.write(`measure  dependency branch  ${where}  ${alone.join(", ")}\n`);
+}
+// Reported, not refused: a unit's dependency cards grow with cards it does not own.
+for (const { where, bytes } of heavyDependencyCards(packages, budget)) {
+	process.stdout.write(
+		`measure  dependency cards  ${where}  ${bytes} > ${budget.dependencyCardBytes}\n`,
+	);
+}
+// Reported, not refused: an entry point's exports its card does not list.
+for (const { where, entry, names } of unlistedExports(packages)) {
+	process.stdout.write(
+		`measure  offers  ${where}  ${entry}  ${names.length}: ${names.join(", ")}\n`,
+	);
+}
+for (const v of violations) process.stdout.write(`${v.rule}  ${v.where}  ${v.detail}\n`);
+process.stdout.write(
+	violations.length === 0 ? "guard: ok\n" : `guard: ${violations.length} violation(s)\n`,
+);
+process.exit(violations.length === 0 ? 0 : 1);
