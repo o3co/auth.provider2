@@ -1,0 +1,472 @@
+import { assemble, BootRefused, defineModule, kernelConfig, type Log } from "@mod/kernel";
+import { quietRuntime, recordingLog } from "@mod/kernel/testing";
+import {
+	type OutboundRefusals,
+	outboundLimits,
+	outboundRefusals,
+	policyOf,
+	policySettings,
+} from "@mod/outbound-policy";
+import { tlsOptions } from "@mod/tls-options";
+import { testTlsOptions, tlsOptionsForTests } from "@mod/tls-options/testing";
+import { configuredUrl } from "@mod/url-setting/testing";
+import { afterEach, expect, it, vi } from "vitest";
+import { type Narrower, outbound, signedOutbound } from "../src/contract.ts";
+import outboundModule, { NotTheFloor, outboundOver, section } from "../src/module.ts";
+import { revocationSection } from "../src/revocation/settings.ts";
+
+afterEach(() => vi.unstubAllEnvs());
+
+/** The proxy variables blanked, but for `name`, set to a proxy when given. */
+const onlyProxy = (name?: string) => {
+	vi.unstubAllEnvs();
+	for (const variable of ["HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY"]) {
+		vi.stubEnv(variable, "");
+		vi.stubEnv(variable.toLowerCase(), "");
+	}
+	if (name) vi.stubEnv(name, "http://proxy.test:3128");
+};
+
+const boot = (settings: Record<string, unknown> = {}, log?: Log) =>
+	assemble({
+		modules: [outboundModule, tlsOptionsForTests],
+		config: { ...kernelConfig(), outbound: settings },
+		runtime: quietRuntime(log ? { log } : {}),
+	});
+
+it("holds to the defaults: outbound-policy's for its keys, and outbound's own", () => {
+	expect(section.parse({})).toEqual({
+		...policySettings.parse({}),
+		"max-concurrent": 16,
+		"direct-despite-proxy": false,
+		"direct-hosts": [],
+		"plain-ipv4": [],
+		resolution: "helper",
+		// Its own defaults, as its tests hold them.
+		revocation: revocationSection.parse({}),
+	});
+});
+
+it("takes each cap within its range, a size or time written with its unit, and refuses anything else", () => {
+	for (const bad of [
+		{ "max-response-size": "0B" },
+		{ "max-response-size": "16777217B" },
+		{ "max-response-size": 1024 },
+		{ "max-response-size": "1024" },
+		{ "signed-max-response-size": "0B" },
+		{ "signed-max-response-size": "16777217B" },
+		{ timeout: "0ms" },
+		{ timeout: "60001ms" },
+		{ timeout: "1.5ms" },
+		{ timeout: 5000 },
+		{ timeout: "5000" },
+		{ "max-concurrent": 0 },
+		{ "max-concurrent": 1025 },
+		{ "max-concurrent": 1.5 },
+	]) {
+		expect(section.safeParse(bad).success, JSON.stringify(bad)).toBe(false);
+	}
+	expect(
+		section.safeParse({
+			"max-response-size": "1B",
+			"signed-max-response-size": "1B",
+			timeout: "1ms",
+			"max-concurrent": 1,
+		}).success,
+	).toBe(true);
+	expect(
+		section.safeParse({
+			"max-response-size": "16MiB",
+			"signed-max-response-size": "16MiB",
+			timeout: "1m",
+			"max-concurrent": 1024,
+		}).success,
+	).toBe(true);
+});
+
+it("refuses allow beside allow-any-public, and a key it does not know", () => {
+	for (const bad of [
+		{ allow: ["a.example"], "allow-any-public": true },
+		{ allowed: ["a.example"] },
+	]) {
+		expect(section.safeParse(bad).success, JSON.stringify(bad)).toBe(false);
+	}
+});
+
+it("takes only hosts in allow and deny, and host:port pairs in plain-loopback", () => {
+	for (const entry of [
+		"a.example",
+		".example",
+		"Example.COM",
+		"[2001:DB8::1]",
+		"2001:db8::1",
+		"10.0.0.1",
+	]) {
+		expect(section.safeParse({ deny: [entry] }).success, entry).toBe(true);
+		expect(section.safeParse({ allow: [entry] }).success, entry).toBe(true);
+	}
+	for (const entry of [
+		"",
+		"a..example",
+		"Example.COM.",
+		"a_b.example",
+		"10.5",
+		"bad host",
+		"*.example",
+		"*.",
+		"*.*.example",
+		"*",
+		"https://a.example",
+		"a.example/x",
+		"a.example:8443",
+		"[2001:db8::1]:8443",
+		"u@a.example",
+		"a.example?q",
+		"a.example#f",
+		"a.example\\x",
+	]) {
+		expect(section.safeParse({ deny: [entry] }).success, entry).toBe(false);
+		expect(section.safeParse({ allow: [entry] }).success, entry).toBe(false);
+	}
+	for (const pair of ["localhost:8080", "[::1]:8080", "127.0.0.1:65535"]) {
+		expect(section.safeParse({ "plain-loopback": [pair] }).success, pair).toBe(true);
+	}
+	for (const pair of [
+		"localhost",
+		"a..b:8080",
+		"::1:8080",
+		"localhost.:8080",
+		"bad host:8080",
+		"localhost:65536",
+		"localhost:08080",
+		"localhost:0",
+		"localhost:",
+		"a/b:80",
+		"*.a.example:80",
+	]) {
+		expect(section.safeParse({ "plain-loopback": [pair] }).success, pair).toBe(false);
+	}
+});
+
+it("refuses to boot while a proxy is set, unless told to go direct", async () => {
+	for (const name of ["HTTP_PROXY", "https_proxy", "ALL_PROXY", "all_proxy"]) {
+		onlyProxy(name);
+		const refused = await boot().then(
+			() => undefined,
+			(error: unknown) => error,
+		);
+		expect(refused, name).toBeInstanceOf(BootRefused);
+		// It names the variable, never its value, and the two ways on.
+		const [{ reason } = { reason: "" }] = (refused as BootRefused).refusals;
+		expect(reason).toContain(name);
+		expect(reason).toContain("outbound.proxy");
+		expect(reason).toContain("direct-despite-proxy");
+		expect(reason).not.toContain("proxy.test");
+		const app = await boot({ "direct-despite-proxy": true });
+		expect(app.get(outbound)).toBeDefined();
+	}
+});
+
+it("boots with a proxy configured whatever the variables say, and warns what it leaves to the proxy", async () => {
+	onlyProxy("HTTPS_PROXY");
+	const recorded = recordingLog();
+	const withProxy = (outboundSettings: Record<string, unknown>) =>
+		boot(outboundSettings, recorded.log);
+	// Those of revocation aside, as their own test holds them.
+	const warned = () =>
+		recorded
+			.lines()
+			.map((line) => line.event)
+			.filter((event) => !event.startsWith("outbound.revocation"));
+	await withProxy({ proxy: "http://127.0.0.1:3128", "proxy-authorization": "Basic dGVzdA==" });
+	expect(warned()).toEqual(["outbound.proxy_checks_addresses"]);
+	await withProxy({
+		proxy: "http://proxy.example.test:3128",
+		"proxy-authorization": "Basic dGVzdA==",
+	});
+	// Credentials to a proxy over plain http, past the loopback, go in clear.
+	expect(warned().slice(1)).toEqual([
+		"outbound.proxy_checks_addresses",
+		"outbound.proxy_credentials_in_clear",
+	]);
+	// A name that only begins like a loopback address is no loopback.
+	await withProxy({
+		proxy: "http://127.example.test:3128",
+		"proxy-authorization": "Basic dGVzdA==",
+	});
+	expect(warned().slice(3)).toEqual([
+		"outbound.proxy_checks_addresses",
+		"outbound.proxy_credentials_in_clear",
+	]);
+	// The proxy's name is never resolved here, so only a loopback address written as one goes unwarned:
+	// a name, localhost and the names under it included, may resolve anywhere.
+	for (const host of ["localhost", "localhost.", "proxy.localhost"]) {
+		const from = warned().length;
+		await withProxy({ proxy: `http://${host}:3128`, "proxy-authorization": "Basic dGVzdA==" });
+		expect(warned().slice(from), host).toEqual([
+			"outbound.proxy_checks_addresses",
+			"outbound.proxy_credentials_in_clear",
+		]);
+	}
+	for (const host of ["[::1]", "127.0.0.2"]) {
+		const from = warned().length;
+		await withProxy({ proxy: `http://${host}:3128`, "proxy-authorization": "Basic dGVzdA==" });
+		expect(warned().slice(from), host).toEqual(["outbound.proxy_checks_addresses"]);
+	}
+	expect(JSON.stringify(recorded.lines())).not.toContain("dGVzdA==");
+	// Nor the proxy itself: a log line carries no value.
+	expect(JSON.stringify(recorded.lines())).not.toMatch(/proxy\.example|127\.|localhost|::1/);
+});
+
+it("warns at each boot of each loosening set, by its entries' count or a reason, never a host", async () => {
+	const warned = async (outboundSettings: Record<string, unknown>) => {
+		const recorded = recordingLog();
+		await boot(outboundSettings, recorded.log);
+		expect(JSON.stringify(recorded.lines())).not.toMatch(/internal:|example|localhost/);
+		return recorded
+			.lines()
+			.filter((line) => !line.event.startsWith("outbound.revocation"))
+			.map((line) => [line.level, line.event, line.fields]);
+	};
+	expect(await warned({})).toEqual([]);
+	const plain = { "plain-internal": ["ledger.internal:9092", "keys.internal:8080"] };
+	const lists = {
+		...plain,
+		"plain-loopback": ["localhost:8080"],
+		"plain-ipv4": ["localhost:8080"],
+	};
+	expect(await warned({ ...lists, "internal-hosts": ["keys.example"] })).toEqual([
+		["warn", "outbound.plain_internal", { count: 2 }],
+		["warn", "outbound.plain_loopback", { count: 1 }],
+		["warn", "outbound.plain_ipv4", { count: 1 }],
+		["warn", "outbound.internal_hosts", { count: 1 }],
+	]);
+	const reasons = (await warned({ "allow-any-public": true, resolution: "in-process" })).map(
+		([, event, fields]) => [event, (fields as { reason: string }).reason],
+	);
+	expect(reasons).toEqual([
+		[
+			"outbound.any_public_host",
+			"any public host is reached by name, not only those outbound.allow lists",
+		],
+		["outbound.resolution_in_process", "names resolve in the app's own process, not in helpers"],
+	]);
+});
+
+it("refuses boot without tls-options, naming it: no TLS connection goes without the floor", async () => {
+	const refused = await assemble({
+		modules: [outboundModule],
+		config: { ...kernelConfig(), outbound: {} },
+	}).catch((error: unknown) => error);
+	expect(refused).toBeInstanceOf(BootRefused);
+	expect((refused as BootRefused).refusals).toEqual([
+		{ where: "outbound", reason: "no module provides tls-options" },
+	]);
+});
+
+it("refuses boot on a floor that is not tls-options' own, however alike, and takes none in its paths", async () => {
+	const copied = { ...testTlsOptions };
+	const another = defineModule({ name: "tls-options", replicaSafe: true, takes: [] }, (m) => [
+		m.provide(tlsOptions).by(() => copied),
+	]);
+	const refused = await assemble({
+		modules: [outboundModule, another],
+		config: { ...kernelConfig(), outbound: {} },
+	}).catch((error: unknown) => error);
+	expect((refused as BootRefused).refusals).toEqual([
+		{
+			where: "outbound",
+			reason: "the TLS floor is not one tls-options made: provide it from @mod/tls-options",
+		},
+	]);
+	expect(() => outboundOver(section.parse({}), async () => [], { floor: copied })).toThrow(
+		NotTheFloor,
+	);
+});
+
+it("boots on many instances, holding nothing they would need to share", async () => {
+	const config = { ...kernelConfig({ deployment: "multi" }), outbound: {} };
+	await expect(
+		assemble({ modules: [outboundModule, tlsOptionsForTests], config }),
+	).resolves.toBeDefined();
+});
+
+it("boots without a proxy, and refuses a destination before sending", async () => {
+	onlyProxy();
+	const app = await boot({ deny: ["example.com"] });
+	await expect(app.get(outbound).fetch("https://example.com/")).rejects.toMatchObject({
+		reason: "denied",
+	});
+	await expect(
+		app.get(signedOutbound).fetch("http://example.com/", {}, { hosts: ["example.com"] }),
+	).rejects.toMatchObject({ reason: "denied" });
+	// Each contract answers through its own path: plain http is signed material's alone.
+	const open = await boot({ "allow-any-public": true });
+	await expect(open.get(outbound).fetch("http://10.0.0.1/")).rejects.toMatchObject({
+		reason: "scheme",
+	});
+	await expect(
+		open.get(signedOutbound).fetch("http://10.0.0.1/", {}, { hosts: ["10.0.0.1"] }),
+	).rejects.toMatchObject({ reason: "special-address" });
+});
+
+it("answers at boot where a request is cut, as fetch cuts it: the caps narrowed, never widened", async () => {
+	onlyProxy();
+	const limits = (
+		await boot({ "allow-any-public": true, timeout: "2s", "max-response-size": "1KiB" })
+	).get(outboundLimits);
+	expect(limits.of()).toEqual({ timeoutMs: 2000, maxBytes: 1024 });
+	expect(limits.of({ timeoutMs: 500, maxBytes: 99_999 })).toEqual({
+		timeoutMs: 500,
+		maxBytes: 1024,
+	});
+	expect(() => limits.of({ timeoutMs: 0 })).toThrow(RangeError);
+});
+
+it("answers at boot why the policy refuses a URL, or nothing when it lets it through", async () => {
+	onlyProxy();
+	/** The reason an explanation leads with. */
+	const reasonOf = (p: OutboundRefusals, url: string, n?: Narrower) =>
+		p.explained(url, n)?.split(":")[0];
+	const named = (
+		await boot({ allow: ["api.example", "127.0.0.1"], "plain-loopback": ["127.0.0.1:8080"] })
+	).get(outboundRefusals);
+	const answers = (policy: typeof named, urls: Record<string, string | undefined>) =>
+		Object.fromEntries(Object.keys(urls).map((url) => [url, reasonOf(policy, url)]));
+	const asNamed = {
+		"https://api.example/x": undefined,
+		"https://other.example/": "not-allowed",
+		"http://api.example/": "scheme",
+		"https://u:p@api.example/": "userinfo",
+		"https://api.example:0/": "port",
+		"http://127.0.0.1:8080/": undefined,
+		"http://127.0.0.1:8081/": "scheme",
+		"ftp://api.example/": "scheme",
+	};
+	expect(answers(named, asNamed)).toEqual(asNamed);
+	expect(reasonOf(named, "https://api.example/", { hosts: ["other.example"] })).toBe("not-allowed");
+	const any = (await boot({ "allow-any-public": true, deny: ["bad.example"] })).get(
+		outboundRefusals,
+	);
+	const asAny = {
+		"https://name.example/": undefined,
+		"https://bad.example/": "denied",
+		"https://10.0.0.1/": "special-address",
+		"https://[::ffff:127.0.0.1]/": "special-address",
+		"https://93.184.215.14/": undefined,
+	};
+	expect(answers(any, asAny)).toEqual(asAny);
+	// A private address written in the URL passes for an internal host the caller names as its operator's.
+	const inside = (
+		await boot({ "allow-any-public": true, "internal-hosts": ["10.0.0.5", "127.0.0.1"] })
+	).get(outboundRefusals);
+	expect(
+		reasonOf(inside, "https://10.0.0.5/", { internal: configuredUrl("https://10.0.0.5/") }),
+	).toBeUndefined();
+	expect(reasonOf(inside, "https://10.0.0.5/")).toBe("special-address");
+	expect(
+		reasonOf(inside, "https://10.0.0.6/", { internal: configuredUrl("https://10.0.0.6/") }),
+	).toBe("special-address");
+	expect(
+		reasonOf(inside, "https://127.0.0.1/", { internal: configuredUrl("https://127.0.0.1/") }),
+	).toBe("special-address");
+});
+
+it("answers at boot whether a URL is taken as plain-internal, for the caller's own URL alone", async () => {
+	onlyProxy();
+	const refusals = (
+		await boot({ "allow-any-public": true, "plain-internal": ["ledger.internal:9092"] })
+	).get(outboundRefusals);
+	const url = "http://ledger.internal:9092/verify";
+	const own = { internal: configuredUrl(url) };
+	expect([
+		refusals.plainInternal?.(url, own),
+		refusals.plainInternal?.(url),
+		refusals.plainInternal?.(url, { ...own, outsideChosen: true }),
+		refusals.plainInternal?.("http://ledger.internal:9093/verify", own),
+	]).toEqual([true, false, false, false]);
+});
+
+it("answers at boot why a URL the browser goes to is refused, as the policy judges it", async () => {
+	onlyProxy();
+	const refusals = (
+		await boot({ "allow-any-public": true, "plain-internal": ["idp.internal:8080"] })
+	).get(outboundRefusals);
+	const own = { internal: configuredUrl("http://idp.internal:8080/") };
+	expect([
+		refusals.browsedRefusal?.("https://idp.example/auth"),
+		refusals.browsedRefusal?.("http://localhost:9000/auth"),
+		refusals.browsedRefusal?.("http://idp.internal:8080/auth", own),
+	]).toEqual([undefined, undefined, undefined]);
+	expect(refusals.browsedRefusal?.("http://idp.example/auth")).toMatch(
+		/^plain http the browser goes to: /,
+	);
+});
+
+it("explains at boot why the policy refuses a URL by the keys that let it through, naming no value", async () => {
+	onlyProxy();
+	const rules = {
+		allow: ["api.example", "127.0.0.1"],
+		"plain-loopback": ["127.0.0.1:8080"],
+		deny: ["bad.example"],
+	};
+	const named = (await boot(rules)).get(outboundRefusals);
+	const allow = "not-allowed: name the host in outbound.allow, or set outbound.allow-any-public";
+	// The policy's own words for plain http, which outbound-policy's tests hold: outbound hands them on.
+	const plain = policyOf(policySettings.parse(rules)).explain("http://api.example/");
+	const expected: Record<string, string | undefined> = {
+		"https://api.example/x": undefined,
+		"https://other.example/": allow,
+		"http://api.example/": plain,
+		"http://127.0.0.1:8081/": plain,
+		"ftp://api.example/": "scheme: only https and http URLs are reached",
+		"https://u:p@api.example/": "userinfo: write the URL without a user or password",
+		"https://api.example:0/": "port: the URL's port is one outbound never reaches",
+		"https://bad.example/": "denied: the host matches outbound.deny",
+	};
+	for (const [url, text] of Object.entries(expected)) expect(named.explained(url), url).toBe(text);
+	// A host the caller does not name for this URL is no operator's key to set.
+	expect(named.explained("https://api.example/", { hosts: ["other.example"] })).toBe(
+		"not-allowed: the host is not one the setting may reach",
+	);
+	const any = (await boot({ "allow-any-public": true, "internal-hosts": ["10.0.0.5"] })).get(
+		outboundRefusals,
+	);
+	expect(any.explained("https://10.0.0.6/")).toBe(
+		"special-address: the URL names a special-purpose address, which outbound never reaches",
+	);
+	// The operator's own URL is told what reaches a private address, in the policy's own words.
+	const own = { internal: configuredUrl("https://10.0.0.6/") };
+	const privately = policyOf(
+		policySettings.parse({ "allow-any-public": true, "internal-hosts": ["10.0.0.5"] }),
+	).explain("https://10.0.0.6/", own);
+	expect(privately).toMatch(/^special-address: /);
+	expect(any.explained("https://10.0.0.6/", own)).toBe(privately);
+	expect(
+		any.explained("https://10.0.0.5/", { internal: configuredUrl("https://10.0.0.5/") }),
+	).toBeUndefined();
+	// The value is never told: no host, port or pair is in any explanation.
+	for (const url of Object.keys(expected)) {
+		for (const value of [
+			"api.example",
+			"other.example",
+			"bad.example",
+			"127.0.0.1",
+			"8081",
+			"u:p",
+		]) {
+			expect(named.explained(url) ?? "", url).not.toContain(value);
+		}
+	}
+});
+
+it("takes the same host list in direct-hosts and internal-hosts, and refuses a wildcard, a dot before an address and an empty label", () => {
+	for (const key of ["direct-hosts", "internal-hosts"]) {
+		expect(section.safeParse({ [key]: ["a.example", ".a.example", "10.0.0.5"] }).success).toBe(
+			true,
+		);
+		for (const entry of ["*.a.example", "*", ".10.0.0.5", "a..example"]) {
+			expect(section.safeParse({ [key]: [entry] }).success, `${key} ${entry}`).toBe(false);
+		}
+	}
+});
