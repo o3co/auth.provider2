@@ -1,0 +1,22 @@
+{
+	"name": "auth-provider2-workspace",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"packageManager": "pnpm@11.28.7",
+	"engines": {
+		"node": ">=24"
+	},
+	"scripts": {
+		"typecheck": "tsc -p tsconfig.json",
+		"lint": "biome check .",
+		"test": "vitest run --passWithNoTests",
+		"check": "pnpm typecheck && pnpm lint && pnpm test"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "2.5.15",
+		"@types/node": "26.6.5",
+		"typescript": "6.0.3",
+		"vitest": "5.0.5"
+	}
+}

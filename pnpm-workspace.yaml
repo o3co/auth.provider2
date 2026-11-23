@@ -1,0 +1,7 @@
+packages:
+  - "modules/*/*"
+
+# pnpm holds back a version until it is a day old, against a hijacked
+# third-party release. The project's own packages are not a third party.
+minimumReleaseAgeExclude:
+  - "@o3co/*"
