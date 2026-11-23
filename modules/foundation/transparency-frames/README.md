@@ -14,7 +14,7 @@
 ## Invariants
 - Refuses through `refuse`, naming `where`, what `records` refuses of records held across: a store with no batch across, a part's space of other guarantees than the frames', and a part's space holding a subject's data, or an index of one.
 - A part's space needs no subject writer, as a Step's one write carries none: a part's records are erased by the erasure boundary's Step alone, its state owner's `write` removing them.
-- A unit's frame is the record keyed by the unit's words (its flow, and a client's op), a part's record by the unit's words, its part and its name: no two units or parts share a key. Nothing it writes expires.
+- A unit's frame is the record keyed by the unit's words (its flow, and a client's op), a part's record by the unit's words, its part and its name: no two units or parts share a key. Nothing it writes expires but records' own settled marks.
 - A record of a part not bound is a TypeError.
 
 ## Depends on

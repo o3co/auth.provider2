@@ -11,7 +11,7 @@ const guaranteeFor: Record<keyof typeof frameStoreNeeds, Guarantee> = {
 	readsConfirmed: "confirmed-reads",
 	authenticated: "authenticated",
 };
-/** Each conditional flow's frame, under the flow's partition: kept as the log keeps the flow. */
+/** Each conditional flow's frame, under its unit's words as the partition: kept as the log keeps the flow. */
 const frames: Space = {
 	name: "transparency-store.frames",
 	guarantees: Object.values(guaranteeFor),
