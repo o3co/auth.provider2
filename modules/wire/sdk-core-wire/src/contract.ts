@@ -206,14 +206,14 @@ export type AuthorizationItems = z.infer<typeof approval>;
 export type SigningKey = z.infer<typeof signingKey>;
 
 /** A canonical JSON text: object keys sorted, undefined members left out, so both sides build the same bytes. */
-export function canonicalJson(value: unknown): string {
-	if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+export function canonicalText(value: unknown): string {
+	if (Array.isArray(value)) return `[${value.map(canonicalText).join(",")}]`;
 	if (value !== null && typeof value === "object") {
 		const record = value as Record<string, unknown>;
 		const keys = Object.keys(record)
 			.filter((key) => record[key] !== undefined)
 			.sort();
-		return `{${keys.map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key])}`).join(",")}}`;
+		return `{${keys.map((key) => `${JSON.stringify(key)}:${canonicalText(record[key])}`).join(",")}}`;
 	}
 	return JSON.stringify(value);
 }
@@ -250,7 +250,7 @@ export const evidenceInput = (token: string) => `first-key-token\u0000${token}`;
 
 /** The additional data a first key's sealed request is bound to: its stage, nonce and the screen's keys, so a swapped key fails to open. */
 export const firstKeyAad = (stage: FirstKeyStage, nonce: string, eEnc: string, eSig: SigningKey) =>
-	canonicalJson({
+	canonicalText({
 		purpose: `first-key/${stage}`,
 		nonce,
 		e_enc: eEnc,
@@ -259,4 +259,4 @@ export const firstKeyAad = (stage: FirstKeyStage, nonce: string, eEnc: string, e
 
 /** What a registration's continuation signs: the statement's hash, the stage, the sequence and the response's hash. */
 export const continuationInput = (statementHash: string, seq: number, responseHash: string) =>
-	canonicalJson({ h: statementHash, stage: "register", seq, body: responseHash });
+	canonicalText({ h: statementHash, stage: "register", seq, body: responseHash });

@@ -13,7 +13,7 @@
 - `jarClaims`: an authorization's closed set of `items`, those a JAR must carry (`required`), and its `envelope`, the claims that are no item.
 - `itemsFromJar` (payload, the JAR's hash): T's items, or an error naming the claim unknown or missing, or the value not allowed.
 - `payloads`: the schemas of T, the completion's answer, the `creation` and `possession` statements, and what the Core opens of the first key's start and mail's side and the screen of the start's answer. Their types: `StatementPayload`, `CompletionPayload`, `CreationPayload`, `PossessionPayload`, `AuthorizationItems`, `SigningKey`.
-- `canonicalJson`, `challengeInput`, `evidenceInput`, `firstKeyAad` and `continuationInput`: what a challenge, the evidence's value, a sealed request's additional data and a continuation's signature cover. `firstKeyStages`: `start` and `mail`.
+- `canonicalText`, `challengeInput`, `evidenceInput`, `firstKeyAad` and `continuationInput`: what a challenge, the evidence's value, a sealed request's additional data and a continuation's signature cover. `firstKeyStages`: `start` and `mail`.
 
 ## Invariants
 - A protocol (G33): types, frozen constants, fixed schemas and the functions that build by them; no I/O, clock, randomness or state.

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-	canonicalJson,
+	canonicalText,
 	challengeInput,
 	continuationInput,
 	evidenceInput,
@@ -102,7 +102,7 @@ describe("the payloads", () => {
 
 describe("the inputs a hash or a signature covers", () => {
 	it("builds JSON canonically, keys sorted and undefined members left out", () => {
-		expect(canonicalJson({ b: 1, a: [2, { d: undefined, c: "x" }] })).toBe(
+		expect(canonicalText({ b: 1, a: [2, { d: undefined, c: "x" }] })).toBe(
 			'{"a":[2,{"c":"x"}],"b":1}',
 		);
 	});
