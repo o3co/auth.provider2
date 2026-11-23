@@ -1,0 +1,13 @@
+import { jsonAnswer, type Route } from "@mod/http";
+
+/** `GET /_healthcheck`: 200 regardless of dependencies, checking none; like any route, 415 to a body. */
+export function liveness(): Route {
+	return {
+		method: "GET",
+		changesState: false,
+		path: "/_healthcheck",
+		exposure: "probe",
+		takes: ["none"],
+		handle: () => jsonAnswer(200, { status: "ok" }),
+	};
+}
