@@ -68,10 +68,12 @@ export async function retried<A>(attempt: () => Promise<A | typeof again>): Prom
 const markFrom = (place: Place) => Buffer.from(place.random.bytes(16)).toString("base64url");
 /** Writes that land after this store-clock time are refused, so a lost send cannot act later. */
 export const writeDeadline = (now: number) => now + patienceMs;
-export const markedAt = (place: Place, now: number) => ({
+/** A write's unguessable mark, with the store-clock time past which it is refused. */
+export const markedBy = (place: Place, deadline: number) => ({
 	idempotency: markFrom(place),
-	deadline: writeDeadline(now),
+	deadline,
 });
+export const markedAt = (place: Place, now: number) => markedBy(place, writeDeadline(now));
 
 /** Writes a mark of its own only while the key holds what was read, at that version or none. */
 export async function confirmedAsRead(
@@ -150,14 +152,17 @@ const heldForSubjects = {
 	internal: true,
 } satisfies Record<WriterHeld, true>;
 
+/** Whether a space holds a subject's data, or an index of one: a category of store's `WriterHeld`. */
+export const holdsSubjectData = (space: Space) =>
+	space.subjectData !== undefined && Object.hasOwn(heldForSubjects, space.subjectData);
+
 /**
  * Refuses the boot where a plain builder (records, under a secret, deferred work, keyed sets)
  * opens a space holding a subject's data, or an index of one: subject-records writes those, through
  * `changeRecords`.
  */
 export function plainDoor(place: Place) {
-	const held = place.space.subjectData;
-	if (held !== undefined && Object.hasOwn(heldForSubjects, held)) {
+	if (holdsSubjectData(place.space)) {
 		throw new BuildRefused(
 			place.space.name,
 			"a space holding a subject's data, or an index of one, is written through subject-records",

@@ -10,9 +10,9 @@ Internal module of `records`: how a record is written, the same for every kind o
 
 ## Offers
 - `Place`, `Attempt`, `Changed`, `writeDeadline`: as the package offers them.
-- `untilAnswered`, `retried` with `again`, `markedAt`, `confirmedAsRead`: one write sent and settled, a decision tried again.
+- `untilAnswered`, `retried` with `again`, `markedAt` and `markedBy` (a caller's deadline), `confirmedAsRead`: one write sent and settled, a decision tried again.
 - `rewrite`: a key read, decided and written on its version.
-- `expiryOf` (a lifetime) → the store's expiry; `claim` (a place, a kind) → the place held to one kind of records; `plainDoor` (a place) → the boot refused over a space holding a subject's data. `nameOf` (a space, a secret) → the name a record under that secret is kept by.
+- `expiryOf` (a lifetime) → the store's expiry; `claim` (a place, a kind) → the place held to one kind of records; `plainDoor` (a place) → the boot refused over a space holding a subject's data (`holdsSubjectData`). `nameOf` (a space, a secret) → the name a record under that secret is kept by.
 
 ## Invariants
 - A change runs again on what is there after a lost race, so it must be pure; after 8 lost races it is unavailable, a fixed margin against contention.

@@ -19,12 +19,10 @@ import {
 } from "./writing/writing.ts";
 
 export {
-	checkedCap,
 	type KeyedSets,
 	type KeyedSetWrite,
 	keyedSetsIn,
 	type Member,
-	overCap,
 	type StrictSet,
 } from "./keyed-sets/keyed-sets.ts";
 export type { Unfinished, Walk, Walked } from "./walk/walk.ts";
@@ -128,9 +126,12 @@ export {
 	changeRecords,
 	changesTogether,
 	changeTogether,
+	type HeldRead,
+	type HeldTarget,
 	type Next,
 	pairedRecordsAcross,
 	pairedRecordsIn,
+	recordsHeldAcross,
 	type Target,
 } from "./together/together.ts";
 

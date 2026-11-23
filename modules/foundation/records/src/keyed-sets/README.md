@@ -12,7 +12,7 @@ Internal module of `records`: sets of members by key, at most a cap to a key, en
 - `keyedSetsIn` (a place, a cap, a clock) → `add`, `members`, `remove`, `awaiting`, `settled`, as the package offers them.
 - `keyedSetsIn.codec` (a cap, a clock) → the same changes and reads as pure functions over a set's stored value, each change answering its value and the lifetime it is kept for.
 - `keyedSetsIn.strict` (a stored value, no cap or clock) → `set` where every part is well formed, each member with its end, ended ones included, or `unreadable` with why (`StrictSet`): nothing dropped, for a migration that must not lose a member. The codec's reads stay lenient.
-- `Member`, `KeyedSetWrite`; `overCap` and `checkedCap`, deprecated, as the package offers them.
+- `Member`, `KeyedSetWrite`: as the package offers them.
 
 ## Invariants
 - A keyed set is one record per key, rewritten whole, so its cap stays small; anything in it that is not a member is no member.

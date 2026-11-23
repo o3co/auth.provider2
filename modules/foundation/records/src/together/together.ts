@@ -14,7 +14,9 @@ import {
 	type Changed,
 	claim,
 	expiryOf,
+	holdsSubjectData,
 	markedAt,
+	markedBy,
 	nameOf,
 	type Place,
 	plainDoor,
@@ -384,6 +386,123 @@ export function pairedRecordsAcross<A extends Json, B extends Json>(
 				},
 			});
 			return byPlace<ChangedRecord<A>, ChangedRecord<B>>(changed.targets, changed.watched);
+		},
+	};
+}
+
+/** A plain record of a place, by key, as records held across read and write it. */
+export type HeldTarget = { readonly place: Place; readonly key: string };
+declare const heldBrand: unique symbol;
+/** What a read of records held across saw, which their one write is held to. */
+export interface HeldRead {
+	/** Each record's value, in the order named; none where it holds none. */
+	readonly values: readonly (Json | undefined)[];
+	/** The latest store-clock time its reads answered at. */
+	readonly now: number;
+	/** Opaque: the records read and the version each was read at. */
+	readonly held: { readonly [heldBrand]: true };
+}
+type Held = {
+	readonly targets: readonly HeldTarget[];
+	readonly versions: readonly (string | undefined)[];
+};
+
+/**
+ * Records of places on one store, of spaces of one guarantee, read by key, then written once held to
+ * everything read, by the caller's deadline: a lost race is answered, never decided again. Where
+ * the places cannot be so (no batch across, two stores, other guarantees, a space of a subject's
+ * data), `refuse` (the builder's) is told, naming `where`: a wiring then maps it with no branch.
+ */
+export function recordsHeldAcross(
+	places: readonly Place[],
+	where: string,
+	refuse: (where: string, reason: string) => never,
+) {
+	const [anchor] = places;
+	if (!anchor) throw new TypeError("records held across hold one place at least");
+	if (!changesTogether(anchor.store)) {
+		refuse(where, "its store writes no records of two partitions as one");
+	}
+	if (places.some((place) => place.store !== anchor.store)) {
+		refuse(where, "its places are on two stores, which write nothing of all as one");
+	}
+	const other = places.find((place) => !sameGuarantees(place.space, anchor.space));
+	if (other) {
+		refuse(
+			where,
+			`space ${other.space.name} declares other guarantees than ${anchor.space.name}, so a fault could keep one and drop another`,
+		);
+	}
+	const subjects = places.find((place) => holdsSubjectData(place.space));
+	if (subjects) {
+		refuse(
+			where,
+			`space ${subjects.space.name} holds a subject's data, or an index of one, which subject-records writes`,
+		);
+	}
+	for (const place of places) claim(place, "records");
+	const target = anchor.store;
+	return {
+		/** Reads the records, at one store time where the store can (`getMany`). */
+		read: async (targets: readonly HeldTarget[]): Promise<HeldRead> => {
+			if (targets.length === 0) throw new TypeError("records held across read one at least");
+			targets.forEach((named, at) => {
+				if (!places.includes(named.place)) {
+					throw new TypeError(`records held across hold no place of ${named.place.space.name}`);
+				}
+				if (targets.slice(0, at).some((earlier) => sameTarget(earlier, named))) {
+					throw new TypeError("records held across are named once each");
+				}
+			});
+			const keys = targets.map(recordKey);
+			const reads = target.getMany
+				? await target.getMany(keys)
+				: await Promise.all(keys.map((key) => target.get(key)));
+			const held: Held = { targets, versions: reads.map((r) => r.entry?.version) };
+			return {
+				values: reads.map((r) => r.entry?.value),
+				now: Math.max(...reads.map((r) => r.now)),
+				held: held as unknown as HeldRead["held"],
+			};
+		},
+		/**
+		 * Writes each record's next, held to every version the read saw (an absent one too, and the
+		 * records it keeps), refused past `deadline` on the store clock. Writing nothing confirms the
+		 * read with a mark of its own, held by the same conditions.
+		 */
+		write: async (
+			read: HeldRead,
+			nexts: readonly Next<Json>[],
+			deadline: number,
+		): Promise<"written" | "moved" | "late"> => {
+			const { targets, versions } = read.held as unknown as Held;
+			const [first] = targets;
+			if (!first || nexts.length !== targets.length) {
+				throw new TypeError("records held across write as many as they read");
+			}
+			const conditions = targets.map((named, at): Condition => {
+				const version = versions[at];
+				const key = recordKey(named);
+				return version === undefined ? { key, absent: true } : { key, version };
+			});
+			const writes = targets.flatMap((named, at): BatchWrite[] => {
+				const next = nexts[at];
+				if (next === undefined) return [];
+				if ("remove" in next) return [{ key: recordKey(named), remove: true }];
+				return [{ key: recordKey(named), put: next.value, expiry: expiryOf(next.lifetimeMs) }];
+			});
+			const settled: BatchWrite = {
+				key: { ...recordKey(first), name: "settled" },
+				put: true,
+				expiry: { kind: "after", ms: 1 },
+			};
+			const marked = markedBy(anchor, deadline);
+			const sent = writes.length > 0 ? writes : [settled];
+			const written = await untilAnswered(() => writtenBy(target, conditions, sent)(marked));
+			if (written.kind === "committed") return "written";
+			if (written.kind === "conflict") return "moved";
+			if (written.kind === "late") return "late";
+			throw new Unavailable("records");
 		},
 	};
 }

@@ -28,22 +28,6 @@ function wholeCap(cap: number): number {
 	return cap;
 }
 
-/**
- * The members kept and those pushed out over `cap`, by end.
- * @deprecated Unused outside records; the set's format is `keyedSetsIn.codec`. Removed in 0.22.
- */
-export const overCap = <T extends readonly [string, number]>(
-	byEnd: readonly T[],
-	added: string,
-	cap: number,
-) => pushedOutOver(byEnd, added, cap);
-
-/**
- * `cap` where it is a whole number from 1; throws TypeError otherwise.
- * @deprecated Unused outside records; the set's format is `keyedSetsIn.codec`. Removed in 0.22.
- */
-export const checkedCap = (cap: number): number => wholeCap(cap);
-
 const clearingMs = 10 * 60_000;
 
 /** Sets of members by key, at most `cap` to a key, ending on the kernel's clock; what an add pushes out awaits in the same write. */
