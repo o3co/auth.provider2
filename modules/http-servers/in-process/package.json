@@ -1,0 +1,24 @@
+{
+	"name": "@mod/in-process",
+	"private": true,
+	"license": "Apache-2.0",
+	"type": "module",
+	"kind": "adapter",
+	"adapts": "@mod/http",
+	"exports": {
+		"./module": "./src/module.ts"
+	},
+	"dependencies": {
+		"@mod/http": "workspace:*",
+		"@mod/http-server": "workspace:*",
+		"@mod/kernel": "workspace:*",
+		"@mod/promises": "workspace:*"
+	},
+	"devDependencies": {
+		"@mod/core-wire": "workspace:*",
+		"@mod/front-relay": "workspace:*",
+		"@mod/http-ops": "workspace:*",
+		"@mod/tls-options": "workspace:*",
+		"vitest": "5.0.5"
+	}
+}

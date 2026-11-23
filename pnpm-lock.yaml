@@ -715,6 +715,37 @@ importers:
         specifier: 5.0.5
         version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(vite@8.3.3(@types/node@26.6.5)(yaml@2.9.1))
 
+  modules/http-servers/in-process:
+    dependencies:
+      '@mod/http':
+        specifier: workspace:*
+        version: link:../../foundation/http
+      '@mod/http-server':
+        specifier: workspace:*
+        version: link:../../foundation/http-server
+      '@mod/kernel':
+        specifier: workspace:*
+        version: link:../../foundation/kernel
+      '@mod/promises':
+        specifier: workspace:*
+        version: link:../../foundation/promises
+    devDependencies:
+      '@mod/core-wire':
+        specifier: workspace:*
+        version: link:../core-wire
+      '@mod/front-relay':
+        specifier: workspace:*
+        version: link:../front-relay
+      '@mod/http-ops':
+        specifier: workspace:*
+        version: link:../../foundation/http-ops
+      '@mod/tls-options':
+        specifier: workspace:*
+        version: link:../../foundation/tls-options
+      vitest:
+        specifier: 5.0.5
+        version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(vite@8.3.3(@types/node@26.6.5)(yaml@2.9.1))
+
   modules/key-holders/keys-kms:
     dependencies:
       '@aws-sdk/client-kms':
