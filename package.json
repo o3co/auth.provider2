@@ -11,7 +11,8 @@
 		"typecheck": "tsc -p tsconfig.json",
 		"lint": "biome check .",
 		"test": "vitest run --passWithNoTests",
-		"check": "pnpm typecheck && pnpm lint && pnpm test"
+		"check": "pnpm typecheck && pnpm lint && pnpm test && pnpm guard",
+		"guard": "pnpm --filter @mod/guard run guard"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.5.15",
