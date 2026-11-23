@@ -1,0 +1,18 @@
+{
+	"name": "@mod/authority-rules",
+	"private": true,
+	"license": "Apache-2.0",
+	"type": "module",
+	"kind": "foundation",
+	"exports": {
+		".": "./src/contract.ts"
+	},
+	"dependencies": {
+		"@mod/sdk-core-wire": "workspace:*",
+		"@mod/transparency-wire": "workspace:*",
+		"zod": "4.6.7"
+	},
+	"devDependencies": {
+		"vitest": "5.0.5"
+	}
+}
