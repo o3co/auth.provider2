@@ -552,6 +552,25 @@ importers:
         specifier: 5.0.5
         version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(vite@8.3.3(@types/node@26.6.5)(yaml@2.9.1))
 
+  modules/foundation/transparency-frames:
+    dependencies:
+      '@mod/kernel':
+        specifier: workspace:*
+        version: link:../kernel
+      '@mod/records':
+        specifier: workspace:*
+        version: link:../records
+      '@mod/store':
+        specifier: workspace:*
+        version: link:../store
+      '@mod/transparency':
+        specifier: workspace:*
+        version: link:../transparency
+    devDependencies:
+      vitest:
+        specifier: 5.0.5
+        version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(vite@8.3.3(@types/node@26.6.5)(yaml@2.9.1))
+
   modules/foundation/transparency-store:
     dependencies:
       '@mod/kernel':

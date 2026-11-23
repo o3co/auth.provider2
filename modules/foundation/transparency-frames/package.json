@@ -1,0 +1,19 @@
+{
+	"name": "@mod/transparency-frames",
+	"private": true,
+	"license": "Apache-2.0",
+	"type": "module",
+	"kind": "capability",
+	"exports": {
+		".": "./src/frames.ts"
+	},
+	"dependencies": {
+		"@mod/kernel": "workspace:*",
+		"@mod/records": "workspace:*",
+		"@mod/store": "workspace:*",
+		"@mod/transparency": "workspace:*"
+	},
+	"devDependencies": {
+		"vitest": "5.0.5"
+	}
+}
