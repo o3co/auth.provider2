@@ -1,0 +1,41 @@
+# seal
+
+## Responsibilities
+- Seals and opens stored data with authenticated encryption, by each key's algorithm (AES-256-GCM), under a key ring read at boot.
+
+## Not here
+- What sealed data means.
+- Where it is stored.
+
+## Offers
+- `seal`: seal (plaintext and context, answering a sealed value) and open (sealed value and context, answering the plaintext, `stale` when a `previous` key sealed it, or refused).
+- Operator section: `current` (an id, an `algorithm`, `aes-256-gcm` unless set, and a base64 key of its size, 32 bytes) seals; `next` opens but never seals, so every host opens with it before it seals; `previous` keys open only.
+- Extension point `resealers`: a holder of long-lived sealed values, which walks its own and seals again what is stale, answering how many it sealed again and how many it could not open.
+- `resealing`: runs each resealer in name order and answers its counts, or that it failed (logged by name and kind); the rest still run. Counts alone, never an id or a value.
+- `resealRun`: the app's `reseal` script's run, the same run as `resealing`: each holder's line, then whether previous keys may be retired. It is the generated app's `reseal` script, as the manifest's `appEntries` declares it.
+  - Its code: 0 when nothing failed, was sealed again or was left; 1 when a holder failed (not finished: look and run again); 2 when values no key opens remain; 3 when values were sealed again, so run again.
+  - 64 for an argument, as it takes none (sysexits' EX_USAGE, beside the 78, EX_CONFIG, the app's entries answer a refused boot with).
+  - Its lines carry holder names and counts alone, never a subject, a configured value or an error's words.
+- `./testing`: `sealConfig`, a test configuration builder, with one key per test file.
+
+## Invariants
+- A sealed value is the key's id, a random IV, the body and a tag, sized by the key's algorithm: 12 and 16 bytes for `aes-256-gcm`. Each algorithm is one row of the table its sizes come from, the key's among them.
+- The tag covers the key's id and the context, so a value moved to another owner or another id is refused.
+- Sealing uses `current`; opening uses the key the value names, from `current`, `next` or `previous`.
+- A value naming a key not in the ring is unavailable, not refused; putting the key back opens it.
+- Tampering, a malformed value, a part not written in its one form, a short tag and another context all give the same refusal.
+- A failed open never puts the stored content in its answer.
+- A rotation runs the resealers only once every host seals with the new `current`; a host still sealing with an older key writes values a walk misses.
+- Boot is refused without `current`, for a key `keys`' `secretBytes` refuses (not its algorithm's size of strict base64, fewer than 8 byte values, a `REPLACE-` sample), for an algorithm not in the table, for an id that is not 1–32 of letters, digits, `_` and `-`, and for ids named alike anywhere in the ring.
+- No sample keys, and no plaintext kept.
+
+## Depends on
+- `kernel`, `keys` (the rule for a secret's bytes)
+
+## Vocabulary
+- key ring: the current sealing key, the next key (opening before it seals), and past keys used only for opening.
+- stale: sealed by a `previous` key; its holder seals it again when it writes it anyway. A value `next` sealed is newer, never stale.
+- context: a name for the owner of a sealed value, decided by the using side.
+
+## Rules for operators
+- Retire a `previous` key only after a reseal run in which no holder failed and every holder answered `resealed` 0 and `left` 0. A walk may miss a value across a failover or restart; the next run then seals it again, so its `resealed` is not 0.

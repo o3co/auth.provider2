@@ -1,0 +1,28 @@
+{
+	"name": "@mod/seal",
+	"private": true,
+	"license": "Apache-2.0",
+	"type": "module",
+	"kind": "foundation",
+	"asks": [
+		"What the composed modules keep sealed uses the `seal` key ring: `seal.current` seals; only while one rotates, `seal.next` opens before every host seals with it, and `seal.previous` opens what an older key sealed."
+	],
+	"appEntries": [
+		{
+			"script": "reseal",
+			"shape": "call",
+			"contract": "resealRun",
+			"member": "run"
+		}
+	],
+	"exports": {
+		".": "./src/contract.ts",
+		"./testing": "./src/testing.ts",
+		"./module": "./src/module.ts"
+	},
+	"dependencies": {
+		"@mod/kernel": "workspace:*",
+		"@mod/keys": "workspace:*",
+		"zod": "4.6.7"
+	}
+}
