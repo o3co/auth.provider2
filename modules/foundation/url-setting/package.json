@@ -1,0 +1,17 @@
+{
+	"name": "@mod/url-setting",
+	"private": true,
+	"license": "Apache-2.0",
+	"type": "module",
+	"kind": "foundation",
+	"exports": {
+		".": "./src/contract.ts",
+		"./testing": "./src/testing.ts"
+	},
+	"dependencies": {
+		"zod": "4.6.7"
+	},
+	"devDependencies": {
+		"@mod/kernel": "workspace:*"
+	}
+}
