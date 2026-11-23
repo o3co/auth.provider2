@@ -11,7 +11,7 @@
 
 ## Offers
 - `defineModule`: name, section schema (zod, the library that reads sections), multi-instance declaration (a boolean, or a function asked only with a section that passed), `takes` (the `Handle`s its factories take from other modules, `[]` for none: a list, or such a function), provisions and contributions.
-- Handles: `contract` (optionally `takenBy`, the names of the modules that may take it, `optional`, its owner letting it go unprovided, and `takersContribute`, a point every module that takes it contributes to), `optional` (a take of such a contract: `takes`' card) and `extensionPoint` (exactly one / at least one / any number / keyed). A take its contract's `takenBy` does not name refuses boot, by `get`, `getOptional` or `late`, caught or not (`building`' card).
+- Handles: `contract` (optionally `takenBy`, the names of the modules that may take it, `optional`, its owner letting it go unprovided, and `takersContribute`, a point its takers contribute to), `optional` (a take of such a contract: `takes`' card) and `extensionPoint` (exactly one / at least one / any number / keyed). What a take refuses: `building`' and `takes`' cards.
 - `assemble` (`neverStarted`, a tool's: `lifecycle`'s card): answers `get`, `start` and `stop(deadlineMs?)` (without one, `stop-deadline`), or rejects with `BootRefused` (one module may raise several refusals).
 - `stop`: after the periodic tasks, runs the stop hooks in reverse order, each given a signal that aborts at the deadline. A hook may also run without `start()`, on a refused assembly: it ends what its build started.
 - Build context: the runtime, `section`, `environment`, `neverStarted`, `get`, `getOptional` (a contract taken optionally, or none), `collect`, `late` (a function giving a contract's interface once assembly succeeds), `readinessReport`, `onBuilt`, `onStart`, `onStop`, `every`, `refuse` and `refuseAll`.
@@ -30,7 +30,6 @@
 ## Invariants
 - Before any factory runs, the takes' preflight (internal module `takes`) refuses a module without takes and each gap a module's takes show, with the sections', replicas', production checks' and duplicate providers' refusals; a refused boot has built nothing. Replicas' and production checks are internal module `deployment`'s.
 - A module taking, by `get`, `late` or `collect`, a handle its takes do not name (its own contracts aside) refuses boot, even when it catches the throw.
-- A module that takes a contract with `takersContribute`, as it stands or optionally, and contributes nothing to that point refuses boot before anything is built.
 - Contracts and points resolve by value identity, never by name. Cycles, gaps, an empty point needing one and a bad `every` interval refuse boot.
 - Refusals of one stage are reported together, by key path (a value configuration cannot hold too), never by value; a key the schema needs and the configuration does not set is `required, and not set`, unless the schema words it itself. Every key a keyed point holds twice is refused, and a point is checked once however many modules collect it. `multi` refuses a module unsafe on multiple instances.
 - Before assembly succeeds, a late reference throws and `readinessReport` rejects. `readinessReport` and `stop` reject with a TypeError a deadline other than whole ms from 1 to 2^31−1. A late contract no module provides refuses boot.

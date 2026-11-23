@@ -15,6 +15,7 @@ export {
 	type Handle,
 	type OptionalTake,
 	optional,
+	type PointHandle,
 } from "./handles.ts";
 export { type Probe, probes, type Readiness, type ReadinessReport } from "./lifecycle/readiness.ts";
 export {
