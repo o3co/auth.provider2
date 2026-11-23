@@ -1,0 +1,22 @@
+{
+	"name": "@mod/keys-local",
+	"private": true,
+	"license": "Apache-2.0",
+	"type": "module",
+	"kind": "adapter",
+	"adapts": "@mod/keys",
+	"exports": {
+		"./module": "./src/module.ts"
+	},
+	"dependencies": {
+		"@mod/kernel": "workspace:*",
+		"@mod/keys": "workspace:*",
+		"@mod/promises": "workspace:*",
+		"zod": "4.6.7"
+	},
+	"devDependencies": {
+		"@mod/sdk-core-wire": "workspace:*",
+		"jose": "6.2.15",
+		"vitest": "5.0.5"
+	}
+}

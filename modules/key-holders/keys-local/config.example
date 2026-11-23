@@ -1,0 +1,12 @@
+keys-local {
+	keys = [
+		{
+			kid = authority-1
+			pem = """-----BEGIN PRIVATE KEY-----
+REPLACE-PKCS8-PEM-PRIVATE-KEY
+-----END PRIVATE KEY-----"""
+		}
+		{ kid = core-1, file = /run/keys/core-1.pem }
+		{ kid = sealing-1, file = /run/keys/sealing-1.pem }
+	]
+}
