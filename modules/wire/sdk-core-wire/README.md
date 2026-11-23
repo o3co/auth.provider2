@@ -8,7 +8,7 @@
 - How a request crosses the Front: `front-core-wire`.
 
 ## Offers
-- `typs`: the `typ` of a JAR, the statement T (`approval+jwt`), the completion's answer (`completion+jwt`, apart from T), a client assertion and a DPoP proof. `purposes`: `authorization`, `creation` and `possession`.
+- `typs`: the `typ` of a JAR, every statement (T and the first key's creation and possession: `approval+jwt`), the completion's answer (`completion+jwt`, apart from them), a client assertion and a DPoP proof. `purposes`: `authorization`, `creation` and `possession`.
 - `hpke`: the suite (`DHKEM(P-256, HKDF-SHA256)`, `HKDF-SHA256`, `AES-128-GCM`) and the info of each sealing: the completion, the first key's request and its code.
 - `jarClaims`: an authorization's closed set of `items`, those a JAR must carry (`required`), and its `envelope`, the claims that are no item.
 - `itemsFromJar` (payload, the JAR's hash): T's items, or an error naming the claim unknown or missing, or the value not allowed.
@@ -19,6 +19,7 @@
 - A protocol (G33): types, frozen constants, fixed schemas and the functions that build by them; no I/O, clock, randomness or state.
 - Every payload refuses a field it does not know; T's items are a closed set, and a JAR with any other claim beside its envelope yields no items.
 - The identifier never goes into a statement but masked, for display alone.
+- A creation names the key generation it is signed for (`kg`), so a creation signed before a reset cannot register a key after it. A possession's `key_hash` is the base64url SHA-256 of the new key's uncompressed P-256 point.
 - A challenge's input names its use, and the evidence's its purpose, each apart from the value by a NUL.
 
 ## Depends on

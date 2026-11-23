@@ -9,7 +9,7 @@ import { z } from "zod";
 /** The `typ` of each signed object. */
 export const typs = Object.freeze({
 	jar: "oauth-authz-req+jwt",
-	/** The statement T a login approves, signed by the Core's ring. */
+	/** Every statement a person approves (T, and the first key's creation and possession), signed by the Core's ring. */
 	statement: "approval+jwt",
 	/** The completion's answer, kept apart from T so neither is taken for the other. */
 	completion: "completion+jwt",
@@ -143,6 +143,8 @@ const creation = z
 				/** The sealed mail request's ciphertext hash, as the Core opened it. */
 				ct_hash: z.string().min(1),
 				subject: z.string().min(1),
+				/** The key generation of the subject this creation is signed for (reset and erasure boundaries count it), bound in the signed bytes. */
+				kg: z.number().int().nonnegative(),
 				options: z
 					.object({
 						user_id: z.string().min(1),
@@ -164,6 +166,7 @@ const possession = z
 		possession: z
 			.object({
 				creation_hash: z.string().min(1),
+				/** The base64url SHA-256 of the new key's uncompressed P-256 point (0x04, x, y: 65 bytes). */
 				key_hash: z.string().min(1),
 				credential_id: z.string().min(1),
 				reservation_id: z.string().min(1),

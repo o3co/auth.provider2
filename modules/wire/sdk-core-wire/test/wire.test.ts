@@ -100,6 +100,44 @@ describe("the payloads", () => {
 	});
 });
 
+describe("the first key's statements", () => {
+	const common = {
+		iss: "https://id.example",
+		sid: "c-1",
+		iat: 1,
+		exp: 2,
+		e_enc: "e",
+		e_sig: { kty: "EC", crv: "P-256", x: "x", y: "y" },
+		nonce: "n",
+	};
+	const creation = {
+		...common,
+		purpose: purposes.creation,
+		creation: {
+			account: "a***",
+			evidence: "ev",
+			ct_hash: "ct",
+			subject: "s-1",
+			kg: 0,
+			options: { user_id: "u", rp_id: "id.example", exclude_credentials: [] },
+		},
+	};
+
+	it("binds a creation to the key generation it was signed for, a whole number from 0", () => {
+		expect(payloads.creation.safeParse(creation).success).toBe(true);
+		const { kg: _, ...without } = creation.creation;
+		expect(payloads.creation.safeParse({ ...creation, creation: without }).success).toBe(false);
+		expect(
+			payloads.creation.safeParse({ ...creation, creation: { ...creation.creation, kg: -1 } })
+				.success,
+		).toBe(false);
+	});
+
+	it("signs every statement, T and the first key's alike, under one typ", () => {
+		expect(typs.statement).toBe("approval+jwt");
+	});
+});
+
 describe("the inputs a hash or a signature covers", () => {
 	it("builds JSON canonically, keys sorted and undefined members left out", () => {
 		expect(canonicalText({ b: 1, a: [2, { d: undefined, c: "x" }] })).toBe(
