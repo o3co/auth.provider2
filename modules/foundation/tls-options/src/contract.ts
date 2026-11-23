@@ -25,7 +25,8 @@ export interface TlsOptions {
 export type HeldToFloor<T> = Omit<T, keyof FloorKeys> & FloorKeys;
 
 /**
- * The floor of every TLS connection the provider makes as a client, as the section sets it, frozen.
+ * The floor of every TLS connection the provider makes as a client, and of the Core's entrance for the
+ * Front, the one listener it ends TLS on itself, as the section sets it, frozen.
  * A caller checks it with `isFloor`, then holds its own options to it by `heldToFloor`, so nothing
  * the caller passes loosens it.
  */

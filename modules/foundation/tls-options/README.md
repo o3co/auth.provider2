@@ -1,10 +1,10 @@
 # tls-options
 
 ## Responsibilities
-- Owns the floor of the provider's own TLS connections as a client: the least version and the suites they take, and that each checks its peer's certificate.
+- Owns the floor of the provider's own TLS connections, as a client and at the one listener the provider ends TLS on itself, the Core's entrance for the Front (`core-wire`): the least version and the suites they take, and that each checks its peer's certificate.
 
 ## Not here
-- Trust (`ca`, which authorities are believed): each caller's; that the certificate is checked at all is the floor's. Which destinations may be reached: `outbound-policy`. Ending TLS for the provider's own listeners: the deployment's front.
+- Trust (`ca`, which authorities are believed): each caller's; that the certificate is checked at all is the floor's. Which destinations may be reached: `outbound-policy`. Ending TLS for the provider's other listeners: the deployment's front.
 
 ## Offers
 - Composition definition (`./module`), providing `tlsOptions`: the floor (`minVersion`, `ciphers`, `rejectUnauthorized`), as `node:tls` takes it, frozen, from the section.
