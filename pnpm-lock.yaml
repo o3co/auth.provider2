@@ -1643,6 +1643,9 @@ importers:
         specifier: workspace:*
         version: link:../../transparency-logs/transparency-local
     devDependencies:
+      '@mod/combinations':
+        specifier: workspace:*
+        version: link:../../scaffold/combinations
       '@mod/keys':
         specifier: workspace:*
         version: link:../../foundation/keys
