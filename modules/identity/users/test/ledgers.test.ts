@@ -8,7 +8,7 @@ import {
 } from "@mod/kernel";
 import { quietRuntime, type RecordingLog, recordingLog } from "@mod/kernel/testing";
 import secretHashModule from "@mod/secret-hash/module";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { type Ledger, ledgers, type Users, users, type Verified } from "../src/contract.ts";
 import usersModule from "../src/module.ts";
 import { ledgerContract, memoryUsersStores, testUser, usersContract } from "../src/testing.ts";
@@ -90,14 +90,31 @@ describe("users waits", () => {
 			},
 		});
 		const u = app.get(users);
-		const timed = async (identifier: string) => {
-			const start = performance.now();
-			await u.verify(identifier, "wrong");
-			return performance.now() - start;
+		/**
+		 * The pauses of the section's first wait that end before the check answers: the wait itself,
+		 * whatever the clock. One set and not awaited ends after the answer, and counts none.
+		 */
+		const waited = async (identifier: string) => {
+			const original = globalThis.setTimeout;
+			let ended = 0;
+			const timers = vi.spyOn(globalThis, "setTimeout").mockImplementation(((
+				handler: () => void,
+				ms?: number,
+			) =>
+				original(() => {
+					if (ms === 60) ended++;
+					handler();
+				}, ms)) as typeof setTimeout);
+			try {
+				await u.verify(identifier, "wrong");
+				return ended;
+			} finally {
+				timers.mockRestore();
+			}
 		};
-		expect(await timed("alice")).toBeLessThan(50);
-		expect(await timed("alice")).toBeGreaterThanOrEqual(55);
-		expect(await timed("bob")).toBeLessThan(50);
+		expect(await waited("alice")).toBe(0);
+		expect(await waited("alice")).toBe(1);
+		expect(await waited("bob")).toBe(0);
 		expect(await u.verify("alice", "correct horse")).toEqual({ kind: "user", user: alice });
 	});
 });
