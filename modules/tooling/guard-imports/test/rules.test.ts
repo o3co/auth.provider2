@@ -597,6 +597,36 @@ describe("guard-imports", () => {
 		]);
 	});
 
+	it("G25 holds neverDefault to adapters, true alone, apart from default, and leaves such an adapter out of the default its axis needs", () => {
+		const files = { "src/contract.ts": "export const n = 1;\n" };
+		const adapter = (name: string, manifest: Record<string, unknown>) =>
+			pkg(name, files, manifest as Pkg["manifest"], "adapter");
+		const packages = [
+			pkg("@t/queue", files, {}, "foundation"),
+			adapter("@t/queue-local", { adapts: "@t/queue", neverDefault: true }),
+			adapter("@t/queue-remote", { adapts: "@t/queue" }),
+			pkg("@t/vault", files, {}, "foundation"),
+			adapter("@t/vault-a", { adapts: "@t/vault", neverDefault: true }),
+			adapter("@t/vault-b", { adapts: "@t/vault" }),
+			adapter("@t/vault-c", { adapts: "@t/vault" }),
+			pkg("@t/cache", files, {}, "foundation"),
+			adapter("@t/cache-x", { adapts: "@t/cache", default: true, neverDefault: true }),
+			pkg("@t/feed", files, {}, "foundation"),
+			adapter("@t/feed-x", { adapts: "@t/feed", neverDefault: "yes" }),
+			pkg("@t/feature-never", files, { neverDefault: true } as Pkg["manifest"]),
+		];
+		expect(
+			check(packages, budget)
+				.filter((v) => v.rule.startsWith("G25"))
+				.map((v) => `${v.where} ${v.detail}`),
+		).toEqual([
+			"@t/cache-x declares default and neverDefault",
+			"@t/feed-x neverDefault is not true",
+			"@t/feature-never neverDefault on kind feature",
+			"@t/vault no default among its 2 adapters",
+		]);
+	});
+
 	it("G24 refuses a wiring that declares spaces and keys no guarantee by the needs its feature declares", () => {
 		// A package made for wirings, whose `spaces` point a wiring takes to declare a space.
 		const store = pkg(

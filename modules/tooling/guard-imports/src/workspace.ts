@@ -17,6 +17,8 @@ export interface Pkg {
 		readonly adapts?: unknown;
 		/** Whether an adapter is its axis's default; only `true`. */
 		readonly default?: unknown;
+		/** Whether an adapter is never its axis's default, composed only where named; only `true`. */
+		readonly neverDefault?: unknown;
 		/** Whether a feature is left off the full template; only `true`. */
 		readonly optIn?: unknown;
 		readonly joins?: unknown;

@@ -336,20 +336,25 @@ export function axisRules(s: Scope) {
 				report(g25, p.name, "joins the owner it adapts");
 			}
 		}
-		const flag = (key: "default" | "optIn", kind: string) => {
+		const flag = (key: "default" | "neverDefault" | "optIn", kind: string) => {
 			const value = p.manifest[key];
 			if (value === undefined) return;
 			if (kindOf(p) !== kind) report(g25, p.name, `${key} on kind ${kindOf(p) || "none"}`);
 			else if (value !== true) report(g25, p.name, `${key} is not true`);
 		};
+		if (p.manifest.default !== undefined && p.manifest.neverDefault !== undefined)
+			report(g25, p.name, "declares default and neverDefault");
 		flag("default", s.budget.adapterKind);
+		flag("neverDefault", s.budget.adapterKind);
 		flag("optIn", s.budget.featureKind);
 	}
 	for (const [owner, adapters] of axes) {
 		const defaults = adapters.filter((p) => p.manifest.default === true).length;
+		// An adapter declaring itself never the default is left out of the one its axis needs.
+		const eligible = adapters.filter((p) => p.manifest.neverDefault !== true).length;
 		if (defaults > 1) report(g25, owner, `${defaults} defaults among its adapters`);
-		if (adapters.length > 1 && defaults === 0) {
-			report(g25, owner, `no default among its ${adapters.length} adapters`);
+		if (eligible > 1 && defaults === 0) {
+			report(g25, owner, `no default among its ${eligible} adapters`);
 		}
 	}
 }

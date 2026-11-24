@@ -13,7 +13,7 @@
   - G16: a feature depends on no capability, nor on a package declaring `forWiring` (a feature's storage is its wiring's to build on it); its tests may use their `./testing` stand-in. `forWiring` is `true` only.
   - G22: only a wiring-kind package wires (`wires` in its manifest), and a feature that declares `storeWiring` has one.
   - G24: a wiring that declares spaces keys their guarantees by the needs its feature declares: shipped code takes `keyof typeof` a name imported from the feature.
-  - G25: an adapter declares exactly one of `replaces` and `adapts`, naming a workspace package; an axis has at most one `default`, and one when it has several adapters; `default` and `optIn` are `true` only, on an adapter and a feature; a wording adapter never `joins` its owner.
+  - G25: an adapter declares exactly one of `replaces` and `adapts`, naming a workspace package; an axis has at most one `default`, and one when it has several adapters, `neverDefault` aside; `default`, `neverDefault` (not both) and `optIn` are `true` only, on an adapter, an adapter and a feature; a wording adapter never `joins` its owner.
   - G28: a dependency a manifest names in `helpers` lends functions and types alone: shipped code takes from it no value the kernel's `contract` or `extensionPoint` makes.
   - G29: a test file composing every module a feature bridge `joins` and a module contributing to the bridge's points composes the bridge too, so no contribution that decides an answer is silently lost.
   - G30: outside the package each `./audit-events` declares through (`audit`), shipped code records an event only through the declared wrapper (`declaredAudit`), never on the contract's own `record`, so every event reaches the audit event reference.
