@@ -17,7 +17,7 @@ import {
 	referenceOf,
 } from "@mod/tokens";
 import tokensModule from "@mod/tokens/module";
-import { tokensConfig } from "@mod/tokens/testing";
+import { issueAtOnce, tokensConfig } from "@mod/tokens/testing";
 import { expect, it } from "vitest";
 import tokensStore from "../src/module.ts";
 
@@ -32,7 +32,7 @@ const grant = {
 };
 /** An access token `t` issues for the grant, under the issuance policies. */
 async function issuedAccess(t: AccessTokenIssuance) {
-	const issued = await t.issue({ grant, grantType: "test" });
+	const issued = await issueAtOnce(t, { grant, grantType: "test" });
 	if (issued.kind !== "issued") throw new Error(issued.reason);
 	return issued.access;
 }
