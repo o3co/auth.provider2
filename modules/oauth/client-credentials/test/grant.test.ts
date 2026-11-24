@@ -22,7 +22,9 @@ const held = "held-key";
 const proved = { assertion: true };
 const keys = {
 	verifiedOf: (proof: unknown) =>
-		proof === proved ? { key: { kty: "EC" }, thumbprint: held, version: 4 } : undefined,
+		proof === proved
+			? { client: "svc", key: { kty: "EC" }, thumbprint: held, version: 4 }
+			: undefined,
 };
 
 /** The grant asked with these parameters and binding, issuing what it is given unless the policies refuse. */
