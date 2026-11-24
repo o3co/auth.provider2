@@ -1,6 +1,12 @@
 import { assemble, BootRefused, contract, defineModule, kernelConfig } from "@mod/kernel";
-import { expect, it } from "vitest";
-import { type Grant, type GrantInput, grants, tokenTies } from "../src/contract.ts";
+import { expect, expectTypeOf, it } from "vitest";
+import {
+	type BundleRequest,
+	type Grant,
+	type GrantInput,
+	grants,
+	tokenTies,
+} from "../src/contract.ts";
 
 const echo = (name: string, grantType = "urn:test:echo") =>
 	defineModule({ name, replicaSafe: true, takes: [] }, (m) => [
@@ -88,4 +94,26 @@ it("lets a grant identify the client of a request naming none, and hands what it
 		"identify" in
 			(await assemble({ modules: [echo("a"), read], config: kernelConfig() })).get(found),
 	).toBe(false);
+});
+
+it("has a grant issue one bundle, naming its root's reference where it has one, answered its access token", async () => {
+	const asked: unknown[] = [];
+	const issued = { token: "t", id: "i", expiresAt: 1, expiresIn: 1, tokenType: "Bearer" };
+	const input = {
+		issue: async (bundle, from) => {
+			asked.push({ bundle, from });
+			return { kind: "issued", access: issued };
+		},
+	} as Pick<GrantInput, "issue">;
+	const access = {
+		subject: "c",
+		subjectKind: "client" as const,
+		issuedTo: "c",
+		audience: [],
+		scope: [],
+	};
+	const answer = await input.issue({ root: "r1", access }, { lifetimeSeconds: 60 });
+	expect(answer).toEqual({ kind: "issued", access: issued });
+	expect(asked).toEqual([{ bundle: { root: "r1", access }, from: { lifetimeSeconds: 60 } }]);
+	expectTypeOf<Parameters<GrantInput["issue"]>[0]>().toEqualTypeOf<BundleRequest>();
 });

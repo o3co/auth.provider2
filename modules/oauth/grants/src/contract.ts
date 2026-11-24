@@ -64,6 +64,16 @@ export const targetRules = extensionPoint<TargetRule>("grants.target-rules", {
 /** The composed rule, provided by the token endpoint; with none, the default audience, the request unread. */
 export const targets = contract<TargetRule>("grants.targets");
 
+/**
+ * One bundle a grant issues: its tokens recorded once, under its start, before any is signed. It holds
+ * an access token; its subject's kind names the flow it is recorded on, a person's or the client's own.
+ */
+export interface BundleRequest {
+	/** Its root's reference: the record its chain roots in, where that record is on the log; none where it is not. */
+	readonly root?: string;
+	readonly access: AccessGrant;
+}
+
 export interface GrantInput {
 	readonly request: HttpRequest;
 	readonly client: Client;
@@ -85,9 +95,14 @@ export interface GrantInput {
 		grant: AccessGrant,
 		from?: Pick<IssuanceRequest, "session" | "continuing">,
 	): Promise<{ readonly kind: "allowed" } | Refused>;
-	/** Issues with the request's grant type and binding once the policies allow it again; `session` and `continuing` go to them, the rest to the token. */
+	/**
+	 * Issues one bundle with the request's grant type and binding once the policies allow it again:
+	 * its start recorded, its tokens made with that record's acceptance time as their issue time,
+	 * recorded once and signed after; answered once judged. `session` and `continuing` go to the
+	 * policies, the rest to the token.
+	 */
 	issue(
-		grant: AccessGrant,
+		bundle: BundleRequest,
 		from?: Pick<IssueLimits, "notAfter" | "lifetimeSeconds"> &
 			Pick<IssuanceRequest, "session" | "continuing">,
 	): Promise<{ readonly kind: "issued"; readonly access: IssuedAccess } | Refused>;
