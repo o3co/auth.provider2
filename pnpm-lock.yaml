@@ -1211,6 +1211,28 @@ importers:
         specifier: workspace:*
         version: link:../../foundation/secret-hash
 
+  modules/oauth/subject-tokens:
+    dependencies:
+      '@mod/kernel':
+        specifier: workspace:*
+        version: link:../../foundation/kernel
+      '@mod/subject-revocation':
+        specifier: workspace:*
+        version: link:../../identity/subject-revocation
+      '@mod/tokens':
+        specifier: workspace:*
+        version: link:../tokens
+    devDependencies:
+      '@mod/erasure-extensions':
+        specifier: workspace:*
+        version: link:../../foundation/erasure-extensions
+      '@mod/store':
+        specifier: workspace:*
+        version: link:../../foundation/store
+      '@mod/subject-revocation-store':
+        specifier: workspace:*
+        version: link:../../templates/subject-revocation-store
+
   modules/oauth/token-denylist:
     dependencies:
       '@mod/kernel':
