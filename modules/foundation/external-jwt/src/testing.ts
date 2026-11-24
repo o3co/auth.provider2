@@ -1,5 +1,12 @@
 import { generateKeyPairSync, type KeyObject, sign } from "node:crypto";
 
+/**
+ * RSA keys are slow to make: two made once, as the module loads, never within a test's time, and
+ * handed out in turn, so two signers asked one after the other hold two keys.
+ */
+const rsaPairs = [0, 1].map(() => generateKeyPairSync("rsa", { modulusLength: 2048 }));
+let nextRsa = 0;
+
 /** What differs by algorithm: the key pair, the digest, and how an EC signature is written (RFC 7518 §3.4). */
 const byAlg = {
 	ES256: {
@@ -8,7 +15,7 @@ const byAlg = {
 		encoding: { dsaEncoding: "ieee-p1363" as const },
 	},
 	RS256: {
-		pair: () => generateKeyPairSync("rsa", { modulusLength: 2048 }),
+		pair: () => rsaPairs[nextRsa++ % rsaPairs.length] as (typeof rsaPairs)[number],
 		digest: "sha256",
 		encoding: {},
 	},

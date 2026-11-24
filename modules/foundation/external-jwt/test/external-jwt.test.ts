@@ -20,6 +20,8 @@ beforeEach(() => {
 	now = start;
 });
 const clock = { now: () => now };
+/** An RSA key apart from the test signers', made once, as the file loads: RSA keys are slow to make. */
+const pssPair = generateKeyPairSync("rsa", { modulusLength: 2048 });
 const seconds = (ms: number) => Math.floor(ms / 1000);
 /** No test of written keys fetches anything. */
 const unreached = {
@@ -752,7 +754,7 @@ describe("a key set at a URL", () => {
 
 	it("fetches again, past the minute, for a token naming no kid that only a key named for another alg fits", async () => {
 		const rsa = await testSigner("RS256", "k1");
-		const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+		const { privateKey, publicKey } = pssPair;
 		const pss = { ...publicKey.export({ format: "jwk" }), kid: "k2", alg: "PS256" };
 		const s = served();
 		s.serve([{ ...rsa.jwk, alg: "RS256" }]);
