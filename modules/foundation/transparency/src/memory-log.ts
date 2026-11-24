@@ -30,7 +30,10 @@ export function logBook(now: () => number) {
 		shard: p.record.shard,
 		n: p.record.n,
 		acceptedAt: p.record.acceptedAt,
-		receipts: ["h.p.s"],
+		// One per token in its order, as the wire's answer carries them; one for a record of none.
+		receipts: (p.record.tokens?.length ? p.record.tokens : [undefined]).map((_, i) =>
+			i === 0 ? "h.p.s" : `h.p${i}.s`,
+		),
 	});
 	const place = (flow: Flow, fields: Record<string, unknown>, writer: Record<string, unknown>) => {
 		const placed = onFlow(flow);
