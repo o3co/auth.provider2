@@ -71,7 +71,7 @@ export function lifecycleOver(parts: LifecycleParts): Lifecycle {
 	};
 	/**
 	 * Moves forward to `target`, never back, always writing to confirm it; none, writing nothing, where
-	 * the update answers nothing. Answers the record after and the state it was found in.
+	 * the update answers nothing. Answers the record after.
 	 */
 	const advance = async (handle: string, target: "closing" | "closed") => {
 		const at = clock.now();
@@ -88,36 +88,33 @@ export function lifecycleOver(parts: LifecycleParts): Lifecycle {
 		if (!written) return undefined;
 		// A record this cannot read is left as it is, and its close cannot go on.
 		const after = fromStored(written.after);
-		const before = fromStored(written.before);
-		if (!after || !before) {
+		if (!after || !fromStored(written.before)) {
 			putOffUnread(handle);
 			throw new Unavailable("session");
 		}
-		return { record: after, from: before.state };
+		return after;
 	};
 	const close: Sessions["close"] = async (handle) => {
 		// Added to the closings first, so a closing that stops halfway is found and finished.
 		await closings.add(handle);
-		const moved = await advance(handle, "closing");
+		const record = await advance(handle, "closing");
 		// Ended, never opened, or its subject erased: a handle is never reissued, so nothing to guard.
-		if (!moved) {
+		if (!record) {
 			await closings.done(handle);
 			return { kind: "closed" };
 		}
-		const { record, from } = moved;
-		const named = { session: { id: handle, subject: record.subject }, from };
 		if (record.state === "closing") {
 			const failed = await parts.closing.closing(sessionOf(handle, record));
 			for (const failure of failed) log.warn("session-lifecycle.participant_failed", failure);
 			if (failed.length > 0) {
 				await putOff(handle, record);
-				return { kind: "pending", ...named };
+				return { kind: "pending" };
 			}
 			await advance(handle, "closed");
 		}
 		await listing.unlist(record.subject, handle);
 		await closings.done(handle);
-		return { kind: "closed", ...named };
+		return { kind: "closed" };
 	};
 	/** Goes on with every pending closing that is due; one that fails does not hold up the rest. */
 	const sweep = async (stopping: AbortSignal) => {

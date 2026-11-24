@@ -372,14 +372,14 @@ describe("session entry", () => {
 });
 
 describe("session closing", () => {
-	it("stays closing until every participant has finished", async () => {
+	it("stays closing until every participant has finished, answering the kind alone", async () => {
 		const { s, closer, login } = await boot();
 		const handle = await login();
 		closer.failing = true;
-		expect((await s.close(handle)).kind).toBe("pending");
+		expect(await s.close(handle)).toEqual({ kind: "pending" });
 		expect((await s.entryOf(handle)).kind).toBe("absent");
 		closer.failing = false;
-		expect((await s.close(handle)).kind).toBe("closed");
+		expect(await s.close(handle)).toEqual({ kind: "closed" });
 		expect(closer.done).toEqual(["alice"]);
 	});
 
