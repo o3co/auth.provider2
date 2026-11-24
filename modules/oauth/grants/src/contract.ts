@@ -77,7 +77,27 @@ export const targets = contract<TargetRule>("grants.targets");
 export interface BundleRequest {
 	/** Its root's reference: the record its chain roots in, where that record is on the log; none where it is not. */
 	readonly root?: string;
+	/** How a person's bundle roots there: by an approval's code, or by a family's refresh at its rotation. */
+	readonly via?: Rooting;
 	readonly access: AccessGrant;
+	/** The tokens it carries beside its access token, each its owner's, recorded in the same bundle. */
+	readonly parts?: readonly BundlePart[];
+}
+
+/** How a person's bundle roots: by an approval's code, or by a family's refresh at its rotation. */
+export type Rooting =
+	| { readonly via: "code" }
+	| { readonly via: "refresh"; readonly rotation: number };
+
+/**
+ * A token a bundle carries beside its access token (A40), made by its owner: prepared with the
+ * start's acceptance time before the bundle is recorded, its digest recorded with the access
+ * token's, and signed only after the bundle's receipts, with its own receipt.
+ */
+export interface BundlePart {
+	readonly frame: "idToken" | "family";
+	prepare(acceptedAt: number): Promise<{ readonly prepared: unknown; readonly digest: string }>;
+	sign(prepared: unknown, receipt: string): Promise<string>;
 }
 
 export interface GrantInput {
@@ -116,7 +136,15 @@ export interface GrantInput {
 		bundle: BundleRequest,
 		from?: Pick<IssueLimits, "notAfter" | "lifetimeSeconds"> &
 			Pick<IssuanceRequest, "session" | "continuing">,
-	): Promise<{ readonly kind: "issued"; readonly access: IssuedAccess } | Refused>;
+	): Promise<
+		| {
+				readonly kind: "issued";
+				readonly access: IssuedAccess;
+				/** Each part's token, as its owner signed it, in the order asked; none where none was asked. */
+				readonly parts?: readonly string[];
+		  }
+		| Refused
+	>;
 }
 
 export interface Grant {
