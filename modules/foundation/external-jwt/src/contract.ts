@@ -71,6 +71,8 @@ export type Verified =
 			readonly kind: "valid";
 			readonly header: Readonly<Record<string, unknown>>;
 			readonly claims: Readonly<Record<string, unknown>>;
+			/** The key that verified the signature, as its source holds it: written in, as PEM, or in the set. */
+			readonly key: Jwk;
 	  }
 	| {
 			readonly kind: "invalid";

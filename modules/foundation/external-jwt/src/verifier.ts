@@ -172,7 +172,12 @@ function verifierWith(choose: Choose, policy: Policy, clock: Clock): Verifier {
 			if (!claims) return signedInvalid("malformed");
 			const fault = claimsFault(claims, policy, clock.now());
 			if (fault) return signedInvalid(fault);
-			return { kind: "valid", header: deepFreeze({ ...header }), claims: deepFreeze(claims) };
+			return {
+				kind: "valid",
+				header: deepFreeze({ ...header }),
+				claims: deepFreeze(claims),
+				key: deepFreeze(structuredClone(key.jwk)),
+			};
 		},
 	};
 }

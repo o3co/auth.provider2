@@ -48,14 +48,16 @@ const fresh = (more: Record<string, unknown> = {}) => ({
 });
 
 describe("headers and keys", () => {
-	it("answers a token signed by the one key its header picks, with its header and claims", async () => {
+	it("answers a token signed by the one key its header picks, with its header, its claims and that key", async () => {
 		const signer = await testSigner("ES256", "k1");
-		const verifier = verifierOf({ inline: [signer.jwk] }, policy);
+		const other = await testSigner("ES256", "k2");
+		const verifier = verifierOf({ inline: [other.jwk, signer.jwk] }, policy);
 		const token = await signer.sign(fresh());
 		expect(await verifier.verify(token)).toEqual({
 			kind: "valid",
 			header: { alg: "ES256", kid: "k1" },
 			claims: fresh(),
+			key: signer.jwk,
 		});
 	});
 
@@ -309,6 +311,7 @@ describe("claims", () => {
 		const answered = await signed(fresh({ extra: { deep: [1] } }));
 		if (answered.kind !== "valid") throw new Error(answered.kind);
 		expect(Object.isFrozen(answered.header)).toBe(true);
+		expect(Object.isFrozen(answered.key)).toBe(true);
 		expect(Object.isFrozen((answered.claims.extra as { deep: unknown }).deep)).toBe(true);
 	});
 
@@ -492,6 +495,8 @@ describe("a key set at a URL", () => {
 		await tick();
 		release();
 		expect((await Promise.all(waiting)).map((v) => v.kind)).toEqual(["valid", "valid"]);
+		// The key of the set that verified it, as the set holds it.
+		expect(await verifier.verify(token)).toMatchObject({ key: signer.jwk });
 		expect(s.asked).toEqual([
 			{ url: "https://issuer.example/jwks", hosts: ["issuer.example"], accept: "application/json" },
 		]);
