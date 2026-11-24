@@ -924,9 +924,16 @@ describe("private_key_jwt", () => {
 			"a point off the curve": { kty: "EC", crv: "P-256", x: "AAAA", y: "AAAA" },
 			"a key-agreement curve": jwk(generateKeyPairSync("x25519").publicKey),
 		};
+		// The section refuses each; one boot shows a refused section refuses boot, as for any of them.
 		for (const [name, bad] of Object.entries(notForSigning)) {
-			expect(await boot({ keys: [bad] }).catch((error) => error), name).toBeInstanceOf(BootRefused);
+			const read = await clientKeys.schema["~standard"].validate({ keys: [bad] });
+			expect(
+				read.issues?.map((i) => i.path?.map(String)),
+				name,
+			).toEqual([["keys", "0"]]);
 		}
+		const refused = await boot({ keys: [jwk(ec.privateKey)] }).catch((error) => error);
+		expect(refused).toBeInstanceOf(BootRefused);
 		const marked = await boot({
 			keys: [jwk(ec.publicKey, { kid: "ec", use: "sig", key_ops: ["verify"] })],
 		});
