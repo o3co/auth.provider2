@@ -83,6 +83,12 @@ export function clientCredentials(
 			);
 			if (allowed.kind === "error") return allowed;
 			const { scope, audience } = allowed;
+			// A `resource` asked that no rule read is never passed over for the one entry's audience.
+			const resource = param("resource");
+			if (asked.audience.length === 0 && resource !== undefined && audience[0] !== resource) {
+				const description = "the resource asked is not the audience given";
+				return { kind: "error", error: "invalid_target", description };
+			}
 			// Nothing is used up before issuing, but the count, so `issue` alone asks the policies.
 			const access = { subject: client.id, subjectKind: "client" as const, issuedTo: client.id };
 			const issued = await issue({ access: { ...access, audience, scope } }, { lifetimeSeconds });

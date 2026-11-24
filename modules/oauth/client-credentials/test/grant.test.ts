@@ -154,6 +154,21 @@ describe("client credentials", () => {
 		]);
 	});
 
+	it("never passes over a resource asked that no rule read: it must be the one entry's audience", async () => {
+		expect((await ask(client(), { scope: "read", resource: api })).answer).toMatchObject({
+			kind: "issued",
+		});
+		const elsewhere = await ask(client(), { scope: "read", resource: "https://elsewhere" });
+		expect([elsewhere.answer, elsewhere.issued]).toEqual([
+			{
+				kind: "error",
+				error: "invalid_target",
+				description: "the resource asked is not the audience given",
+			},
+			[],
+		]);
+	});
+
 	it("refuses a public client, however it authenticated, and a suspended one [rfc6749-4.4-a] [rfc6749-2.3-a]", async () => {
 		expect((await ask(client({ kind: "public" }))).answer).toEqual({
 			kind: "error",

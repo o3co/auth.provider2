@@ -19,6 +19,7 @@
 - Only a client whose assertion a key written in its record verified is served (`client-assertion`'s `verifiedOf`, `written`, of what its authentication verified, for this client); a secret's, or a key at its `jwks-uri`, is `unauthorized_client`. No setting weakens it.
 - The token is bound by DPoP to that very key: its `cnf` is that key's thumbprint, so using it needs the client's private key. A proof by another key is `invalid_dpop_proof`; no binding is `invalid_request`, and one of another kind `unauthorized_client`. Boot is refused where no binding kind composed writes `jkt`.
 - The scope and audience are the client's own ceiling's alone (`client-allowance`'s `allowedSelfIssuance`), never its person's delegation: the scope named, the audience asked within its own audiences, never the issuer; a client not of a signed version is issued nothing.
+- The audience is asked through `grants`' rule for it: with no rule composed, a ceiling of two entries or more issues nothing, and a `resource` asked that the rule did not read must be the one entry's audience, else `invalid_target`.
 - The token's subject and the client it is issued to are both the client, its subject's kind `client`; it lives five minutes; it is one bundle, naming no root, as the client's registry version is on no log here; no refresh credential is issued. Nothing but the count is used up before issuing.
 
 ## Depends on
