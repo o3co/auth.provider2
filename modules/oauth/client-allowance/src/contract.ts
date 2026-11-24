@@ -88,6 +88,33 @@ export interface ClientAllowance {
 		asked: Partial<AllowanceLists>,
 	): Readonly<Record<string, unknown>> | undefined;
 	/**
+	 * The audiences of the client's own ceiling, in its order: none for a client not of a version its
+	 * publisher signed (`Client.signed`).
+	 */
+	selfAudiences(client: Client): readonly string[];
+	/**
+	 * What a client may be issued for itself, by its own ceiling alone, never the person's delegation:
+	 * only a client of a version its publisher signed (else `unauthorized_client`); the scopes named,
+	 * with no default (`invalid_scope`); one audience, named unless the ceiling holds one entry, never
+	 * the issuer, and every scope within that audience's entry (`invalid_target`, `invalid_scope`).
+	 */
+	allowedSelfIssuance(
+		client: Client,
+		requested: string | undefined,
+		audience: readonly string[],
+		issuer: string,
+	):
+		| {
+				readonly kind: "allowed";
+				readonly scope: readonly string[];
+				readonly audience: readonly string[];
+		  }
+		| {
+				readonly kind: "error";
+				readonly error: "unauthorized_client" | "invalid_scope" | "invalid_target";
+				readonly description?: string;
+		  };
+	/**
 	 * RFC 6749 §3.3 scope tokens; none when the value is empty or left out (§3.2). Undefined when it
 	 * is not scope tokens joined by single spaces.
 	 */
@@ -167,6 +194,41 @@ const allowedIssuanceWithin: ClientAllowance["allowedIssuanceWithin"] = (
 	return { kind: "allowed", scope: [...new Set(asked)], audience: audiences.slice(0, 1) };
 };
 
+/** The client's own ceiling: a signed version's alone. */
+const selfOf = (client: Client) => (client.signed === true ? client.section(allowances).self : []);
+
+const allowedSelfIssuance: ClientAllowance["allowedSelfIssuance"] = (
+	client,
+	requested,
+	audience,
+	issuer,
+) => {
+	if (client.signed !== true) {
+		const description = "only a client of a version its publisher signed is issued for itself";
+		return { kind: "error", error: "unauthorized_client", description };
+	}
+	const named = parseScope(requested);
+	if (named === undefined) return { kind: "error", error: "invalid_scope" };
+	if (named.length === 0) {
+		return { kind: "error", error: "invalid_scope", description: "scope is required" };
+	}
+	const self = selfOf(client);
+	const [only, ...more] =
+		audience.length === 0 && self.length === 1 ? [self[0]?.audience] : audience;
+	if (only === undefined || more.length > 0) {
+		const description = "name one audience of the client's own";
+		return { kind: "error", error: "invalid_target", description };
+	}
+	const entry = self.find((e) => e.audience === only);
+	if (entry === undefined || only === issuer) {
+		const description = "the audience is not one of the client's own";
+		return { kind: "error", error: "invalid_target", description };
+	}
+	if (named.some((s) => !entry.scopes.includes(s)))
+		return { kind: "error", error: "invalid_scope" };
+	return { kind: "allowed", scope: [...new Set(named)], audience: [only] };
+};
+
 const covers: ClientAllowance["covers"] = (client, issued, issuer) => {
 	const allowed = client.section(allowances);
 	return (
@@ -189,6 +251,8 @@ export const clientAllowance: ClientAllowance = Object.freeze({
 	},
 	allowedIssuance,
 	allowedIssuanceWithin,
+	selfAudiences: (client) => selfOf(client).map((e) => e.audience),
+	allowedSelfIssuance,
 	allowsAudienceWithin: (client, ceilings, audience, issuer) =>
 		narrowed(audiencesOf(client.section(allowances), issuer), ceilings, "audiences").includes(
 			audience,

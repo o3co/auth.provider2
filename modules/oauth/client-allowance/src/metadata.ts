@@ -1,11 +1,19 @@
 import type { Section } from "@mod/clients";
 import { z } from "zod";
 
+/** One entry of the client's own ceiling: an audience and the scopes it may be issued for itself there. */
+export interface SelfEntry {
+	readonly audience: string;
+	readonly scopes: readonly string[];
+}
+
 export interface Allowances {
 	readonly grants: readonly string[];
 	readonly scopes: readonly string[];
 	readonly "default-scopes"?: readonly string[] | undefined;
 	readonly audiences: readonly string[];
+	/** The client's own ceiling, apart from what a person delegates: audience and scope pairs. */
+	readonly self: readonly SelfEntry[];
 }
 
 /** A scope the client may be allowed: never `offline_access`, which allows nothing here, offline access not being offered. */
@@ -38,6 +46,22 @@ export const allowances: Section<Allowances> = {
 			.prefault([])
 			.describe(
 				"The audiences the client's tokens may name, the first given when none is asked; none means the issuer.",
+			),
+		self: z
+			.array(z.strictObject({ audience: z.string().min(1), scopes: z.array(scope) }))
+			.prefault([])
+			.superRefine((entries, context) => {
+				for (const [i, entry] of entries.entries()) {
+					if (entries.findIndex((e) => e.audience === entry.audience) < i)
+						context.addIssue({
+							code: "custom",
+							message: "an audience is written in one entry alone",
+							path: [i, "audience"],
+						});
+				}
+			})
+			.describe(
+				"The client's own ceiling, for a token it takes for itself: each entry an audience and the scopes it may be issued there. Read only for a client of a version its publisher signed; none allows nothing. The person's delegation (`scopes`, `audiences`) is never read for it.",
 			),
 	}),
 };
