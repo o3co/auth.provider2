@@ -9,6 +9,13 @@ describe("the added claims' copier", () => {
 		expect(addedClaimsIn({ o3co_standing_at: 1, iat: 2, mine: 3 })).toEqual({ mine: 3 });
 	});
 
+	it("refuses the subject's kind and the receipt claim, an access token's issuer's own, and leaves them out of the added ones a payload holds", () => {
+		for (const name of ["o3co_subject_kind", "txr"]) {
+			expect(() => addedClaimsOf({ [name]: "x" }), name).toThrow(TypeError);
+			expect(addedClaimsIn({ [name]: "x", mine: 3 }), name).toEqual({ mine: 3 });
+		}
+	});
+
 	it("copies a plain set into a new frozen one, and takes none for none or an empty set", () => {
 		const given = { a: { b: [true, false, 1.5, "x"] } };
 		const copied = addedClaimsOf(given);
