@@ -1116,6 +1116,61 @@ importers:
         specifier: 5.0.5
         version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(vite@8.3.3(@types/node@26.6.5)(yaml@2.9.1))
 
+  modules/oauth/client-assertion:
+    dependencies:
+      '@mod/clients':
+        specifier: workspace:*
+        version: link:../../identity/clients
+      '@mod/external-jwt':
+        specifier: workspace:*
+        version: link:../../foundation/external-jwt
+      '@mod/http':
+        specifier: workspace:*
+        version: link:../../foundation/http
+      '@mod/issuer':
+        specifier: workspace:*
+        version: link:../issuer
+      '@mod/kernel':
+        specifier: workspace:*
+        version: link:../../foundation/kernel
+      '@mod/keys':
+        specifier: workspace:*
+        version: link:../../foundation/keys
+      '@mod/outbound':
+        specifier: workspace:*
+        version: link:../../foundation/outbound
+      '@mod/outbound-policy':
+        specifier: workspace:*
+        version: link:../../foundation/outbound-policy
+      '@mod/token-endpoint':
+        specifier: workspace:*
+        version: link:../token-endpoint
+      '@mod/url-setting':
+        specifier: workspace:*
+        version: link:../../foundation/url-setting
+      jose:
+        specifier: 6.2.15
+        version: 6.2.15
+      zod:
+        specifier: 4.6.7
+        version: 4.6.7
+    devDependencies:
+      '@mod/http-server':
+        specifier: workspace:*
+        version: link:../../foundation/http-server
+      '@mod/records':
+        specifier: workspace:*
+        version: link:../../foundation/records
+      '@mod/secret-hash':
+        specifier: workspace:*
+        version: link:../../foundation/secret-hash
+      '@mod/tls-options':
+        specifier: workspace:*
+        version: link:../../foundation/tls-options
+      vitest:
+        specifier: 5.0.5
+        version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(vite@8.3.3(@types/node@26.6.5)(yaml@2.9.1))
+
   modules/oauth/discovery:
     dependencies:
       '@mod/issuer':
