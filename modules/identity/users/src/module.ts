@@ -10,7 +10,7 @@ import { record, registeredUsers } from "./registered.ts";
 import { contactStore } from "./store.ts";
 import { usersEraser } from "./stores/eraser.ts";
 import { portsRefused } from "./stores/ports.ts";
-import { identifierWaits } from "./waits/waits.ts";
+import { failedChecksWithin, identifierWaits } from "./waits/waits.ts";
 
 /** Identifiers match exactly; this form, folding case fully ("straße", "STRASSE", "STRAẞE"), only finds look-alikes. */
 const confusable = (identifier: string) =>
@@ -99,18 +99,23 @@ export default defineModule(
 				? contributedSource(ledger, c.log)
 				: registeredUsers(c.section.registered, (inUse) => checkers.checkerOf(inUse));
 			const { after, first, longest, forget } = c.section.waits;
-			const waited = identifierWaits(
-				{ after, firstMs: first, longestMs: longest, forgetMs: forget },
-				{
-					now: () => c.clock.monotonic?.() ?? c.clock.now(),
-					pause: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
-				},
-			);
+			const rules = { after, firstMs: first, longestMs: longest, forgetMs: forget };
+			const waited = identifierWaits(rules, {
+				now: () => c.clock.monotonic?.() ?? c.clock.now(),
+				pause: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+			});
 			// Every check of a password waits as its identifier's run of failures says, whoever answers.
 			const source = {
 				...answering,
 				verify: (identifier: string, password: string) =>
 					waited.run(identifier, () => answering.verify(identifier, password)),
+				verifyAsPart: async (identifier: string, password: string) => {
+					const held = await waited.runPending(identifier, () =>
+						answering.verify(identifier, password),
+					);
+					return { verified: held.answer, settle: held.settle };
+				},
+				failedChecks: Object.freeze({ count: failedChecksWithin(rules), windowMs: forget }),
 			};
 			const contacts = await c.get(contactStore);
 			const ports = portsRefused(contacts);

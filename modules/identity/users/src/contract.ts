@@ -107,12 +107,28 @@ export interface Contact {
 	readonly value: string;
 }
 
+/** A password's check that is one part of something larger, whose caller settles whether the whole passed. */
+export interface PartVerification {
+	readonly verified: Verified;
+	/**
+	 * Once: where the whole passed. Until then, and where it never comes, the check counts as failed;
+	 * a whole that failed for a fault counts so too, so no fault lets a check go uncounted. Settled past
+	 * the identifier's forgetting, it takes back nothing.
+	 */
+	settle(passed: boolean): void;
+}
+
 export interface Users {
 	/**
-	 * Takes the same work whether or not the user exists; throws Unavailable if the ledger fails, or
-	 * where the identifier's checks are queued past their bound.
+	 * Takes the same work whether or not the user exists; throws Unavailable if the ledger fails,
+	 * where the identifier's checks are queued past their bound, or, for an identifier not held, where
+	 * every one held keeps failures not forgotten.
 	 */
 	verify(identifier: string, password: string): Promise<Verified>;
+	/** As `verify`, for a check that is one part of something larger: its waits count it failed until settled passed. */
+	verifyAsPart(identifier: string, password: string): Promise<PartVerification>;
+	/** At most `count` failed checks of one identifier in any `windowMs`, as its waits allow, on each instance since it started. */
+	readonly failedChecks: { readonly count: number; readonly windowMs: number };
 	bySubject(subject: string): Promise<BySubject>;
 	/**
 	 * The user holding the identifier, matched exactly; none for an empty one. Offered where the

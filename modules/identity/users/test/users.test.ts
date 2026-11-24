@@ -13,7 +13,7 @@ import {
 } from "../src/contract.ts";
 import { ledgerUsers } from "../src/ledger.ts";
 import usersModule from "../src/module.ts";
-import { record, registeredUsers } from "../src/registered.ts";
+import { record, registeredUsers, type UserSource } from "../src/registered.ts";
 import {
 	ledgerContract,
 	memoryUsersStores,
@@ -22,6 +22,23 @@ import {
 	testUser,
 	usersContract,
 } from "../src/testing.ts";
+import { identifierWaits } from "../src/waits/waits.ts";
+
+/** The source with waits that never wait, as the package wraps it, so pending checks are real. */
+function waited(source: UserSource) {
+	const waits = identifierWaits(
+		{ after: 1000, firstMs: 1, longestMs: 1, forgetMs: 1000 },
+		{ now: () => 0, pause: async () => {} },
+	);
+	return {
+		...source,
+		verifyAsPart: async (identifier: string, password: string) => {
+			const held = await waits.runPending(identifier, () => source.verify(identifier, password));
+			return { verified: held.answer, settle: held.settle };
+		},
+		failedChecks: { count: 1001, windowMs: 1000 },
+	};
+}
 
 const boot = (registered: unknown[]) =>
 	assemble({
@@ -45,7 +62,7 @@ function counting() {
 		checks = recording.works;
 		return recording.checker;
 	});
-	const counted = ledgerUsers(source, stores.contacts.store);
+	const counted = ledgerUsers(waited(source), stores.contacts.store);
 	return { source, users: counted, checks };
 }
 
@@ -252,12 +269,30 @@ it("checks passwords within its own assembly's secret-hash limit, whatever anoth
 	expect((await first).kind).toBe("user");
 });
 
+it("does the same password checks for a pending check of an unknown user as of a known one", async () => {
+	const { users: u, checks } = counting();
+	await u.verifyAsPart("alice", "wrong");
+	const known = [...checks];
+	await u.verifyAsPart("nobody", "wrong");
+	expect(known.length).toBeGreaterThan(0);
+	expect(checks.slice(known.length)).toEqual(known);
+});
+
+it("states the failed checks of one identifier its waits allow in their forget time", async () => {
+	const app = await assemble({
+		modules: [usersModule, secretHashModule, memoryUsersStores().module],
+		config: { ...kernelConfig(), users: { registered: [aliceEntry], waits: { forget: "1m" } } },
+	});
+	// Three at once, then 1, 2, 4, 8 and 16 seconds, then one each half minute (none), and one more.
+	expect(app.get(users).failedChecks).toEqual({ count: 3 + 5 + 0 + 1, windowMs: 60_000 });
+});
+
 describe("records", () => {
 	const empty = () => registeredUsers([], (inUse) => recordingChecker(inUse, randomBytes).checker);
 	const open = () => {
 		const stores = memoryUsersStores();
 		const source = empty();
-		const u = ledgerUsers(source, stores.contacts.store);
+		const u = ledgerUsers(waited(source), stores.contacts.store);
 		return { u, stores };
 	};
 
@@ -292,7 +327,7 @@ describe("records", () => {
 			read: async () => undefined,
 			update: async () => undefined,
 		};
-		const u = ledgerUsers(empty(), vanishing);
+		const u = ledgerUsers(waited(empty()), vanishing);
 		const email = { kind: "email", value: "a@example.com" } as const;
 		await expect(u.verifiedContact("s", email)).rejects.toSatisfy(isUnavailable);
 	});

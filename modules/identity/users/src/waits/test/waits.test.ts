@@ -1,7 +1,7 @@
 import { isUnavailable, Unavailable } from "@mod/kernel";
 import { describe, expect, it } from "vitest";
 import type { Verified } from "../../contract.ts";
-import { identifierWaits, queueBound, type WaitRules } from "../waits.ts";
+import { failedChecksWithin, identifierWaits, queueBound, type WaitRules } from "../waits.ts";
 
 const rules: WaitRules = { after: 2, firstMs: 1000, longestMs: 4000, forgetMs: 60_000 };
 const none: Verified = { kind: "none" };
@@ -125,16 +125,101 @@ describe("identifierWaits", () => {
 	});
 });
 
+describe("a pending check", () => {
+	it("counts a user found as a failure until settled passed, and only once", async () => {
+		const { waits, paused } = waitsAt();
+		await waits.run("alice", async () => none);
+		const passing = await waits.runPending("alice", async () => user);
+		expect(passing.answer).toBe(user);
+		// Two failures now: the third check is let through, the fourth would wait.
+		passing.settle(true);
+		passing.settle(true);
+		await waits.run("alice", async () => none);
+		await waits.run("alice", async () => none);
+		expect(paused).toEqual([1000]);
+	});
+
+	it("keeps a user found as a failure where settled not passed, or never settled", async () => {
+		const { waits, paused } = waitsAt();
+		const failing = await waits.runPending("alice", async () => user);
+		failing.settle(false);
+		failing.settle(true);
+		await waits.runPending("alice", async () => user);
+		await waits.run("alice", async () => none);
+		expect(paused).toEqual([1000]);
+	});
+
+	it("keeps none found a failure, settled passed or not", async () => {
+		const { waits, paused } = waitsAt();
+		for (let i = 0; i < 2; i++) (await waits.runPending("alice", async () => none)).settle(true);
+		await waits.run("alice", async () => none);
+		expect(paused).toEqual([1000]);
+	});
+});
+
+describe("a pending check across a forgetting", () => {
+	it("takes back nothing of the failures after its run was forgotten", async () => {
+		const { waits, paused, clock } = waitsAt({ ...rules, after: 1 });
+		const early = await waits.runPending("alice", async () => user);
+		clock.at += rules.forgetMs;
+		await waits.run("alice", async () => none);
+		early.settle(true);
+		// The later failure stands: the next check waits.
+		await waits.run("alice", async () => none);
+		expect(paused).toEqual([1000]);
+	});
+});
+
+describe("a pending check of a run let go", () => {
+	it("takes back nothing of the run made after its own was let go", async () => {
+		const { waits, paused, clock } = waitsAt({ ...rules, after: 1 }, 1);
+		const early = await waits.runPending("alice", async () => user);
+		clock.at += rules.forgetMs;
+		// Alice's run is past its forget time: bob takes its place, then alice's anew.
+		await waits.run("bob", async () => user);
+		await waits.run("alice", async () => none);
+		early.settle(true);
+		await waits.run("alice", async () => none);
+		expect(paused).toEqual([1000]);
+	});
+});
+
+describe("failedChecksWithin", () => {
+	it("answers the failed checks the defaults allow in a quarter hour: three at once, five doubling, then one each half minute, and one more", () => {
+		const defaults = { after: 3, firstMs: 1000, longestMs: 30_000, forgetMs: 900_000 };
+		expect(failedChecksWithin(defaults)).toBe(3 + 5 + 28 + 1);
+	});
+
+	it("bounds what a sender gets, failing at once whenever let through, in any window of the forget time", async () => {
+		for (const given of [rules, { ...rules, after: 0 }, { ...rules, after: 7, firstMs: 3000 }]) {
+			const { waits, clock } = waitsAt(given);
+			const at: number[] = [];
+			while (clock.at < 3 * given.forgetMs) {
+				await waits.run("alice", async () => none);
+				at.push(clock.at);
+			}
+			const most = Math.max(
+				...at.map((start) => at.filter((t) => t >= start && t <= start + given.forgetMs).length),
+			);
+			expect(most).toBeLessThanOrEqual(failedChecksWithin(given));
+			expect(most).toBeGreaterThanOrEqual(failedChecksWithin(given) - 2);
+		}
+	});
+
+	it("counts a run of no waits without stepping through it", () => {
+		expect(failedChecksWithin({ ...rules, after: 1_000_000_000 })).toBeGreaterThan(1_000_000_000);
+	});
+});
+
 describe("identifierWaits at its capacity", () => {
-	it("lets the run with the fewest failures go to make room", async () => {
+	it("refuses a new identifier as unavailable where every run held keeps failures not forgotten, so none is reset", async () => {
 		const { waits, paused } = waitsAt({ ...rules, after: 1 }, 2);
 		for (let i = 0; i < 2; i++) await waits.run("alice", async () => none);
 		await waits.run("bob", async () => none);
-		// Full: carol takes bob's place, who failed fewer times; alice's run stays.
-		await waits.run("carol", async () => none);
+		await expect(waits.run("carol", async () => none)).rejects.toSatisfy(isUnavailable);
 		await waits.run("alice", async () => none);
 		await waits.run("bob", async () => none);
-		expect(paused).toEqual([1000, 2000]);
+		expect(paused).toEqual([1000, 2000, 1000]);
 	});
 
 	it("lets a run past its forget time go before one that failed fewer times", async () => {
@@ -161,7 +246,8 @@ describe("identifierWaits at its capacity", () => {
 			}),
 		).rejects.toSatisfy(isUnavailable);
 		expect(asked).toBe(false);
-		first.answer(none);
+		// Alice's check found her and left no failure: her run is let go, and bob is held.
+		first.answer(user);
 		await running;
 		expect(await waits.run("bob", async () => none)).toEqual(none);
 	});

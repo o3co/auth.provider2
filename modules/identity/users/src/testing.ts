@@ -110,6 +110,20 @@ export function usersContract(name: string, harness: UsersHarness): void {
 			expect(checks.slice(known.length)).toEqual(known);
 		});
 
+		it("answers a pending check as verify does, settled once, and states the failed checks its waits allow", async () => {
+			const u = await harness.open();
+			const found = await u.verifyAsPart("alice", "correct horse");
+			expect(found.verified).toEqual(await u.verify("alice", "correct horse"));
+			found.settle(true);
+			found.settle(false);
+			expect((await u.verifyAsPart("alice", "wrong")).verified).toEqual({ kind: "none" });
+			expect((await u.verifyAsPart("", "correct horse")).verified).toEqual({ kind: "none" });
+			const { count, windowMs } = u.failedChecks;
+			expect(
+				Number.isInteger(count) && count >= 1 && Number.isInteger(windowMs) && windowMs >= 1,
+			).toBe(true);
+		});
+
 		it.runIf(Boolean(harness.unanswerableBySubject))(
 			"answers every subject and its claimed contacts unanswerable, never none",
 			async () => {

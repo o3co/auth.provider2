@@ -42,13 +42,21 @@ const fitting =
 	};
 
 /** The source's users, with the contacts written through the store interface. */
-export function ledgerUsers(source: UserSource, contacts: ContactStore): Users {
+export function ledgerUsers(
+	source: UserSource & Pick<Users, "verifyAsPart" | "failedChecks">,
+	contacts: ContactStore,
+): Users {
+	// The length is the sender's choice, so answering early tells nothing about users.
+	const unasked = (identifier: string, password: string) =>
+		Buffer.byteLength(password) > maxPasswordBytes || !identifierFits(identifier);
 	return {
 		verify: async (identifier, password) =>
-			// The length is the sender's choice, so answering early tells nothing about users.
-			Buffer.byteLength(password) > maxPasswordBytes || !identifierFits(identifier)
-				? none
-				: source.verify(identifier, password),
+			unasked(identifier, password) ? none : source.verify(identifier, password),
+		verifyAsPart: async (identifier, password) =>
+			unasked(identifier, password)
+				? { verified: none, settle: () => {} }
+				: source.verifyAsPart(identifier, password),
+		failedChecks: source.failedChecks,
 		bySubject: source.bySubject,
 		...(source.byIdentifier ? { byIdentifier: fittingLookup(source.byIdentifier) } : {}),
 		...(source.create ? { create: fitting(source.create) } : {}),
