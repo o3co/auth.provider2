@@ -30,6 +30,7 @@
 		}
 	},
 	"devDependencies": {
+		"@mod/sdk-core-wire": "workspace:*",
 		"vitest": "5.0.5"
 	}
 }
