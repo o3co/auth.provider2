@@ -24,6 +24,7 @@ import {
 import {
 	authenticatedAheadMs,
 	type BuiltTokens,
+	checkingOf,
 	issuanceOf,
 	issuing,
 	judging,
@@ -815,7 +816,7 @@ export function tokensStandIn(
 				};
 				return stand;
 			}),
-			m.provide(accessTokens).by((c) => c.get(builtStandIn)),
+			m.provide(accessTokens).by(async (c) => checkingOf(await c.get(builtStandIn))),
 			m.provide(accessTokenIssuance).by(async (c) => issuanceOf(await c.get(builtStandIn))),
 		],
 	);

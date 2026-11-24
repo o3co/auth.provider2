@@ -18,6 +18,7 @@ import {
 import { fencingOver } from "./fencing/fencing.ts";
 import {
 	type BuiltTokens,
+	checkingOf,
 	issuanceOf,
 	issuing,
 	judging,
@@ -220,7 +221,7 @@ export default defineModule(
 			};
 			return access;
 		}),
-		m.provide(accessTokens).by((c) => c.get(built)),
+		m.provide(accessTokens).by(async (c) => checkingOf(await c.get(built))),
 		m.provide(accessTokenIssuance).by(async (c) => issuanceOf(await c.get(built))),
 	],
 );

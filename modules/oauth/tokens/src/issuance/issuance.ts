@@ -183,6 +183,16 @@ export function issuing(
 /** Access tokens as one build makes them, both handles' members. */
 export type BuiltTokens = Tokens & AccessTokenIssuance;
 
+/** The members of built access tokens that check and revoke alone, for the handle any module takes. */
+export const checkingOf = (t: BuiltTokens): Tokens => ({
+	revocable: t.revocable,
+	subjectsChecked: t.subjectsChecked,
+	verifyAccess: t.verifyAccess,
+	revokeReferenced: t.revokeReferenced,
+	issuedToOf: t.issuedToOf,
+	revokeAccess: t.revokeAccess,
+});
+
 /** The members of built access tokens that issue, for the handle taken to issue. */
 export const issuanceOf = (t: BuiltTokens): AccessTokenIssuance => ({
 	admits: t.admits,

@@ -1,4 +1,4 @@
-import { assemble, type BootRefused, defineModule, isUnavailable } from "@mod/kernel";
+import { assemble, type BootRefused, defineModule, isUnavailable, kernelConfig } from "@mod/kernel";
 import { quietRuntime } from "@mod/kernel/testing";
 import { accessTokenSigning } from "@mod/keys";
 import { promiseNames, promises, stances } from "@mod/promises";
@@ -11,7 +11,7 @@ import {
 	accessTokens,
 	type PreparedAccess,
 } from "../src/contract.ts";
-import { tokensConfig } from "../src/testing.ts";
+import { tokensConfig, tokensStandIn } from "../src/testing.ts";
 import { bothOf, composedConfig, composedModules, composedWith } from "./composed.ts";
 
 const now = 1_800_000_000_000;
@@ -110,4 +110,25 @@ it("is taken for issuing only by a module that declares where it stands on the p
 	]);
 	await expect(booted(taking(accessTokenIssuance, true))).resolves.toBeDefined();
 	await expect(booted(taking(accessTokens, false))).resolves.toBeDefined();
+});
+
+it("hands checking and revoking alone through accessTokens, no issuing member at run time, in tokens and its stand-in", async () => {
+	const standIn = await assemble({ modules: [tokensStandIn()], config: kernelConfig(), runtime });
+	for (const app of [(await boot()).app, standIn]) {
+		expect(Object.keys(app.get(accessTokens)).sort()).toEqual([
+			"issuedToOf",
+			"revocable",
+			"revokeAccess",
+			"revokeReferenced",
+			"subjectsChecked",
+			"verifyAccess",
+		]);
+		expect(Object.keys(app.get(accessTokenIssuance)).sort()).toEqual([
+			"accessTokenLifetimeSeconds",
+			"admits",
+			"issue",
+			"prepare",
+			"sign",
+		]);
+	}
 });
