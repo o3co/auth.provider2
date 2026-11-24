@@ -12,6 +12,30 @@ import type { LogRecord, Preimage } from "@mod/transparency-wire";
 /** The one monitor key a record names: t0 seals a preimage to no monitor, keeping it in the Core. */
 export const localKey = "local";
 
+/** A record another writer writes (a reset boundary, the monitor's here) judged with its body on its flow's judged prefix. */
+export type SignedJudging = (
+	record: Extract<LogRecord, { readonly position: number }>,
+	body: unknown,
+	prior: readonly FlowEntry[],
+) => FlowEntry;
+
+/** j0 for a record no Core writer writes: `authority-rules`' judgment with its body. */
+export function localSignedJudging(p: {
+	readonly checks: Checks;
+	readonly context: Context;
+}): SignedJudging {
+	return (record, body, prior) => {
+		const state = prior.reduce(
+			(s, e) => fold(s, e.envelope, e.changes, e.judgment),
+			emptyState as FlowState,
+		);
+		const ruling = judge({ record, body, state, prior, checks: p.checks, context: p.context });
+		if ("wait" in ruling)
+			throw new TypeError(`transparency-local: the rules wait (${ruling.wait})`);
+		return ruling.entry;
+	};
+}
+
 /** A Core writer's record judged on its flow's judged prefix: its entry, with its finding. */
 export type Judging = (
 	record: Extract<LogRecord, { readonly position: number }>,

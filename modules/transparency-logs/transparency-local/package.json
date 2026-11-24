@@ -17,6 +17,7 @@
 		"@mod/passkeys": "workspace:*",
 		"@mod/promises": "workspace:*",
 		"@mod/records": "workspace:*",
+		"@mod/reset-wire": "workspace:*",
 		"@mod/store": "workspace:*",
 		"@mod/transparency": "workspace:*",
 		"@mod/transparency-wire": "workspace:*",

@@ -1,12 +1,13 @@
 import { createHash } from "node:crypto";
+import type { Checks, Context } from "@mod/authority-rules";
 import { defineModule, optional } from "@mod/kernel";
-import { keys } from "@mod/keys";
+import { type Jwk, keys, publicJwk } from "@mod/keys";
 import { passkeys } from "@mod/passkeys";
 import { promiseNames, stances } from "@mod/promises";
 import { transparencyLog } from "@mod/transparency";
 import { ceremonies, keyThumbprint } from "@mod/webauthn";
 import { clientRecords, logStore } from "./contract.ts";
-import { localJudging } from "./judging.ts";
+import { localJudging, localSignedJudging } from "./judging.ts";
 import { localLog } from "./log.ts";
 import { section } from "./section.ts";
 import { verifiedByOne } from "./verify.ts";
@@ -36,35 +37,80 @@ export default defineModule(
 			const fresh = () => Buffer.from(c.random.bytes(16)).toString("base64url");
 			const generation = ring.generation();
 			const s = c.section;
+			// A key's body, its SPKI, read as keys reads a public JWK: none for a private member, another
+			// spelling or no key at all.
+			const bodyOf = (jwk: unknown) =>
+				publicJwk(jwk as Jwk)
+					?.key.export({ type: "spki", format: "der" })
+					.toString("base64url");
+			// V22 §B.2: no key in two sets. Here a version's keys apart, each named by a kid of its own,
+			// and none the Core ring's of any generation held (kept apart as §B.2 means keys to be;
+			// V18's sets join the comparison once L0 holds them).
+			const ringBodies = new Set(ring.coreRings().map(bodyOf));
+			const refusals = s["reset-keys"].flatMap((set) => {
+				const bodies = set.keys.map(bodyOf);
+				const kids = set.keys.map((k) => (typeof k.kid === "string" ? k.kid : ""));
+				return bodies.flatMap((b, at) =>
+					b === undefined
+						? [`version ${set.version}: a key that is no public key`]
+						: kids[at] === "" || kids.indexOf(kids[at] ?? "") !== at
+							? [`version ${set.version}: a key with no kid of its own`]
+							: bodies.indexOf(b) !== at
+								? [`version ${set.version}: a key named twice`]
+								: ringBodies.has(b)
+									? [`version ${set.version}: a key of the Core ring`]
+									: [],
+				);
+			});
+			if (refusals.length > 0) c.refuse("transparency-local.reset-keys", refusals.join("; "));
+			const sets = (version: number) =>
+				s["reset-keys"].find((set) => set.version === version)?.keys ?? ("absent" as const);
+			const newest = s["reset-keys"].reduce<number | undefined>(
+				(most, set) => (most === undefined || set.version > most ? set.version : most),
+				undefined,
+			);
+			const checks: Checks = {
+				// A client's evidence is verified by one key, a DPoP proof's naming no kid.
+				verifyJws: (jws, keySet) =>
+					ring.verifyJws(jws, keySet) ??
+					(keySet.length === 1 ? verifiedByOne(jws, keySet) : undefined),
+				verifyAssertion: checking.verifyAssertion,
+				digest: (data) => createHash("sha256").update(data).digest("base64url"),
+				keyThumbprint,
+			};
+			// t0 names no version and opens every preimage itself: no window, no retry to wait out.
+			const context: Context = {
+				ring: ring.coreRing(generation) ?? [],
+				origin: s.origin,
+				limits: {
+					codeLifetime: s["code-lifetime"],
+					refreshLifetime: s["refresh-lifetime"],
+					issueWindow: s["issue-window"],
+					evidenceWindow: s["evidence-window"],
+					epsilon: 0,
+					propagation: 0,
+					retry: 0,
+				},
+				...(s.installation === undefined ? {} : { reset: { installation: s.installation, sets } }),
+			};
 			return localLog({
 				store: await c.get(logStore),
 				writer: { instance: fresh(), generation },
 				now: c.clock.now,
 				id: fresh,
+				...(s.installation === undefined
+					? {}
+					: {
+							resetting: {
+								newest,
+								checks,
+								context,
+								judging: localSignedJudging({ checks, context }),
+							},
+						}),
 				judging: localJudging({
-					checks: {
-						// A client's evidence is verified by one key, a DPoP proof's naming no kid.
-						verifyJws: (jws, keySet) =>
-							ring.verifyJws(jws, keySet) ??
-							(keySet.length === 1 ? verifiedByOne(jws, keySet) : undefined),
-						verifyAssertion: checking.verifyAssertion,
-						digest: (data) => createHash("sha256").update(data).digest("base64url"),
-						keyThumbprint,
-					},
-					// t0 names no version and opens every preimage itself: no window, no retry to wait out.
-					context: {
-						ring: ring.coreRing(generation) ?? [],
-						origin: s.origin,
-						limits: {
-							codeLifetime: s["code-lifetime"],
-							refreshLifetime: s["refresh-lifetime"],
-							issueWindow: s["issue-window"],
-							evidenceWindow: s["evidence-window"],
-							epsilon: 0,
-							propagation: 0,
-							retry: 0,
-						},
-					},
+					checks,
+					context,
 					holds: async (credential, subject) =>
 						(await held().publicKeyOf(credential))?.subject === subject,
 					// A client of a version its publisher signed, at the version named, as the registry holds it now.
