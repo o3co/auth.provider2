@@ -13,7 +13,7 @@
 
 ## Offers
 - `passkeyReset`, taken only by a module standing on the promises (O1): `reset` (instruction) → the log's `ResetAnswer`; `generation` (subject) → its key generation in the Core's applied state, its flow tended first.
-- Composition definition: the contract and its stance (`promises`' `stances`).
+- Composition definition: the contract and its stance (`promises`' `stances`). An opt-in feature: composed only where a composition names it, bringing `transparency` and `passkeys`; never with passkeys alone.
 
 ## Invariants
 - The reset's path is the one way a subject's last key goes. It holds `front-compromise-new-authorization` only where its caller is the embedder's recovery procedure, on the Core's side alone, never reached from the Front: the operator's condition, its stance's reason.
