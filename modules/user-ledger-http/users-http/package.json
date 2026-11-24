@@ -1,0 +1,34 @@
+{
+	"name": "@mod/users-http",
+	"private": true,
+	"license": "Apache-2.0",
+	"type": "module",
+	"kind": "adapter",
+	"narrower": "internal",
+	"adapts": "@mod/users",
+	"default": true,
+	"asks": [
+		"Users from an outside ledger (`users-http.verify-url`; `users-http.credential` in the local layer when the ledger asks for one).",
+		"`users-http.subject-url`: the lookup by subject; without it, every lookup by subject is unanswerable.",
+		"`users-http.identifier-url`: the lookup by identifier; without it, every lookup by identifier is unavailable.",
+		"`users-http.create-url`: the call that makes a subject for an identifier; without it, the ledger makes no subjects."
+	],
+	"exports": {
+		"./module": "./src/module.ts"
+	},
+	"dependencies": {
+		"@mod/kernel": "workspace:*",
+		"@mod/keys": "workspace:*",
+		"@mod/ledger-wire": "workspace:*",
+		"@mod/outbound": "workspace:*",
+		"@mod/outbound-policy": "workspace:*",
+		"@mod/url-setting": "workspace:*",
+		"@mod/users": "workspace:*",
+		"zod": "4.6.7"
+	},
+	"devDependencies": {
+		"@mod/secret-hash": "workspace:*",
+		"@mod/tls-options": "workspace:*",
+		"vitest": "5.0.5"
+	}
+}
