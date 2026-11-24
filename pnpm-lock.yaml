@@ -1222,9 +1222,6 @@ importers:
       '@mod/kernel':
         specifier: workspace:*
         version: link:../../foundation/kernel
-      '@mod/records':
-        specifier: workspace:*
-        version: link:../../foundation/records
       '@mod/store':
         specifier: workspace:*
         version: link:../../foundation/store

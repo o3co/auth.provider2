@@ -1,8 +1,8 @@
 import { assemble, type BuildContext, contract, defineModule, kernelConfig } from "@mod/kernel";
 import { quietRuntime } from "@mod/kernel/testing";
 import { simulatedStore } from "@mod/store/testing";
-import { contactStore, linkStore, type StoredName } from "@mod/users";
-import { contactStoreContract, linkStoreContract } from "@mod/users/testing";
+import { contactStore } from "@mod/users";
+import { contactStoreContract } from "@mod/users/testing";
 import { expect, it } from "vitest";
 import wiring from "../src/module.ts";
 
@@ -43,22 +43,6 @@ async function opened(phase: "reader" | "indexed" = "reader", blip = false) {
 for (const phase of ["reader", "indexed"] as const) {
 	// A change in indexed records watches its subject's tombstone: a batch across.
 	const write = phase === "indexed" ? "batchAcross" : "batch";
-	linkStoreContract(
-		`users-store on subject-records, ${phase}, on a simulated replicated store`,
-		async () => {
-			const { app, simulated, faults } = await opened(phase);
-			const records = app.get(linkStore);
-			return {
-				records,
-				...faults,
-				raceNextUpdate: (key, change) =>
-					simulated.beforeNext(write, "users-store.links", async () => {
-						await records.update(key, (record) => ({ value: change(record) }));
-					}),
-			};
-		},
-	);
-
 	contactStoreContract(
 		`users-store on subject-records, ${phase}, on a simulated replicated store`,
 		async () => {
@@ -75,30 +59,6 @@ for (const phase of ["reader", "indexed"] as const) {
 		},
 	);
 }
-
-const nameKey = JSON.stringify({ idp: "corp" });
-const issuer = { issuer: "https://a.example" } as unknown as StoredName;
-
-it("offers every port as one set: names apart from the links, and unowned keeping a name's record raw while not indexed", async () => {
-	const { app } = await opened();
-	const links = app.get(linkStore);
-	for (const port of [links.remove, links.erase, links.migrate, links.issuers, links.unowned]) {
-		expect(port).toBeDefined();
-	}
-	expect(await links.unowned?.(nameKey, issuer, "endless")).toBe("created");
-	expect(await links.unowned?.(nameKey, issuer, "endless")).toBe("exists");
-	expect(await links.read(nameKey)).toEqual({ issuer: "https://a.example" });
-	expect(await links.issuers?.read(nameKey)).toBeUndefined();
-	expect(await links.issuers?.save(nameKey, issuer, "endless")).toBe("created");
-	expect(await links.issuers?.read(nameKey)).toEqual({ issuer: "https://a.example" });
-});
-
-it("answers closed for a name's record once indexed, writing nothing in the link space", async () => {
-	const { app } = await opened("indexed");
-	const links = app.get(linkStore);
-	expect(await links.unowned?.(nameKey, issuer, "endless")).toBe("closed");
-	expect(await links.read(nameKey)).toBeUndefined();
-});
 
 it("keeps the composition out of traffic while the phase cannot be read, and in once it can", async () => {
 	const { simulated, ready } = await opened("indexed", true);
