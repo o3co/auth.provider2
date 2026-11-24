@@ -26,14 +26,45 @@ function over() {
 }
 
 describe("passkey-witnessing", () => {
-	it("marks for a key generation, unless a mark is set", async () => {
+	it("marks for a key generation, keeping one of that or a later, replacing one before", async () => {
 		const { witnessing, marks } = over();
 		expect(await witnessing.marked("s")).toBe(false);
 		await witnessing.mark("s", 2);
 		expect(await witnessing.marked("s")).toBe(true);
-		await witnessing.mark("s", 3);
 		await witnessing.mark("s", 2);
+		await witnessing.mark("s", 1);
 		expect(marks.get("s")).toBe("generation-2");
+		await witnessing.mark("s", 3);
+		expect(marks.get("s")).toBe("generation-3");
+	});
+
+	it("keeps the new generation's mark where a late old mark lands between its withdraw and its mark", async () => {
+		const { witnessing, marks } = over();
+		await witnessing.mark("s", 0);
+		// A settle of generation 1 withdraws below it; a late settle of 0 marks; the first marks 1.
+		await witnessing.withdraw("s", 1);
+		await witnessing.mark("s", 0);
+		await witnessing.mark("s", 1);
+		// The late settle reads the keys again and withdraws below 1.
+		await witnessing.withdraw("s", 1);
+		expect(marks.get("s")).toBe("generation-1");
+	});
+
+	it("enrolls again where the mark it found goes before it reads its token, and is unavailable past its tries", async () => {
+		const { witnessing, witness, marks, next } = over();
+		await witness.enroll("s", "generation-0");
+		next.afterEnroll = () => {
+			marks.delete("s");
+		};
+		await witnessing.mark("s", 1);
+		expect(marks.get("s")).toBe("generation-1");
+		// An old mark set again each time this one is withdrawn: it never converges.
+		const stubborn = {
+			...witness,
+			markedWith: async () => "generation-0",
+			enroll: async () => false,
+		};
+		await expect(witnessingOver(stubborn).mark("s", 2)).rejects.toSatisfy(isUnavailable);
 	});
 
 	it("withdraws only a mark of a generation before the one given", async () => {
@@ -57,11 +88,14 @@ describe("passkey-witnessing", () => {
 		expect(await witnessing.marked("s")).toBe(false);
 	});
 
-	it("answers unavailable for a mark of no generation, removing nothing", async () => {
-		const { witnessing, witness } = over();
-		expect(await witness.enroll("s", "another")).toBe(true);
-		await expect(witnessing.withdraw("s", 5)).rejects.toSatisfy(isUnavailable);
-		expect(await witness.markedWith("s")).toBe("another");
+	it("answers unavailable for a mark of no generation it can read, removing nothing", async () => {
+		for (const token of ["another", "generation-01", `generation-${"9".repeat(20)}`]) {
+			const { witnessing, witness } = over();
+			expect(await witness.enroll("s", token)).toBe(true);
+			await expect(witnessing.withdraw("s", 5), token).rejects.toSatisfy(isUnavailable);
+			await expect(witnessing.mark("s", 5), token).rejects.toSatisfy(isUnavailable);
+			expect(await witness.markedWith("s")).toBe(token);
+		}
 	});
 
 	it("passes a witness that cannot answer on as unavailable, never a refusal", async () => {
