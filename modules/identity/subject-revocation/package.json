@@ -1,0 +1,33 @@
+{
+	"name": "@mod/subject-revocation",
+	"private": true,
+	"license": "Apache-2.0",
+	"type": "module",
+	"kind": "feature",
+	"exports": {
+		".": "./src/contract.ts",
+		"./testing": "./src/testing.ts",
+		"./module": "./src/module.ts"
+	},
+	"dependencies": {
+		"@mod/erasure-extensions": "workspace:*",
+		"@mod/kernel": "workspace:*"
+	},
+	"peerDependencies": {
+		"vitest": "5.0.5"
+	},
+	"peerDependenciesMeta": {
+		"vitest": {
+			"optional": true
+		}
+	},
+	"devDependencies": {
+		"@mod/records": "workspace:*",
+		"vitest": "5.0.5"
+	},
+	"takenBy": {
+		"subjectErasure": [
+			"@mod/account-erasure"
+		]
+	}
+}
