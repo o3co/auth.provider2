@@ -127,8 +127,61 @@ interface Kept {
 	count: number;
 }
 
+type Made = { readonly privateKey: KeyObject; readonly cose: Map<Cbor, Cbor> };
+const bytesOf = (text: string | undefined) => Buffer.from(text ?? "", "base64url");
+
+/** Each algorithm the authenticator may make a key of: its COSE id, a new key pair as COSE names it, and its hash. */
+const algorithmsMade = {
+	ES256: { id: -7, hash: "sha256", make: () => ecKey("P-256", 1, -7) },
+	ES384: { id: -35, hash: "sha384", make: () => ecKey("P-384", 2, -35) },
+	EdDSA: {
+		id: -8,
+		hash: null,
+		make: (): Made => {
+			const { privateKey, publicKey } = generateKeyPairSync("ed25519");
+			const jwk = publicKey.export({ format: "jwk" });
+			const cose = new Map<Cbor, Cbor>([
+				[1, 1],
+				[3, -8],
+				[-1, 6],
+				[-2, bytesOf(jwk.x)],
+			]);
+			return { privateKey, cose };
+		},
+	},
+	RS256: {
+		id: -257,
+		hash: "sha256",
+		make: (bits = 2048): Made => {
+			const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: bits });
+			const jwk = publicKey.export({ format: "jwk" });
+			const cose = new Map<Cbor, Cbor>([
+				[1, 3],
+				[3, -257],
+				[-1, bytesOf(jwk.n)],
+				[-2, bytesOf(jwk.e)],
+			]);
+			return { privateKey, cose };
+		},
+	},
+} as const;
+
+function ecKey(namedCurve: string, crv: number, alg: number): Made {
+	const { privateKey, publicKey } = generateKeyPairSync("ec", { namedCurve });
+	const jwk = publicKey.export({ format: "jwk" });
+	const cose = new Map<Cbor, Cbor>([
+		[1, 2],
+		[3, alg],
+		[-1, crv],
+		[-2, bytesOf(jwk.x)],
+		[-3, bytesOf(jwk.y)],
+	]);
+	return { privateKey, cose };
+}
+
 /**
- * A software WebAuthn authenticator behind a browser: it makes ES256 (or ES384) credentials,
+ * A software WebAuthn authenticator behind a browser: it makes ES256 credentials (or ES384, EdDSA,
+ * RS256 of `rsaBits`, 2048 unless told),
  * attests with `none`, asserts with a count that goes up unless it keeps none, and checks the
  * options as a browser does unless a twist says to overlook them.
  */
@@ -138,13 +191,15 @@ export function softwareAuthenticator(
 		readonly userVerified?: boolean;
 		readonly backupEligible?: boolean;
 		readonly countless?: boolean;
-		readonly algorithm?: "ES256" | "ES384";
+		readonly algorithm?: keyof typeof algorithmsMade;
+		readonly rsaBits?: number;
 		/** Whether it can keep a discoverable credential; it can unless told otherwise. */
 		readonly discoverable?: boolean;
 	} = {},
 ) {
 	const kept = new Map<string, Kept>();
-	const alg = settings.algorithm === "ES384" ? -35 : -7;
+	const made = algorithmsMade[settings.algorithm ?? "ES256"];
+	const alg = made.id;
 	const canVerify = settings.userVerified !== false;
 	const canDiscover = settings.discoverable !== false;
 	const flags = (attested: boolean, verified: boolean) =>
@@ -209,17 +264,7 @@ export function softwareAuthenticator(
 		check(twist, residentKey === "required" && !canDiscover, "NotAllowedError", "not discoverable");
 		const verified = verifies(selection.userVerification, twist);
 
-		const { privateKey, publicKey } = generateKeyPairSync("ec", {
-			namedCurve: alg === -35 ? "P-384" : "P-256",
-		});
-		const jwk = publicKey.export({ format: "jwk" });
-		const cose = new Map<Cbor, Cbor>([
-			[1, 2],
-			[3, alg],
-			[-1, alg === -35 ? 2 : 1],
-			[-2, Buffer.from(jwk.x ?? "", "base64url")],
-			[-3, Buffer.from(jwk.y ?? "", "base64url")],
-		]);
+		const { privateKey, cose } = made.make(settings.rsaBits);
 		const id = twist.credentialId ? Buffer.from(twist.credentialId, "base64url") : randomBytes(16);
 		const attested = [...Buffer.alloc(16), id.length >> 8, id.length & 255, ...id, ...cbor(cose)];
 		const data = authData(twist.rpId ?? rpId, true, verified, 0, attested);
@@ -278,7 +323,7 @@ export function softwareAuthenticator(
 			response: {
 				clientDataJSON,
 				authenticatorData: b64(data),
-				signature: b64(sign(alg === -35 ? "sha384" : "sha256", signed, credential.key)),
+				signature: b64(sign(made.hash, signed, credential.key)),
 				...(handle === null ? {} : { userHandle: handle }),
 			},
 			clientExtensionResults: {},

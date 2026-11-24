@@ -10,7 +10,7 @@ Internal module of `webauthn`: the WebAuthn ceremonies, over a pinned version of
 
 ## Offers
 - `ceremoniesFor` (relying party) → the package's `Ceremonies`. No library type crosses it.
-- Its `verifyAssertion`, the evidence check: the library's decoders and `parseAuthenticatorData` read what `assert` reads, and Node's crypto verifies the ES256 signature over the authenticator data and the client data's hash, at once.
+- Its `verifyAssertion`, the evidence check: the library's decoders and `parseAuthenticatorData` read what `assert` reads, and Node's crypto verifies the signature over the authenticator data and the client data's hash, at once, by the stored COSE key read for its algorithm (Ed25519, P-256 or RSA of 2048 bits or more), its key type and curve matching it.
 - `algorithmNames`: the algorithms a credential may use (`EdDSA`, `ES256`, `RS256`), by the names `keys` gives them; the package's `algorithms` setting takes from them, all of them by default.
 - `challengeOf` (response) → the challenge the client data names, read by the library's decoder, the one that verifies it.
 
