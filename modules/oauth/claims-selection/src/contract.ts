@@ -1,0 +1,75 @@
+import type { Client } from "@mod/clients";
+import { contract, extensionPoint } from "@mod/kernel";
+
+/** A value a constraint names: claims-selection keeps it as it is, never reading what it means. */
+export type Scalar = string | boolean | number;
+
+/** A claim the request names, with the one value or the values it must hold to be released. */
+export interface Constraint {
+	readonly name: string;
+	readonly value?: Scalar;
+	readonly values?: readonly Scalar[];
+}
+
+/** A claim the request names, and the scope it belongs to. */
+export interface Named {
+	readonly name: string;
+	readonly scope: string;
+}
+
+/** What one target (the ID token, or userinfo) releases beyond its scope, and the constraints on all it releases. */
+export interface Target {
+	readonly names: readonly Named[];
+	readonly constraints: readonly Constraint[];
+}
+
+export interface Selection {
+	readonly idToken: Target;
+	readonly userinfo: Target;
+}
+
+/**
+ * What the person agreed to in the approval its request rests on (O19): the scopes and the claim
+ * names of the statement it used, as the caller read them from that statement's items. A name is
+ * agreed to for every target: the caller builds `asked` and `agreed` from the same request.
+ */
+export interface Agreed {
+	readonly scopes: readonly string[];
+	readonly names: readonly string[];
+}
+
+export interface ClaimsSelections {
+	/** The scope a claim belongs to, as the module releasing claims tells it; none where none does. */
+	scopeOf(claim: string): string | undefined;
+	/**
+	 * The names the client is allowed and the person agreed to in this approval, by their scope or by
+	 * name; the constraints as they are.
+	 */
+	select(client: Client, subject: string, asked: Selection, agreed: Agreed): Promise<Selection>;
+	/** Keeps a code's selection by its redemption's name, for its subject, for the code's lifetime and a minute more. */
+	keepForCode(
+		redemption: string,
+		selection: Selection,
+		lifetimeMs: number,
+		subject: string,
+	): Promise<void>;
+	/** The selection pinned to a redemption: none for a code without one; throws once the pin is gone. */
+	forCode(redemption: string): Promise<Selection | undefined>;
+	/** The userinfo target kept for an access token; none for a token without one. */
+	forToken(tokenId: string): Promise<Target | undefined>;
+}
+
+export const claimsSelections = contract<ClaimsSelections>("claims-selection");
+
+/** Which scope each claim belongs to, from the module that releases claims. */
+export interface ClaimScopes {
+	scopeOf(claim: string): string | undefined;
+}
+
+export const claimScopes = extensionPoint<ClaimScopes>("claims-selection.claim-scopes", {
+	multiplicity: "many",
+});
+
+export { selectionLimits } from "./limits.ts";
+export * from "./store.ts";
+export { withinLimits } from "./stored.ts";
