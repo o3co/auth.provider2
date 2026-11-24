@@ -137,6 +137,8 @@ export function memoryLog(now: () => number): TransparencyLog & {
 				receipts: ["h.p.s"],
 			};
 		},
+		// A reset is placed by `boundary`, a test's own; this log places none of an instruction.
+		reset: async () => ({ v: 1, result: "conflict" }) as const,
 		head: async (flow) => onFlow(flow).length,
 		at: async (flow, position) => onFlow(flow)[position - 1],
 		of: async (flow, op) => {
