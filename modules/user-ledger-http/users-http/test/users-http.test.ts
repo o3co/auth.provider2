@@ -246,15 +246,14 @@ ledgerContract("users-http looking users up by subject and identifier, and makin
 	creates: true,
 });
 
-async function linked(extra: Record<string, unknown> = {}) {
+async function opened(extra: Record<string, unknown> = {}) {
 	const { users: u } = await open({ "identifier-url": identifierUrl(), ...extra });
-	await u.link("s-alice", { idp: "example", subject: "u-alice" });
 	return u;
 }
 usersContract("users with users-http against a fake ledger", {
-	open: linked,
+	open: () => opened(),
 	openCounting: async () => {
-		const u = await linked();
+		const u = await opened();
 		const checks: string[] = [];
 		const verify = u.verify;
 		return {
@@ -272,14 +271,13 @@ usersContract("users with users-http against a fake ledger", {
 			checks,
 		};
 	},
-	writtenLinksOnly: true,
 	unanswerableBySubject: true,
 });
 
 usersContract("users with users-http making subjects", {
-	open: () => linked({ "create-url": createUrl() }),
+	open: () => opened({ "create-url": createUrl() }),
 	openCounting: async () => {
-		const u = await linked({ "create-url": createUrl() });
+		const u = await opened({ "create-url": createUrl() });
 		const checks: string[] = [];
 		const verify = u.verify;
 		return {
@@ -297,7 +295,6 @@ usersContract("users with users-http making subjects", {
 			checks,
 		};
 	},
-	writtenLinksOnly: true,
 	unanswerableBySubject: true,
 	creates: true,
 });
