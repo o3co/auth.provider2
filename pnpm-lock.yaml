@@ -1453,6 +1453,40 @@ importers:
         specifier: 4.6.7
         version: 4.6.7
 
+  modules/user-ledger-http/passkey-witness-http:
+    dependencies:
+      '@mod/kernel':
+        specifier: workspace:*
+        version: link:../../foundation/kernel
+      '@mod/keys':
+        specifier: workspace:*
+        version: link:../../foundation/keys
+      '@mod/ledger-wire':
+        specifier: workspace:*
+        version: link:../ledger-wire
+      '@mod/outbound':
+        specifier: workspace:*
+        version: link:../../foundation/outbound
+      '@mod/outbound-policy':
+        specifier: workspace:*
+        version: link:../../foundation/outbound-policy
+      '@mod/passkey-witness':
+        specifier: workspace:*
+        version: link:../../passkey/passkey-witness
+      '@mod/url-setting':
+        specifier: workspace:*
+        version: link:../../foundation/url-setting
+      zod:
+        specifier: 4.6.7
+        version: 4.6.7
+    devDependencies:
+      '@mod/tls-options':
+        specifier: workspace:*
+        version: link:../../foundation/tls-options
+      vitest:
+        specifier: 5.0.5
+        version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(vite@8.3.3(@types/node@26.6.5)(yaml@2.9.1))
+
   modules/user-ledger-http/subject-revocation-http:
     dependencies:
       '@mod/audit':
