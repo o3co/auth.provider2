@@ -1,0 +1,3 @@
+# authorize-store
+
+Wires `authorize`'s JAR reservations: `records`' records in `authorize-store.reservations`, each for the lifetime `authorize` gives (the JAR's expiry and the clock skew). The space declares a guarantee for each need `authorize` states (never evicted, durable, replicated, confirmed reads, authenticated); a need with nothing mapped to it fails the type check. It holds no subject's data (`subjectData: none`): a client's id and a JAR's `jti`, a digest, and the statement a start was answered with, which names no subject. On a store that does not tell a write made outside the provider apart, it boots only under store's `accept-unauthenticated`. The wiring only maps, with no branches or loops. Depends on `kernel`, `authorize`, `records` and `store`.
