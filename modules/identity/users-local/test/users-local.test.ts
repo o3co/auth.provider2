@@ -77,7 +77,7 @@ describe("users-local", () => {
 				kind: "user",
 				user: first?.kind === "created" ? first.user : undefined,
 			});
-			expect(Object.isFrozen(found.kind === "user" && found.user)).toBe(true);
+			expect(Object.isFrozen(found?.kind === "user" && found.user)).toBe(true);
 		});
 	}
 
