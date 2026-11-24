@@ -82,20 +82,21 @@ describe("a registered client allowed a grant nothing composed serves", () => {
 });
 
 describe("a client a source lists allowed a grant nothing composed serves", () => {
-	/** A source listing one public client allowed each list of `grants`. */
-	const listing = (...allowed: string[][]) =>
-		defineModule({ name: "listing", replicaSafe: true, takes: [] }, (m) => [
+	/** A source listing, and finding, one public client allowed each list of `grants`. */
+	const listing = (...allowed: string[][]) => {
+		const records = allowed.map((grants, i) => ({
+			id: `s${i}`,
+			kind: "public" as const,
+			method: "none",
+			sections: allowancesFor({ grants }),
+		}));
+		return defineModule({ name: "listing", replicaSafe: true, takes: [] }, (m) => [
 			m.contribute(clientSources).by(() => ({
-				find: async () => undefined,
-				listed: async () =>
-					allowed.map((grants, i) => ({
-						id: `s${i}`,
-						kind: "public" as const,
-						method: "none",
-						sections: allowancesFor({ grants }),
-					})),
+				find: async (id: string) => records.find((record) => record.id === id),
+				listed: async () => records,
 			})),
 		]);
+	};
 	const told = (server: string) =>
 		`clients.sources: a client a source lists is allowed a grant no composed module serves: compose ${server}, or take it out of the client's grants where its source keeps them`;
 
