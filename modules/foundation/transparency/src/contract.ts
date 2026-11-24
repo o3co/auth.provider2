@@ -47,6 +47,8 @@ export interface FrameRead {
 	readonly held: readonly (Json | undefined)[];
 	/** The store clock's time at the read. */
 	readonly now: number;
+	/** On a client's op: its flow's record (its ops not yet ended), held to the write too; none on a subject's flow. */
+	readonly flow?: Json | undefined;
 	/** Opaque to the caller: what the frame store holds the write to. */
 	readonly basis: unknown;
 }
@@ -56,14 +58,22 @@ export interface FrameStore {
 	/** The part names bound to a place; every registration's parts are among them. */
 	readonly parts: readonly string[];
 	read(unit: IntentUnit, records: readonly PartRecord[]): Promise<FrameRead>;
+	/** A client's flow's record, as a confirmed read; none where it holds none. */
+	flowRecord?(flow: IntentUnit["flow"]): Promise<Json | undefined>;
 	/**
-	 * Writes the frame (none keeps it) and the records as one, held to every version the read saw,
-	 * refused past `deadline` on the store clock; nothing expires. Writing nothing is held to the read
-	 * all the same. Unavailable means it may have applied.
+	 * Writes the frame (none keeps it; `drop` removes it), on a client's op its flow's record (none
+	 * keeps it), and the records as one, held to every version the read saw, refused past `deadline`
+	 * on the store clock; nothing expires. Writing nothing is held to the read all the same.
+	 * Unavailable means it may have applied.
 	 */
 	write(
 		read: FrameRead,
-		next: { readonly frame?: Json; readonly records: readonly PartNext[] },
+		next: {
+			readonly frame?: Json;
+			readonly drop?: true;
+			readonly flow?: Json;
+			readonly records: readonly PartNext[];
+		},
 		deadline: number,
 	): Promise<"written" | "moved" | "late">;
 }

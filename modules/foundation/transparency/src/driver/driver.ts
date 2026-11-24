@@ -2,6 +2,7 @@ import { type Envelope, emptyState, type FlowState, fold, ruleSchemas } from "@m
 import { Unavailable } from "@mod/kernel";
 import type { Flow } from "@mod/transparency-wire";
 import type {
+	FrameRead,
 	FrameStore,
 	IntentUnit,
 	Json,
@@ -36,8 +37,16 @@ import {
 
 /** How long past its read a write that is no owner's may still commit, on the store clock. */
 const writeWindowMs = 10_000;
-/** The records a tending takes in at most before it yields the flow. */
+/** The records a tending takes in at most before it yields the flow, and the client's ops one turn tends. */
 const tendSteps = 64;
+
+/** The open ops a client's flow's record lists; none where it holds none. */
+const openOps = (value: Json | undefined): readonly string[] => {
+	if (value === undefined) return [];
+	if (!Array.isArray(value) || !value.every((op) => typeof op === "string"))
+		throw new TypeError("a stored flow record of another shape");
+	return value as readonly string[];
+};
 /** How many reads find the intent's kind before contention is unavailable. */
 const kindReads = 3;
 
@@ -149,10 +158,22 @@ export function transparencyOver(p: {
 			snap.read,
 			{
 				...(next.frame ? { frame: next.frame as unknown as Json } : {}),
+				...(next.frame ? flowNext(snap.read, next.frame) : {}),
 				records: [...owned, ...extra],
 			},
 			deadline,
 		);
+	}
+	/**
+	 * On a client's op, its flow's record follows its frame in the same write: the op is listed while
+	 * its intent is open, and once it ends it leaves the list and its frame is dropped.
+	 */
+	function flowNext(read: FrameRead, frame: Frame): { readonly drop?: true; readonly flow?: Json } {
+		if (!("op" in read.unit)) return {};
+		const { op } = read.unit;
+		const listed = openOps(read.flow);
+		if (isOpen(frame.intent)) return listed.includes(op) ? {} : { flow: [...listed, op] };
+		return { drop: true, flow: listed.filter((o) => o !== op) };
 	}
 	const settled = (answer: "written" | "moved" | "late") =>
 		answer === "written" ? undefined : { refused: answer };
@@ -319,6 +340,11 @@ export function transparencyOver(p: {
 
 	/** A unit's tending: taken in to its head (the apply phase of an op it took over), then claimed. */
 	async function tendUnit(unit: IntentUnit) {
+		// A client's op whose intent is not open has nothing to take in, claim or abandon.
+		if (perOp(unit)) {
+			const { frame, at } = await frameAt(unit);
+			if (!isOpen(intentOf(frame, at))) return { stepped: 0 };
+		}
 		let count = 0;
 		let last: Awaited<ReturnType<typeof step>> | undefined;
 		for (; count < tendSteps; count++) {
@@ -331,18 +357,6 @@ export function transparencyOver(p: {
 		}
 		const ready = last !== undefined && "refused" in last && last.refused === "atHead";
 		return { stepped: count, ...(await claim(unit, ready)) };
-	}
-
-	/** The ops whose Core records are among a client's flow's last records, the latest first. */
-	async function recentOps(flow: Flow) {
-		const head = await log.head(flow);
-		const ops = new Set<string>();
-		for (let position = head; position > Math.max(0, head - tendSteps); position--) {
-			const r = (await log.at(flow, position))?.record;
-			if (r?.writer.role !== "core") continue;
-			ops.add(r.kind === "abandonment" ? (r.abandons?.op ?? r.op) : r.op);
-		}
-		return [...ops];
 	}
 
 	return {
@@ -410,10 +424,11 @@ export function transparencyOver(p: {
 			const unit = unitOf(flow);
 			if (unit) return tendUnit(unit);
 			if (flow.of !== "client") return notSubject;
-			// A client's flow: each op among its last records, its own unit tended in turn.
+			// A client's flow: its open ops as its record lists them, oldest first, as many as one turn takes.
 			let stepped = 0;
 			let did = {};
-			for (const op of await recentOps(flow)) {
+			const listed = openOps(await frames.flowRecord?.({ of: "client", id: flow.id }));
+			for (const op of listed.slice(0, tendSteps)) {
 				const { stepped: count, ...claimed } = await tendUnit({
 					flow: { of: "client", id: flow.id },
 					op,

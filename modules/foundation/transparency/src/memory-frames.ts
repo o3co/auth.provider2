@@ -7,6 +7,7 @@ export function memoryFrames(parts: readonly string[]) {
 	let versions = 0;
 	const kept = new Map<string, { readonly value: Json; readonly version: string }>();
 	let before: (() => Promise<void> | void) | undefined;
+	const flowKey = (flow: IntentUnit["flow"]) => `${flow.of}:${flow.id}/flow`;
 	const keyOf = (unit: IntentUnit | Flow, r?: PartRecord) => {
 		if (r && !parts.includes(r.part)) throw new TypeError(`no part ${r.part} is bound`);
 		const { of, id } = "flow" in unit ? unit.flow : unit;
@@ -22,24 +23,37 @@ export function memoryFrames(parts: readonly string[]) {
 		async read(unit, records) {
 			const keys = [keyOf(unit), ...records.map((r) => keyOf(unit, r))];
 			const entries = keys.map((k) => kept.get(k));
+			const flow = "op" in unit ? kept.get(flowKey(unit.flow)) : undefined;
 			return {
 				unit,
 				records,
 				frame: entries[0] && structuredClone(entries[0].value),
 				held: entries.slice(1).map((e) => e && structuredClone(e.value)),
 				now,
-				basis: entries.map((e) => e?.version ?? null),
+				...("op" in unit ? { flow: flow && structuredClone(flow.value) } : {}),
+				basis: [...entries, ...("op" in unit ? [flow] : [])].map((e) => e?.version ?? null),
 			};
+		},
+		flowRecord: async (flow) => {
+			const value = kept.get(flowKey(flow))?.value;
+			return value === undefined ? undefined : structuredClone(value);
 		},
 		async write(read: FrameRead, next, deadline) {
 			const run = before;
 			before = undefined;
 			await run?.();
 			if (now > deadline) return "late";
-			const keys = [keyOf(read.unit), ...read.records.map((r) => keyOf(read.unit, r))];
+			const unit = read.unit;
+			const keys = [
+				keyOf(unit),
+				...read.records.map((r) => keyOf(unit, r)),
+				...("op" in unit ? [flowKey(unit.flow)] : []),
+			];
 			const versions = read.basis as readonly (string | null)[];
 			if (keys.some((k, i) => (kept.get(k)?.version ?? null) !== versions[i])) return "moved";
 			if (next.frame !== undefined) put(keys[0] as string, next.frame);
+			if (next.drop) kept.delete(keys[0] as string);
+			if (next.flow !== undefined && "op" in unit) put(flowKey(unit.flow), next.flow);
 			next.records.forEach((r, i) => {
 				const key = keys[i + 1] as string;
 				if (r && "value" in r) put(key, r.value);

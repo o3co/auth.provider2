@@ -12,9 +12,9 @@
 
 ## Offers
 - `transparency`: `decide` (KE-C01, with its kind's records), `send` (KE-C02), `rebase`, `step` (KE-C04), `tend` (KE-C04, C14, C10 and C09 for an idle replica), `changeHeld` (a kind's records, changed while no intent is open). `Refused`, `End`, `Ending`. A writer refused `open` or `notReady` tends the flow and decides again.
-  - On a client's flow, each op is its own unit: `decide` answers the head it looks on from, appends name no previous position, `step` names the op (`own`), and `tend` tends each op among the flow's last records.
+  - On a client's flow, each op is its own unit: `decide` answers the head it looks on from, appends name no previous position, `step` names the op (`own`), and `tend` tends the open ops the flow's record lists, oldest first, 64 in one turn.
 - `transparencyLog`, the log's axis: the writer, `digest`, `append` (after a previous position, or none on an unconditional flow), `head`, `at`, `of` (what the flow holds of an op: `OpOnFlow`). `Stage`, `Placed`.
-- `frameStore`, the frame's store interface (`IntentUnit`, `FrameRead`, `PartRecord`, `PartNext`, `Json`), and `frameStoreNeeds`: never evicted, survives a crash and a failover, reads confirmed, authenticated.
+- `frameStore`, the frame's store interface (`IntentUnit`, `FrameRead`, `PartRecord`, `PartNext`, `Json`), and `frameStoreNeeds`: never evicted, survives a crash and a failover, reads confirmed, authenticated. On a client's op, a read holds its flow's record and a write may set it and drop the frame; `flowRecord` reads it alone.
 - `operationKinds` (`OperationKind`: bundle or not, its parts and records, its end's writes, a taker's resend) and `stateOwners` (`StateOwner`: the state's fields it holds, its records, records → fields, state → records), keyed by name.
 - `BundleSigning`: the token endpoint's `prepare` before a bundle's append and `sign` after its receipts, implemented by their owners. `Deciding`: a writer's part of KE-C01.
 - `./testing`: `frameStoreContract`, the contract test of every frame store; `memoryFrames` and `logBook`, a frame store and a log in memory.
@@ -31,7 +31,8 @@
 - Boot is refused unless every field of a flow's state has one owner, and every part a registration names is bound to a place.
 
 ## Data
-- Each intent unit's frame, in its wiring's space with no expiry; it holds an op's changes (`eff`) until the op ends.
+- Each intent unit's frame, in its wiring's space with no expiry; it holds an op's changes (`eff`) until the op ends. A client's op's frame is dropped once its op ends, deliberately, in the end's write: no store evicts it.
+- Each client's flow's record: the ops decided on it and not yet ended, written in the same write as each op's frame.
 
 ## Depends on
 - `kernel`, `transparency-wire`, `authority-rules`; `zod`.

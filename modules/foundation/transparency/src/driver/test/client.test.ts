@@ -46,7 +46,8 @@ function makeWorld() {
 		store.value(unit(op) as never) as
 			| { applied: number; intent: Record<string, unknown> | null }
 			| undefined;
-	return { store, log, replica, w1: replica("w1"), w2: replica("w2"), frame };
+	const listed = () => store.frames.flowRecord?.(flow).then((v) => v ?? []);
+	return { store, log, replica, w1: replica("w1"), w2: replica("w2"), frame, listed };
 }
 beforeEach(() => {
 	world = makeWorld();
@@ -71,8 +72,9 @@ describe("a client's flow: one frame per op, unconditional appends (KG-07)", () 
 		expect(await decide("o2", world.w2)).toEqual({ prev: 0 });
 		expect(world.frame("o1")).toMatchObject({ intent: { op: "o1", state: "pending", by: "w1" } });
 		expect(world.frame("o2")).toMatchObject({ intent: { op: "o2", state: "pending", by: "w2" } });
-		// An op is decided once, whatever its end.
+		// An op is decided once, whatever its end; each open one is listed in its flow's record.
 		expect(await decide("o1", world.w2)).toEqual({ refused: "ended" });
+		expect(await world.listed()).toEqual(["o1", "o2"]);
 	});
 
 	it("looks on from the flow's head when decided, and appends with no previous position", async () => {
@@ -99,9 +101,12 @@ describe("a client's flow: one frame per op, unconditional appends (KG-07)", () 
 			position: 3,
 			end: { op: "o1", kind: "issue", ending: "took", owner: true },
 		});
-		expect(world.frame("o1")).toMatchObject({ applied: 3, intent: { state: "done", eff: null } });
+		// Ended, it leaves its flow's list and its frame is dropped in the same write.
+		expect(world.frame("o1")).toBeUndefined();
+		expect(await world.listed()).toEqual(["o2"]);
 		expect(world.frame("o2")).toMatchObject({ applied: 0, intent: { state: "pending" } });
-		expect(await world.w1.step({ flow, own: "o1" })).toEqual({ refused: "atHead" });
+		// Its frame dropped, nothing of it is taken in again.
+		expect(await world.w1.step({ flow, own: "o1" })).toEqual({ refused: "stuck" });
 	});
 
 	it("ends a held bundle held, its owner told", async () => {
@@ -113,7 +118,7 @@ describe("a client's flow: one frame per op, unconditional appends (KG-07)", () 
 		expect(await world.w1.step({ flow, own: "o1" })).toMatchObject({
 			end: { ending: "held", owner: true },
 		});
-		expect(world.frame("o1")).toMatchObject({ intent: { state: "closed" } });
+		expect([world.frame("o1"), await world.listed()]).toEqual([undefined, []]);
 	});
 
 	it("closes its op without a record on a refusal for good; a temporary one leaves it open", async () => {
@@ -130,7 +135,7 @@ describe("a client's flow: one frame per op, unconditional appends (KG-07)", () 
 		expect(
 			await refusing("lateBundle").send({ flow, op: "o1", stage: bundle("o1"), prev: 0 }),
 		).toMatchObject({ end: { op: "o1", ending: "refused", owner: true } });
-		expect(world.frame("o1")).toMatchObject({ intent: { state: "closed" } });
+		expect([world.frame("o1"), await world.listed()]).toEqual([undefined, []]);
 	});
 
 	it("rebases with no position to move, or closes its op once a stage is placed", async () => {
@@ -146,7 +151,7 @@ describe("a client's flow: one frame per op, unconditional appends (KG-07)", () 
 		expect(await world.w1.rebase({ flow, op: "o1", recheck: () => false })).toEqual({
 			end: { op: "o1", kind: "issue", ending: "refused", owner: true },
 		});
-		expect(world.frame("o1")).toMatchObject({ intent: { state: "closed" } });
+		expect([world.frame("o1"), await world.listed()]).toEqual([undefined, []]);
 	});
 });
 
@@ -170,7 +175,7 @@ describe("tending a client's flow: each op among its last records, its own unit"
 		expect(await world.w1.step({ flow, own: "o1" })).toEqual({ refused: "unjudged" });
 		world.log.judge(flow, 3, verified);
 		await world.w2.tend(flow);
-		expect(world.frame("o1")).toMatchObject({ applied: 3, intent: { state: "closed" } });
+		expect([world.frame("o1"), await world.listed()]).toEqual([undefined, []]);
 	});
 
 	it("marks an orphan with its start alone, then sends its abandonment; a held one is sent again", async () => {
@@ -213,5 +218,35 @@ describe("tending a client's flow: each op among its last records, its own unit"
 				decide: () => ({ digest: "d", eff: {}, records: [] }),
 			}),
 		).toEqual({ refused: "notSubject" });
+	});
+});
+
+describe("tending a client's flow by the ops its record lists, however far back", () => {
+	it("closes a bundle left alone though 64 later records pushed it back, and an op that fell before its first append", async () => {
+		await decide("old");
+		await sendBoth("old");
+		await decide("silent");
+		for (let i = 0; i < 40; i++) {
+			await decide(`busy${i}`, world.w2);
+			await sendBoth(`busy${i}`, world.w2);
+		}
+		for (const p of world.log.records(flow)) world.log.judge(flow, p.record.position, verified);
+		// The busy ops' owner takes each in, so they end and leave the list.
+		for (let i = 0; i < 40; i++) {
+			await world.w2.step({ flow, own: `busy${i}` });
+			await world.w2.step({ flow, own: `busy${i}` });
+		}
+		expect(await world.listed()).toEqual(["old", "silent"]);
+		world.store.clock.set(leaseMs);
+		// The first turn marks the silent op and abandons the old bundle; the next sends the silent op's.
+		await world.w2.tend(flow);
+		await world.w2.tend(flow);
+		const abandoned = world.log.records(flow).filter((p) => p.record.kind === "abandonment");
+		expect(abandoned.map((p) => p.record.abandons?.op).sort()).toEqual(["old", "silent"]);
+		for (const p of abandoned) world.log.judge(flow, p.record.position, verified);
+		await world.w2.tend(flow);
+		expect([world.frame("old"), world.frame("silent")]).toEqual([undefined, undefined]);
+		expect(await world.listed()).not.toContain("old");
+		expect(await world.listed()).not.toContain("silent");
 	});
 });
