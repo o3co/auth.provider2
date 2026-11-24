@@ -405,6 +405,51 @@ describe("a bundle, owned by the token endpoint (A40)", () => {
 		expect(bundles[1]?.stage).toEqual(bundles[0]?.stage);
 	});
 
+	it("signs again with the receipts the second append answers, once every part's first signing settled", async () => {
+		let appended = 0;
+		world = await makeWorld((log) => ({
+			...log,
+			append: async (stage, prev) => {
+				const answer = await log.append(stage, prev);
+				if (stage.kind !== "bundle" || answer.result !== "accepted") return answer;
+				appended++;
+				return {
+					...answer,
+					receipts: answer.receipts.map((r) => r.replace(".s", `.a${appended}`)),
+				};
+			},
+		}));
+		world.book.judgeOnAppend({ verdict: "verified", outcome: "took" });
+		const person = { ...grant, subject: "alice", subjectKind: "user" as const };
+		const events: string[] = [];
+		let falls = 1;
+		const part = (frame: "idToken" | "family", delayMs: number) => ({
+			frame,
+			prepare: async () => ({ prepared: frame, digest: `${frame}-d` }),
+			sign: async (_prepared: unknown, receipt: string) => {
+				await new Promise((resolve) => setTimeout(resolve, delayMs));
+				events.push(`${frame} ${receipt}`);
+				if (frame === "idToken" && falls-- > 0) throw new Unavailable("keys");
+				return `${frame}.${receipt}`;
+			},
+		});
+		const answer = await world.run(await world.replica("w1"))({
+			...ask,
+			request: { ...ask.request, grant: person },
+			root: "r",
+			parts: [part("idToken", 0), part("family", 20)],
+		});
+		// The slower part's first signing settles before the bundle is appended again.
+		expect(events).toEqual([
+			"idToken h.p1.a1",
+			"family h.p2.a1",
+			"idToken h.p1.a2",
+			"family h.p2.a2",
+		]);
+		expect(answer).toMatchObject({ parts: ["idToken.h.p1.a2", "family.h.p2.a2"] });
+		expect(appended).toBe(2);
+	});
+
 	it("signs nothing again where the bundle appended again answers its receipts otherwise", async () => {
 		let appended = 0;
 		world = await makeWorld((log) => ({
