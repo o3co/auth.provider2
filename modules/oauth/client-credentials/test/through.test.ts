@@ -23,6 +23,8 @@ import { quietRuntime } from "@mod/kernel/testing";
 import keysModule from "@mod/keys/module";
 import { keysConfig, testHolder } from "@mod/keys/testing";
 import outboundModule from "@mod/outbound/module";
+import { promiseNames, promises } from "@mod/promises";
+import promisesModule from "@mod/promises/module";
 import { rateLimitStandIn } from "@mod/rate-limit/testing";
 import secretHashModule from "@mod/secret-hash/module";
 import senderBindingModule from "@mod/sender-binding/module";
@@ -64,9 +66,10 @@ const transparencyInMemory = defineModule(
 		})),
 	],
 );
-/** The client, as the registry's version 3 names it: its one key, `ec`. */
+/** The client, as the registry's signed version 3 names it: its one key, `ec`, and `read` at the API. */
 const registry = defineModule({ name: "registry", replicaSafe: true, takes: [] }, (m) => [
 	m.contribute(clientSources).by(() => ({
+		signed: true,
 		find: async (id) =>
 			id === "svc"
 				? {
@@ -74,7 +77,10 @@ const registry = defineModule({ name: "registry", replicaSafe: true, takes: [] }
 						kind: "confidential",
 						method: "private_key_jwt",
 						sections: {
-							...allowancesFor({ grants: ["client_credentials"] }),
+							...allowancesFor({
+								grants: ["client_credentials"],
+								self: [{ audience: "https://api.example", scopes: ["read"] }],
+							}),
 							...clientKeysFor([{ ...jwkOf(ec.publicKey), kid: "ec" }]),
 						},
 						version: 3,
@@ -111,6 +117,7 @@ async function serve() {
 			auditStandIn().module,
 			transparencyModule,
 			transparencyInMemory,
+			promisesModule,
 			tokenEndpointModule,
 			clientCredentialsModule,
 			registry,
@@ -139,33 +146,37 @@ async function serve() {
 		new SignJWT({ jti: randomUUID(), htm: "POST", htu: `${issuer}/oauth/token`, iat: now() })
 			.setProtectedHeader({ alg: "ES256", typ: "dpop+jwt", jwk: jwkOf(publicKey) })
 			.sign(key);
-	/** A client credentials request, its client proved by `ec`, its token bound by DPoP to `pair`'s key. */
-	const post = async (pair: { privateKey: KeyObject; publicKey: KeyObject }) => {
+	/** A client credentials request for `read`, its client proved by `ec`, its token bound by DPoP to `pair`'s key, or by none. */
+	const post = async (pair?: { privateKey: KeyObject; publicKey: KeyObject }) => {
 		const res = await fetch(at, {
 			method: "POST",
 			headers: {
 				"content-type": "application/x-www-form-urlencoded",
-				dpop: await proof(pair.privateKey, pair.publicKey),
+				...(pair ? { dpop: await proof(pair.privateKey, pair.publicKey) } : {}),
 			},
 			body: new URLSearchParams({
 				grant_type: "client_credentials",
+				scope: "read",
 				client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
 				client_assertion: await assertion(),
 			}),
 		});
 		return { status: res.status, body: (await res.json()) as Record<string, unknown> };
 	};
-	return { post, tokens: app.get(accessTokens) };
+	return { post, tokens: app.get(accessTokens), judged: app.get(promises).judgment() };
 }
 
 it("issues a DPoP-bound token only by the key its assertion was verified with, of the registry's version", async () => {
 	const { post, tokens } = await serve();
 	const same = await post(ec);
-	expect(same).toMatchObject({ status: 200, body: { token_type: "DPoP" } });
+	expect(same).toMatchObject({
+		status: 200,
+		body: { token_type: "DPoP", expires_in: 300, scope: "read" },
+	});
 	const checked = await tokens.verifyAccess(String(same.body.access_token));
 	expect(checked).toMatchObject({
 		kind: "valid",
-		grant: { subject: "svc", subjectKind: "client" },
+		grant: { subject: "svc", subjectKind: "client", audience: ["https://api.example"] },
 	});
 	expect(await post(other)).toEqual({
 		status: 400,
@@ -173,5 +184,29 @@ it("issues a DPoP-bound token only by the key its assertion was verified with, o
 			error: "invalid_dpop_proof",
 			error_description: "the proof's key is not the key the client's assertion was verified with",
 		},
+	});
+});
+
+it("refuses a request whose token would be bound by no DPoP proof", async () => {
+	const { post } = await serve();
+	expect(await post()).toEqual({
+		status: 400,
+		body: {
+			error: "invalid_request",
+			error_description: "a DPoP proof by the client's key is required",
+		},
+	});
+});
+
+it("composed, breaks the promise that no client subject token is issued, naming itself", async () => {
+	const { judged } = await serve();
+	expect(judged.find((j) => j.promise === promiseNames.noClientSubjectToken)).toMatchObject({
+		held: false,
+		breaking: [
+			{
+				by: "token-endpoint",
+				reason: expect.stringContaining("client_credentials (client-credentials)"),
+			},
+		],
 	});
 });

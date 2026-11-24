@@ -4,6 +4,7 @@
 	"license": "Apache-2.0",
 	"type": "module",
 	"kind": "feature",
+	"optIn": true,
 	"grantTypes": [
 		"client_credentials"
 	],
@@ -14,24 +15,26 @@
 	"dependencies": {
 		"@mod/client-allowance": "workspace:*",
 		"@mod/client-assertion": "workspace:*",
+		"@mod/dpop": "workspace:*",
 		"@mod/grants": "workspace:*",
 		"@mod/issuer": "workspace:*",
-		"@mod/kernel": "workspace:*"
+		"@mod/kernel": "workspace:*",
+		"@mod/rate-limit": "workspace:*",
+		"@mod/sender-binding": "workspace:*",
+		"zod": "4.6.7"
 	},
 	"devDependencies": {
 		"@mod/audit": "workspace:*",
 		"@mod/client-assertion-store": "workspace:*",
 		"@mod/clients": "workspace:*",
-		"@mod/dpop": "workspace:*",
 		"@mod/dpop-store": "workspace:*",
 		"@mod/external-jwt": "workspace:*",
 		"@mod/http": "workspace:*",
 		"@mod/http-server": "workspace:*",
 		"@mod/keys": "workspace:*",
 		"@mod/outbound": "workspace:*",
-		"@mod/rate-limit": "workspace:*",
+		"@mod/promises": "workspace:*",
 		"@mod/secret-hash": "workspace:*",
-		"@mod/sender-binding": "workspace:*",
 		"@mod/store": "workspace:*",
 		"@mod/tls-options": "workspace:*",
 		"@mod/token-endpoint": "workspace:*",

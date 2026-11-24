@@ -1201,6 +1201,9 @@ importers:
       '@mod/client-assertion':
         specifier: workspace:*
         version: link:../client-assertion
+      '@mod/dpop':
+        specifier: workspace:*
+        version: link:../dpop
       '@mod/grants':
         specifier: workspace:*
         version: link:../grants
@@ -1210,6 +1213,15 @@ importers:
       '@mod/kernel':
         specifier: workspace:*
         version: link:../../foundation/kernel
+      '@mod/rate-limit':
+        specifier: workspace:*
+        version: link:../../foundation/rate-limit
+      '@mod/sender-binding':
+        specifier: workspace:*
+        version: link:../sender-binding
+      zod:
+        specifier: 4.6.7
+        version: 4.6.7
     devDependencies:
       '@mod/audit':
         specifier: workspace:*
@@ -1220,9 +1232,6 @@ importers:
       '@mod/clients':
         specifier: workspace:*
         version: link:../../identity/clients
-      '@mod/dpop':
-        specifier: workspace:*
-        version: link:../dpop
       '@mod/dpop-store':
         specifier: workspace:*
         version: link:../../templates/dpop-store
@@ -1241,15 +1250,12 @@ importers:
       '@mod/outbound':
         specifier: workspace:*
         version: link:../../foundation/outbound
-      '@mod/rate-limit':
+      '@mod/promises':
         specifier: workspace:*
-        version: link:../../foundation/rate-limit
+        version: link:../../foundation/promises
       '@mod/secret-hash':
         specifier: workspace:*
         version: link:../../foundation/secret-hash
-      '@mod/sender-binding':
-        specifier: workspace:*
-        version: link:../sender-binding
       '@mod/store':
         specifier: workspace:*
         version: link:../../foundation/store
