@@ -7,7 +7,7 @@
 ## Not here
 - The token format and its revocation: `tokens`.
 - What a contributed token kind does when revoked: the contributing module.
-- Client authentication and the shape of OAuth error answers: `clients`, through `token-endpoint`'s `authenticateClient` and `oauthError`.
+- Client authentication: `clients`, called through `token-endpoint`'s `authenticateClient`. The shape of OAuth error answers: `token-endpoint` (`oauthError`).
 - Introspection: `token-introspection`.
 
 ## Offers
@@ -22,7 +22,7 @@
 - The client is authenticated through `token-endpoint`'s `authenticateClient`, handed the audit, which records a refusal as `client.authentication.failure`.
 - A repeated parameter or a missing `token` is `invalid_request`.
 - Only the client a token was issued to can revoke it; another client gets `200` and the token stays.
-- An access token's revocation is written on every request, past any earlier one, and answered only once confirmed.
+- An access token's revocation is written on every request, past any earlier one, and answered only once confirmed; one `tokens` no longer verifies when asked to revoke it is unknown, and nothing is recorded.
 - Access tokens are tried first; the hint only moves its kind ahead, and each kind is tried once at most. A token no kind knows gets `200`.
 - A kind that cannot revoke its token gets `unsupported_token_type`, as do access tokens where `tokens` cannot revoke them.
 - A contribution for the hint `access_token` refuses boot.

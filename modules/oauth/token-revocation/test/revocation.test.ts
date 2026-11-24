@@ -18,7 +18,7 @@ describe("revocation", () => {
 			),
 		]);
 
-	it("lets the issuing client revoke its access token, with an empty answer that is not cached [rfc7009-2-b] [rfc7662-4-d]", async () => {
+	it("lets the issuing client revoke its access token, with an empty answer that is not cached [rfc7009-2-b]", async () => {
 		const s = await serve();
 		const token = await s.issue();
 		const answer = await s.post("app", { token });
@@ -180,6 +180,16 @@ describe("revocation", () => {
 		expect([answer.status, answer.error]).toEqual([400, "unsupported_token_type"]);
 		expect(await s.active(token)).toBe(true);
 		expect((await s.post("other", { token })).status).toBe(200);
+	});
+
+	it("answers 503 when the token's owner cannot be read, never 200, and leaves the token as it was", async () => {
+		const s = await serve();
+		const token = await s.issue();
+		s.down.unavailable("issuedToOf");
+		const answer = await s.post("app", { token });
+		expect([answer.status, answer.error, s.events]).toEqual([503, "temporarily_unavailable", []]);
+		s.down.restore();
+		expect(await s.active(token)).toBe(true);
 	});
 
 	it("answers 503 when a revocation cannot be made, and leaves the token as it was", async () => {

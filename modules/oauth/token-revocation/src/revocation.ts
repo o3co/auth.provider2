@@ -21,7 +21,9 @@ export function accessKind(tokens: Tokens): RevocableKind {
 			if (issued.kind === "invalid") return "unknown";
 			// Another client's token: nothing to do, and answered the same as a revocation.
 			if (issued.issuedTo !== client.id) return "done";
-			return (await tokens.revokeAccess(token)).kind === "unsupported" ? "unsupported" : "written";
+			// A token past its allowance since it was read is no longer known: nothing was written.
+			const revoked = (await tokens.revokeAccess(token)).kind;
+			return revoked === "revoked" ? "written" : revoked === "invalid" ? "unknown" : "unsupported";
 		},
 	};
 }
