@@ -15,8 +15,12 @@ const widestWindow = 300;
 /** The member a proof's key is written in, in a token bound to it. */
 const member = "jkt";
 
-/** A JWK SHA-256 thumbprint (RFC 7638), base64url without padding, as `dpop_jkt` names a key. */
-const thumbprintForm = /^[A-Za-z0-9_-]{43}$/;
+/** A JWK SHA-256 thumbprint (RFC 7638) in its one form: 32 bytes, base64url without padding. */
+const isThumbprint = (value: string) => {
+	if (!/^[A-Za-z0-9_-]{43}$/.test(value)) return false;
+	// Re-encoded, so a last character setting the bits no byte uses is refused.
+	return Buffer.from(value, "base64url").toString("base64url") === value;
+};
 
 /** A spent proof's name: of one length whatever the `jti`; a thumbprint holds no dot, so it is one key's and one `jti`'s alone. */
 const spentName = (jkt: string, jti: string) =>
@@ -122,7 +126,7 @@ export default defineModule(
 				explicit: true,
 				requested: {
 					parameter: "dpop_jkt",
-					confirmationOf: (value) => (thumbprintForm.test(value) ? value : undefined),
+					confirmationOf: (value) => (isThumbprint(value) ? value : undefined),
 				},
 				read: async (request, scene) => {
 					const checked = await readProof(request, scene, rules, c.clock.now());

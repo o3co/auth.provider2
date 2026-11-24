@@ -160,9 +160,13 @@ describe("dpop", () => {
 		expect(await publishedAlgorithms(named)).toEqual(["ES256", "RS256"]);
 	});
 
-	it("contributes dpop_jkt as how a client asks for its binding ahead, taking a SHA-256 thumbprint alone", async () => {
+	it("contributes dpop_jkt as how a client asks for its binding ahead, taking a SHA-256 thumbprint in its one form alone", async () => {
 		const asked = (await boot()).get(kinds).find((kind) => kind.member === "jkt")?.requested;
 		const jkt = held.confirmation;
+		const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+		// The last character holds 2 bits no byte uses: a value setting them decodes to the same bytes.
+		const last = alphabet.indexOf(jkt.at(-1) ?? "A");
+		const strayBits = `${jkt.slice(0, 42)}${alphabet[last + 1]}`;
 		expect(asked?.parameter).toBe("dpop_jkt");
 		expect(asked?.confirmationOf(jkt)).toBe(jkt);
 		for (const malformed of [
@@ -172,6 +176,7 @@ describe("dpop", () => {
 			`${jkt}A`,
 			`${jkt.slice(1)}+`,
 			" ".repeat(43),
+			strayBits,
 		]) {
 			expect(asked?.confirmationOf(malformed), malformed).toBeUndefined();
 		}

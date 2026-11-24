@@ -9,7 +9,7 @@
 
 ## Offers
 - Composition definition only. The binding kind: `cnf` member `jkt`, named `dpop` for operators, token type `DPoP`, explicit (it wins over an ambient binding, such as a certificate, a request also proves).
-- Asked for ahead by `dpop_jkt` (RFC 9449 §10), the kind's `requested`: a value is the key's JWK SHA-256 thumbprint, 43 characters of base64url without padding, as written; any other is out of its form.
+- Asked for ahead by `dpop_jkt` (RFC 9449 §10), the kind's `requested`: a value is the key's JWK SHA-256 thumbprint, 43 characters of base64url without padding in its one form (32 bytes, encoded again the same); any other is out of its form.
 - Contribution to `issuer`'s metadata: `dpop_signing_alg_values_supported`, the allowed algorithms.
 - Store interface for spent proofs, `spentProofs`: save a name for a lifetime, answering `created` or `exists`.
   - Requirements (`spentProofsNeeds`): no eviction, survives a crash, never rolled back by failover.
