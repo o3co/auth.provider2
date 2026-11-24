@@ -1,10 +1,19 @@
+import { clientAllowance } from "@mod/client-allowance";
 import type { Grant, GrantOutcome } from "@mod/grants";
 import { sameSecret, Unavailable } from "@mod/kernel";
 import { sameBinding } from "@mod/sender-binding";
 import type { Sessions } from "@mod/session";
 import { type AccessGrant, referenceOf } from "@mod/tokens";
 import { type CodeRecord, digestOf, fromStored, s256, toStored, verifierShape } from "./codes.ts";
-import { codeGrantType, type IdTokenMaker, openid, type RedemptionHook } from "./contract.ts";
+import {
+	type ApprovedFacts,
+	codeGrantType,
+	type FamilyMaker,
+	type FamilyRequest,
+	type IdTokenMaker,
+	openid,
+	type RedemptionHook,
+} from "./contract.ts";
 import {
 	createRedemptionRecord,
 	isRedeemed,
@@ -55,6 +64,23 @@ const idTokenOf = (record: CodeRecord, clientId: string, code: string) => {
 	};
 };
 
+/** A family's request from a code's record, rooted with its approval's facts. */
+const familyOf = (record: CodeRecord, clientId: string, code: string): FamilyRequest => ({
+	...(record.approval as ApprovedFacts & { statement: string }),
+	subject: record.subject,
+	clientId,
+	scope: record.scope,
+	audience: record.audience,
+	amr: record.amr,
+	...(record.acr === undefined ? {} : { acr: record.acr }),
+	session: record.session,
+	...(record.binding ? { binding: record.binding } : {}),
+	code,
+});
+
+/** The refresh grant's type (RFC 6749 §6), which a client must be allowed for a family to be founded. */
+const refreshGrantType = "refresh_token";
+
 export function codeGrant(parts: {
 	readonly store: CodeStore;
 	readonly redemptionRecords: RedemptionRecords;
@@ -63,9 +89,11 @@ export function codeGrant(parts: {
 	readonly hooks: readonly RedemptionHook[];
 	/** The ID token's maker, where one is composed. */
 	readonly idToken?: IdTokenMaker;
+	/** The refresh family's maker, where one is composed. */
+	readonly family?: FamilyMaker;
 	readonly now: () => number;
 }): Grant {
-	const { store, redemptionRecords, sessions, settle, hooks, idToken, now } = parts;
+	const { store, redemptionRecords, sessions, settle, hooks, idToken, family, now } = parts;
 	/** Runs each hook; one that fails voids the code, so what was issued is revoked, and the failure goes on. */
 	const runHooks = async (name: string, run: (hook: RedemptionHook) => Promise<void>) => {
 		try {
@@ -138,11 +166,13 @@ export function codeGrant(parts: {
 			if (again.kind === "error") return again;
 			// Its record is made once used up and before issuing (use-up, create, issue, note), under
 			// its subject's tombstone (`redemption-record`): a subject erased meanwhile gets no token.
+			const redemption = digestOf(code);
 			const { made, tokenEnd } = await createRedemptionRecord(
 				redemptionRecords,
 				name,
 				record.subject,
 				now,
+				redemption,
 			);
 			if (made === "erased") {
 				await settle(name);
@@ -150,12 +180,21 @@ export function codeGrant(parts: {
 			}
 			// Only this request turned the code consumed: a record there already is no state it knows.
 			if (made !== "created") throw new Unavailable("code-grant");
-			const redemption = digestOf(code);
 			await runHooks(name, (hook) => hook.pin(redemption, record.subject));
-			const parts =
+			const idParts =
 				asksIdToken && idToken
 					? [await idToken.part(idTokenOf(record, client.id, redemption))]
 					: [];
+			// A family for a client allowed to refresh, of a code rooted with its approval's facts.
+			const founds =
+				family &&
+				record.approval?.statement !== undefined &&
+				clientAllowance.allowsGrant(client, refreshGrantType);
+			const founded = founds
+				? await family.part(familyOf(record, client.id, redemption))
+				: undefined;
+			if (founded && "refused" in founded) return refused;
+			const parts = [...idParts, ...(founded ? [founded] : [])];
 			// One bundle, rooted in the code's approval by its code. The token ends no later than its
 			// session, nor later than the allowance before its record's end.
 			const allowed = await issue(
@@ -163,9 +202,12 @@ export function codeGrant(parts: {
 				{ session: record.session, notAfter: Math.min(entry.endsAt, tokenEnd) },
 			);
 			if (allowed.kind === "refused") return allowed;
-			const idTokenIssued = allowed.parts?.[0];
-			if (parts.length > 0 && idTokenIssued === undefined)
-				throw new TypeError("code-grant: a bundle answered without its ID token");
+			const [idTokenIssued, refreshIssued] = [
+				idParts.length > 0 ? allowed.parts?.[0] : undefined,
+				founded ? allowed.parts?.[idParts.length] : undefined,
+			];
+			if ((idParts.length > 0 && !idTokenIssued) || (founded && !refreshIssued))
+				throw new TypeError("code-grant: a bundle answered without a part it asked");
 			const issued = allowed.access;
 			// Noted on its record, which keeps its end; one gone meanwhile (erased) gets no token answered.
 			const after = await noteToken(redemptionRecords, name, {
@@ -192,6 +234,7 @@ export function codeGrant(parts: {
 					expires_in: issued.expiresIn,
 					scope: record.scope.join(" "),
 					...(idTokenIssued === undefined ? {} : { id_token: idTokenIssued }),
+					...(refreshIssued === undefined ? {} : { refresh_token: refreshIssued }),
 				},
 			};
 		},

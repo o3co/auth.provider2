@@ -31,6 +31,7 @@ export interface CodeRecord {
 		readonly esig: string;
 		readonly apr: { readonly shard: string; readonly n: number };
 		readonly approvedAt: number;
+		readonly statement?: string;
 	};
 	/** Marked when the code came again: the redemption that used it up reads it after issuing. */
 	readonly void?: true;
@@ -60,6 +61,7 @@ const recordShape = z.strictObject({
 			esig: z.string(),
 			apr: z.strictObject({ shard: z.string(), n: z.number() }),
 			approvedAt: z.number(),
+			statement: z.string().optional(),
 		})
 		.optional(),
 	void: z.literal(true).optional(),

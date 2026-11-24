@@ -8,12 +8,15 @@ import {
 /** What a redemption keeps: its token, once noted, and whether a reuse voided it. */
 export interface RedemptionRecord {
 	readonly format: 1;
+	/** The code's digest, its redemption's name, which a family it founded is ended by. */
+	readonly redemption?: string;
 	readonly token?: { readonly reference: string; readonly expiresAt: number };
 	readonly void?: true;
 }
 
 const recordShape = z.strictObject({
 	format: z.literal(1),
+	redemption: z.string().optional(),
 	token: z.strictObject({ reference: z.string(), expiresAt: z.number() }).optional(),
 	void: z.literal(true).optional(),
 });
@@ -42,11 +45,12 @@ export const createRedemptionRecord = async (
 	name: string,
 	subject: string,
 	now: () => number,
+	redemption: string,
 ): Promise<{ readonly made: "created" | "exists" | "erased"; readonly tokenEnd: number }> => {
 	const created = now();
 	const made = await records.create(
 		name,
-		toStoredRedemptionRecord({ format: 1 }),
+		toStoredRedemptionRecord({ format: 1, redemption }),
 		storedRecordMaxMs,
 		subject,
 	);

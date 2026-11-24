@@ -25,6 +25,8 @@ export interface ApprovedFacts {
 	readonly apr: { readonly shard: string; readonly n: number };
 	/** When the log accepted its record, in ms: the ID token's authentication time. */
 	readonly approvedAt: number;
+	/** Its statement's hash, what `approvals` keeps it by: what a refresh family rests on; none founds none. */
+	readonly statement?: string;
 }
 
 /** What an ID token of a redemption is made from: the code's, as its record holds them. */
@@ -46,6 +48,47 @@ export interface IdTokenMaker {
 	/** Read before the bundle starts: what it reads besides the request fails the redemption, recording nothing. */
 	part(request: IdTokenRequest): Promise<BundlePart>;
 }
+
+/** What a refresh family a redemption founds is made from: the code's, as its record holds them. */
+export interface FamilyRequest extends ApprovedFacts {
+	readonly statement: string;
+	readonly subject: string;
+	readonly clientId: string;
+	readonly scope: readonly string[];
+	readonly audience: readonly string[];
+	readonly amr: readonly string[];
+	readonly acr?: string;
+	/** The session's handle. */
+	readonly session: string;
+	/** The binding the authorization asked for ahead: the family's key. */
+	readonly binding?: Binding;
+	/** The code's digest, as `digestOf` gives it: the redemption's name. */
+	readonly code: string;
+}
+
+/**
+ * Founds a refresh family with a redemption, as a part of its bundle (frame `family`), for a client
+ * allowed the refresh grant; and ends the one a code's redemption founded, when the code is voided.
+ */
+export interface FamilyMaker {
+	/**
+	 * Read before the bundle starts: a failure to read fails the redemption, recording nothing; a
+	 * family it may not found (its key gone, or bound to another live family) is `refused`, the code
+	 * used up and answered as every refused code is.
+	 */
+	part(request: FamilyRequest): Promise<BundlePart | { readonly refused: string }>;
+	/**
+	 * Ends the family a redemption by this code's digest founded, or that it founds later, given the
+	 * code's subject while its record still names it (none: no family is founded from it any more).
+	 * Safe to repeat.
+	 */
+	revoke(code: string, subject?: string): Promise<void>;
+}
+
+/** At most one; two refuse boot. With none, a redemption founds no family. */
+export const families = extensionPoint<FamilyMaker>("code-grant.families", {
+	multiplicity: "many",
+});
 
 /** At most one; two refuse boot. With none, a code asking an ID token is answered `invalid_scope`. */
 export const idTokens = extensionPoint<IdTokenMaker>("code-grant.id-tokens", {

@@ -3,13 +3,13 @@
 Internal module of `code-grant`: each redemption's record, which holds its token and outlives its code.
 
 ## Responsibilities
-- The redemption record's format, and its steps in a redemption: created once the code is used up, bounding its token's end, then holding its token; marked void on a reuse.
+- The redemption record's format (its code's digest, its token, a void mark), and its steps in a redemption: created once the code is used up, bounding its token's end, then holding its token; marked void on a reuse.
 
 ## Not here
 - Deciding a code was used up or came again (the grant). Revoking the token (`voiding`). Where the record is kept (the Store).
 
 ## Offers
-- `createRedemptionRecord` (the records, the redemption's name, the subject, the clock) → `created`, `exists` or `erased`, for `storedRecordMaxMs`, and the latest its token may end; `noteToken`, `markVoid` → the record after, or none where it is gone; `isRedeemed` → whether one is kept under the name.
+- `createRedemptionRecord` (the records, the redemption's name, the subject, the clock, the code's digest) → `created`, `exists` or `erased`, for `storedRecordMaxMs`, and the latest its token may end; `noteToken`, `markVoid` → the record after, or none where it is gone; `isRedeemed` → whether one is kept under the name.
 - `RedemptionRecord` and its stored form (`toStoredRedemptionRecord`, `fromStoredRedemptionRecord`, checked on every read).
 
 ## Invariants

@@ -12,6 +12,7 @@ import {
 	codeGrantType,
 	codeStore,
 	codes,
+	families,
 	idTokens,
 	openid,
 	redemptionHooks,
@@ -35,6 +36,7 @@ const takes = [
 	sessionIssuances,
 	redemptionHooks,
 	idTokens,
+	families,
 ];
 
 // Safe on many instances: every instance runs the sweep over the shared void list, and settling a void twice
@@ -104,6 +106,7 @@ export default defineModule({ name: "code-grant", replicaSafe: true, section, ta
 						esig: approval.esig,
 						apr: { shard: approval.apr.shard, n: approval.apr.n },
 						approvedAt: approval.approvedAt,
+						...(approval.statement === undefined ? {} : { statement: approval.statement }),
 					},
 				};
 				let unnamed = false;
@@ -141,6 +144,9 @@ export default defineModule({ name: "code-grant", replicaSafe: true, section, ta
 		}
 		const makers = await c.collect(idTokens);
 		if (makers.length > 1) return c.refuse("code-grant", "at most one module makes ID tokens");
+		const founders = await c.collect(families);
+		if (founders.length > 1)
+			return c.refuse("code-grant", "at most one module founds refresh families");
 		const store = await c.get(codeStore);
 		const records = await c.get(redemptionRecords);
 		const ports = portsRefused({ codes: store, redemptionRecords: records });
@@ -150,6 +156,7 @@ export default defineModule({ name: "code-grant", replicaSafe: true, section, ta
 			redemptionRecords: records,
 			voids: await c.get(voidList),
 			tokens: issuing,
+			...(founders[0] ? { families: founders[0] } : {}),
 			log: c.log,
 		});
 		c.every(c.section["sweep-interval"] * 1000, () => voids.sweep());
@@ -160,6 +167,7 @@ export default defineModule({ name: "code-grant", replicaSafe: true, section, ta
 			settle: voids.settle,
 			hooks: await c.collect(redemptionHooks),
 			...(makers[0] ? { idToken: makers[0] } : {}),
+			...(founders[0] ? { family: founders[0] } : {}),
 			now: c.clock.now,
 		});
 	}),

@@ -1,6 +1,7 @@
 import { type Log, Unavailable } from "@mod/kernel";
 import type { Tokens } from "@mod/tokens";
 import { fromStored, toStored } from "../codes.ts";
+import type { FamilyMaker } from "../contract.ts";
 import { markVoid } from "../redemption-record/redemption-record.ts";
 import type { CodeStore, RedemptionRecords, VoidList } from "../store/store.ts";
 
@@ -10,9 +11,11 @@ export function voiding(parts: {
 	readonly redemptionRecords: RedemptionRecords;
 	readonly voids: VoidList;
 	readonly tokens: Pick<Tokens, "revokeReferenced">;
+	/** The refresh family a redemption founded, ended with its token. */
+	readonly families?: Pick<FamilyMaker, "revoke">;
 	readonly log: Log;
 }) {
-	const { store, redemptionRecords, voids, tokens, log } = parts;
+	const { store, redemptionRecords, voids, tokens, families, log } = parts;
 	/**
 	 * Voids a code: listed first, then marked void on its own record and its redemption record, even
 	 * if they are already, so the redemption issuing it reads a mark wherever it looks after issuing.
@@ -32,6 +35,10 @@ export function voiding(parts: {
 			await voids.done(name);
 			return;
 		}
+		// Its family ended first, or marked so that none is founded later, under the code's subject.
+		const subject = coded ? fromStored(coded.before)?.subject : undefined;
+		if (families && marked.redemption !== undefined)
+			await families.revoke(marked.redemption, subject);
 		// Not issued yet: the request issuing it sees the mark and voids again.
 		if (!marked.token) return;
 		const revoked = await tokens.revokeReferenced(marked.token.reference);

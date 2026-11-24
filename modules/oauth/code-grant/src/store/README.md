@@ -15,6 +15,10 @@ Internal module of `code-grant`: the interfaces of the places its records are ke
 - `codeStoreNeeds` (never evicted, survives a crash, never rolled back by failover, names made from a secret) and `storedRecordMaxMs`.
 - Each place's optional `erase` and `migrate`: all of them or none.
 
+## Data
+- Codes: a record per code name until its expiry. Redemption records: each for `storedRecordMaxMs` (`kernel`'s clock; syncing hosts is the deployment's). The void list: until each code is settled.
+- Needs: no eviction (tokens to revoke would be lost), a crash survived, no rollback on failover (a used code would come back), names derived from the code.
+
 ## Invariants
 - Every call throws Unavailable when the place cannot tell. A change reruns on a race, so it is pure; a record gone is never written back.
 

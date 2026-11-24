@@ -50,6 +50,8 @@ import {
 	type CodeStore,
 	codeStore,
 	codes,
+	type FamilyRequest,
+	families,
 	type IdTokenRequest,
 	idTokens,
 	type Redeemed,
@@ -229,6 +231,8 @@ type Options = {
 	recorded?: boolean;
 	extra?: Module[];
 	codeGrant?: Parameters<typeof codeGrantConfig>[0];
+	/** The grants the clients are allowed; the code grant alone unless told. */
+	grants?: string[];
 };
 
 /** What `serve` assembles, with the stores it reaches into and the tokens recorded to their session. */
@@ -262,7 +266,7 @@ function assembly(options: Options = {}) {
 					confidentialClient({
 						id,
 						sections: allowancesFor({
-							grants: ["authorization_code"],
+							grants: options.grants ?? ["authorization_code"],
 							scopes: ["openid", "read"],
 							audiences: ["https://api"],
 						}),
@@ -379,6 +383,7 @@ async function handleDirectly(
 	s: Served,
 	code: string,
 	over: Partial<Pick<GrantInput, "issue" | "binding">> = {},
+	client = directClient,
 ) {
 	const grant = s.app.get(grantsSeen).find((g) => g.grantType === "authorization_code");
 	const params: Record<string, string> = {
@@ -388,7 +393,7 @@ async function handleDirectly(
 	};
 	if (!grant) throw new Error("no authorization_code grant");
 	const issuing = { ...s.app.get(accessTokenIssuance), ...s.app.get(accessTokens) };
-	return grant.handle({ ...grantInput(issuing, grant, directClient, params), ...over });
+	return grant.handle({ ...grantInput(issuing, grant, client, params), ...over });
 }
 
 it("gives the access token the code's amr, authentication time and acr, issued from its session", async () => {
@@ -486,6 +491,131 @@ const idTokenMaker = (asked: IdTokenRequest[], name = "id-tokens", fails = false
 			},
 		})),
 	]);
+
+/** A family maker that answers each part's request, made at once, and records what it was asked to end. */
+const familyMaker = (
+	asked: FamilyRequest[],
+	revoked: string[],
+	refuse?: string,
+	name = "families",
+) =>
+	defineModule({ name, replicaSafe: true, takes: [] }, (m) => [
+		m.contribute(families).by(() => ({
+			part: async (request) => {
+				asked.push(request);
+				if (refuse) return { refused: refuse };
+				return {
+					frame: "family" as const,
+					prepare: async () => ({ prepared: "f", digest: "family-digest" }),
+					sign: async (_prepared, receipt, placed) => `refresh.${placed.id}.${receipt}`,
+				};
+			},
+			revoke: async (code, subject) => {
+				revoked.push(`${code} ${subject}`);
+			},
+		})),
+	]);
+
+describe("a refresh family, founded with a redemption", () => {
+	const founding = { ...approval, statement: "t-hash" };
+	const allowances = {
+		grants: ["authorization_code", "refresh_token"],
+		scopes: ["read"],
+		audiences: ["https://api"],
+	};
+	const refreshing = { ...directClient, section: <T>() => allowances as T };
+
+	it("is a part of the redemption's bundle for a client allowed to refresh, made from the code's facts, answered as refresh_token", async () => {
+		const asked: FamilyRequest[] = [];
+		const s = await serve({
+			extra: [familyMaker(asked, [])],
+			grants: ["authorization_code", "refresh_token"],
+		});
+		const code = await rootedIssue(
+			s,
+			{ ...s.facts, binding: { member: "jkt", confirmation: "k1", tokenType: "DPoP" } },
+			founding,
+		);
+		const bundles: BundleRequest[] = [];
+		const answer = await handleDirectly(
+			s,
+			code,
+			{
+				binding: { member: "jkt", confirmation: "k1", tokenType: "DPoP" },
+				issue: async (bundle) => {
+					bundles.push(bundle);
+					return { ...(await issuedNow(s, bundle)), parts: ["the-refresh-token"] };
+				},
+			},
+			refreshing,
+		);
+		expect(answer).toMatchObject({ kind: "issued", body: { refresh_token: "the-refresh-token" } });
+		expect(bundles[0]?.parts?.map((p) => p.frame)).toEqual(["family"]);
+		expect(asked).toEqual([
+			{
+				...founding,
+				subject: "alice",
+				clientId: "app",
+				scope: ["read"],
+				audience: ["https://api"],
+				amr: ["hwk", "user"],
+				session: s.session.id,
+				binding: { member: "jkt", confirmation: "k1", tokenType: "DPoP" },
+				code: digestOf(code),
+			},
+		]);
+	});
+
+	it("is founded for no client not allowed to refresh, and none of a code rooted without its statement", async () => {
+		const asked: FamilyRequest[] = [];
+		const s = await serve({ extra: [familyMaker(asked, [])] });
+		expect((await s.redeem(await rootedIssue(s, s.facts, founding))).body).not.toHaveProperty(
+			"refresh_token",
+		);
+		const allowed = await serve({
+			extra: [familyMaker(asked, [])],
+			grants: ["authorization_code", "refresh_token"],
+		});
+		expect(
+			(await allowed.redeem(await rootedIssue(allowed, allowed.facts, approval))).body,
+		).not.toHaveProperty("refresh_token");
+		expect(asked).toEqual([]);
+	});
+
+	it("refused, uses the code up and answers it as every refused code, issuing nothing", async () => {
+		const s = await serve({
+			extra: [familyMaker([], [], "the key is bound to another live family")],
+			grants: ["authorization_code", "refresh_token"],
+		});
+		const code = await rootedIssue(s, s.facts, founding);
+		expect((await s.redeem(code)).body).toEqual(refusedBody);
+		expect(keptOf(s, code)?.state).toBe("consumed");
+		expect((await s.redeem(code)).body).toEqual(refusedBody);
+	});
+
+	it("is ended with the token when the code comes again, by the code's digest its redemption record keeps", async () => {
+		const revoked: string[] = [];
+		const s = await serve({
+			extra: [familyMaker([], revoked)],
+			grants: ["authorization_code", "refresh_token"],
+		});
+		const code = await rootedIssue(s, s.facts, founding);
+		expect((await s.redeem(code)).status).toBe(200);
+		expect(redeemedOf(s, code)?.redemption).toBe(digestOf(code));
+		expect((await s.redeem(code)).body).toEqual(refusedBody);
+		// Under the code's subject, which its record still names.
+		expect(revoked).toEqual([`${digestOf(code)} alice`]);
+	});
+
+	it("is founded by at most one module: two refuse boot", async () => {
+		const { input } = assembly({
+			extra: [familyMaker([], []), familyMaker([], [], undefined, "other-families")],
+		});
+		await expect(assemble(input)).rejects.toEqual(
+			refusedFor("at most one module founds refresh families"),
+		);
+	});
+});
 
 describe("an ID token, for a code whose scope has openid", () => {
 	const openidFacts = (s: Served) => ({
