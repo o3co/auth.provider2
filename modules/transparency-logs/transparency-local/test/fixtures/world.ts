@@ -110,7 +110,7 @@ const ceremonies = testCeremonies({
 	topOrigins: [],
 	algorithms: ["ES256", "EdDSA", "RS256"],
 });
-const screen = { e_enc: "ZW5j", e_sig: { kty: "EC", crv: "P-256", x: "eA", y: "eQ" } };
+const screen = { v: 1, e_enc: "ZW5j", e_sig: { kty: "EC", crv: "P-256", x: "eA", y: "eQ" } };
 const fresh = () => randomBytes(32).toString("base64url");
 
 /** A statement the Core's ring signs, valid from now for five minutes, by the world's clock. */
