@@ -1,0 +1,25 @@
+import { describe, expect, it } from "vitest";
+import { section } from "../src/section.ts";
+
+describe("code-grant's section", () => {
+	it.each([
+		["code-lifetime", "9s", "10s", "60s", "61s"],
+		["sweep-interval", "0s", "1s", "1h", "3601s"],
+	])("takes %s from its least to its most, and nothing outside", (key, under, low, high, over) => {
+		const parses = (value: string) => section.safeParse({ [key]: value }).success;
+		expect([under, low, high, over].map(parses)).toEqual([false, true, true, false]);
+	});
+
+	it("keeps a code 60 seconds and sweeps every 30 seconds where nothing is set [rfc6749-4.1.2-c]", () => {
+		expect(section.parse({})).toMatchObject({ "code-lifetime": 60, "sweep-interval": 30 });
+	});
+
+	it.each(["code-lifetime", "sweep-interval"])("refuses %s written with no unit", (key) => {
+		expect(section.safeParse({ [key]: 30 }).success).toBe(false);
+		expect(section.safeParse({ [key]: "30" }).success).toBe(false);
+	});
+
+	it.each(["code-seconds", "sweep-seconds"])("refuses %s, a name in seconds", (key) => {
+		expect(section.safeParse({ [key]: 60 }).success).toBe(false);
+	});
+});
