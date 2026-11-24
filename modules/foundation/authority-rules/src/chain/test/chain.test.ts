@@ -140,9 +140,6 @@ describe("a first-trust key (Rules023e Allowed `ft`)", () => {
 		expect(step(eddsa, undefined, unread)).toEqual(refused(/not a key the protocol takes/));
 		const other = { ...checks, keyThumbprint: () => ({ jkt: digest("other"), alg: -8 }) };
 		expect(step(eddsa, undefined, other)).toEqual(refused(/signed bytes/));
-		// A possession naming the key by its point's hash, as one did before keys took every algorithm.
-		const point = Buffer.concat([Buffer.from([4]), Buffer.alloc(64, 1)]).toString("base64url");
-		expect(step({ credential: "c", publicKey: point })).toEqual(refused(/by no thumbprint/));
 	});
 
 	it("is refused unless the new key asserts the possession", () => {

@@ -71,6 +71,7 @@ export const assertion = (
 
 export const T0 = 1_700_000_000;
 const screen = {
+	v: 1,
 	e_enc: "ZW5j",
 	e_sig: { kty: "EC", crv: "P-256", x: "eA", y: "eQ" },
 };
@@ -122,26 +123,21 @@ export const possession = (
 	creationJws: string,
 	key: { credential: string; publicKey: string },
 	iat = T0,
-) => {
-	const thumbprint = checks.keyThumbprint(key.publicKey);
-	return {
-		iss: "https://core.example",
-		sid: "possession-1",
-		iat,
-		exp: iat + 300,
-		...screen,
-		nonce: "n2",
-		purpose: "possession",
-		possession: {
-			creation_hash: digest(creationJws),
-			...(thumbprint
-				? { key_jkt: thumbprint.jkt }
-				: { key_hash: digest(Buffer.from(key.publicKey, "base64url")) }),
-			credential_id: key.credential,
-			reservation_id: "res-1",
-		},
-	};
-};
+) => ({
+	iss: "https://core.example",
+	sid: "possession-1",
+	iat,
+	exp: iat + 300,
+	...screen,
+	nonce: "n2",
+	purpose: "possession",
+	possession: {
+		creation_hash: digest(creationJws),
+		key_jkt: checks.keyThumbprint(key.publicKey)?.jkt,
+		credential_id: key.credential,
+		reservation_id: "res-1",
+	},
+});
 
 export const subject = { of: "subject", id: "sub-1" } as const;
 export type FlowRecord = Exclude<LogRecord, { kind: "tick" }>;

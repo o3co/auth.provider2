@@ -111,7 +111,6 @@ function newKeyRefusal(
 	p: { readonly key_jkt?: string | undefined },
 	publicKey: string,
 ): Refusal {
-	if (p.key_jkt === undefined) return "the possession names the new key by no thumbprint";
 	const key = checks.keyThumbprint(publicKey);
 	if (!key) return "the new key is not a key the protocol takes";
 	if (!creation.options.algorithms?.includes(key.alg))

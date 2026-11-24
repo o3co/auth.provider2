@@ -20,7 +20,7 @@ Internal module of `authority-rules`: reading a Core writer's preimage and its e
 - A statement is read only where it verifies by the ring the context names (the record writer's Core generation), carries the statement's `typ` and holds to its schema; a field it does not know refuses it.
 - An assertion's challenge is the digest of `sdk-core-wire`'s challenge input for `get` over the statement's compact bytes; it holds only for the key's credential.
 - A statement's times are seconds; an acceptance time is milliseconds.
-- The key generation a first key is made for is the signed creation's `kg`, never the preimage's; a possession names the new key by `key_jkt`, its thumbprint, as `sdk-core-wire` defines it; one naming it otherwise is refused.
+- The key generation a first key is made for is the signed creation's `kg`, never the preimage's; a possession names the new key by `key_jkt`, its thumbprint, as `sdk-core-wire` defines it.
 
 ## Depends on
 - `transparency-wire` (the preimage), `sdk-core-wire` (statements, the challenge input, `typ`); `zod`.
