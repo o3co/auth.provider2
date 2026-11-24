@@ -1631,6 +1631,37 @@ importers:
         specifier: workspace:*
         version: link:../../oauth/token-denylist
 
+  modules/templates/transparency-local-store:
+    dependencies:
+      '@mod/kernel':
+        specifier: workspace:*
+        version: link:../../foundation/kernel
+      '@mod/store':
+        specifier: workspace:*
+        version: link:../../foundation/store
+      '@mod/transparency-local':
+        specifier: workspace:*
+        version: link:../../transparency-logs/transparency-local
+    devDependencies:
+      '@mod/keys':
+        specifier: workspace:*
+        version: link:../../foundation/keys
+      '@mod/passkeys':
+        specifier: workspace:*
+        version: link:../../passkey/passkeys
+      '@mod/transparency':
+        specifier: workspace:*
+        version: link:../../foundation/transparency
+      '@mod/transparency-wire':
+        specifier: workspace:*
+        version: link:../../wire/transparency-wire
+      '@mod/webauthn':
+        specifier: workspace:*
+        version: link:../../passkey/webauthn
+      vitest:
+        specifier: 5.0.5
+        version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(vite@8.3.3(@types/node@26.6.5)(yaml@2.9.1))
+
   modules/templates/users-store:
     dependencies:
       '@mod/kernel':

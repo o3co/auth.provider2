@@ -1,0 +1,24 @@
+{
+	"name": "@mod/transparency-local-store",
+	"private": true,
+	"license": "Apache-2.0",
+	"type": "module",
+	"kind": "wiring",
+	"wires": "@mod/transparency-local",
+	"exports": {
+		"./module": "./src/module.ts"
+	},
+	"dependencies": {
+		"@mod/kernel": "workspace:*",
+		"@mod/store": "workspace:*",
+		"@mod/transparency-local": "workspace:*"
+	},
+	"devDependencies": {
+		"@mod/keys": "workspace:*",
+		"@mod/passkeys": "workspace:*",
+		"@mod/transparency": "workspace:*",
+		"@mod/transparency-wire": "workspace:*",
+		"@mod/webauthn": "workspace:*",
+		"vitest": "5.0.5"
+	}
+}
