@@ -4,7 +4,7 @@ import { sameBinding } from "@mod/sender-binding";
 import type { Sessions } from "@mod/session";
 import { type AccessGrant, referenceOf } from "@mod/tokens";
 import { type CodeRecord, digestOf, fromStored, s256, toStored, verifierShape } from "./codes.ts";
-import { codeGrantType, type RedemptionHook } from "./contract.ts";
+import { codeGrantType, type IdTokenMaker, openid, type RedemptionHook } from "./contract.ts";
 import {
 	createRedemptionRecord,
 	isRedeemed,
@@ -24,8 +24,6 @@ const malformed = (description: string): GrantOutcome => ({
 	error: "invalid_request",
 	description,
 });
-/** The scope that asks for an ID token, which no redemption gives yet: answered so, never left out unsaid. */
-const openid = "openid";
 
 const accessOf = (record: CodeRecord, clientId: string): AccessGrant => ({
 	subject: record.subject,
@@ -39,15 +37,35 @@ const accessOf = (record: CodeRecord, clientId: string): AccessGrant => ({
 	...(record.acr !== undefined ? { acr: record.acr } : {}),
 });
 
+/** An ID token's request from a code's record; a record of an openid code holds its nonce and approval. */
+const idTokenOf = (record: CodeRecord, clientId: string, code: string) => {
+	const { nonce, approval } = record;
+	if (nonce === undefined || approval === undefined)
+		throw new TypeError("code-grant: an openid code without its nonce or its approval");
+	return {
+		...approval,
+		subject: record.subject,
+		clientId,
+		nonce,
+		amr: record.amr,
+		...(record.acr === undefined ? {} : { acr: record.acr }),
+		scope: record.scope,
+		session: record.session,
+		code,
+	};
+};
+
 export function codeGrant(parts: {
 	readonly store: CodeStore;
 	readonly redemptionRecords: RedemptionRecords;
 	readonly sessions: Sessions;
 	readonly settle: (name: string) => Promise<void>;
 	readonly hooks: readonly RedemptionHook[];
+	/** The ID token's maker, where one is composed. */
+	readonly idToken?: IdTokenMaker;
 	readonly now: () => number;
 }): Grant {
-	const { store, redemptionRecords, sessions, settle, hooks, now } = parts;
+	const { store, redemptionRecords, sessions, settle, hooks, idToken, now } = parts;
 	/** Runs each hook; one that fails voids the code, so what was issued is revoked, and the failure goes on. */
 	const runHooks = async (name: string, run: (hook: RedemptionHook) => Promise<void>) => {
 		try {
@@ -108,8 +126,9 @@ export function codeGrant(parts: {
 			// A code whose root was never set roots in no approval: used up, it issues nothing.
 			const root = record.root;
 			if (root === undefined) return refused;
-			// No ID token is issued yet, so a code asking one gives nothing, rather than a token alone.
-			if (record.scope.includes(openid)) {
+			// A code asking an ID token where none is made gives nothing, rather than a token alone.
+			const asksIdToken = record.scope.includes(openid);
+			if (asksIdToken && !idToken) {
 				return { kind: "error", error: "invalid_scope", description: "no ID token is issued" };
 			}
 			const entry = await sessions.entryOf(record.session);
@@ -133,13 +152,20 @@ export function codeGrant(parts: {
 			if (made !== "created") throw new Unavailable("code-grant");
 			const redemption = digestOf(code);
 			await runHooks(name, (hook) => hook.pin(redemption, record.subject));
-			// One bundle, rooted in the code's approval. The token ends no later than its session, nor
-			// later than the allowance before its record's end.
+			const parts =
+				asksIdToken && idToken
+					? [await idToken.part(idTokenOf(record, client.id, redemption))]
+					: [];
+			// One bundle, rooted in the code's approval by its code. The token ends no later than its
+			// session, nor later than the allowance before its record's end.
 			const allowed = await issue(
-				{ root, access: accessOf(record, client.id) },
+				{ root, via: { via: "code" }, access: accessOf(record, client.id), parts },
 				{ session: record.session, notAfter: Math.min(entry.endsAt, tokenEnd) },
 			);
 			if (allowed.kind === "refused") return allowed;
+			const idTokenIssued = allowed.parts?.[0];
+			if (parts.length > 0 && idTokenIssued === undefined)
+				throw new TypeError("code-grant: a bundle answered without its ID token");
 			const issued = allowed.access;
 			// Noted on its record, which keeps its end; one gone meanwhile (erased) gets no token answered.
 			const after = await noteToken(redemptionRecords, name, {
@@ -165,6 +191,7 @@ export function codeGrant(parts: {
 					token_type: issued.tokenType,
 					expires_in: issued.expiresIn,
 					scope: record.scope.join(" "),
+					...(idTokenIssued === undefined ? {} : { id_token: idTokenIssued }),
 				},
 			};
 		},

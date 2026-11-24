@@ -12,6 +12,8 @@ import {
 	codeGrantType,
 	codeStore,
 	codes,
+	idTokens,
+	openid,
 	redemptionHooks,
 	redemptionRecords,
 	voidList,
@@ -32,6 +34,7 @@ const takes = [
 	accessTokens,
 	sessionIssuances,
 	redemptionHooks,
+	idTokens,
 ];
 
 // Safe on many instances: every instance runs the sweep over the shared void list, and settling a void twice
@@ -42,9 +45,13 @@ export default defineModule({ name: "code-grant", replicaSafe: true, section, ta
 		const opened = await c.get(sessions);
 		const known = await c.get(clients);
 		const issuerUrl = (await c.get(issuer)).url;
+		const makers = await c.collect(idTokens);
 		return {
 			issue: async (facts) => {
 				if (!challengeShape.test(facts.challenge)) throw new TypeError("code-grant: bad challenge");
+				// An ID token's code carries the nonce it names.
+				if (facts.scope.includes(openid) && !facts.nonce)
+					throw new TypeError("code-grant: an openid code without its nonce");
 				const entry = await opened.entryOf(facts.session);
 				// One closed or short since the caller read it is no fault of the caller's: it answers as it can.
 				if (entry.kind !== "entered") throw new Unavailable("code-grant");
@@ -89,19 +96,31 @@ export default defineModule({ name: "code-grant", replicaSafe: true, section, ta
 				if (created !== "created") throw new Unavailable("code-grant");
 				return code;
 			},
-			root: async (code, root) => {
+			root: async (code, root, approval) => {
 				if (root === "") throw new TypeError("code-grant: no root's reference");
+				// Its members by name, as the binding's.
+				const facts = approval && {
+					approval: {
+						esig: approval.esig,
+						apr: { shard: approval.apr.shard, n: approval.apr.n },
+						approvedAt: approval.approvedAt,
+					},
+				};
+				let unnamed = false;
 				const changed = await store.update(store.nameOf(code), (current) => {
 					const r = fromStored(current);
-					return r?.state === "issued" && r.root === undefined
-						? { value: toStored({ ...r, root }) }
-						: undefined;
+					if (r?.state !== "issued" || r.root !== undefined) return undefined;
+					// An ID token's code is rooted with what its approval gives the ID token.
+					unnamed = r.scope.includes(openid) && !facts;
+					return unnamed ? undefined : { value: toStored({ ...r, root, ...facts }) };
 				});
+				if (unnamed) throw new TypeError("code-grant: an openid code rooted without its approval");
 				const after = changed && fromStored(changed.after);
 				return after?.state === "issued" && after.root === root ? "set" : "refused";
 			},
 			digestOf,
 			lifetimeMs: () => c.section["code-lifetime"] * 1000,
+			issuesIdTokens: () => makers.length > 0,
 		};
 	}),
 	m.contribute(grants).by(async (c) => {
@@ -120,6 +139,8 @@ export default defineModule({ name: "code-grant", replicaSafe: true, section, ta
 				"its tokens must be recorded to their session, so that a logout ends them",
 			);
 		}
+		const makers = await c.collect(idTokens);
+		if (makers.length > 1) return c.refuse("code-grant", "at most one module makes ID tokens");
 		const store = await c.get(codeStore);
 		const records = await c.get(redemptionRecords);
 		const ports = portsRefused({ codes: store, redemptionRecords: records });
@@ -138,6 +159,7 @@ export default defineModule({ name: "code-grant", replicaSafe: true, section, ta
 			sessions: await c.get(sessions),
 			settle: voids.settle,
 			hooks: await c.collect(redemptionHooks),
+			...(makers[0] ? { idToken: makers[0] } : {}),
 			now: c.clock.now,
 		});
 	}),

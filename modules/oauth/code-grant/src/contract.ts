@@ -1,3 +1,4 @@
+import type { BundlePart } from "@mod/grants";
 import { contract, extensionPoint } from "@mod/kernel";
 import type { Binding } from "@mod/sender-binding";
 
@@ -16,6 +17,41 @@ export interface CodeFacts {
 	readonly binding?: Binding;
 }
 
+/** An approval as an ID token of its code names it (A38, A21), each as `approvals` gave it, once its record is placed. */
+export interface ApprovedFacts {
+	/** Its statement's E_sig's thumbprint. */
+	readonly esig: string;
+	/** Its record's reference on the log. */
+	readonly apr: { readonly shard: string; readonly n: number };
+	/** When the log accepted its record, in ms: the ID token's authentication time. */
+	readonly approvedAt: number;
+}
+
+/** What an ID token of a redemption is made from: the code's, as its record holds them. */
+export interface IdTokenRequest extends ApprovedFacts {
+	readonly subject: string;
+	readonly clientId: string;
+	readonly nonce: string;
+	readonly amr: readonly string[];
+	readonly acr?: string;
+	readonly scope: readonly string[];
+	/** The session's handle, which never lets anyone into it. */
+	readonly session: string;
+	/** The code's digest, as `digestOf` gives it: the redemption's name, its pin's, and `c_hash`'s source. */
+	readonly code: string;
+}
+
+/** Makes a redemption's ID token, as a part of its bundle (frame `idToken`), where the scope has `openid`. */
+export interface IdTokenMaker {
+	/** Read before the bundle starts: what it reads besides the request fails the redemption, recording nothing. */
+	part(request: IdTokenRequest): Promise<BundlePart>;
+}
+
+/** At most one; two refuse boot. With none, a code asking an ID token is answered `invalid_scope`. */
+export const idTokens = extensionPoint<IdTokenMaker>("code-grant.id-tokens", {
+	multiplicity: "many",
+});
+
 export interface Codes {
 	/**
 	 * A code for the facts. Throws Unavailable where the store cannot tell, or the session is not
@@ -26,17 +62,23 @@ export interface Codes {
 	/**
 	 * Sets the root's reference of a code, once: the record its chain roots in, its approval's, which
 	 * carries the code's digest and so is placed after the code is made; carried to the bundle unread.
-	 * `set` where the code is unused and had none (or had this one), `refused` for any other. Throws
-	 * Unavailable where the store cannot tell.
+	 * `set` where the code is unused and had none (or had this one), `refused` for any other. With it,
+	 * what the approval gives an ID token: required for a code whose scope has `openid`, else a
+	 * TypeError. Throws Unavailable where the store cannot tell.
 	 */
-	root(code: string, root: string): Promise<"set" | "refused">;
+	root(code: string, root: string, approval?: ApprovedFacts): Promise<"set" | "refused">;
 	/** A code's digest, its SHA-256 in base64url: what a record names it by, never the code itself. */
 	digestOf(code: string): string;
 	/** How long a code lives once issued, as `code-lifetime` says. */
 	lifetimeMs(): number;
+	/** Whether an ID token is made (a module contributes to `idTokens`): without, an `openid` code redeems for nothing. */
+	issuesIdTokens(): boolean;
 }
 
 export const codes = contract<Codes>("code-grant");
+
+/** The scope that asks for an ID token (OpenID Connect Core §3.1.2.1). */
+export const openid = "openid";
 
 /** The grant's type (RFC 6749 §4.1.3). */
 export const codeGrantType = "authorization_code";

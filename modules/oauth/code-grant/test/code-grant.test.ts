@@ -43,12 +43,15 @@ import {
 } from "@mod/tokens";
 import { issueAtOnce, tokensStandIn } from "@mod/tokens/testing";
 import { afterEach, describe, expect, it } from "vitest";
-import { fromStored } from "../src/codes.ts";
+import { digestOf, fromStored } from "../src/codes.ts";
 import {
+	type ApprovedFacts,
 	type CodeFacts,
 	type CodeStore,
 	codeStore,
 	codes,
+	type IdTokenRequest,
+	idTokens,
 	type Redeemed,
 	type RedemptionHook,
 	redemptionHooks,
@@ -339,9 +342,9 @@ async function serve(options: Options = {}) {
 }
 type Served = Awaited<ReturnType<typeof serve>>;
 /** A code issued for the facts and rooted, as its issuer roots it once the approval is placed. */
-const rootedIssue = async (s: Served, facts: CodeFacts) => {
+const rootedIssue = async (s: Served, facts: CodeFacts, approved?: ApprovedFacts) => {
 	const code = await s.app.get(codes).issue(facts);
-	await s.app.get(codes).root(code, "root-of-the-approval");
+	await s.app.get(codes).root(code, "root-of-the-approval", approved);
 	return code;
 };
 /** What a code's record holds now. */
@@ -421,7 +424,9 @@ it("issues one bundle rooted in the code's approval, carrying the root's referen
 		},
 	});
 	expect(answer.kind).toBe("issued");
-	expect(bundles.map((bundle) => bundle.root)).toEqual(["root-of-the-approval"]);
+	expect(bundles.map((bundle) => [bundle.root, bundle.via, bundle.parts])).toEqual([
+		["root-of-the-approval", { via: "code" }, []],
+	]);
 });
 
 describe("the binding the authorization asked for ahead", () => {
@@ -460,9 +465,120 @@ describe("the binding the authorization asked for ahead", () => {
 	});
 });
 
-it("answers invalid_scope for a code asking an ID token, none of which is issued yet, issuing nothing", async () => {
+/** What an approval gives an openid code, as `authorize` hands it on. */
+const approval = {
+	esig: "e-sig-thumbprint",
+	apr: { shard: "s1", n: 7 },
+	approvedAt: 1_800_000_000_000,
+};
+/** An ID token maker that answers each part's request, made at once, as `oidc` would contribute it. */
+const idTokenMaker = (asked: IdTokenRequest[], name = "id-tokens", fails = false) =>
+	defineModule({ name, replicaSafe: true, takes: [] }, (m) => [
+		m.contribute(idTokens).by(() => ({
+			part: async (request) => {
+				asked.push(request);
+				if (fails) throw new Unavailable("attributes");
+				return {
+					frame: "idToken" as const,
+					prepare: async (acceptedAt) => ({ prepared: acceptedAt, digest: "id-digest" }),
+					sign: async (prepared, receipt) => `id-token.${String(prepared)}.${receipt}`,
+				};
+			},
+		})),
+	]);
+
+describe("an ID token, for a code whose scope has openid", () => {
+	const openidFacts = (s: Served) => ({
+		...s.facts,
+		scope: ["openid", "read"],
+		nonce: "n-0S6_WzA2Mj",
+	});
+
+	it("is a part of the redemption's bundle, made from the code's facts, and answered as id_token", async () => {
+		const asked: IdTokenRequest[] = [];
+		const s = await serve({ extra: [idTokenMaker(asked)] });
+		const code = await rootedIssue(s, { ...openidFacts(s), acr: "urn:example:acr:high" }, approval);
+		const answer = await s.redeem(code);
+		expect(answer.status).toBe(200);
+		expect(String(answer.body.id_token)).toMatch(/^id-token\.\d+\.test-receipt$/);
+		expect(asked).toEqual([
+			{
+				...approval,
+				subject: "alice",
+				clientId: "app",
+				nonce: "n-0S6_WzA2Mj",
+				amr: ["hwk", "user"],
+				acr: "urn:example:acr:high",
+				scope: ["openid", "read"],
+				session: s.session.id,
+				code: digestOf(code),
+			},
+		]);
+	});
+
+	it("is asked in one bundle with the access token, rooted by its code", async () => {
+		const s = await serve({ extra: [idTokenMaker([])] });
+		const bundles: BundleRequest[] = [];
+		const answer = await handleDirectly(s, await rootedIssue(s, openidFacts(s), approval), {
+			issue: async (bundle) => {
+				bundles.push(bundle);
+				return { ...(await issuedNow(s, bundle)), parts: ["id"] };
+			},
+		});
+		expect(answer).toMatchObject({ kind: "issued", body: { id_token: "id" } });
+		expect(bundles.map((b) => [b.via, b.parts?.map((p) => p.frame)])).toEqual([
+			[{ via: "code" }, ["idToken"]],
+		]);
+	});
+
+	it("is never issued from a code without its nonce, nor rooted without its approval, which it keeps by name", async () => {
+		const s = await serve({ extra: [idTokenMaker([])] });
+		const { nonce: _, ...noNonce } = openidFacts(s);
+		await expect(s.app.get(codes).issue(noNonce)).rejects.toThrow(TypeError);
+		const code = await s.app.get(codes).issue(openidFacts(s));
+		await expect(s.app.get(codes).root(code, "r")).rejects.toThrow(TypeError);
+		expect(keptOf(s, code)?.root).toBeUndefined();
+		const loud = { ...approval, extra: 1, apr: { ...approval.apr, more: 2 } } as ApprovedFacts;
+		expect(await s.app.get(codes).root(code, "r", loud)).toBe("set");
+		expect(keptOf(s, code)).toMatchObject({ root: "r", approval });
+		// A code asking no ID token roots without one.
+		expect(await s.app.get(codes).root(await s.app.get(codes).issue(s.facts), "r")).toBe("set");
+	});
+
+	it("is read before the bundle starts: a maker that cannot read fails the redemption, issuing nothing", async () => {
+		const s = await serve({ extra: [idTokenMaker([], "id-tokens", true)] });
+		const bundles: BundleRequest[] = [];
+		const code = await rootedIssue(s, openidFacts(s), approval);
+		await expect(
+			handleDirectly(s, code, {
+				issue: async (bundle) => {
+					bundles.push(bundle);
+					return issuedNow(s, bundle);
+				},
+			}),
+		).rejects.toSatisfy(isUnavailable);
+		expect(bundles).toEqual([]);
+		expect(keptOf(s, code)?.state).toBe("consumed");
+	});
+
+	it("tells whether an ID token is made, for a request to be refused before a code asks one", async () => {
+		expect((await serve({ extra: [idTokenMaker([])] })).app.get(codes).issuesIdTokens()).toBe(true);
+		expect((await serve()).app.get(codes).issuesIdTokens()).toBe(false);
+	});
+
+	it("is made by at most one module: two refuse boot", async () => {
+		const { input } = assembly({ extra: [idTokenMaker([]), idTokenMaker([], "other-maker")] });
+		await expect(assemble(input)).rejects.toEqual(refusedFor("at most one module makes ID tokens"));
+	});
+});
+
+it("answers invalid_scope for a code asking an ID token where no module makes one, issuing nothing", async () => {
 	const s = await serve();
-	const code = await s.issue(["openid", "read"]);
+	const code = await rootedIssue(
+		s,
+		{ ...s.facts, scope: ["openid", "read"], nonce: "n" },
+		approval,
+	);
 	expect((await s.redeem(code)).body).toEqual({
 		error: "invalid_scope",
 		error_description: "no ID token is issued",

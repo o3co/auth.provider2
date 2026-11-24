@@ -26,6 +26,12 @@ export interface CodeRecord {
 	readonly amr: readonly string[];
 	readonly authenticatedAt: number;
 	readonly authenticatedAtUnknown?: true;
+	/** What its approval gives an ID token, where the scope has `openid`. */
+	readonly approval?: {
+		readonly esig: string;
+		readonly apr: { readonly shard: string; readonly n: number };
+		readonly approvedAt: number;
+	};
 	/** Marked when the code came again: the redemption that used it up reads it after issuing. */
 	readonly void?: true;
 }
@@ -49,6 +55,13 @@ const recordShape = z.strictObject({
 	amr: z.array(z.string()),
 	authenticatedAt: z.number(),
 	authenticatedAtUnknown: z.literal(true).optional(),
+	approval: z
+		.strictObject({
+			esig: z.string(),
+			apr: z.strictObject({ shard: z.string(), n: z.number() }),
+			approvedAt: z.number(),
+		})
+		.optional(),
 	void: z.literal(true).optional(),
 });
 
