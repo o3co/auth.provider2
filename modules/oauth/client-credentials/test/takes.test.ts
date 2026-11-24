@@ -41,13 +41,26 @@ it("refuses boot where no binding kind writes a DPoP proof's key, as every token
 });
 
 it("counts sixty requests a minute for each client, and suspends none, unless set", async () => {
-	expect(clientCredentials.section?.parse({})).toEqual({ requests: 60, suspended: [] });
+	expect(clientCredentials.section?.parse({})).toEqual({
+		lifetime: 300,
+		requests: 60,
+		suspended: [],
+	});
 	for (const not of [0, 100_001, 1.5, "60"])
 		expect(clientCredentials.section?.safeParse({ requests: not }).success, String(not)).toBe(
 			false,
 		);
 	expect(clientCredentials.section?.parse({ suspended: ["svc"] })).toEqual({
+		lifetime: 300,
 		requests: 60,
 		suspended: ["svc"],
 	});
+});
+
+it("lets its token live five minutes unless set, from a minute to the fifteen authority-rules lets one live", () => {
+	const parse = (lifetime: unknown) => clientCredentials.section?.safeParse({ lifetime });
+	expect(parse("1m")?.data).toMatchObject({ lifetime: 60 });
+	expect(parse("15m")?.data).toMatchObject({ lifetime: 900 });
+	for (const not of ["59s", "15m1s", "16m", 300])
+		expect(parse(not)?.success, String(not)).toBe(false);
 });

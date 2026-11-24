@@ -9,14 +9,13 @@ export const clientCredentialsGrantType = "client_credentials";
 /** The binding member a DPoP proof's key confirms a token by: its JWK SHA-256 thumbprint (RFC 9449 §6). */
 export const dpopMember = "jkt";
 
-/** How long a token it issues lives, well within the fifteen minutes a client's own token may. */
-const lifetimeSeconds = 300;
-
 /** The window a client's requests are counted in. */
 const window = { name: "client-credentials", ms: 60_000 };
 
-/** How often a client is issued, and the clients the operator suspended. */
+/** How long a token it issues lives, how often a client is issued, and the clients the operator suspended. */
 export interface Limits {
+	/** Within the fifteen minutes `authority-rules` lets a client's own token live. */
+	readonly lifetimeSeconds: number;
 	readonly counting: Pick<RateLimit, "hit">;
 	/** Requests a client may make in a minute. */
 	readonly requests: number;
@@ -91,6 +90,7 @@ export function clientCredentials(
 			}
 			// Nothing is used up before issuing, but the count, so `issue` alone asks the policies.
 			const access = { subject: client.id, subjectKind: "client" as const, issuedTo: client.id };
+			const { lifetimeSeconds } = limits;
 			const issued = await issue({ access: { ...access, audience, scope } }, { lifetimeSeconds });
 			if (issued.kind === "refused") return issued;
 			const { token, tokenType, expiresIn } = issued.access;

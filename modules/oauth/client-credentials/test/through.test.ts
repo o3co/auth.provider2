@@ -169,10 +169,16 @@ async function serve() {
 it("issues a DPoP-bound token only by the key its assertion was verified with, of the registry's version", async () => {
 	const { post, tokens } = await serve();
 	const same = await post(ec);
-	expect(same).toMatchObject({
-		status: 200,
-		body: { token_type: "DPoP", expires_in: 300, scope: "read" },
-	});
+	expect(same).toMatchObject({ status: 200, body: { token_type: "DPoP", scope: "read" } });
+	// Its lifetime is the token's own, five minutes; `expires_in` counts what is left once answered.
+	const [, claims = ""] = String(same.body.access_token).split(".");
+	const { iat, exp } = JSON.parse(Buffer.from(claims, "base64url").toString()) as {
+		iat: number;
+		exp: number;
+	};
+	expect(exp - iat).toBe(300);
+	expect(same.body.expires_in).toBeGreaterThan(0);
+	expect(same.body.expires_in).toBeLessThanOrEqual(exp - iat);
 	const checked = await tokens.verifyAccess(String(same.body.access_token));
 	expect(checked).toMatchObject({
 		kind: "valid",

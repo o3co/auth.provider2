@@ -13,6 +13,7 @@
 		"./module": "./src/module.ts"
 	},
 	"dependencies": {
+		"@mod/authority-rules": "workspace:*",
 		"@mod/client-allowance": "workspace:*",
 		"@mod/client-assertion": "workspace:*",
 		"@mod/dpop": "workspace:*",

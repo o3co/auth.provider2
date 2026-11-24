@@ -1,13 +1,27 @@
+import { clientRules } from "@mod/authority-rules";
 import { clientAssertion } from "@mod/client-assertion";
 import { grants } from "@mod/grants";
 import { issuer } from "@mod/issuer";
-import { defineModule } from "@mod/kernel";
+import { defineModule, setting } from "@mod/kernel";
 import { rateLimit } from "@mod/rate-limit";
 import { senderBinding } from "@mod/sender-binding";
 import { z } from "zod";
 import { clientCredentials, dpopMember } from "./contract.ts";
 
 const section = z.strictObject({
+	lifetime: setting
+		.duration("s")
+		.pipe(
+			z
+				.number()
+				.int()
+				.min(60)
+				.max(clientRules.lifetimeMs / 1000),
+		)
+		.prefault("5m")
+		.describe(
+			"How long a client's own token lives, from 1m to the 15m authority-rules lets one live; written with its unit.",
+		),
 	requests: z
 		.number()
 		.int()
@@ -37,10 +51,11 @@ export default defineModule(
 					"no binding kind writes jkt: compose dpop, which binds the client's token to its key",
 				);
 			}
-			const { requests, suspended } = c.section;
+			const { lifetime: lifetimeSeconds, requests, suspended } = c.section;
 			const counting = await c.get(rateLimit);
 			const keys = await c.get(clientAssertion);
-			return clientCredentials((await c.get(issuer)).url, keys, { counting, requests, suspended });
+			const limits = { lifetimeSeconds, counting, requests, suspended };
+			return clientCredentials((await c.get(issuer)).url, keys, limits);
 		}),
 	],
 );

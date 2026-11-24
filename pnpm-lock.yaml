@@ -1325,6 +1325,9 @@ importers:
 
   modules/oauth/client-credentials:
     dependencies:
+      '@mod/authority-rules':
+        specifier: workspace:*
+        version: link:../../foundation/authority-rules
       '@mod/client-allowance':
         specifier: workspace:*
         version: link:../client-allowance

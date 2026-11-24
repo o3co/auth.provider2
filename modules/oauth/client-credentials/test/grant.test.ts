@@ -95,6 +95,7 @@ async function ask(
 		},
 	} as unknown as GrantInput;
 	const limits = {
+		lifetimeSeconds: 300,
 		counting: options.counting ?? counter().counting,
 		requests: 60,
 		suspended: options.suspended ?? [],
@@ -105,6 +106,7 @@ async function ask(
 describe("client credentials", () => {
 	it("is client_credentials, for the client's own subject, reading no ambient credential and taking its audience from the request", () => {
 		const grant = clientCredentials(issuer, keys, {
+			lifetimeSeconds: 300,
 			counting: counter().counting,
 			requests: 60,
 			suspended: [],
