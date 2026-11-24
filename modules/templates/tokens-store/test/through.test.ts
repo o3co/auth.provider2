@@ -10,7 +10,12 @@ import { keysConfig, testHolder } from "@mod/keys/testing";
 import senderBindingModule from "@mod/sender-binding/module";
 import { simulatedStore } from "@mod/store/testing";
 // Revocations through tokens, kept by this wiring on records over a store that fails as real ones do.
-import { accessTokens, referenceOf, type Tokens } from "@mod/tokens";
+import {
+	type AccessTokenIssuance,
+	accessTokenIssuance,
+	accessTokens,
+	referenceOf,
+} from "@mod/tokens";
 import tokensModule from "@mod/tokens/module";
 import { tokensConfig } from "@mod/tokens/testing";
 import { expect, it } from "vitest";
@@ -26,7 +31,7 @@ const grant = {
 	scope: [],
 };
 /** An access token `t` issues for the grant, under the issuance policies. */
-async function issuedAccess(t: Tokens) {
+async function issuedAccess(t: AccessTokenIssuance) {
 	const issued = await t.issue({ grant, grantType: "test" });
 	if (issued.kind !== "issued") throw new Error(issued.reason);
 	return issued.access;
@@ -56,7 +61,8 @@ async function boot() {
 		runtime,
 	});
 	const t = app.get(accessTokens);
-	return { simulated, t, token: (await issuedAccess(t)).token };
+	const issuing = app.get(accessTokenIssuance);
+	return { simulated, t, issuing, token: (await issuedAccess(issuing)).token };
 }
 
 it("answers a revocation whose reply was lost only once it is kept, so it survives a failover", async () => {
@@ -110,8 +116,8 @@ it("keeps refusing after a failover to a store host whose clock runs ahead withi
 });
 
 it("revokes an issued token by its reference, without the token itself", async () => {
-	const { simulated, t } = await boot();
-	const issued = await issuedAccess(t);
+	const { simulated, t, issuing } = await boot();
+	const issued = await issuedAccess(issuing);
 	expect(issued.expiresAt).toBe(now + 3_600_000);
 	expect(t.revocable()).toBe(true);
 	expect(await t.revokeReferenced(referenceOf(issued))).toEqual({ kind: "revoked" });
