@@ -1,0 +1,25 @@
+{
+	"name": "@mod/clients",
+	"private": true,
+	"license": "Apache-2.0",
+	"type": "module",
+	"kind": "feature",
+	"asks": [
+		"`clients.registered`: written in the local layer; a confidential client carries `sections.client-secret.hash`, a bcrypt or scrypt hash of its secret, never the secret itself."
+	],
+	"exports": {
+		".": "./src/contract.ts",
+		"./testing": "./src/testing.ts",
+		"./module": "./src/module.ts",
+		"./audit-events": "./src/audit-events.ts"
+	},
+	"dependencies": {
+		"@mod/audit": "workspace:*",
+		"@mod/http": "workspace:*",
+		"@mod/kernel": "workspace:*",
+		"@mod/request-source": "workspace:*",
+		"@mod/secret-hash": "workspace:*",
+		"@standard-schema/spec": "1.1.0",
+		"zod": "4.6.7"
+	}
+}
