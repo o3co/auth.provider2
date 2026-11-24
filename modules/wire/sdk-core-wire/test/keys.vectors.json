@@ -138,6 +138,14 @@
 				"kty": "RSA",
 				"n": "oh9v3EC5yLoM7v56aGMODTxQbczLiwR_KBcgdGMFwq8xrfjmtgvD-sPZRvyvszIEdM8-q1itH55-wGe4xJnX-WUe2nBUClXWcrrG1C7whsjfzMlwYcoKPfkCKcRA9tILtkIKBymiRJKqrQFF2yAcElY-fY5Ir0ZcbLI8mwHS4Zg"
 			}
+		},
+		{
+			"why": "an even modulus",
+			"jwk": {
+				"e": "AQAB",
+				"kty": "RSA",
+				"n": "oh9v3EC5yLoM7v56aGMODTxQbczLiwR_KBcgdGMFwq8xrfjmtgvD-sPZRvyvszIEdM8-q1itH55-wGe4xJnX-WUe2nBUClXWcrrG1C7whsjfzMlwYcoKPfkCKcRA9tILtkIKBymiRJKqrQFF2yAcElY-fY5Ir0ZcbLI8mwHS4ZhNNZjjL-OGJx75p2JwVwAVD06ILukfpLAiLEquhM0_5RBtuoSBuri3SmcdF4IbtD0BMpioIY8ItHmQDCVWrDtz-7_1euOiEwjRgdiFwjd0ZdHdFopOlYEVxIX3TS4eI82xfTOSWKQ8cqhkWVt1-LRpvSFDVd2UV7dvILl7j3EoQA"
+			}
 		}
 	],
 	"coseRefusals": [
@@ -188,6 +196,14 @@
 		{
 			"why": "bytes after the map",
 			"cose": "a50102032620012158202d4f46025dc8bf3a83e8054c23cf8bdfbb7d22e8728c873dcedd0651257eb60f225820b61fab77ca9636227a86fde8cea63ebed598159473ce8c46900c3f1cbf6b75c000"
+		},
+		{
+			"why": "a byte string's length in a longer head than its least (two bytes for 32)",
+			"cose": "a5010203262001215900202d4f46025dc8bf3a83e8054c23cf8bdfbb7d22e8728c873dcedd0651257eb60f225820b61fab77ca9636227a86fde8cea63ebed598159473ce8c46900c3f1cbf6b75c0"
+		},
+		{
+			"why": "a byte string's length in a longer head than its least (one byte for 3)",
+			"cose": "a401030339010020590100a21f6fdc40b9c8ba0ceefe7a68630e0d3c506dcccb8b047f281720746305c2af31adf8e6b60bc3fac3d946fcafb3320474cf3eab58ad1f9e7ec067b8c499d7f9651eda70540a55d672bac6d42ef086c8dfccc97061ca0a3df90229c440f6d20bb6420a0729a24492aaad0145db201c12563e7d8e48af465c6cb23c9b01d2e1984d3598e32fe386271ef9a762705700150f4e882ee91fa4b0222c4aae84cd3fe5106dba8481bab8b74a671d17821bb43d013298a8218f08b479900c2556ac3b73fbbff57ae3a21308d181d885c2377465d1dd168a4e958115c485f74d2e1e23cdb17d339258a43c72a864595b75f8b469bd214355dd9457b76f20b97b8f712841215803010001"
 		}
 	]
 }

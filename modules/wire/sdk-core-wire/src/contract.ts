@@ -95,13 +95,16 @@ const sextet = (text: string, at: number) => alphabet.indexOf(text.charAt(at));
 
 /**
  * An RSA modulus in its one unpadded base64url spelling, its first byte not 0 (one that is is
- * refused, never cut), of 2048 to 4096 bits.
+ * refused, never cut), of 2048 to 4096 bits, and odd.
  */
 function isModulus(text: string): boolean {
 	const rest = text.length % 4;
 	if (!/^[A-Za-z0-9_-]+$/.test(text) || rest === 1) return false;
-	// The last character's bits past the bytes (4 where a group ends in 2 characters, 2 in 3) are 0.
-	if (sextet(text, text.length - 1) % (rest === 2 ? 16 : rest === 3 ? 4 : 1) !== 0) return false;
+	// The last character's bits past the bytes (4 where a group ends in 2 characters, 2 in 3) are 0,
+	// and the last byte's lowest bit, the one above them, is 1: a modulus is odd.
+	const unit = rest === 2 ? 16 : rest === 3 ? 4 : 1;
+	const last = sextet(text, text.length - 1);
+	if (last % unit !== 0 || (last / unit) % 2 !== 1) return false;
 	const bytes = ((text.length - rest) / 4) * 3 + (rest === 0 ? 0 : rest - 1);
 	const high = sextet(text, 0) * 4 + (sextet(text, 1) - (sextet(text, 1) % 16)) / 16;
 	// 2048 bits are 256 bytes, the first of them 128 or more; 4096 bits are 512 bytes.
