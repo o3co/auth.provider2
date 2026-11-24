@@ -23,14 +23,13 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
 	type AccessCondition,
 	accessConditions,
-	accessTokens,
 	type IssuedFor,
 	subjectChecks,
 } from "../src/contract.ts";
 import { defaultLifetimeSeconds } from "../src/limits.ts";
 import tokensModule from "../src/module.ts";
 import { section } from "../src/section.ts";
-import { composedHttp, composedKeys, issueFor, signingKey } from "./composed.ts";
+import { bothOf, composedHttp, composedKeys, issueFor, signingKey } from "./composed.ts";
 import { revokedInMemory } from "./revoked.ts";
 
 const start = 1_800_000_000_000;
@@ -53,7 +52,7 @@ const runtime = quietRuntime({
 });
 
 async function boot(...args: Parameters<typeof assembled>) {
-	return (await assembled(...args)).get(accessTokens);
+	return bothOf(await assembled(...args));
 }
 
 /** The grant most tests issue for; a test that is about the grant writes its own. */
@@ -326,41 +325,6 @@ it("names among the issuer's metadata the key set keys-publish writes, jwks.json
 	expect(jwks(seen)).toBe("https://static.example/tenant/jwks.json");
 	await boot(section, { extra: [reader], origin, issuerUrl: "https://static.example" });
 	expect(jwks(seen)).toBe("https://static.example/jwks.json");
-});
-
-it("writes the actor chain as act, and amr, auth_time and acr, only when the grant gives them", async () => {
-	const t = await boot({ revocation: "unsupported" });
-	const plain = claimsOf((await issueFor(t, { ...grant, amr: [] })).token);
-	expect(["act", "amr", "auth_time", "acr"].filter((name) => name in plain)).toEqual([]);
-	const issued = await issueFor(t, {
-		...grant,
-		actor: { subject: "a", actor: { subject: "b" } },
-		amr: ["hwk", "pwd"],
-		authenticatedAt: now - 1_500,
-	});
-	const claims = claimsOf(issued.token);
-	expect(claims.act).toEqual({ sub: "a", act: { sub: "b" } });
-	expect(claims.amr).toEqual(["hwk", "pwd"]);
-	expect(claims.auth_time).toBe(Math.floor((now - 1_500) / 1000));
-	const checked = await t.verifyAccess(issued.token);
-	expect(checked.kind === "valid" && checked.grant).toEqual({
-		...grant,
-		actor: { subject: "a", actor: { subject: "b" } },
-		amr: ["hwk", "pwd"],
-		authenticatedAt: Math.floor((now - 1_500) / 1000) * 1000,
-	});
-});
-
-it("writes no auth_time for a grant whose authentication time is not known, whatever time it holds", async () => {
-	const t = await boot({ revocation: "unsupported" });
-	const issued = await issueFor(t, {
-		...grant,
-		authenticatedAt: now - 1_500,
-		authenticatedAtUnknown: true,
-	});
-	expect("auth_time" in claimsOf(issued.token)).toBe(false);
-	const checked = await t.verifyAccess(issued.token);
-	expect(checked.kind === "valid" && checked.grant.authenticatedAt).toBeUndefined();
 });
 
 it("writes one audience as a string and more as a list, an empty scope not at all, and a 128-bit id", async () => {

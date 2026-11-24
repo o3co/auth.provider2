@@ -3,9 +3,15 @@ import { assemble, kernelConfig } from "@mod/kernel";
 import { quietRuntime } from "@mod/kernel/testing";
 import { accessTokenSigning } from "@mod/keys";
 import { expect, it } from "vitest";
-import { composedHttp, composedKeys, composedModules, signAccess } from "../../../test/composed.ts";
+import {
+	bothOf,
+	composedHttp,
+	composedKeys,
+	composedModules,
+	signAccess,
+} from "../../../test/composed.ts";
 import { revokedInMemory } from "../../../test/revoked.ts";
-import { type AccessGrant, accessTokens } from "../../contract.ts";
+import type { AccessGrant } from "../../contract.ts";
 
 let now = 1_800_000_000_400;
 const runtime = quietRuntime({ clock: { now: () => now } });
@@ -35,7 +41,7 @@ async function boot() {
 		},
 		runtime,
 	});
-	return { t: app.get(accessTokens), signer: app.get(accessTokenSigning) };
+	return { t: bothOf(app), signer: app.get(accessTokenSigning) };
 }
 
 it("writes a grant's standing time as o3co_standing_at, whole seconds floored and never after iat, and none without one", async () => {

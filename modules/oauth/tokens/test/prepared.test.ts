@@ -12,7 +12,7 @@ import {
 	type PreparedAccess,
 } from "../src/contract.ts";
 import { tokensConfig } from "../src/testing.ts";
-import { composedConfig, composedModules, composedWith } from "./composed.ts";
+import { bothOf, composedConfig, composedModules, composedWith } from "./composed.ts";
 
 const now = 1_800_000_000_000;
 const runtime = quietRuntime({ clock: { now: () => now } });
@@ -27,7 +27,7 @@ const segment = (text: string) => Buffer.from(text).toString("base64url");
 
 async function boot(modules = composedModules, config: object = composedConfig()) {
 	const app = await assemble({ modules, config: { ...config, ...tokensConfig() }, runtime });
-	return { t: app.get(accessTokens), signer: app.get(accessTokenSigning), app };
+	return { t: bothOf(app), signer: app.get(accessTokenSigning), app };
 }
 
 describe("prepare and sign", () => {

@@ -3,9 +3,8 @@ import { assemble, defineModule } from "@mod/kernel";
 import { quietRuntime } from "@mod/kernel/testing";
 import { senderBinding, senderBindings } from "@mod/sender-binding";
 import { expect, it } from "vitest";
-import { accessTokens } from "../src/contract.ts";
 import { tokensConfig } from "../src/testing.ts";
-import { composedConfig, composedModules, issueFor } from "./composed.ts";
+import { bothOf, composedConfig, composedModules, issueFor } from "./composed.ts";
 import { revokedInMemory } from "./revoked.ts";
 
 const now = 1_800_000_000_000;
@@ -39,7 +38,7 @@ it("is the validity sender-binding admits a request by at a resource", async () 
 		},
 		runtime,
 	});
-	const t = app.get(accessTokens);
+	const t = bothOf(app);
 	const admitted = (headers: Record<string, string>) =>
 		app.get(senderBinding).admitted(testRequest({ headers: new Map(Object.entries(headers)) }), t);
 	const plain = (await issueFor(t, grant)).token;

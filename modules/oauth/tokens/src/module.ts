@@ -14,10 +14,15 @@ import {
 	issuanceFencing,
 	issuancePolicies,
 	subjectChecks,
-	type Tokens,
 } from "./contract.ts";
 import { fencingOver } from "./fencing/fencing.ts";
-import { issuanceOf, issuing, judging, type MakeAccess } from "./issuance/issuance.ts";
+import {
+	type BuiltTokens,
+	issuanceOf,
+	issuing,
+	judging,
+	type MakeAccess,
+} from "./issuance/issuance.ts";
 import { expiryOf, keptGrant, lifetimeOf, tokenId } from "./limits.ts";
 import { namedBy } from "./reference.ts";
 import { section } from "./section.ts";
@@ -25,7 +30,7 @@ import { standingOf } from "./standing/standing.ts";
 import { checkingWith, compactLimit } from "./verification/verification.ts";
 
 /** The one access tokens built, which both handles hand on. */
-const built = contract<Tokens>("tokens.built");
+const built = contract<BuiltTokens>("tokens.built");
 
 /** Whether the section keeps revoked access tokens in a denylist, which takes token-denylist's store. */
 const denylisted = (s: { readonly revocation: "denylist" | "unsupported" }) =>
@@ -168,7 +173,7 @@ export default defineModule(
 					},
 				};
 			};
-			const access: Tokens = {
+			const access: BuiltTokens = {
 				revocable: () => denylist.revocable,
 				accessTokenLifetimeSeconds: () => lifetime,
 				subjectsChecked: () => !unchecked,

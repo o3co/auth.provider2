@@ -9,9 +9,9 @@ import keysModule from "@mod/keys/module";
 import { keysConfig, testHolder } from "@mod/keys/testing";
 import senderBindingModule from "@mod/sender-binding/module";
 import { describe, expect, it } from "vitest";
-import { composedHttp, signAccess } from "../../../test/composed.ts";
+import { bothOf, composedHttp, signAccess } from "../../../test/composed.ts";
 import { revokedInMemory } from "../../../test/revoked.ts";
-import { type AccessGrant, accessTokens } from "../../contract.ts";
+import type { AccessGrant } from "../../contract.ts";
 import tokensModule from "../../module.ts";
 
 const now = 1_800_000_000_000;
@@ -43,7 +43,7 @@ async function boot(signing?: Module, at = now) {
 		},
 		runtime: quietRuntime({ clock: { now: () => at } }),
 	});
-	return { t: app.get(accessTokens), access: app.get(accessTokenSigning) };
+	return { t: bothOf(app), access: app.get(accessTokenSigning) };
 }
 
 describe("access tokens, signed through accessTokenSigning", () => {

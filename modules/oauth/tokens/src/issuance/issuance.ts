@@ -136,10 +136,10 @@ export function issuing(
 	now: () => number,
 	/** `added-claims`' check of a grant's claims, under the section's limits. */
 	addedOf: (given: unknown) => AddedClaims | undefined,
-): Pick<Tokens, "admits" | "prepare" | "sign" | "issue"> {
+): Pick<AccessTokenIssuance, "admits" | "prepare" | "sign" | "issue"> {
 	// Only what this prepared is signed, so the texts are the ones fixed, whatever came between.
 	const made = new WeakMap<PreparedAccess, MadeAccess>();
-	const prepare: Tokens["prepare"] = async (request, limits) => {
+	const prepare: AccessTokenIssuance["prepare"] = async (request, limits) => {
 		// One frozen copy, taken before anything waits, is both what the policies judge and what is
 		// made: a caller changing its own grant or limits meanwhile changes neither.
 		const taken = deepFreeze(
@@ -155,7 +155,7 @@ export function issuing(
 		made.set(prepared, access);
 		return prepared;
 	};
-	const sign: Tokens["sign"] = async (prepared) => {
+	const sign: AccessTokenIssuance["sign"] = async (prepared) => {
 		const access = made.get(prepared);
 		if (!access) throw new TypeError("tokens: only an access token this prepared is signed");
 		const signed = await access.signed();
@@ -180,8 +180,11 @@ export function issuing(
 	};
 }
 
+/** Access tokens as one build makes them, both handles' members. */
+export type BuiltTokens = Tokens & AccessTokenIssuance;
+
 /** The members of built access tokens that issue, for the handle taken to issue. */
-export const issuanceOf = (t: Tokens): AccessTokenIssuance => ({
+export const issuanceOf = (t: BuiltTokens): AccessTokenIssuance => ({
 	admits: t.admits,
 	prepare: t.prepare,
 	sign: t.sign,

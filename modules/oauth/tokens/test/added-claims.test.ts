@@ -4,8 +4,15 @@ import { assemble, kernelConfig, type Module } from "@mod/kernel";
 import { quietRuntime } from "@mod/kernel/testing";
 import { accessTokenSigning } from "@mod/keys";
 import { describe, expect, it } from "vitest";
-import { type AccessGrant, accessTokens } from "../src/contract.ts";
-import { composedHttp, composedKeys, composedModules, signAccess, signingKey } from "./composed.ts";
+import type { AccessGrant } from "../src/contract.ts";
+import {
+	bothOf,
+	composedHttp,
+	composedKeys,
+	composedModules,
+	signAccess,
+	signingKey,
+} from "./composed.ts";
 import { revokedInMemory } from "./revoked.ts";
 
 const runtime = quietRuntime();
@@ -31,7 +38,7 @@ async function boot(extra: Module[] = []) {
 		},
 		runtime,
 	});
-	return { t: app.get(accessTokens), signer: app.get(accessTokenSigning) };
+	return { t: bothOf(app), signer: app.get(accessTokenSigning) };
 }
 
 /** A token signed as tokens signs one, with what a test puts in its payload. */

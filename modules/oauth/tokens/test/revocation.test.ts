@@ -3,9 +3,9 @@ import { assemble, Unavailable } from "@mod/kernel";
 import { quietRuntime, recordingLog } from "@mod/kernel/testing";
 import { denylistAllowanceMs } from "@mod/token-denylist";
 import { beforeEach, expect, it } from "vitest";
-import { accessTokens, referenceOf } from "../src/contract.ts";
+import { referenceOf } from "../src/contract.ts";
 import { tokensConfig } from "../src/testing.ts";
-import { composedConfig, composedModules, issueFor } from "./composed.ts";
+import { bothOf, composedConfig, composedModules, issueFor } from "./composed.ts";
 import { revokedInMemory } from "./revoked.ts";
 
 const start = 1_800_000_000_000;
@@ -39,7 +39,7 @@ async function boot() {
 		},
 		runtime,
 	});
-	const t = app.get(accessTokens);
+	const t = bothOf(app);
 	return { place, t, token: (await issueFor(t, grant)).token };
 }
 

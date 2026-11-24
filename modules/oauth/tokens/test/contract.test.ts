@@ -4,19 +4,14 @@ import { quietRuntime, takesUnused } from "@mod/kernel/testing";
 import { senderBindings } from "@mod/sender-binding";
 import { denylistAllowanceMs } from "@mod/token-denylist";
 import { expect, it } from "vitest";
-import {
-	accessTokens,
-	type IssuancePolicy,
-	issuancePolicies,
-	subjectChecks,
-} from "../src/contract.ts";
+import { type IssuancePolicy, issuancePolicies, subjectChecks } from "../src/contract.ts";
 import {
 	type TokensUnderTest,
 	tokensConfig,
 	tokensContract,
 	tokensStandIn,
 } from "../src/testing.ts";
-import { composedConfig, composedModules, issueFor } from "./composed.ts";
+import { bothOf, composedConfig, composedModules, issueFor } from "./composed.ts";
 import { revokedInMemory } from "./revoked.ts";
 
 /**
@@ -40,7 +35,7 @@ function around(random?: Random) {
 		})),
 	]);
 	const place = (app: Assembly): TokensUnderTest => ({
-		tokens: app.get(accessTokens),
+		tokens: bothOf(app),
 		now: () => now,
 		advance: (ms) => {
 			now += ms;

@@ -2,8 +2,14 @@ import { assemble } from "@mod/kernel";
 import { quietRuntime } from "@mod/kernel/testing";
 import { accessTokenSigning } from "@mod/keys";
 import { describe, expect, it } from "vitest";
-import { composedConfig, composedModules, issueFor, signAccess } from "../../../test/composed.ts";
-import { type AccessGrant, accessTokenClaims, accessTokens } from "../../contract.ts";
+import {
+	bothOf,
+	composedConfig,
+	composedModules,
+	issueFor,
+	signAccess,
+} from "../../../test/composed.ts";
+import { type AccessGrant, accessTokenClaims } from "../../contract.ts";
 import { tokensConfig } from "../../testing.ts";
 
 const now = 1_800_000_000_000;
@@ -24,7 +30,7 @@ async function boot() {
 		config: { ...composedConfig(), ...tokensConfig() },
 		runtime,
 	});
-	return { t: app.get(accessTokens), signer: app.get(accessTokenSigning) };
+	return { t: bothOf(app), signer: app.get(accessTokenSigning) };
 }
 
 describe("the claims tokens writes, closed", () => {
@@ -81,4 +87,39 @@ describe("the claims tokens writes, closed", () => {
 		}
 		expect((await t.verifyAccess(await signAccess(signer, claims))).kind).toBe("valid");
 	});
+});
+
+it("writes the actor chain as act, and amr, auth_time and acr, only when the grant gives them", async () => {
+	const { t } = await boot();
+	const plain = claimsOf((await issueFor(t, { ...grant, amr: [] })).token);
+	expect(["act", "amr", "auth_time", "acr"].filter((name) => name in plain)).toEqual([]);
+	const issued = await issueFor(t, {
+		...grant,
+		actor: { subject: "a", actor: { subject: "b" } },
+		amr: ["hwk", "pwd"],
+		authenticatedAt: now - 1_500,
+	});
+	const claims = claimsOf(issued.token);
+	expect(claims.act).toEqual({ sub: "a", act: { sub: "b" } });
+	expect(claims.amr).toEqual(["hwk", "pwd"]);
+	expect(claims.auth_time).toBe(Math.floor((now - 1_500) / 1000));
+	const checked = await t.verifyAccess(issued.token);
+	expect(checked.kind === "valid" && checked.grant).toEqual({
+		...grant,
+		actor: { subject: "a", actor: { subject: "b" } },
+		amr: ["hwk", "pwd"],
+		authenticatedAt: Math.floor((now - 1_500) / 1000) * 1000,
+	});
+});
+
+it("writes no auth_time for a grant whose authentication time is not known, whatever time it holds", async () => {
+	const { t } = await boot();
+	const issued = await issueFor(t, {
+		...grant,
+		authenticatedAt: now - 1_500,
+		authenticatedAtUnknown: true,
+	});
+	expect("auth_time" in claimsOf(issued.token)).toBe(false);
+	const checked = await t.verifyAccess(issued.token);
+	expect(checked.kind === "valid" && checked.grant.authenticatedAt).toBeUndefined();
 });

@@ -7,6 +7,7 @@ import type { z } from "zod";
 import {
 	type AccessCheck,
 	type AccessGrant,
+	type AccessTokenIssuance,
 	type Actor,
 	accessConditions,
 	accessTokenIssuance,
@@ -22,6 +23,7 @@ import {
 } from "./contract.ts";
 import {
 	authenticatedAheadMs,
+	type BuiltTokens,
 	issuanceOf,
 	issuing,
 	judging,
@@ -50,7 +52,8 @@ export function tokensConfig(
 
 /** A composition that offers tokens, as one implementation of the contract does. */
 export interface TokensUnderTest {
-	readonly tokens: Tokens;
+	/** Both handles' members, as one build makes them. */
+	readonly tokens: Tokens & AccessTokenIssuance;
 	/** The time tokens are judged by now, and a way to move it on. */
 	now(): number;
 	advance(ms: number): void;
@@ -85,7 +88,11 @@ export function tokensContract(
 	const chain = (n: number): Actor =>
 		n === 1 ? { subject: "a1" } : { subject: `a${n}`, actor: chain(n - 1) };
 	/** Issues through `issue`, which no policy here refuses, and answers what it issued. */
-	const issueFor = async (tokens: Tokens, grant: AccessGrant, limits?: IssueLimits) => {
+	const issueFor = async (
+		tokens: AccessTokenIssuance,
+		grant: AccessGrant,
+		limits?: IssueLimits,
+	) => {
 		const issued = await tokens.issue({ grant, grantType: "test" }, limits);
 		if (issued.kind !== "issued") throw new Error(`refused by ${issued.policy}`);
 		return issued.access;
@@ -660,7 +667,7 @@ export function tokensContract(
 }
 
 /** The stand-in built once, which both handles hand on. */
-const builtStandIn = contract<Tokens>("tokens.stand-in");
+const builtStandIn = contract<BuiltTokens>("tokens.stand-in");
 
 /**
  * A stand-in for tests of the modules that use tokens: it keeps what it issued in memory, with
@@ -783,7 +790,7 @@ export function tokensStandIn(
 						}),
 					};
 				};
-				const stand: Tokens = {
+				const stand: BuiltTokens = {
 					revocable: () => denylist.revocable,
 					accessTokenLifetimeSeconds: () => configured,
 					subjectsChecked: () => options.subjectsChecked ?? true,

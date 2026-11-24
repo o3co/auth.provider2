@@ -5,13 +5,14 @@ import { quietRuntime, recordingLog } from "@mod/kernel/testing";
 import { keysConfig } from "@mod/keys/testing";
 import { describe, expect, it } from "vitest";
 import {
+	bothOf,
 	composedHttp,
 	composedKeys,
 	composedModules,
 	composedWith,
 } from "../../../test/composed.ts";
 import { revokedInMemory } from "../../../test/revoked.ts";
-import { type AccessGrant, type Actor, accessTokens } from "../../contract.ts";
+import type { AccessGrant, Actor } from "../../contract.ts";
 
 const runtime = quietRuntime();
 const grant: AccessGrant = {
@@ -41,7 +42,7 @@ describe("a token past 16 KiB once signed", () => {
 			scope: Array.from({ length: 2000 }, (_, i) => `scope-${i}`),
 			claims: { x_secret_kept: "s3cr3t" },
 		};
-		expect(await app.get(accessTokens).issue({ grant: wide, grantType: "test" })).toEqual({
+		expect(await bothOf(app).issue({ grant: wide, grantType: "test" })).toEqual({
 			kind: "refused",
 			policy: "tokens",
 			reason: "token_too_large",
@@ -94,7 +95,7 @@ describe("an access token at its largest", () => {
 			acr: long(64),
 			claims,
 		};
-		const issued = await app.get(accessTokens).issue({ grant: largest, grantType: "test" });
+		const issued = await bothOf(app).issue({ grant: largest, grantType: "test" });
 		if (issued.kind !== "issued") throw new Error(`refused: ${issued.reason}`);
 		// What a DPoP binding adds, `,"cnf":{"jkt":<43 characters>}`, encoded.
 		expect(issued.access.token.length).toBeLessThanOrEqual(16_384 - 80);

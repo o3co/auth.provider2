@@ -4,12 +4,19 @@ import { httpConfig } from "@mod/http/testing";
 import { testServer } from "@mod/http-server/testing";
 import issuerModule from "@mod/issuer/module";
 import { issuerConfig } from "@mod/issuer/testing";
+import type { Assembly } from "@mod/kernel";
 import { kernelConfig } from "@mod/kernel";
 import type { AccessTokenSigning } from "@mod/keys";
 import keysModule from "@mod/keys/module";
 import { keysConfig, testHolder } from "@mod/keys/testing";
 import senderBindingModule from "@mod/sender-binding/module";
-import type { AccessGrant, IssueLimits, Tokens } from "../src/contract.ts";
+import {
+	type AccessGrant,
+	type AccessTokenIssuance,
+	accessTokenIssuance,
+	accessTokens,
+	type IssueLimits,
+} from "../src/contract.ts";
 import tokensModule from "../src/module.ts";
 
 /** The authority's signing key every test composition signs with, as kid `k` under EdDSA: one across boots. */
@@ -53,8 +60,14 @@ export async function signAccess(signer: AccessTokenSigning, claims: object): Pr
 }
 
 /** Issues through `issue`, which nothing in the tests using it refuses, and answers what it issued. */
-export async function issueFor(t: Tokens, grant: AccessGrant, limits?: IssueLimits) {
+export async function issueFor(t: AccessTokenIssuance, grant: AccessGrant, limits?: IssueLimits) {
 	const issued = await t.issue({ grant, grantType: "test" }, limits);
 	if (issued.kind !== "issued") throw new Error(`refused by ${issued.policy}`);
 	return issued.access;
 }
+
+/** Both of tokens' handles in a composition, as one: a test issues and checks through it. */
+export const bothOf = (app: Assembly) => ({
+	...app.get(accessTokens),
+	...app.get(accessTokenIssuance),
+});

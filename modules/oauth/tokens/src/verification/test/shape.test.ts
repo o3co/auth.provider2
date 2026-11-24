@@ -3,8 +3,14 @@ import { quietRuntime } from "@mod/kernel/testing";
 import { accessTokenSigning } from "@mod/keys";
 import { senderBindings } from "@mod/sender-binding";
 import { expect, it } from "vitest";
-import { composedConfig, composedModules, issueFor, signAccess } from "../../../test/composed.ts";
-import { type AccessGrant, accessTokens } from "../../contract.ts";
+import {
+	bothOf,
+	composedConfig,
+	composedModules,
+	issueFor,
+	signAccess,
+} from "../../../test/composed.ts";
+import type { AccessGrant } from "../../contract.ts";
 import { tokensConfig } from "../../testing.ts";
 
 const grant: AccessGrant = {
@@ -27,7 +33,7 @@ async function assembled(extra: Module[] = []) {
 
 it("refuses as shape a token whose act, amr or auth_time is malformed", async () => {
 	const app = await assembled();
-	const t = app.get(accessTokens);
+	const t = bothOf(app);
 	const issued = await issueFor(t, grant);
 	const signer = app.get(accessTokenSigning);
 	for (const malformed of [
@@ -57,7 +63,7 @@ it("refuses a token another issuer stamped, and one bound by two members", async
 		),
 	);
 	const app = await assembled([kinds]);
-	const t = app.get(accessTokens);
+	const t = bothOf(app);
 	const signer = app.get(accessTokenSigning);
 	const claims = claimsOf((await issueFor(t, grant)).token);
 	const signed = (changed: Record<string, unknown>) =>

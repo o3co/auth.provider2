@@ -150,19 +150,30 @@ export interface IssueLimits {
  */
 export const lifetimeSecondsRange = Object.freeze({ min: 2, max: 86_400 });
 
-/** Its `verifyAccess` is the validity `sender-binding` checks a token by at a resource. */
+/** Checking and revoking access tokens; its `verifyAccess` is the validity `sender-binding` checks a token by at a resource. */
 export interface Tokens extends TokenValidity<AccessCheck> {
 	revocable(): boolean;
+	/** Whether access tokens are checked against subject revocation: false where the section states `subject-check = none`. */
+	subjectsChecked(): boolean;
+	verifyAccess(token: string): Promise<AccessCheck>;
+	revokeReferenced(reference: string): Promise<Revocation>;
+	issuedToOf(token: string): Promise<IssuedTo>;
+	revokeAccess(token: string): Promise<Revocation>;
+}
+
+/** Taken by any module: checking a token grants nothing. */
+export const accessTokens = contract<Tokens>("tokens");
+
+/** Issuing access tokens, and the lifetime it applies. */
+export interface AccessTokenIssuance {
 	/**
 	 * The access-token lifetime that `issue` applies where the grant gives no `lifetimeSeconds`, in
 	 * whole seconds from 2 to 86400. It is fixed when `tokens` is built and never changes after, so a
 	 * check made at build time stays true. It is not the longest life any token may have: a grant's own
-	 * `lifetimeSeconds` and token exchange's cap may differ. A boot check against it does not reach
+	 * `lifetimeSeconds` may differ. A boot check against it does not reach
 	 * tokens already issued, or instances still on other settings.
 	 */
 	accessTokenLifetimeSeconds(): number;
-	/** Whether access tokens are checked against subject revocation: false where the section states `subject-check = none`. */
-	subjectsChecked(): boolean;
 	/**
 	 * Whether an access token may be issued for the request; the same judgment `issue` makes, but for
 	 * the lifetime, which only `issue`'s limits and signing fix.
@@ -192,20 +203,7 @@ export interface Tokens extends TokenValidity<AccessCheck> {
 	 * does. A value it did not prepare is the caller's TypeError. It may sign one again.
 	 */
 	sign(prepared: PreparedAccess): Promise<Issued>;
-	verifyAccess(token: string): Promise<AccessCheck>;
-	revokeReferenced(reference: string): Promise<Revocation>;
-	issuedToOf(token: string): Promise<IssuedTo>;
-	revokeAccess(token: string): Promise<Revocation>;
 }
-
-/** Checking and revoking access tokens: taken by any module. */
-export const accessTokens = contract<Tokens>("tokens");
-
-/** Issuing access tokens: the members of `Tokens` that make one, and the lifetime they apply. */
-export type AccessTokenIssuance = Pick<
-	Tokens,
-	"admits" | "prepare" | "sign" | "issue" | "accessTokenLifetimeSeconds"
->;
 
 /** Taken only by a module that declares where it stands on the promises, as it issues authority. */
 export const accessTokenIssuance = contract<AccessTokenIssuance>("tokens.issuance", {
