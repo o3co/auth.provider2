@@ -1906,6 +1906,34 @@ importers:
         specifier: 5.0.5
         version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(vite@8.3.3(@types/node@26.6.5)(yaml@2.9.1))
 
+  modules/templates/approvals-store:
+    dependencies:
+      '@mod/approvals':
+        specifier: workspace:*
+        version: link:../../approval/approvals
+      '@mod/kernel':
+        specifier: workspace:*
+        version: link:../../foundation/kernel
+      '@mod/records':
+        specifier: workspace:*
+        version: link:../../foundation/records
+      '@mod/store':
+        specifier: workspace:*
+        version: link:../../foundation/store
+      '@mod/transparency':
+        specifier: workspace:*
+        version: link:../../foundation/transparency
+      '@mod/transparency-frames':
+        specifier: workspace:*
+        version: link:../../foundation/transparency-frames
+    devDependencies:
+      '@mod/transparency-store':
+        specifier: workspace:*
+        version: link:../../foundation/transparency-store
+      vitest:
+        specifier: 5.0.5
+        version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(vite@8.3.3(@types/node@26.6.5)(yaml@2.9.1))
+
   modules/templates/client-assertion-store:
     dependencies:
       '@mod/client-assertion':
