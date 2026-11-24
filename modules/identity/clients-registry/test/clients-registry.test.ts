@@ -76,6 +76,8 @@ describe("clients-registry", () => {
 		expect((await c.find("rp-1"))?.registered).toBe(false);
 		expect((await c.find("rp-2"))?.kind).toBe("public");
 		expect(await c.find("rp-3")).toBeUndefined();
+		// Each says the version it came from.
+		expect((await c.find("rp-1"))?.version).toBe(3);
 		await app.stop();
 	});
 

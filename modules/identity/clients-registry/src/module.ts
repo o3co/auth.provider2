@@ -27,7 +27,9 @@ export default defineModule(
 			const read = versionOf(text, c.section, (await c.get(keys)).verifyJws);
 			if ("refused" in read) return c.refuseAll([read.refused]);
 			const { version } = read;
-			const records = new Map(version.clients.map((client) => [client.id, recordOf(client)]));
+			const records = new Map(
+				version.clients.map((client) => [client.id, recordOf(client, version.version)]),
+			);
 			c.onStart(() => {
 				c.log.info("clients-registry.read", {
 					version: version.version,

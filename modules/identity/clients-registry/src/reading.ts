@@ -54,10 +54,11 @@ export function versionOf(
 	return { version: parsed.data };
 }
 
-/** A registry client in `clients`' words: the record a source answers. */
-export const recordOf = (client: RegistryClient): ClientRecord => ({
+/** A registry client of a version in `clients`' words: the record a source answers, naming the version. */
+export const recordOf = (client: RegistryClient, version: number): ClientRecord => ({
 	id: client.id,
 	kind: client.kind,
 	method: client.method,
 	sections: client.sections,
+	version,
 });
