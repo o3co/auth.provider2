@@ -16,6 +16,7 @@
 - A token's standing time, as tokens hands it (its standing claim where it carries one, else its issue time), counts as the time its subject authenticated.
 - The comparison and the fence are `subject-revocation`'s, never repeated here.
 - Its guard holds because the module both checks and fences: `tokens` refuses `subject-check = none` beside a subject check, so a composition with this module checks subjects.
+- Only a person's token or bundle is held to the boundary and the erasure: a client's, whose subject is the client itself, passes even where a person has the same name.
 - A comparison that cannot be made is unavailable, never holds or revoked.
 
 ## Depends on

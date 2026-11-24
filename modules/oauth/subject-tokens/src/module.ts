@@ -9,10 +9,13 @@ export default defineModule(
 		m.contribute(subjectChecks).by(async (c) => {
 			const revocation = await c.get(subjectRevocation);
 			return {
-				holds: async (token) =>
-					(await revocation.check(token.subject, token.standingAt)) === "valid"
+				holds: async (token) => {
+					// A person's boundary is a person's: a client of the same name is another subject.
+					if (token.subjectKind !== "user") return "holds";
+					return (await revocation.check(token.subject, token.standingAt)) === "valid"
 						? "holds"
-						: "revoked",
+						: "revoked";
+				},
 			};
 		}),
 		// A bundle of credentials passes only where its subject is not erased, by one fenced write.
@@ -20,8 +23,11 @@ export default defineModule(
 			const fence = await c.get(erasureFence);
 			return {
 				name: "subject-tokens",
-				fence: async ({ subject, receiptId }) =>
-					(await fence.fence(subject, receiptId)) === "passed" ? "passed" : "refused",
+				fence: async ({ subject, subjectKind, receiptId }) => {
+					// Only a person is erased: a client of the same name is another subject.
+					if (subjectKind === "client") return "passed";
+					return (await fence.fence(subject, receiptId)) === "passed" ? "passed" : "refused";
+				},
 			};
 		}),
 		// Where tokens composes this module, access tokens are checked and issuance fenced on this boundary.

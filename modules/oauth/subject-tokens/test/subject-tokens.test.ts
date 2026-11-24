@@ -32,11 +32,15 @@ async function boot() {
 	const { input, simulated } = assembly();
 	const app = await assemble(input);
 	const t = app.get(accessTokens);
-	const issue = async (subject: string, standingAt?: number) => {
+	const issue = async (
+		subject: string,
+		standingAt?: number,
+		subjectKind: "user" | "client" = "user",
+	) => {
 		const grant = {
 			subject,
-			subjectKind: "user" as const,
-			issuedTo: "c",
+			subjectKind,
+			issuedTo: subjectKind === "client" ? subject : "c",
 			audience: ["api"],
 			scope: [],
 			...(standingAt === undefined ? {} : { standingAt }),
@@ -56,6 +60,15 @@ it("fails a token issued up to its subject's revocation, and no other subject's"
 	await s.revoke("alice");
 	expect(await s.t.verifyAccess(early)).toEqual({ kind: "invalid", reason: "revoked" });
 	expect((await s.t.verifyAccess(other)).kind).toBe("valid");
+});
+
+it("fails a person's token at the person's revocation, and keeps a client's token whose client has the same name", async () => {
+	const s = await boot();
+	const person = await s.issue("same");
+	const client = await s.issue("same", undefined, "client");
+	await s.revoke("same");
+	expect(await s.t.verifyAccess(person)).toEqual({ kind: "invalid", reason: "revoked" });
+	expect((await s.t.verifyAccess(client)).kind).toBe("valid");
 });
 
 it("keeps a token issued in a later second than the revocation's boundary, its write's deadline", async () => {
@@ -109,8 +122,12 @@ it("fences a bundle for its subject: refused once the subject is erased, and let
 	});
 	const [fence] = app.get(fenced);
 	expect(fence?.name).toBe("subject-tokens");
-	expect(await fence?.fence({ subject: "alice", receiptId: "r1" })).toBe("passed");
+	const bundle = (subject: string, receiptId: string, subjectKind: "user" | "client" = "user") =>
+		fence?.fence({ subject, subjectKind, receiptId });
+	expect(await bundle("alice", "r1")).toBe("passed");
 	await app.get(subjectErasure).markErased("alice");
-	expect(await fence?.fence({ subject: "alice", receiptId: "r2" })).toBe("refused");
-	expect(await fence?.fence({ subject: "bob", receiptId: "r3" })).toBe("passed");
+	expect(await bundle("alice", "r2")).toBe("refused");
+	expect(await bundle("bob", "r3")).toBe("passed");
+	// A client named as the erased person is no person: its bundle passes.
+	expect(await bundle("alice", "r4", "client")).toBe("passed");
 });
