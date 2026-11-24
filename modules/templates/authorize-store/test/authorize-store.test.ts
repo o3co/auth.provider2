@@ -8,10 +8,12 @@ import wiring from "../src/module.ts";
 
 jarReservationsContract("authorize-store on records, on a simulated replicated store", async () => {
 	const simulated = simulatedStore();
+	// The composition's clock stands still, so only the test's own moves run a lifetime out.
+	const now = Date.UTC(2026, 0, 1);
 	const app = await assemble({
 		modules: [simulated.module, wiring],
 		config: kernelConfig(),
-		runtime: quietRuntime(),
+		runtime: quietRuntime({ clock: { now: () => now } }),
 	});
 	return {
 		reservations: await app.get(jarReservations),
