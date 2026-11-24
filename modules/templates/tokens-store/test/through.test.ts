@@ -18,7 +18,7 @@ import {
 } from "@mod/tokens";
 import tokensModule from "@mod/tokens/module";
 import { issueAtOnce, tokensConfig } from "@mod/tokens/testing";
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import tokensStore from "../src/module.ts";
 
 let now = 1_800_000_000_000;
@@ -103,8 +103,22 @@ it("is unavailable when only writes fail, once its patience is spent", async () 
 	const { simulated, t, token } = await boot();
 	simulated.failWrites(true);
 	expect((await t.verifyAccess(token)).kind).toBe("valid");
-	await expect(t.revokeAccess(token)).rejects.toThrow();
-}, 30_000);
+	// The resends' pauses run on a fake clock: the patience spent is the same, its seconds none.
+	vi.useFakeTimers({ toFake: ["setTimeout"] });
+	try {
+		let settled = false;
+		const revoking = expect(t.revokeAccess(token))
+			.rejects.toThrow()
+			.finally(() => {
+				settled = true;
+			});
+		// A pause at a time: each is set only once the send before it failed.
+		while (!settled) await vi.advanceTimersByTimeAsync(1000);
+		await revoking;
+	} finally {
+		vi.useRealTimers();
+	}
+});
 
 it("keeps refusing after a failover to a store host whose clock runs ahead within the allowance", async () => {
 	const { simulated, t, token } = await boot();
