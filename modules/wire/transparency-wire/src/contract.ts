@@ -68,7 +68,13 @@ export const flows = Object.freeze({
 	unconditional: Object.freeze(["client"] as const),
 });
 
-/** Why the log refuses an append; it refuses with one word and writes nothing. */
+/**
+ * Why the log refuses an append; it refuses with one word and writes nothing. On an unconditional
+ * flow: `abandoned`, a stage of an op whose abandonment it accepted (never placed, now or later);
+ * `evidenceUsed`, a client's start naming an evidence element (`elements`) a start of that flow
+ * named. Their order: the same id and content's original receipt, `sameIdOther`, `abandoned`,
+ * `evidenceUsed`; every log keeps both marks without end.
+ */
 export const appendRefusals = Object.freeze([
 	"prevMismatch",
 	"sameIdOther",
@@ -80,6 +86,8 @@ export const appendRefusals = Object.freeze([
 	"kindNotAllowed",
 	"credInvalid",
 	"generationFlowInvalid",
+	"abandoned",
+	"evidenceUsed",
 ] as const);
 
 /** The monitor's four verdicts (A45) and the outcome, a separate axis: whether a stage took effect. */
@@ -351,11 +359,19 @@ const named = {
 	tokens: tokenDigests.optional(),
 	approval: approvalDigests.optional(),
 	abandons: abandons.optional(),
+	/** A client's start: the SHA-256 of each evidence element's JWS signing input, the log's use-once index. */
+	elements: z
+		.array(digest)
+		.min(1)
+		.refine((list) => unique(list, (e) => e), { message: "an element is named twice" })
+		.optional(),
 };
 
 type Named = {
 	kind: string;
+	flow: { of: string };
 	op: string;
+	elements?: unknown;
 	tokens?: unknown;
 	approval?: unknown;
 	abandons?: z.infer<typeof abandons> | undefined;
@@ -369,6 +385,8 @@ const kindRules = (r: Named, ctx: z.RefinementCtx) => {
 		fail("approval digests go with an approval");
 	if ((r.abandons !== undefined) !== (r.kind === "abandonment"))
 		fail("abandons goes with an abandonment");
+	if (r.elements !== undefined && !(r.kind === "start" && r.flow.of === "client"))
+		fail("evidence elements go with a client's start alone");
 	if (r.abandons && r.op !== opIds.abandonment(r.abandons.op, r.abandons.attempt)) {
 		fail("an abandonment's op id is derived from the op it abandons and its attempt");
 	}

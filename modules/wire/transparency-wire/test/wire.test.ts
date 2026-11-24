@@ -156,6 +156,28 @@ describe("the conditional append a writer sends", () => {
 		no(schemas.appendRequest, { ...noTokens, kind: "start", abandons });
 	});
 
+	it("holds evidence elements to a client's start, each a digest named once", () => {
+		const { prev: _, tokens: _t, ...noPrev } = bundleRequest;
+		const start = {
+			...noPrev,
+			kind: "start",
+			stage: 1,
+			last: false,
+			flow: { of: "client", id: "rp-1" },
+		};
+		const elements = [d("x"), d("y")];
+		ok(schemas.appendRequest, { ...start, elements });
+		no(schemas.appendRequest, { ...start, elements: [] });
+		no(schemas.appendRequest, { ...start, elements: [d("x"), d("x")] });
+		no(schemas.appendRequest, { ...start, elements: ["short"] });
+		no(schemas.appendRequest, { ...start, flow: subject, prev: 4, elements });
+		no(schemas.appendRequest, { ...bundleRequest, flow: start.flow, prev: undefined, elements });
+		const { prev: _q, preimage: _s, ...fields } = { ...start, prev: 0 };
+		const record = { ...fields, ...placed, sealedTo: bundleRecord.sealedTo, keySetVersion: 2 };
+		ok(schemas.record, { ...record, elements });
+		no(schemas.record, { ...record, flow: subject, elements });
+	});
+
 	it("refuses a field it does not know, a kind the log writes, and malformed digests and positions", () => {
 		no(schemas.appendRequest, { ...bundleRequest, extra: 1 });
 		no(schemas.appendRequest, {
@@ -230,6 +252,8 @@ describe("the log's answer to an append", () => {
 			"holdLimit",
 			"kindNotAllowed",
 			"credInvalid",
+			"abandoned",
+			"evidenceUsed",
 		]) {
 			expect(appendRefusals).toContain(word);
 		}
