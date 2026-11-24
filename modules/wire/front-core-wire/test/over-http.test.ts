@@ -81,6 +81,61 @@ describe("each operation over HTTP", () => {
 		}
 	});
 
+	it("names the answer's form of every operation the screen calls, and of no other; by an enum field, one form per value", () => {
+		for (const [kind, side] of operations) {
+			expect(side.answer !== undefined, kind).toBe(side.crossOrigin !== undefined);
+			const answer = side.answer;
+			if (typeof answer !== "object") continue;
+			const spec = requests[kind].fields.find((f) => f.name === answer.by) as
+				| { type: string; values?: number }
+				| undefined;
+			expect(spec?.type, kind).toBe("enum");
+			expect(answer.forms.length, kind).toBe(spec?.values);
+		}
+		expect(overHttp.operations.continue.answer).toEqual({
+			by: "stage",
+			forms: ["statement", "sealed", "sealed"],
+		});
+	});
+
+	it("opens the screen's key operations by §C's names, their stages and purposes as text", () => {
+		const ops = overHttp.operations;
+		expect(
+			[ops.firstKeyRecover, ops.approvalStart, ops.approvalFinish, ops.continue, ops.keyFinish].map(
+				(side) => [side.path, side.answer],
+			),
+		).toEqual([
+			["/first-key/recover", "statement"],
+			["/approval/start", "statement"],
+			["/approval/finish", "sealed"],
+			["/continue", ops.continue.answer],
+			["/key/finish", "sealed"],
+		]);
+		expect(ops.approvalStart.enumTexts?.purpose?.texts).toEqual({
+			"passkey-add": 0,
+			"passkey-manage": 1,
+		});
+		expect(ops.continue.enumTexts?.stage?.texts).toEqual({ register: 0, delete: 1, rename: 2 });
+		expect(requests.continue.fields.map((f) => f.name)).toEqual([
+			"source",
+			"statement",
+			"stage",
+			"seq",
+			"body",
+			"sig",
+		]);
+		expect(requests.continue.fields.find((f) => f.name === "seq")).toMatchObject({ values: 17 });
+		expect(requests.continue.fields.find((f) => f.name === "statement")).toMatchObject({
+			max: 8192,
+		});
+		expect(requests.firstKeyRecover.fields.map((f) => [f.name, f.min, f.max])).toEqual([
+			["source", 0, 45],
+			["nonce", 43, 43],
+			["digest", 43, 43],
+			["sig", 64, 64],
+		]);
+	});
+
 	it("answers a refusal with the status its word names, words of the wire alone", () => {
 		for (const word of Object.keys(overHttp.statuses)) expect(refusals).toContain(word);
 		expect(overHttp.statuses).toMatchObject({

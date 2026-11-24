@@ -163,6 +163,55 @@ export const requests = Object.freeze({
 			field("dpop", "jws", 0, 4096),
 		] as const),
 	}),
+	/** A first key's creation asked again where its answer was lost (§C.4): the mail's nonce, the sealed request's digest, and E_sig's signature (r||s) over sdk-core-wire's `firstKey.recoverInput`. */
+	firstKeyRecover: Object.freeze({
+		code: 0x0b,
+		fields: Object.freeze([
+			source,
+			field("nonce", "b64url", 43, 43),
+			field("digest", "b64url", 43, 43),
+			field("sig", "bytes", 64, 64),
+		] as const),
+	}),
+	/** A key management's start: its purpose (0 `passkey-add`, 1 `passkey-manage`) and the screen's keys, as the login's start carries them. */
+	approvalStart: Object.freeze({
+		code: 0x0c,
+		fields: Object.freeze([
+			source,
+			field("purpose", "enum", 1, 1, 2),
+			field("eEnc", "bytes", 65, 65),
+			field("eSigX", "bytes", 32, 32),
+			field("eSigY", "bytes", 32, 32),
+		] as const),
+	}),
+	approvalFinish: Object.freeze({
+		code: 0x0d,
+		fields: Object.freeze([
+			source,
+			field("statement", "jws", 1, 4096),
+			field("assertion", "utf8", 1, 8192),
+		] as const),
+	}),
+	/** A statement's continuation: its stage (0 `register`, 1 `delete`, 2 `rename`), sequence (the Core refuses 0), body and E_sig's r||s. */
+	continue: Object.freeze({
+		code: 0x0e,
+		fields: Object.freeze([
+			source,
+			field("statement", "jws", 1, 8192),
+			field("stage", "enum", 1, 1, 3),
+			field("seq", "enum", 1, 1, 17),
+			field("body", "utf8", 1, 8192),
+			field("sig", "bytes", 64, 64),
+		] as const),
+	}),
+	keyFinish: Object.freeze({
+		code: 0x0f,
+		fields: Object.freeze([
+			source,
+			field("statement", "jws", 1, 4096),
+			field("assertion", "utf8", 1, 8192),
+		] as const),
+	}),
 });
 
 /** The values of the token request's enums. */
@@ -250,13 +299,20 @@ export interface OverHttp {
 	readonly successStatus?: number;
 	/** Called by a page of another origin (the login screen): the request headers it sends beyond the safelisted ones. */
 	readonly crossOrigin?: { readonly headers: readonly string[] };
+	/** A success's body's form, named as sdk-core-wire's `payloads.answers` (by an enum field: a form per value). */
+	readonly answer?: string | { readonly by: string; readonly forms: readonly string[] };
 }
 
-const screen = (path: string, more: Partial<OverHttp> = {}): OverHttp =>
+const screen = (
+	path: string,
+	answer: NonNullable<OverHttp["answer"]>,
+	more: Partial<OverHttp> = {},
+): OverHttp =>
 	Object.freeze({
 		path,
 		body: "json",
 		crossOrigin: Object.freeze({ headers: Object.freeze(["content-type"]) }),
+		answer,
 		...more,
 	});
 
@@ -288,8 +344,8 @@ const dpopHeader = Object.freeze({ dpop: "dpop" });
 export const overHttp = Object.freeze({
 	declaredSource: "source" as const,
 	operations: Object.freeze({
-		loginStart: screen("/login/start"),
-		loginFinish: screen("/login/finish"),
+		loginStart: screen("/login/start", "authorization"),
+		loginFinish: screen("/login/finish", "sealed"),
 		token: Object.freeze({
 			path: "/oauth/token",
 			body: "form",
@@ -313,15 +369,15 @@ export const overHttp = Object.freeze({
 			headerNames: dpopHeader,
 			enumTexts: tokenEnumTexts,
 		}),
-		firstKeyNonce: screen("/first-key/nonce", {
+		firstKeyNonce: screen("/first-key/nonce", "nonce", {
 			enumTexts: Object.freeze({
 				stage: Object.freeze({ texts: Object.freeze({ start: 0, mail: 1 }) }),
 			}),
 		}),
-		firstKeyStart: screen("/first-key/start"),
-		firstKeyMail: screen("/first-key/mail"),
-		firstKeyContinue: screen("/first-key/continue"),
-		firstKeyFinish: screen("/first-key/finish"),
+		firstKeyStart: screen("/first-key/start", "sealed"),
+		firstKeyMail: screen("/first-key/mail", "statement"),
+		firstKeyContinue: screen("/first-key/continue", "statement"),
+		firstKeyFinish: screen("/first-key/finish", "sealed"),
 		par: Object.freeze({
 			path: "/oauth/par",
 			body: "form",
@@ -334,6 +390,27 @@ export const overHttp = Object.freeze({
 			}),
 			successStatus: 201,
 		}),
+		firstKeyRecover: screen("/first-key/recover", "statement"),
+		approvalStart: screen("/approval/start", "statement", {
+			enumTexts: Object.freeze({
+				purpose: Object.freeze({
+					texts: Object.freeze({ "passkey-add": 0, "passkey-manage": 1 }),
+				}),
+			}),
+		}),
+		approvalFinish: screen("/approval/finish", "sealed"),
+		continue: screen(
+			"/continue",
+			Object.freeze({ by: "stage", forms: Object.freeze(["statement", "sealed", "sealed"]) }),
+			{
+				enumTexts: Object.freeze({
+					stage: Object.freeze({
+						texts: Object.freeze({ register: 0, delete: 1, rename: 2 }),
+					}),
+				}),
+			},
+		),
+		keyFinish: screen("/key/finish", "sealed"),
 	} satisfies Record<keyof typeof requests, OverHttp>) as Readonly<
 		Record<keyof typeof requests, OverHttp>
 	>,
