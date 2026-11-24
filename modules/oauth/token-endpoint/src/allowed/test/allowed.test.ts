@@ -53,7 +53,7 @@ describe("a registered client allowed a grant nothing composed serves", () => {
 			await refusals(boot([], ["authorization_code"], [], ["refresh_token", "urn:x:own"])),
 		).toEqual([
 			`clients.registered.0.sections.client-allowance.grants.0: ${reason("code-grant")}`,
-			`clients.registered.2.sections.client-allowance.grants.0: ${none}`,
+			`clients.registered.2.sections.client-allowance.grants.0: ${reason("refresh")}`,
 			`clients.registered.2.sections.client-allowance.grants.1: ${none}`,
 		]);
 	});

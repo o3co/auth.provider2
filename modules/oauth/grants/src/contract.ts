@@ -211,6 +211,7 @@ export const grantServers: Readonly<Record<string, string>> = Object.freeze(
 	Object.assign(Object.create(null) as Record<string, string>, {
 		authorization_code: "code-grant",
 		client_credentials: "client-credentials",
+		refresh_token: "refresh",
 	}),
 );
 

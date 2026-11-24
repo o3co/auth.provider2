@@ -1,0 +1,210 @@
+import type { BundlePart } from "@mod/grants";
+import { isUnavailable } from "@mod/kernel";
+import { describe, expect, it } from "vitest";
+import {
+	binding,
+	jkt,
+	lifetimeMs,
+	now,
+	recordsAt,
+	request,
+	statement,
+} from "../../../test/fixtures.ts";
+import { nameOf, read, sha256, tokenOf } from "../../record.ts";
+import { type FoundingParts, founding } from "../family.ts";
+
+const secret = "s".repeat(43);
+const iat = now / 1000 - 10;
+
+/** The founding over records in memory, an approval and a key as found, recording what it followed. */
+function world(over: Partial<FoundingParts> = {}) {
+	const records = recordsAt();
+	const followed: unknown[][] = [];
+	const maker = founding({
+		records: records.records,
+		approvals: {
+			rootOf: async (hash) =>
+				hash === "t-hash" ? { statement, assertion: "{}", credential: "cred-1" } : undefined,
+		},
+		passkeys: {
+			publicKeyOf: async (credential) =>
+				credential === "cred-1"
+					? { subject: "alice", publicKey: "pk", registration: "r-key" }
+					: undefined,
+		},
+		// This Core is of generation 5; the statement was signed by generation 4's ring.
+		keys: {
+			generation: () => 5,
+			verifyOf: async (g, jws) =>
+				g === 4 && jws === statement
+					? { kind: "valid", claims: {} }
+					: { kind: "invalid", reason: "signature" },
+		},
+		selections: {
+			follow: async (...args) => {
+				followed.push(args);
+			},
+		},
+		lifetimeMs,
+		now: records.now,
+		secret: () => secret,
+		...over,
+	});
+	return { records, maker, followed };
+}
+
+/** A part founded, prepared, signed and committed as the bundle's record `placed` would. */
+async function founded(w: ReturnType<typeof world>, id = "r-bundle", asked = request) {
+	const part = (await w.maker.part(asked)) as BundlePart;
+	const ready = await part.prepare(now);
+	const placed = { id, acceptedAt: now };
+	const token = await part.sign(ready.prepared, "h.p.s", placed);
+	await part.commit?.(ready.prepared, placed);
+	return { part, ready, token };
+}
+
+describe("a family, founded with a code's redemption", () => {
+	it("rests on its approval's root and key, kept by its bundle record's id once committed, its token that id and a secret", async () => {
+		const w = world();
+		const { token, ready } = await founded(w);
+		expect(token).toBe(tokenOf("r-bundle", secret));
+		const family = read.family(await w.records.records.read(nameOf.family("r-bundle")));
+		expect(family).toEqual({
+			format: 1,
+			subject: "alice",
+			client: "app",
+			session: "sess-1",
+			scope: ["read"],
+			audience: ["https://api"],
+			amr: ["pop", "user"],
+			authTime: request.approvedAt,
+			// Its statement's issue and the delegation's length (O27).
+			end: iat * 1000 + lifetimeMs,
+			binding,
+			statement,
+			assertion: "{}",
+			credential: "cred-1",
+			registration: "r-key",
+			publicKey: "pk",
+			generation: 4,
+			secret: sha256(secret),
+			code: "code-digest",
+		});
+		expect(ready.digest).toMatch(/^[\w-]{43}$/);
+		expect(read.key(await w.records.records.read(nameOf.key(jkt)))).toEqual({
+			format: 1,
+			subject: "alice",
+			family: "r-bundle",
+		});
+		expect(read.code(await w.records.records.read(nameOf.code("code-digest")))).toEqual({
+			format: 1,
+			subject: "alice",
+			family: "r-bundle",
+		});
+		expect(w.followed).toEqual([
+			["code-digest", "r-bundle", iat * 1000 + lifetimeMs - now + 120_000],
+		]);
+		expect(w.records.subjects().get(nameOf.family("r-bundle"))).toBe("alice");
+	});
+
+	it("keeps nothing before it is committed: signing alone founds no family", async () => {
+		const w = world();
+		const part = (await w.maker.part(request)) as BundlePart;
+		const ready = await part.prepare(now);
+		await part.sign(ready.prepared, "h.p.s", { id: "r-bundle", acceptedAt: now });
+		expect(await w.records.records.read(nameOf.family("r-bundle"))).toBeUndefined();
+	});
+
+	it("is refused where its approval or key is gone, its key another subject's, no key bound, or the key bound to another live family", async () => {
+		const gone = { ...request, statement: "no-such-hash" };
+		expect(await world().maker.part(gone)).toEqual({ refused: "the approval it rests on is gone" });
+		const keyless = world({ passkeys: { publicKeyOf: async () => undefined } });
+		expect(await keyless.maker.part(request)).toEqual({ refused: "the key it rests on is gone" });
+		const others = world({
+			passkeys: {
+				publicKeyOf: async () => ({ subject: "bob", publicKey: "pk", registration: "r" }),
+			},
+		});
+		expect(await others.maker.part(request)).toEqual({ refused: "the key it rests on is gone" });
+		const { binding: _, ...unbound } = request;
+		expect(await world().maker.part(unbound)).toEqual({ refused: "no key the family is bound to" });
+		const w = world();
+		await founded(w);
+		expect(await w.maker.part({ ...request, code: "code-2" })).toEqual({
+			refused: "the key is bound to another family",
+		});
+		// Revoked, it holds its key until its end all the same; past it, the key is free.
+		await w.maker.revoke("code-digest", "alice");
+		expect(await w.maker.part({ ...request, code: "code-2" })).toMatchObject({
+			refused: expect.any(String),
+		});
+		w.records.move(lifetimeMs + 120_000);
+		expect(await w.maker.part({ ...request, code: "code-3" })).not.toHaveProperty("refused");
+	});
+
+	it("claims its key by the index's one create: of two founded at once with one key, only the first lives", async () => {
+		const w = world();
+		const parts = await Promise.all([
+			w.maker.part(request),
+			w.maker.part({ ...request, code: "code-2" }),
+		]);
+		const [first, second] = parts as BundlePart[];
+		const ready = await Promise.all([first?.prepare(now), second?.prepare(now)]);
+		await first?.commit?.(ready[0]?.prepared, { id: "r-1", acceptedAt: now });
+		await expect(
+			second?.commit?.(ready[1]?.prepared, { id: "r-2", acceptedAt: now }),
+		).rejects.toSatisfy(isUnavailable);
+		const at = async (id: string) => read.family(await w.records.records.read(nameOf.family(id)));
+		expect((await at("r-1"))?.revoked).toBeUndefined();
+		expect((await at("r-2"))?.revoked).toBe(true);
+		expect(read.key(await w.records.records.read(nameOf.key(jkt)))?.family).toBe("r-1");
+	});
+
+	it("ends itself where its commit fails midway, and records the generation that signed its statement", async () => {
+		const failing = world({
+			selections: {
+				follow: async () => {
+					throw new Error("claims-selection down");
+				},
+			},
+		});
+		await expect(founded(failing)).rejects.toThrow("claims-selection down");
+		expect(
+			read.family(await failing.records.records.read(nameOf.family("r-bundle")))?.revoked,
+		).toBe(true);
+		const w = world();
+		await founded(w);
+		expect(read.family(await w.records.records.read(nameOf.family("r-bundle")))?.generation).toBe(
+			4,
+		);
+		const unsigned = world({
+			keys: {
+				generation: () => 7,
+				verifyOf: async () => ({ kind: "invalid", reason: "signature" }),
+			},
+		});
+		expect(await unsigned.maker.part(request)).toEqual({
+			refused: "the statement it rests on does not verify",
+		});
+	});
+
+	it("is ended with its code: a code voided after it was kept, or before, which it is ended at as it is kept", async () => {
+		const w = world();
+		await founded(w);
+		await w.maker.revoke("code-digest", "alice");
+		expect(read.family(await w.records.records.read(nameOf.family("r-bundle")))?.revoked).toBe(
+			true,
+		);
+		const early = world();
+		await early.maker.revoke("code-digest", "alice");
+		await expect(founded(early)).rejects.toSatisfy(isUnavailable);
+		expect(read.family(await early.records.records.read(nameOf.family("r-bundle")))?.revoked).toBe(
+			true,
+		);
+		// Revoking again, or a code that founded none, does no harm; with no subject, the code's record
+		// gone, nothing is marked.
+		await w.maker.revoke("code-digest", "alice");
+		await w.maker.revoke("code-none");
+		expect(await w.records.records.read(nameOf.code("code-none"))).toBeUndefined();
+	});
+});
