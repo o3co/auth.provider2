@@ -17,6 +17,7 @@ Internal module of `users`: how long a password check of one identifier waits, a
 - The first `after` failures wait for nothing; each further one doubles the next wait from `firstMs`, never past `longestMs`.
 - Checks of one identifier run in the order asked, each after the one before it ends; checks of different identifiers never wait for one another.
 - At most `queueBound` checks of one identifier are held, the one under way among them: one more is Unavailable at once, never checked and never counted, a known identifier and an unknown one alike. So a check admitted waits at most `queueBound` × `longestMs` (2 minutes by default) beside the checks' own time, however many were sent before it.
+- While a sender keeps an identifier's queue full, its owner's checks are answered Unavailable: the per-identifier wait's own limit. Limiting each sender is the layer in front's.
 - An identifier is counted alike whether a user holds it or not.
 - Held in this process alone: each instance counts its own checks. At most `capacity` identifiers are held (100 000 unless told, a fixed guard). A new one past it lets go an idle one past its forget time, else the idle one with the fewest failures; where every one held has a check under way, it is Unavailable, unchecked.
 

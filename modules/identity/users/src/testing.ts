@@ -212,10 +212,13 @@ export function usersContract(name: string, harness: UsersHarness): void {
 
 export interface LedgerHarness {
 	/**
-	 * A user ledger holding "alice" with the password "correct horse" and the subject "s-alice", with
-	 * every password comparison it does recorded in order, by the work it takes.
+	 * A user ledger holding "alice" with the subject "s-alice" and, unless `withoutPasswords`, the
+	 * password "correct horse", with every password comparison it does recorded in order, by the
+	 * work it takes.
 	 */
 	open(): Promise<{ readonly ledger: Ledger; readonly checks: readonly string[] }>;
+	/** Set where the ledger holds no password: every password check answers none, with no work. */
+	readonly withoutPasswords?: boolean;
 	readonly unanswerableBySubject?: boolean;
 	/** Set where the ledger makes subjects (`create`). */
 	readonly creates?: boolean;
@@ -226,12 +229,35 @@ export interface LedgerHarness {
 /** The user ledger contract, run against any user ledger. */
 export function ledgerContract(name: string, harness: LedgerHarness): void {
 	describe(`user ledger contract: ${name}`, () => {
-		it("verifies alice, and answers none for a wrong password or an unknown identifier", async () => {
+		it.skipIf(Boolean(harness.withoutPasswords))(
+			"verifies alice, and answers none for a wrong password or an unknown identifier",
+			async () => {
+				const { ledger } = await harness.open();
+				const found = await ledger.verify("alice", "correct horse");
+				expect(found.kind === "user" && found.user.subject).toBe("s-alice");
+				expect(await ledger.verify("alice", "wrong")).toEqual({ kind: "none" });
+				expect(await ledger.verify("nobody", "correct horse")).toEqual({ kind: "none" });
+			},
+		);
+
+		it.runIf(Boolean(harness.withoutPasswords))(
+			"answers none for every password, a known identifier as an unknown one, doing no password work",
+			async () => {
+				const { ledger, checks } = await harness.open();
+				for (const [identifier, password] of [
+					["alice", "correct horse"],
+					["alice", "wrong"],
+					["nobody", "correct horse"],
+					["nobody", ""],
+				] as const) {
+					expect(await ledger.verify(identifier, password), identifier).toEqual({ kind: "none" });
+				}
+				expect(checks).toEqual([]);
+			},
+		);
+
+		it("finds alice by subject exactly, and none for one it does not know, or unanswerable", async () => {
 			const { ledger } = await harness.open();
-			const found = await ledger.verify("alice", "correct horse");
-			expect(found.kind === "user" && found.user.subject).toBe("s-alice");
-			expect(await ledger.verify("alice", "wrong")).toEqual({ kind: "none" });
-			expect(await ledger.verify("nobody", "correct horse")).toEqual({ kind: "none" });
 			const bySubject = await ledger.bySubject("s-alice");
 			if (harness.unanswerableBySubject) {
 				expect(bySubject).toEqual({ kind: "unanswerable" });
@@ -260,8 +286,11 @@ export function ledgerContract(name: string, harness: LedgerHarness): void {
 				expect(made?.kind).toBe("created");
 				if (made?.kind !== "created") return;
 				expect(made.user.subject).not.toBe("s-alice");
-				const found = await ledger.byIdentifier?.("carol");
-				expect(found?.kind === "user" && found.user.subject).toBe(made.user.subject);
+				// Each port read back only where the ledger has it.
+				if (ledger.byIdentifier) {
+					const found = await ledger.byIdentifier("carol");
+					expect(found.kind === "user" && found.user.subject).toBe(made.user.subject);
+				}
 				if (!harness.unanswerableBySubject) {
 					const bySubject = await ledger.bySubject(made.user.subject);
 					expect(bySubject.kind === "user" && bySubject.user.subject).toBe(made.user.subject);
@@ -271,21 +300,24 @@ export function ledgerContract(name: string, harness: LedgerHarness): void {
 			},
 		);
 
-		it("does the same comparisons for an unknown identifier as for a known one", async () => {
-			const { ledger, checks } = await harness.open();
-			await ledger.verify("alice", "wrong");
-			const known = [...checks];
-			expect(known.length).toBeGreaterThan(0);
-			for (const [identifier, password] of [
-				["nobody", "wrong"],
-				["nobody", "correct horse"],
-				["alice", "correct horse"],
-			] as const) {
-				const before = checks.length;
-				await ledger.verify(identifier, password);
-				expect(checks.slice(before), identifier).toEqual(known);
-			}
-		});
+		it.skipIf(Boolean(harness.withoutPasswords))(
+			"does the same comparisons for an unknown identifier as for a known one",
+			async () => {
+				const { ledger, checks } = await harness.open();
+				await ledger.verify("alice", "wrong");
+				const known = [...checks];
+				expect(known.length).toBeGreaterThan(0);
+				for (const [identifier, password] of [
+					["nobody", "wrong"],
+					["nobody", "correct horse"],
+					["alice", "correct horse"],
+				] as const) {
+					const before = checks.length;
+					await ledger.verify(identifier, password);
+					expect(checks.slice(before), identifier).toEqual(known);
+				}
+			},
+		);
 	});
 }
 

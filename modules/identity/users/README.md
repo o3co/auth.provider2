@@ -16,7 +16,7 @@
 - Store interface for verified contacts; what it needs, its erasure ports, and the eraser `users`: internal module `stores`.
 - `userAttribute`, typed by `UserAttributes`: the attributes users names, by OIDC claim name `email`, `email_verified`, `name`, `picture` and `groups`; a user may hold others. `isAttributeValue` (name, value): whether users takes the value. `acceptedAttributes` (values of any shape): the named ones users takes, frozen; an email's verification only beside the email. `isWellFormedSubject`: a subject's shape.
 - `usersImport`, called by the app entry `users-import` (`settle-records`): a record brought from another IdP, kept through the ledger's `keep` and as a verified contact; its shape and answers: internal module `imports`. No passkey is brought.
-- `./testing`: contract tests for users, user ledgers and the Store interface, configuration builders, and the Store interface in memory.
+- `./testing`: contract tests for users, user ledgers (those holding passwords and those holding none) and the Store interface, configuration builders, and the Store interface in memory.
 
 ## Invariants
 - A subject is 1 to 255 ASCII characters: one outside that refuses boot in the settings (the identifier's, where `subject` is left out), is unavailable in a ledger's answer, and is none when looked up without asking the ledger.

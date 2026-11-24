@@ -11,7 +11,7 @@ import secretHashModule from "@mod/secret-hash/module";
 import { describe, expect, it } from "vitest";
 import { type Ledger, ledgers, type Users, users, type Verified } from "../src/contract.ts";
 import usersModule from "../src/module.ts";
-import { memoryUsersStores, testUser, usersContract } from "../src/testing.ts";
+import { ledgerContract, memoryUsersStores, testUser, usersContract } from "../src/testing.ts";
 
 const alice = { subject: "s-alice", attributes: { name: "Alice", email: "Alice@example.com" } };
 const none: Verified = { kind: "none" };
@@ -126,6 +126,31 @@ usersContract("a contributed user ledger that makes subjects", {
 		return { users: await openWith(creatingLedger(checks)), checks };
 	},
 	creates: true,
+});
+
+/** A ledger holding alice with no password, making subjects, and looking no one up by identifier. */
+function passwordless(): Ledger {
+	const made = new Map([["alice", "s-alice"]]);
+	const userOf = (subject: string) => ({
+		kind: "user" as const,
+		user: { subject, attributes: {} },
+	});
+	return {
+		verify: async () => none,
+		bySubject: async (subject) => ([...made.values()].includes(subject) ? userOf(subject) : none),
+		create: async (identifier) => {
+			if (made.has(identifier)) return { kind: "exists" };
+			const subject = `s-made-${made.size}`;
+			made.set(identifier, subject);
+			return { kind: "created", user: userOf(subject).user };
+		},
+	};
+}
+ledgerContract("a ledger holding no password, making subjects, looking no one up by identifier", {
+	open: async () => ({ ledger: passwordless(), checks: [] }),
+	withoutPasswords: true,
+	creates: true,
+	withoutIdentifierLookup: true,
 });
 
 /** The same ledger, looking no one up by identifier. */
