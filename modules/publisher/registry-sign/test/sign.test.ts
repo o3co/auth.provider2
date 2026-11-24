@@ -14,6 +14,8 @@ const version = {
 };
 const ed25519 = generateKeyPairSync("ed25519");
 const p256 = generateKeyPairSync("ec", { namedCurve: "P-256" });
+/** An RSA key, which the tool refuses: made once, as the file loads, as RSA keys are slow to make. */
+const rsa = generateKeyPairSync("rsa", { modulusLength: 2048 });
 const privateJwk = (key: KeyObject, more: Record<string, unknown> = { kid: "publisher-1" }) => ({
 	...key.export({ format: "jwk" }),
 	...more,
@@ -80,7 +82,6 @@ describe("registry-sign", () => {
 	});
 
 	it("refuses a key that is no private Ed25519 or P-256 JWK with a kid, never writing its members", async () => {
-		const rsa = generateKeyPairSync("rsa", { modulusLength: 2048 });
 		const noKid = ed25519.privateKey.export({ format: "jwk" });
 		for (const key of [
 			noKid,
