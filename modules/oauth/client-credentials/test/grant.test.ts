@@ -17,12 +17,12 @@ const client = (kind: Client["kind"], allowed: Record<string, unknown> = {}): Cl
 			: {}) as T,
 });
 
-/** The key the test client's assertion was verified with, as client-assertion reads it from the proof. */
+/** The key the test client's assertion was verified with, as client-assertion reads it from its authentication, for it alone. */
 const held = "held-key";
 const proved = { assertion: true };
 const keys = {
-	verifiedOf: (proof: unknown) =>
-		proof === proved
+	verifiedOf: (proof: unknown, of?: Client) =>
+		proof === proved && of?.id === "svc"
 			? { client: "svc", key: { kty: "EC" }, thumbprint: held, version: 4 }
 			: undefined,
 };
@@ -33,12 +33,12 @@ async function ask(
 	params: Record<string, string> = {},
 	refused = false,
 	binding?: { member: string; confirmation: string; tokenType: string },
-	proof: unknown = proved,
+	authenticated: unknown = proved,
 ) {
 	const issued: unknown[] = [];
 	const input = {
 		client: c,
-		proof,
+		authenticated,
 		...(binding ? { binding } : {}),
 		param: (name: string) => params[name],
 		target: (audience: readonly string[]) => ({ kind: "ok" as const, audience }),
@@ -134,6 +134,9 @@ describe("a token bound by DPoP", () => {
 	it("is refused for a client whose authentication verified no key, a secret's, or another method's proof", async () => {
 		expect(await ask(allowed, {}, false, dpop(held), null)).toEqual(refused);
 		expect(await ask(allowed, {}, false, dpop(held), { assertion: true })).toEqual(refused);
+		// Another client's genuine verification reads as none for this one.
+		const other = { ...allowed, id: "other" } as Client;
+		expect((await ask(other, {}, false, dpop(held))).answer).toEqual(refused.answer);
 	});
 
 	it("leaves a binding of another kind, and none, as they are", async () => {

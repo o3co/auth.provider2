@@ -21,7 +21,7 @@ export function clientCredentials(
 		grantType: clientCredentialsGrantType,
 		readsAmbient: "none",
 		targets: true,
-		handle: async ({ client, param, binding, proof, issue, target }) => {
+		handle: async ({ client, param, binding, authenticated, issue, target }) => {
 			if (client.kind !== "confidential") return { kind: "error", error: "unauthorized_client" };
 			const allowed = clientAllowance.allowedIssuance(client, param("scope"), issuer);
 			if (allowed.kind === "error") return allowed;
@@ -33,7 +33,7 @@ export function clientCredentials(
 			const { audience } = asked;
 			// The proof's key is the one the client proved itself with, of the registry version it came
 			// from: the token's `cnf`, so using it needs the client's private key.
-			const verified = keys.verifiedOf(proof);
+			const verified = keys.verifiedOf(authenticated, client);
 			if (binding?.member === dpopMember && binding.confirmation !== verified?.thumbprint) {
 				const description =
 					"the proof's key is not the key the client's assertion was verified with";
