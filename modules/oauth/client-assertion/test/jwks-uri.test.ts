@@ -12,6 +12,7 @@ import issuerModule from "@mod/issuer/module";
 import { issuerConfig } from "@mod/issuer/testing";
 import { assemble, BootRefused, defineModule, isUnavailable, kernelConfig } from "@mod/kernel";
 import { quietRuntime } from "@mod/kernel/testing";
+import { thumbprint } from "@mod/keys";
 import outboundModule from "@mod/outbound/module";
 import { memoryRecords } from "@mod/records/testing";
 import secretHashModule from "@mod/secret-hash/module";
@@ -19,7 +20,7 @@ import { tlsOptionsForTests } from "@mod/tls-options/testing";
 import { tokenEndpointLocation } from "@mod/token-endpoint";
 import { SignJWT } from "jose";
 import { afterAll, beforeAll, expect, it } from "vitest";
-import { spentAssertions } from "../src/contract.ts";
+import { clientAssertion, spentAssertions } from "../src/contract.ts";
 import { assertionType } from "../src/method.ts";
 import assertionModule from "../src/module.ts";
 import { clientAssertionConfig } from "../src/testing.ts";
@@ -91,7 +92,7 @@ async function boot(section: Record<string, unknown>, reach = true) {
 		},
 		runtime: quietRuntime(),
 	});
-	return app.get(clients);
+	return { ...app.get(clients), checks: app.get(clientAssertion) };
 }
 
 const assertion = () =>
@@ -122,6 +123,17 @@ it("authenticates a client by keys it publishes at its jwks-uri, fetching the se
 		expect(await authenticate(c)).toMatchObject({ kind: "authenticated", client: { id: "app" } });
 	}
 	expect(fetched - before).toBe(1);
+});
+
+it("answers the key of the set its assertion was verified with, naming the client", async () => {
+	const c = await boot({ "jwks-uri": jwksUri() });
+	const answer = await authenticate(c);
+	if (answer.kind !== "authenticated") throw new Error(answer.reason);
+	expect(c.checks.verifiedOf(answer.proof, answer.client)).toEqual({
+		client: "app",
+		key: publicJwk(ec.publicKey, "ec"),
+		thumbprint: await thumbprint(publicJwk(ec.publicKey, "ec")),
+	});
 });
 
 it("refuses a key its jwks-uri does not publish [rfc7523-3-u] [rfc7521-5.2-n]", async () => {

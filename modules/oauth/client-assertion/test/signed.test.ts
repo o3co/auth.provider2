@@ -1,5 +1,5 @@
 import { generateKeyPairSync, type KeyObject } from "node:crypto";
-import { clients } from "@mod/clients";
+import { clientSources, clients } from "@mod/clients";
 import clientsModule from "@mod/clients/module";
 import { clientsConfig } from "@mod/clients/testing";
 import externalJwtModule from "@mod/external-jwt/module";
@@ -33,12 +33,19 @@ const jwk = (key: KeyObject, extra: Record<string, unknown> = {}): Jwk => ({
 });
 
 async function boot() {
+	const keyed = (id: string, sections: Readonly<Record<string, unknown>>) =>
+		({ id, kind: "confidential", method: "private_key_jwt", sections }) as const;
 	const beside = defineModule({ name: "beside", replicaSafe: false, takes: [] }, (m) => [
 		m.provide(tokenEndpointLocation).by(() => ({ url: `${issuer}/oauth/token` })),
 		m.provide(spentAssertions).by(() => ({ save: async () => "created" as const })),
+		// A client from a source, of the registry version it came from.
+		m.contribute(clientSources).by(() => ({
+			find: async (id) =>
+				id === "listed"
+					? { ...keyed(id, clientKeysFor([jwk(ec.publicKey, { kid: "ec" })])), version: 9 }
+					: undefined,
+		})),
 	]);
-	const keyed = (id: string, sections: Readonly<Record<string, unknown>>) =>
-		({ id, kind: "confidential", method: "private_key_jwt", sections }) as const;
 	const app = await assemble({
 		modules: [
 			http,
@@ -118,21 +125,34 @@ describe("the key a client's assertion was verified with", () => {
 				["client_assertion", [assertion]],
 			]),
 		});
-	const assertion = (key: KeyObject, jti: string) =>
-		new SignJWT({ iss: "app", sub: "app", aud: issuer, jti, exp: Math.floor(now / 1000) + 60 })
+	const assertion = (key: KeyObject, jti: string, id = "app") =>
+		new SignJWT({ iss: id, sub: id, aud: issuer, jti, exp: Math.floor(now / 1000) + 60 })
 			.setProtectedHeader({ alg: "ES256", kid: "ec" })
 			.sign(key);
 
 	it("is what the authentication verified: the key, its thumbprint and the client's registry version", async () => {
-		const { checks, clients: c } = await boot();
+		const { checks, clients: c, client } = await boot();
 		const answer = await c.authenticate(presented(await assertion(ec.privateKey, "j1")));
 		if (answer.kind !== "authenticated") throw new Error(answer.reason);
-		const verified = checks.verifiedOf(answer.proof);
+		const verified = checks.verifiedOf(answer.proof, answer.client);
 		expect(verified).toEqual({
+			client: "app",
 			key: jwk(ec.publicKey, { kid: "ec" }),
 			thumbprint: await thumbprint(jwk(ec.publicKey)),
 		});
 		expect(Object.isFrozen(verified)).toBe(true);
+		// Read for another client, it is none: a proof is its client's alone.
+		expect(checks.verifiedOf(answer.proof, await client("far"))).toBeUndefined();
+	});
+
+	it("names the registry version a client from a source came from", async () => {
+		const { checks, clients: c } = await boot();
+		const answer = await c.authenticate(presented(await assertion(ec.privateKey, "j2", "listed")));
+		if (answer.kind !== "authenticated") throw new Error(answer.reason);
+		expect(checks.verifiedOf(answer.proof, answer.client)).toMatchObject({
+			client: "listed",
+			version: 9,
+		});
 	});
 
 	it("is none for a proof this module did not make, however it is shaped", async () => {
@@ -141,6 +161,8 @@ describe("the key a client's assertion was verified with", () => {
 			key: jwk(other.publicKey),
 			thumbprint: await thumbprint(jwk(other.publicKey)),
 		};
-		for (const proof of [undefined, forged, "k"]) expect(checks.verifiedOf(proof)).toBeUndefined();
+		const app = await (await boot()).client("app");
+		for (const proof of [undefined, { ...forged, client: "app" }, "k"])
+			expect(checks.verifiedOf(proof, app)).toBeUndefined();
 	});
 });

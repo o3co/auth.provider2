@@ -12,6 +12,8 @@ export type SignedBy =
 
 /** The key a client's assertion was verified with, its JWK SHA-256 thumbprint, and the registry version the client came from. */
 export interface VerifiedKey {
+	/** The client it verified. */
+	readonly client: string;
 	readonly key: Jwk;
 	readonly thumbprint: string;
 	readonly version?: number;
@@ -21,9 +23,10 @@ export interface VerifiedKey {
 export interface ClientAssertion {
 	/**
 	 * The key an authentication by this module's assertion was verified with, from its `proof` as
-	 * `clients` carries it; none for any other value, a proof of another method's or one made elsewhere.
+	 * `clients` carries it, for the client it verified; none for any other value, a proof of another
+	 * method's, one made elsewhere, or one of another client. `client` is optional while its readers move.
 	 */
-	verifiedOf(proof: unknown): VerifiedKey | undefined;
+	verifiedOf(proof: unknown, client?: Client): VerifiedKey | undefined;
 	/**
 	 * A JWT signed by one of the client's keys, written or at its jwks-uri, under the operator's
 	 * algorithms, clock allowance and longest lifetime, its header's `typ` the one asked: its claims,
