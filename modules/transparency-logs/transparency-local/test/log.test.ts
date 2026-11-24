@@ -97,6 +97,29 @@ describe("transparency-local's log (t0)", () => {
 		});
 	});
 
+	it("refuses an op's stage placed already whose named fields differ, its preimage the same", async () => {
+		const { log } = await boot();
+		const flow = subjectFlow();
+		const { abandons: _none, ...base } = abandonment(flow);
+		const tokens = [{ frame: "accessToken", digest: "a".repeat(43) }] as const;
+		const bundle: Stage = { ...base, kind: "bundle", op: "o1", stage: 2, tokens: [...tokens] };
+		const first = accepted(await log.append(bundle, 0));
+		expect(await log.append(bundle, 1)).toEqual(first);
+		const others: Stage[] = [
+			{ ...bundle, tokens: [{ frame: "accessToken", digest: "b".repeat(43) }] },
+			{ ...bundle, tokens: [...tokens, { frame: "family", digest: "f".repeat(43) }] },
+			{ ...bundle, last: false },
+			{ ...bundle, kind: "noEffect", tokens: undefined },
+		];
+		for (const other of others) {
+			expect(await log.append(other, 1), JSON.stringify(other)).toEqual({
+				v: 1,
+				result: "refused",
+				refusal: "sameIdOther",
+			});
+		}
+	});
+
 	it("places a client's flow's stages with no previous position, each at the head", async () => {
 		const { log } = await boot();
 		const flow = { of: "client", id: "c1" } as const;

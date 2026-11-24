@@ -151,6 +151,9 @@ export function localLog(p: {
 				);
 			const keys = keysOf(flow);
 			const plaintextDigest = digest(stage.preimage);
+			const { preimage, ...named } = stage;
+			// The stage as named, its preimage by its digest: a resend differing in any field is another.
+			const asNamed = digest({ ...named, plaintextDigest });
 			for (let attempt = 0; attempt < attempts; attempt++) {
 				const head = await headOf(flow);
 				const abandoned = stage.abandons ? [keys.op(stage.abandons.op)] : [];
@@ -166,14 +169,13 @@ export function localLog(p: {
 				const op = readAs("op", heldOp) ?? { stages: [], abandonments: 0 };
 				const same = op.stages.find((s) => s.stage === stage.stage);
 				if (same) {
-					if (same.digest !== plaintextDigest) return refused("sameIdOther");
+					if (same.digest !== asNamed) return refused("sameIdOther");
 					const at = readAs("at", await read1(keys.at(same.position)));
 					if (!at) throw new Unavailable("transparency-local");
 					return acceptedOf(placedOf(at).record);
 				}
 				if (!unconditional && prev !== head) return refused("prevMismatch");
 				const position = head + 1;
-				const { preimage, ...named } = stage;
 				const made = schemas.record.safeParse(
 					plain({
 						v: 1,
@@ -209,7 +211,7 @@ export function localLog(p: {
 						...op,
 						stages: [
 							...op.stages,
-							{ stage: stage.stage, position, digest: plaintextDigest, last: stage.last },
+							{ stage: stage.stage, position, digest: asNamed, last: stage.last },
 						],
 					},
 					{ record, finding: judged.judgment } as unknown as Json,

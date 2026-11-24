@@ -18,7 +18,7 @@
 
 ## Invariants
 - A conditional flow's append places after its head alone (`prevMismatch` else); an unconditional one's names none and places at the head. A previous position given otherwise is the writer's TypeError.
-- An op's stage placed already is answered as first placed where its preimage's digest is the same, `sameIdOther` where not, before the previous position is read.
+- An op's stage placed already is answered as first placed where the stage as named (each field, and its preimage's digest) is the same, `sameIdOther` where not, before the previous position is read.
 - A record is placed in one write with the flow's head, its judged prefix and its op's stages, held to all it read: two appends after one position place one. After 8 lost races an append is `temporary`.
 - A stage naming a version is the writer's TypeError: no publisher's flow is here to give its window.
 - A record's shard is its flow, its `n` its position. It names the local key alone, `local`, its hash the plaintext digest; its writer names its replica, the image `transparency-local` and the Core generation `keys` signs as. The preimage is judged, then dropped.
@@ -29,7 +29,7 @@
 - A stored record of another shape is unavailable, never none. It holds nothing in process, so it is safe on many instances.
 
 ## Data
-- Per flow, in its wiring's space, kept without end: the head, the judged prefix, each position's record with its finding, and each op's stages and abandonments.
+- Per flow, in its wiring's space, kept without end: the head, the judged prefix, each position's record with its finding, and each op's stages (each with its digest as named) and abandonments.
 
 ## Depends on
 - `kernel`, `transparency`, `transparency-wire`, `authority-rules`, `keys`, `webauthn`, `passkeys` (`publicKeyOf`), `promises`, `records`, `store`; `zod`.
