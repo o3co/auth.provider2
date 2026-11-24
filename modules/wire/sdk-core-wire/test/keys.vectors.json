@@ -1,0 +1,193 @@
+{
+	"accepted": [
+		{
+			"name": "ES256",
+			"alg": -7,
+			"cose": "a50102032620012158202d4f46025dc8bf3a83e8054c23cf8bdfbb7d22e8728c873dcedd0651257eb60f225820b61fab77ca9636227a86fde8cea63ebed598159473ce8c46900c3f1cbf6b75c0",
+			"spki": "3059301306072a8648ce3d020106082a8648ce3d030107034200042d4f46025dc8bf3a83e8054c23cf8bdfbb7d22e8728c873dcedd0651257eb60fb61fab77ca9636227a86fde8cea63ebed598159473ce8c46900c3f1cbf6b75c0",
+			"jwk": {
+				"crv": "P-256",
+				"kty": "EC",
+				"x": "LU9GAl3IvzqD6AVMI8-L37t9IuhyjIc9zt0GUSV-tg8",
+				"y": "th-rd8qWNiJ6hv3ozqY-vtWYFZRzzoxGkAw_HL9rdcA"
+			},
+			"input": "{\"crv\":\"P-256\",\"kty\":\"EC\",\"x\":\"LU9GAl3IvzqD6AVMI8-L37t9IuhyjIc9zt0GUSV-tg8\",\"y\":\"th-rd8qWNiJ6hv3ozqY-vtWYFZRzzoxGkAw_HL9rdcA\"}",
+			"jkt": "f8S_bSDLrCv5BxMRxT99d2bFk8QDVQQl4bOAWUvTvCM"
+		},
+		{
+			"name": "EdDSA (Ed25519)",
+			"alg": -8,
+			"cose": "a4010103272006215820666d40b6637b0bf3ba94156c6ed44e52c39ab3a03d944131f98668d72d69a37c",
+			"spki": "302a300506032b6570032100666d40b6637b0bf3ba94156c6ed44e52c39ab3a03d944131f98668d72d69a37c",
+			"jwk": {
+				"crv": "Ed25519",
+				"kty": "OKP",
+				"x": "Zm1AtmN7C_O6lBVsbtROUsOas6A9lEEx-YZo1y1po3w"
+			},
+			"input": "{\"crv\":\"Ed25519\",\"kty\":\"OKP\",\"x\":\"Zm1AtmN7C_O6lBVsbtROUsOas6A9lEEx-YZo1y1po3w\"}",
+			"jkt": "jBOtNfOgFNXOcMzQa-4AIzgx3VSCwKEKc8ls-XtY5_c"
+		},
+		{
+			"name": "RS256, 2048 bits",
+			"alg": -257,
+			"cose": "a401030339010020590100a21f6fdc40b9c8ba0ceefe7a68630e0d3c506dcccb8b047f281720746305c2af31adf8e6b60bc3fac3d946fcafb3320474cf3eab58ad1f9e7ec067b8c499d7f9651eda70540a55d672bac6d42ef086c8dfccc97061ca0a3df90229c440f6d20bb6420a0729a24492aaad0145db201c12563e7d8e48af465c6cb23c9b01d2e1984d3598e32fe386271ef9a762705700150f4e882ee91fa4b0222c4aae84cd3fe5106dba8481bab8b74a671d17821bb43d013298a8218f08b479900c2556ac3b73fbbff57ae3a21308d181d885c2377465d1dd168a4e958115c485f74d2e1e23cdb17d339258a43c72a864595b75f8b469bd214355dd9457b76f20b97b8f7128412143010001",
+			"spki": "30820122300d06092a864886f70d01010105000382010f003082010a0282010100a21f6fdc40b9c8ba0ceefe7a68630e0d3c506dcccb8b047f281720746305c2af31adf8e6b60bc3fac3d946fcafb3320474cf3eab58ad1f9e7ec067b8c499d7f9651eda70540a55d672bac6d42ef086c8dfccc97061ca0a3df90229c440f6d20bb6420a0729a24492aaad0145db201c12563e7d8e48af465c6cb23c9b01d2e1984d3598e32fe386271ef9a762705700150f4e882ee91fa4b0222c4aae84cd3fe5106dba8481bab8b74a671d17821bb43d013298a8218f08b479900c2556ac3b73fbbff57ae3a21308d181d885c2377465d1dd168a4e958115c485f74d2e1e23cdb17d339258a43c72a864595b75f8b469bd214355dd9457b76f20b97b8f7128410203010001",
+			"jwk": {
+				"e": "AQAB",
+				"kty": "RSA",
+				"n": "oh9v3EC5yLoM7v56aGMODTxQbczLiwR_KBcgdGMFwq8xrfjmtgvD-sPZRvyvszIEdM8-q1itH55-wGe4xJnX-WUe2nBUClXWcrrG1C7whsjfzMlwYcoKPfkCKcRA9tILtkIKBymiRJKqrQFF2yAcElY-fY5Ir0ZcbLI8mwHS4ZhNNZjjL-OGJx75p2JwVwAVD06ILukfpLAiLEquhM0_5RBtuoSBuri3SmcdF4IbtD0BMpioIY8ItHmQDCVWrDtz-7_1euOiEwjRgdiFwjd0ZdHdFopOlYEVxIX3TS4eI82xfTOSWKQ8cqhkWVt1-LRpvSFDVd2UV7dvILl7j3EoQQ"
+			},
+			"input": "{\"e\":\"AQAB\",\"kty\":\"RSA\",\"n\":\"oh9v3EC5yLoM7v56aGMODTxQbczLiwR_KBcgdGMFwq8xrfjmtgvD-sPZRvyvszIEdM8-q1itH55-wGe4xJnX-WUe2nBUClXWcrrG1C7whsjfzMlwYcoKPfkCKcRA9tILtkIKBymiRJKqrQFF2yAcElY-fY5Ir0ZcbLI8mwHS4ZhNNZjjL-OGJx75p2JwVwAVD06ILukfpLAiLEquhM0_5RBtuoSBuri3SmcdF4IbtD0BMpioIY8ItHmQDCVWrDtz-7_1euOiEwjRgdiFwjd0ZdHdFopOlYEVxIX3TS4eI82xfTOSWKQ8cqhkWVt1-LRpvSFDVd2UV7dvILl7j3EoQQ\"}",
+			"jkt": "nFOf96HfT8efjGW8yaufMoXc2pMpamDXTsX_2bxWQws"
+		},
+		{
+			"name": "RS256, 4096 bits",
+			"alg": -257,
+			"cose": "a401030339010020590200b367b5323409007332f0ef97a1a25d6bb3be214d85c4b0e5e57d5d21eaf01012a7b327e809415b29abcab3e8d049cc66955e0e7503823437676e7b24412f8a6ab55c59fa8082f567ead30223dfc2496718d1dd951343a2b373dce88cbeee6d1d99165c6fb7db3d90a749f921342509ef958a7af7fb2a8fe207f23bd70605c69105232f354c45de260f897efbc7561db50c8dfd7e08afc518fd503521c1744b99d5b55a8fcba31b33859e34d747277d13218f7d5224044598e5e0d197e9831edbf5c52331cd5ad81eb59a4e65362999bb25123d1f9f7be7e380e1905d66d4ce29993de06ff3d951d95550fa75e46cff3dbe9fad4c840a51f21be233bb8ef89b44130934312a418b06c6b5a4f13e037b99790a2d05721834ff3e704a359bcf4528808f080e2abcd633da747f2eb7ee3e75a2e6998d62c932f396191b35c9629339b13fdf1e13fc2d154313dbb87685857359661b271f96eb3257c2c385d24572083c84220a03f91b69e94fb1968d7d0dad63e836037937c6d2ac600d20ac2a73ed65f5d6cea96a68e78b231ed66f81af204ba997f3b8120051bf52f6cd43773b5a30a42bff4bfe219648fd9084efa4873ca9690628814132b0bd7682b9cd31b4d6c6aef05751776d0ecd3b46a204cce2d1211b2890c51eef48c4baec55e2899b150517f4f66d8bbba8f2b25f2ae4eae54754e27a7d3b91ba705cf1e6ab4479d7f52143010001",
+			"spki": "30820222300d06092a864886f70d01010105000382020f003082020a0282020100b367b5323409007332f0ef97a1a25d6bb3be214d85c4b0e5e57d5d21eaf01012a7b327e809415b29abcab3e8d049cc66955e0e7503823437676e7b24412f8a6ab55c59fa8082f567ead30223dfc2496718d1dd951343a2b373dce88cbeee6d1d99165c6fb7db3d90a749f921342509ef958a7af7fb2a8fe207f23bd70605c69105232f354c45de260f897efbc7561db50c8dfd7e08afc518fd503521c1744b99d5b55a8fcba31b33859e34d747277d13218f7d5224044598e5e0d197e9831edbf5c52331cd5ad81eb59a4e65362999bb25123d1f9f7be7e380e1905d66d4ce29993de06ff3d951d95550fa75e46cff3dbe9fad4c840a51f21be233bb8ef89b44130934312a418b06c6b5a4f13e037b99790a2d05721834ff3e704a359bcf4528808f080e2abcd633da747f2eb7ee3e75a2e6998d62c932f396191b35c9629339b13fdf1e13fc2d154313dbb87685857359661b271f96eb3257c2c385d24572083c84220a03f91b69e94fb1968d7d0dad63e836037937c6d2ac600d20ac2a73ed65f5d6cea96a68e78b231ed66f81af204ba997f3b8120051bf52f6cd43773b5a30a42bff4bfe219648fd9084efa4873ca9690628814132b0bd7682b9cd31b4d6c6aef05751776d0ecd3b46a204cce2d1211b2890c51eef48c4baec55e2899b150517f4f66d8bbba8f2b25f2ae4eae54754e27a7d3b91ba705cf1e6ab4479d7f50203010001",
+			"jwk": {
+				"e": "AQAB",
+				"kty": "RSA",
+				"n": "s2e1MjQJAHMy8O-XoaJda7O-IU2FxLDl5X1dIerwEBKnsyfoCUFbKavKs-jQScxmlV4OdQOCNDdnbnskQS-KarVcWfqAgvVn6tMCI9_CSWcY0d2VE0Ois3Pc6Iy-7m0dmRZcb7fbPZCnSfkhNCUJ75WKevf7Ko_iB_I71wYFxpEFIy81TEXeJg-JfvvHVh21DI39fgivxRj9UDUhwXRLmdW1Wo_LoxszhZ4010cnfRMhj31SJARFmOXg0Zfpgx7b9cUjMc1a2B61mk5lNimZuyUSPR-fe-fjgOGQXWbUzimZPeBv89lR2VVQ-nXkbP89vp-tTIQKUfIb4jO7jvibRBMJNDEqQYsGxrWk8T4De5l5Ci0Fchg0_z5wSjWbz0UogI8IDiq81jPadH8ut-4-daLmmY1iyTLzlhkbNclikzmxP98eE_wtFUMT27h2hYVzWWYbJx-W6zJXwsOF0kVyCDyEIgoD-Rtp6U-xlo19Da1j6DYDeTfG0qxgDSCsKnPtZfXWzqlqaOeLIx7Wb4GvIEupl_O4EgBRv1L2zUN3O1owpCv_S_4hlkj9kITvpIc8qWkGKIFBMrC9doK5zTG01sau8FdRd20OzTtGogTM4tEhGyiQxR7vSMS67FXiiZsVBRf09m2Lu6jysl8q5OrlR1Tien07kbpwXPHmq0R51_U"
+			},
+			"input": "{\"e\":\"AQAB\",\"kty\":\"RSA\",\"n\":\"s2e1MjQJAHMy8O-XoaJda7O-IU2FxLDl5X1dIerwEBKnsyfoCUFbKavKs-jQScxmlV4OdQOCNDdnbnskQS-KarVcWfqAgvVn6tMCI9_CSWcY0d2VE0Ois3Pc6Iy-7m0dmRZcb7fbPZCnSfkhNCUJ75WKevf7Ko_iB_I71wYFxpEFIy81TEXeJg-JfvvHVh21DI39fgivxRj9UDUhwXRLmdW1Wo_LoxszhZ4010cnfRMhj31SJARFmOXg0Zfpgx7b9cUjMc1a2B61mk5lNimZuyUSPR-fe-fjgOGQXWbUzimZPeBv89lR2VVQ-nXkbP89vp-tTIQKUfIb4jO7jvibRBMJNDEqQYsGxrWk8T4De5l5Ci0Fchg0_z5wSjWbz0UogI8IDiq81jPadH8ut-4-daLmmY1iyTLzlhkbNclikzmxP98eE_wtFUMT27h2hYVzWWYbJx-W6zJXwsOF0kVyCDyEIgoD-Rtp6U-xlo19Da1j6DYDeTfG0qxgDSCsKnPtZfXWzqlqaOeLIx7Wb4GvIEupl_O4EgBRv1L2zUN3O1owpCv_S_4hlkj9kITvpIc8qWkGKIFBMrC9doK5zTG01sau8FdRd20OzTtGogTM4tEhGyiQxR7vSMS67FXiiZsVBRf09m2Lu6jysl8q5OrlR1Tien07kbpwXPHmq0R51_U\"}",
+			"jkt": "gbHsXm04bb85627SgoapeM1eCL46Jw2UhnAH7TXJyUs"
+		}
+	],
+	"jwkRefusals": [
+		{
+			"why": "an x whose last character carries bits past the 32 bytes",
+			"jwk": {
+				"crv": "P-256",
+				"kty": "EC",
+				"x": "LU9GAl3IvzqD6AVMI8-L37t9IuhyjIc9zt0GUSV-tgB",
+				"y": "th-rd8qWNiJ6hv3ozqY-vtWYFZRzzoxGkAw_HL9rdcA"
+			}
+		},
+		{
+			"why": "a y of 33 bytes",
+			"jwk": {
+				"crv": "P-256",
+				"kty": "EC",
+				"x": "LU9GAl3IvzqD6AVMI8-L37t9IuhyjIc9zt0GUSV-tg8",
+				"y": "AbYfq3fKljYieob96M6mPr7VmBWUc86MRpAMPxy_a3XA"
+			}
+		},
+		{
+			"why": "a member past the thumbprint's",
+			"jwk": {
+				"crv": "P-256",
+				"kty": "EC",
+				"x": "LU9GAl3IvzqD6AVMI8-L37t9IuhyjIc9zt0GUSV-tg8",
+				"y": "th-rd8qWNiJ6hv3ozqY-vtWYFZRzzoxGkAw_HL9rdcA",
+				"alg": "ES256"
+			}
+		},
+		{
+			"why": "padding",
+			"jwk": {
+				"crv": "Ed25519",
+				"kty": "OKP",
+				"x": "Zm1AtmN7C_O6lBVsbtROUsOas6A9lEEx-YZo1y1po3w="
+			}
+		},
+		{
+			"why": "Ed448",
+			"jwk": {
+				"crv": "Ed448",
+				"kty": "OKP",
+				"x": "IEp2Fm6ilrOgCkG5XHmIJXgD-6Aq3o9UT-INt02M1jHke8NeOdnZL0TpQwQL2UvuyQYl6LcYVYwP"
+			}
+		},
+		{
+			"why": "a modulus with a leading zero byte, kept rather than cut",
+			"jwk": {
+				"e": "AQAB",
+				"kty": "RSA",
+				"n": "AKIfb9xAuci6DO7-emhjDg08UG3My4sEfygXIHRjBcKvMa345rYLw_rD2Ub8r7MyBHTPPqtYrR-efsBnuMSZ1_llHtpwVApV1nK6xtQu8IbI38zJcGHKCj35AinEQPbSC7ZCCgcpokSSqq0BRdsgHBJWPn2OSK9GXGyyPJsB0uGYTTWY4y_jhice-adicFcAFQ9OiC7pH6SwIixKroTNP-UQbbqEgbq4t0pnHReCG7Q9ATKYqCGPCLR5kAwlVqw7c_u_9XrjohMI0YHYhcI3dGXR3RaKTpWBFcSF900uHiPNsX0zklikPHKoZFlbdfi0ab0hQ1XdlFe3byC5e49xKEE"
+			}
+		},
+		{
+			"why": "an exponent other than 65537",
+			"jwk": {
+				"e": "Aw",
+				"kty": "RSA",
+				"n": "oh9v3EC5yLoM7v56aGMODTxQbczLiwR_KBcgdGMFwq8xrfjmtgvD-sPZRvyvszIEdM8-q1itH55-wGe4xJnX-WUe2nBUClXWcrrG1C7whsjfzMlwYcoKPfkCKcRA9tILtkIKBymiRJKqrQFF2yAcElY-fY5Ir0ZcbLI8mwHS4ZhNNZjjL-OGJx75p2JwVwAVD06ILukfpLAiLEquhM0_5RBtuoSBuri3SmcdF4IbtD0BMpioIY8ItHmQDCVWrDtz-7_1euOiEwjRgdiFwjd0ZdHdFopOlYEVxIX3TS4eI82xfTOSWKQ8cqhkWVt1-LRpvSFDVd2UV7dvILl7j3EoQQ"
+			}
+		},
+		{
+			"why": "a modulus of 2047 bits",
+			"jwk": {
+				"e": "AQAB",
+				"kty": "RSA",
+				"n": "fx9v3EC5yLoM7v56aGMODTxQbczLiwR_KBcgdGMFwq8xrfjmtgvD-sPZRvyvszIEdM8-q1itH55-wGe4xJnX-WUe2nBUClXWcrrG1C7whsjfzMlwYcoKPfkCKcRA9tILtkIKBymiRJKqrQFF2yAcElY-fY5Ir0ZcbLI8mwHS4ZhNNZjjL-OGJx75p2JwVwAVD06ILukfpLAiLEquhM0_5RBtuoSBuri3SmcdF4IbtD0BMpioIY8ItHmQDCVWrDtz-7_1euOiEwjRgdiFwjd0ZdHdFopOlYEVxIX3TS4eI82xfTOSWKQ8cqhkWVt1-LRpvSFDVd2UV7dvILl7j3EoQQ"
+			}
+		},
+		{
+			"why": "a modulus of 4097 bits",
+			"jwk": {
+				"e": "AQAB",
+				"kty": "RSA",
+				"n": "Aa6fWu-VZwJXAUnABLL0b1ze58Canb_pwzxByaPIb41ZQTNZTmw8-hnxESdvMEBLElVEktbk5ui--cW4pv5hlCIYdQJgMiD_wz12TFTjWZ7d5pAV73jnjz8I_Tj1n_0SScRnF1I3hslJKTe_gBxarl4GHixe8sSlMlrOeeZrWNr3rxr95Z-_81hfpFbnjitGwJo3nl0_DoCFixXWNkihpefoSb1N2wRU-Psyn5dDBJ-q8XH6owxEip-vOexl2hHkaQiUWc2pKcnNmw3XzVrMIJK-xTqsZzlnhcCYUOwRybpSBgMloz8l05xf4UBPNIRn0WymfaBtjsX6gGW0it6w3K8yukaiToINoF5iy3_eq_VNUj1kJA0AQI7nyus5a7bysuxLVLcBwsKaX8aYuK0ZQTS622hDJFJ0vs_o0evijeYmxlWG8g6XeSLcDsf1Fq-vCAmnRUNmHWqU4-hPec6QIbzvao9AHi1SXv7QtGcU1v1deilnIR6GWa95v6X7ybGhqmxSyhYDvUThJI5yAzZjmnJJ3DxavPPD0SSAFSjLF4xFfDVbZEs_E9fAUtDWCNI7a3C4m0iZuV6LzSUM5w2MiRx_IbcLYXJ_lODahyg_Bs3_URdyhQtdVLmTolPErfH_nJpXBDCODfqemDBcKEWPyLpfrnObExEssBRu3JlsPmdu"
+			}
+		},
+		{
+			"why": "a modulus of 1024 bits",
+			"jwk": {
+				"e": "AQAB",
+				"kty": "RSA",
+				"n": "oh9v3EC5yLoM7v56aGMODTxQbczLiwR_KBcgdGMFwq8xrfjmtgvD-sPZRvyvszIEdM8-q1itH55-wGe4xJnX-WUe2nBUClXWcrrG1C7whsjfzMlwYcoKPfkCKcRA9tILtkIKBymiRJKqrQFF2yAcElY-fY5Ir0ZcbLI8mwHS4Zg"
+			}
+		}
+	],
+	"coseRefusals": [
+		{
+			"why": "a field past the key type's (kid)",
+			"cose": "a60102024100032620012158202d4f46025dc8bf3a83e8054c23cf8bdfbb7d22e8728c873dcedd0651257eb60f225820b61fab77ca9636227a86fde8cea63ebed598159473ce8c46900c3f1cbf6b75c0"
+		},
+		{
+			"why": "a key named twice",
+			"cose": "a501020102032620012158202d4f46025dc8bf3a83e8054c23cf8bdfbb7d22e8728c873dcedd0651257eb60f"
+		},
+		{
+			"why": "a map of indefinite length",
+			"cose": "bf0102032620012158202d4f46025dc8bf3a83e8054c23cf8bdfbb7d22e8728c873dcedd0651257eb60f225820b61fab77ca9636227a86fde8cea63ebed598159473ce8c46900c3f1cbf6b75c0ff"
+		},
+		{
+			"why": "an integer not in its shortest form",
+			"cose": "a5010203380620012158202d4f46025dc8bf3a83e8054c23cf8bdfbb7d22e8728c873dcedd0651257eb60f225820b61fab77ca9636227a86fde8cea63ebed598159473ce8c46900c3f1cbf6b75c0"
+		},
+		{
+			"why": "keys out of the canonical order",
+			"cose": "a50326010220012158202d4f46025dc8bf3a83e8054c23cf8bdfbb7d22e8728c873dcedd0651257eb60f225820b61fab77ca9636227a86fde8cea63ebed598159473ce8c46900c3f1cbf6b75c0"
+		},
+		{
+			"why": "a byte string of indefinite length",
+			"cose": "a4010103272006215f50666d40b6637b0bf3ba94156c6ed44e5250c39ab3a03d944131f98668d72d69a37cff"
+		},
+		{
+			"why": "Ed448",
+			"cose": "a401010327200721583976c3dc987012838e19732aa4dc6171238209c4251465650a5f69e3142b8056bc75dacc9f33812f50dafff680cbf070707756d1c51c49001ad8"
+		},
+		{
+			"why": "an algorithm its key type does not have",
+			"cose": "a50102032720012158202d4f46025dc8bf3a83e8054c23cf8bdfbb7d22e8728c873dcedd0651257eb60f225820b61fab77ca9636227a86fde8cea63ebed598159473ce8c46900c3f1cbf6b75c0"
+		},
+		{
+			"why": "a modulus with a leading zero byte",
+			"cose": "a40103033901002059010100a21f6fdc40b9c8ba0ceefe7a68630e0d3c506dcccb8b047f281720746305c2af31adf8e6b60bc3fac3d946fcafb3320474cf3eab58ad1f9e7ec067b8c499d7f9651eda70540a55d672bac6d42ef086c8dfccc97061ca0a3df90229c440f6d20bb6420a0729a24492aaad0145db201c12563e7d8e48af465c6cb23c9b01d2e1984d3598e32fe386271ef9a762705700150f4e882ee91fa4b0222c4aae84cd3fe5106dba8481bab8b74a671d17821bb43d013298a8218f08b479900c2556ac3b73fbbff57ae3a21308d181d885c2377465d1dd168a4e958115c485f74d2e1e23cdb17d339258a43c72a864595b75f8b469bd214355dd9457b76f20b97b8f7128412143010001"
+		},
+		{
+			"why": "an exponent other than 65537",
+			"cose": "a401030339010020590100a21f6fdc40b9c8ba0ceefe7a68630e0d3c506dcccb8b047f281720746305c2af31adf8e6b60bc3fac3d946fcafb3320474cf3eab58ad1f9e7ec067b8c499d7f9651eda70540a55d672bac6d42ef086c8dfccc97061ca0a3df90229c440f6d20bb6420a0729a24492aaad0145db201c12563e7d8e48af465c6cb23c9b01d2e1984d3598e32fe386271ef9a762705700150f4e882ee91fa4b0222c4aae84cd3fe5106dba8481bab8b74a671d17821bb43d013298a8218f08b479900c2556ac3b73fbbff57ae3a21308d181d885c2377465d1dd168a4e958115c485f74d2e1e23cdb17d339258a43c72a864595b75f8b469bd214355dd9457b76f20b97b8f712841214103"
+		},
+		{
+			"why": "a point off the curve",
+			"cose": "a50102032620012158202d4f46025dc8bf3a83e8054c23cf8bdfbb7d22e8728c873dcedd0651257eb60f225820b61fab77ca9636227a86fde8cea63ebed598159473ce8c46900c3f1cbf6b75c1"
+		},
+		{
+			"why": "bytes after the map",
+			"cose": "a50102032620012158202d4f46025dc8bf3a83e8054c23cf8bdfbb7d22e8728c873dcedd0651257eb60f225820b61fab77ca9636227a86fde8cea63ebed598159473ce8c46900c3f1cbf6b75c000"
+		}
+	]
+}

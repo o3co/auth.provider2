@@ -3,8 +3,7 @@ import {
 	canonicalText,
 	challengeInput,
 	continuationInput,
-	evidenceInput,
-	firstKeyAad,
+	firstKey,
 	hpke,
 	itemsFromJar,
 	payloads,
@@ -148,20 +147,20 @@ describe("the inputs a hash or a signature covers", () => {
 	it("binds a challenge to its use and the statement, and the evidence to the token, with a separator", () => {
 		expect(challengeInput("T", "get")).toBe("get\u0000T");
 		expect(challengeInput("T", "create")).not.toBe(challengeInput("T", "get"));
-		expect(evidenceInput("tok")).toBe("first-key-token\u0000tok");
+		expect(firstKey.evidenceInput("tok")).toBe("first-key-token\u0000tok");
 	});
 
 	it("binds a sealed request to its stage, nonce and the screen's keys, whatever order they come in", () => {
-		const aad = firstKeyAad("start", "n", "e", key);
+		const aad = firstKey.aad("start", "n", "e", key);
 		expect(aad).toBe(
 			'{"e_enc":"e","e_sig":{"x":"x","y":"y"},"nonce":"n","purpose":"first-key/start"}',
 		);
-		expect(firstKeyAad("mail", "n", "e", key)).not.toBe(aad);
+		expect(firstKey.aad("mail", "n", "e", key)).not.toBe(aad);
 		expect(continuationInput("h", 1, "b")).toBe('{"body":"b","h":"h","seq":1,"stage":"register"}');
 	});
 
 	it("holds every word frozen, and names each sealing's info apart", () => {
-		for (const words of [typs, purposes, hpke, hpke.info, payloads])
+		for (const words of [typs, purposes, hpke, hpke.info, payloads, firstKey, firstKey.stages])
 			expect(Object.isFrozen(words)).toBe(true);
 		const infos = Object.values(hpke.info);
 		expect(new Set(infos).size).toBe(infos.length);

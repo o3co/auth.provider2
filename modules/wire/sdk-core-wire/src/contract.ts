@@ -6,6 +6,9 @@ import { z } from "zod";
  * signature covers; hashing, signing and sealing are each side's own.
  */
 
+/** The wire versions a reader of this protocol speaks; a statement and a completion name one as `v`. */
+export const versions = Object.freeze([1] as const);
+
 /** The `typ` of each signed object. */
 export const typs = Object.freeze({
 	jar: "oauth-authz-req+jwt",
@@ -79,6 +82,42 @@ const signingKey = z
 	.object({ kty: z.literal("EC"), crv: z.literal("P-256"), x: z.string(), y: z.string() })
 	.strict();
 
+/** The algorithms a passkey may be of, as COSE numbers them: ES256, EdDSA (Ed25519) and RS256. */
+const passkeyAlgorithm = z.union([z.literal(-7), z.literal(-8), z.literal(-257)]);
+
+const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+/** 32 bytes in their one unpadded base64url spelling: 43 characters, the last carrying no bit past them. */
+const bytes32 = z.string().regex(/^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$/);
+/** A SHA-256 thumbprint, base64url. */
+const thumbprint = bytes32;
+
+const sextet = (text: string, at: number) => alphabet.indexOf(text.charAt(at));
+
+/**
+ * An RSA modulus in its one unpadded base64url spelling, its first byte not 0 (one that is is
+ * refused, never cut), of 2048 to 4096 bits.
+ */
+function isModulus(text: string): boolean {
+	const rest = text.length % 4;
+	if (!/^[A-Za-z0-9_-]+$/.test(text) || rest === 1) return false;
+	// The last character's bits past the bytes (4 where a group ends in 2 characters, 2 in 3) are 0.
+	if (sextet(text, text.length - 1) % (rest === 2 ? 16 : rest === 3 ? 4 : 1) !== 0) return false;
+	const bytes = ((text.length - rest) / 4) * 3 + (rest === 0 ? 0 : rest - 1);
+	const high = sextet(text, 0) * 4 + (sextet(text, 1) - (sextet(text, 1) % 16)) / 16;
+	// 2048 bits are 256 bytes, the first of them 128 or more; 4096 bits are 512 bytes.
+	return high !== 0 && (bytes === 256 ? high >= 128 : bytes > 256 && bytes <= 512);
+}
+
+/** A passkey's public key as a JWK, its thumbprint's members alone, for each algorithm a passkey may be of. */
+const passkeyJwk = z.discriminatedUnion("kty", [
+	z.object({ crv: z.literal("P-256"), kty: z.literal("EC"), x: bytes32, y: bytes32 }).strict(),
+	z.object({ crv: z.literal("Ed25519"), kty: z.literal("OKP"), x: bytes32 }).strict(),
+	z
+		.object({ e: z.literal("AQAB"), kty: z.literal("RSA"), n: z.string().refine(isModulus) })
+		.strict(),
+]);
+export type PasskeyJwk = z.infer<typeof passkeyJwk>;
+
 const approval = z
 	.object({
 		client_id: z.string().min(1),
@@ -98,8 +137,11 @@ const approval = z
 	})
 	.strict();
 
-/** The fields every statement carries: its issuer, id, issue and expiry times, and the screen's two keys. */
+const v = z.literal(versions[0]).optional();
+
+/** The fields every statement carries: its version, issuer, id, issue and expiry times, and the screen's two keys. */
 const common = {
+	v,
 	iss: z.string().min(1),
 	sid: z.string().min(1),
 	iat: z.number().int(),
@@ -117,6 +159,7 @@ const statement = z
 /** The completion's answer the Core signs and seals to the screen's encryption key. */
 const completion = z
 	.object({
+		v,
 		iss: z.string().min(1),
 		/** T's SHA-256. */
 		t_hash: z.string().min(1),
@@ -150,6 +193,12 @@ const creation = z
 						user_id: z.string().min(1),
 						rp_id: z.string().min(1),
 						exclude_credentials: z.array(z.string()),
+						/** The algorithms the ceremony offered, as COSE numbers them: those the new key may be of. */
+						algorithms: z
+							.array(passkeyAlgorithm)
+							.min(1)
+							.refine((list) => list.every((alg, at) => list.indexOf(alg) === at))
+							.optional(),
 					})
 					.strict(),
 			})
@@ -166,17 +215,21 @@ const possession = z
 		possession: z
 			.object({
 				creation_hash: z.string().min(1),
+				/** The new key's JWK thumbprint (RFC 7638), the SHA-256 of `keyThumbprintInput`, base64url. */
+				key_jkt: thumbprint.optional(),
 				/** The base64url SHA-256 of the new key's uncompressed P-256 point (0x04, x, y: 65 bytes). */
-				key_hash: z.string().min(1),
+				key_hash: z.string().min(1).optional(),
 				credential_id: z.string().min(1),
 				reservation_id: z.string().min(1),
 			})
-			.strict(),
+			.strict()
+			// The new key is named one way: by its thumbprint or by its point's hash.
+			.refine((p) => (p.key_jkt === undefined) !== (p.key_hash === undefined)),
 	})
 	.strict();
 
 /** The first key's stages, each with a nonce of its own. */
-export const firstKeyStages = Object.freeze(["start", "mail"] as const);
+const firstKeyStages = Object.freeze(["start", "mail"] as const);
 export type FirstKeyStage = (typeof firstKeyStages)[number];
 
 /** What the Core opens of the first key's start: the identifier, and a password where the deployment asks one. */
@@ -222,6 +275,16 @@ export function canonicalText(value: unknown): string {
 }
 
 /**
+ * What a passkey's thumbprint (RFC 7638; RFC 8037 for an OKP key) is the SHA-256 of: the JWK's
+ * required members, sorted, with no space. A JWK that is not a passkey's as `PasskeyJwk` holds it
+ * (another member, another spelling of the same bytes, a value out of its bounds) has none.
+ */
+export function keyThumbprintInput(jwk: unknown): string | undefined {
+	const read = passkeyJwk.safeParse(jwk);
+	return read.success ? canonicalText(read.data) : undefined;
+}
+
+/**
  * The items T approves, from a JAR's payload and its hash, by the one rule both sides run and compare
  * exactly: an error names the claim that is unknown or missing, or the value that is not allowed.
  */
@@ -248,17 +311,22 @@ export function itemsFromJar(
 export const challengeInput = (statement: string, use: "get" | "create") =>
 	`${use}\u0000${statement}`;
 
-/** What the first key's evidence value is the hash of: the mail's token. */
-export const evidenceInput = (token: string) => `first-key-token\u0000${token}`;
-
-/** The additional data a first key's sealed request is bound to: its stage, nonce and the screen's keys, so a swapped key fails to open. */
-export const firstKeyAad = (stage: FirstKeyStage, nonce: string, eEnc: string, eSig: SigningKey) =>
-	canonicalText({
-		purpose: `first-key/${stage}`,
-		nonce,
-		e_enc: eEnc,
-		e_sig: { x: eSig.x, y: eSig.y },
-	});
+/**
+ * The first key's words and inputs: its stages; what its evidence value is the hash of (the mail's
+ * token); and the additional data a sealed request is bound to (its stage, nonce and the screen's
+ * keys, so a swapped key fails to open).
+ */
+export const firstKey = Object.freeze({
+	stages: firstKeyStages,
+	evidenceInput: (token: string) => `first-key-token\u0000${token}`,
+	aad: (stage: FirstKeyStage, nonce: string, eEnc: string, eSig: SigningKey) =>
+		canonicalText({
+			purpose: `first-key/${stage}`,
+			nonce,
+			e_enc: eEnc,
+			e_sig: { x: eSig.x, y: eSig.y },
+		}),
+});
 
 /** What a registration's continuation signs: the statement's hash, the stage, the sequence and the response's hash. */
 export const continuationInput = (statementHash: string, seq: number, responseHash: string) =>
