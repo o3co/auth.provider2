@@ -41,6 +41,14 @@ describe("the items T approves, from a JAR", () => {
 		});
 	});
 
+	it("takes prompt as the envelope's, never an item: the Core reads it before T is made", () => {
+		const read = itemsFromJar({ ...jar, prompt: "login" }, "h");
+		expect(read).toEqual(itemsFromJar(jar, "h"));
+		expect("items" in read && "prompt" in read.items).toBe(false);
+		for (const prompt of ["none", ["login"], 1, null])
+			expect(itemsFromJar({ ...jar, prompt }, "h"), JSON.stringify(prompt)).toEqual(read);
+	});
+
 	it("refuses a claim outside the closed set, authorization_details among them", () => {
 		expect(itemsFromJar({ ...jar, authorization_details: [] }, "h")).toEqual({
 			error: "unknown_item:authorization_details",
@@ -105,6 +113,38 @@ describe("the payloads", () => {
 			true,
 		);
 		expect(payloads.mailPlain.safeParse({ token: "t", identifier: "a" }).success).toBe(false);
+	});
+});
+
+describe("②'s answer to an authorization's start", () => {
+	const answer = {
+		statement: "eyJh.eyJi.c2ln",
+		challenge: "A".repeat(43),
+		create: false,
+	};
+
+	it("reads T, its get challenge and whether a passkey may be made first", () => {
+		expect(payloads.answers.authorization.parse(answer)).toEqual(answer);
+		expect(payloads.answers.authorization.parse({ ...answer, create: true }).create).toBe(true);
+	});
+
+	it("refuses a statement that is no compact JWS, a challenge that is no SHA-256, a create that is no boolean, and any other field", () => {
+		for (const change of [
+			{ statement: "a.b" },
+			{ statement: "a.b.c.d" },
+			{ statement: "a.b+.c" },
+			{ challenge: "A".repeat(42) },
+			{ challenge: `${"A".repeat(42)}B` },
+			{ challenge: `${"A".repeat(42)}=` },
+			{ create: "false" },
+			{ purpose: "authorization" },
+		])
+			expect(
+				payloads.answers.authorization.safeParse({ ...answer, ...change }).success,
+				JSON.stringify(change),
+			).toBe(false);
+		const { create: _, ...without } = answer;
+		expect(payloads.answers.authorization.safeParse(without).success).toBe(false);
 	});
 });
 

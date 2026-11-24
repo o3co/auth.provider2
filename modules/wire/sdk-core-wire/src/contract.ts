@@ -67,8 +67,8 @@ const requiredItems = Object.freeze([
 	"code_challenge_method",
 	"dpop_jkt",
 ] as const);
-/** A JAR's envelope: claims that are no item, so T holds none of them. */
-const jarEnvelope = Object.freeze(["iss", "aud", "iat", "nbf", "exp", "jti"] as const);
+/** A JAR's envelope: claims that are no item, so T holds none of them (`prompt`, read by the Core before T, among them). */
+const jarEnvelope = Object.freeze(["iss", "aud", "iat", "nbf", "exp", "jti", "prompt"] as const);
 
 /** A JAR's claims as T reads them: the items, those it must carry, and its envelope. */
 export const jarClaims = Object.freeze({
@@ -241,7 +241,13 @@ const mailPlain = z
 /** What the screen opens of the start's answer, which looks alike whether the start went well or not. */
 const codePlain = z.object({ code: z.string().min(1) }).strict();
 
-/** The payloads' schemas, as each reader holds what it opened or verified to them. */
+const compactJws = z.string().regex(/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/);
+/** ②'s answer: T, its get challenge (SHA-256 of `challengeInput(T, "get")`, the screen recomputes it), whether F1 may make a passkey first. */
+const authorizationAnswer = z
+	.object({ statement: compactJws, challenge: bytes32, create: z.boolean() })
+	.strict();
+
+/** The bodies' schemas: what each reader opened or verified, and the answers the Front carries unread (`answers`). */
 export const payloads = Object.freeze({
 	statement,
 	completion,
@@ -250,12 +256,14 @@ export const payloads = Object.freeze({
 	startPlain,
 	mailPlain,
 	codePlain,
+	answers: Object.freeze({ authorization: authorizationAnswer }),
 });
 
 export type StatementPayload = z.infer<typeof statement>;
 export type CompletionPayload = z.infer<typeof completion>;
 export type CreationPayload = z.infer<typeof creation>;
 export type PossessionPayload = z.infer<typeof possession>;
+export type AuthorizationAnswer = z.infer<typeof authorizationAnswer>;
 export type AuthorizationItems = z.infer<typeof approval>;
 export type SigningKey = z.infer<typeof signingKey>;
 
