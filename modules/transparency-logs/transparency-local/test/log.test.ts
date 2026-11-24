@@ -258,6 +258,21 @@ describe("transparency-local's log (t0)", () => {
 		expect(answer.receipts.map((r) => readReceipt(r).payload.token)).toEqual(tokens);
 	});
 
+	it("gives a key change's receipt the digests its append names, as an approval's", async () => {
+		const { log } = await boot();
+		const flow = subjectFlow();
+		await log.append(abandonment(flow), 0);
+		const { abandons: _none, ...stage } = abandonment(flow);
+		const keyChange = { statement: "A".repeat(43), evidence: "E".repeat(43) };
+		const change: Stage = { ...stage, kind: "keyChange", op: "k1", stage: 1, keyChange };
+		const answer = await log.append(change, 1);
+		if (answer.result !== "accepted") return expect.unreachable(JSON.stringify(answer));
+		expect(readReceipt(answer.receipts[0] ?? "").payload).toMatchObject({
+			kind: "keyChange",
+			keyChange,
+		});
+	});
+
 	it("gives the preimage's digest its append names, the same for the same content in any order", async () => {
 		const { log } = await boot();
 		const flow = subjectFlow();

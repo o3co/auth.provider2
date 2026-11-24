@@ -111,7 +111,7 @@ function receiptsOf(record: Placed["record"]): string[] {
 	const { v, id, writer, kind, flow, position, shard, n, acceptedAt, plaintextDigest } = record;
 	const body = { v, iss: local, id, writer, kind, flow, position, shard, n, acceptedAt };
 	const of = (token?: unknown) =>
-		`${b64({ alg: "none", typ: logTyps.receipt })}.${b64(plain({ ...body, plaintextDigest, token, approval: record.approval }))}.${unsigned}`;
+		`${b64({ alg: "none", typ: logTyps.receipt })}.${b64(plain({ ...body, plaintextDigest, token, approval: record.approval, keyChange: record.keyChange }))}.${unsigned}`;
 	return record.tokens ? record.tokens.map((token) => of(token)) : [of()];
 }
 const acceptedOf = (r: Placed["record"]): AppendAnswer => ({
