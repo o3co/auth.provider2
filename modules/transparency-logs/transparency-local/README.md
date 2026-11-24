@@ -12,7 +12,7 @@
 
 ## Offers
 - Composition definition: the log axis (`transparencyLog`) and a stance (`promises`' `stances`).
-- It declares itself no default of the axis; being the axis's only adapter, `combinations` composes it wherever `transparency` comes and no adapter is chosen.
+- It is never the axis's default (`neverDefault`): a composition names it for `transparency`'s axis to compose it.
 - `logStore`, its store interface (records by key, read, then written as one held to every version read), `logStoreNeeds` (never evicted, survives a crash and a failover, reads confirmed, authenticated) and `logStoreOver` (a store, a space, randomness, `where`, `refuse`), over `records`' records held across.
 - Operator section `transparency-local`: `origin` (required), the one an assertion is judged for; `code-lifetime` (default `10m`), `refresh-lifetime` (default `365d`) and `issue-window` (default `1m`), the rules' times. Each no shorter than the lifetime its issuer holds, so the rules never cut an issuance short.
 

@@ -5,6 +5,7 @@
 	"type": "module",
 	"kind": "adapter",
 	"adapts": "@mod/transparency",
+	"neverDefault": true,
 	"exports": {
 		".": "./src/contract.ts",
 		"./module": "./src/module.ts"
