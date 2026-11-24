@@ -152,9 +152,9 @@ export interface TransparencyLog {
 	of(flow: Flow, op: string): Promise<OpOnFlow>;
 	/**
 	 * Places a reset boundary for an embedder's signed instruction, as the monitor does (§B.4): L0's
-	 * log itself, L1's by handing it to the monitor's endpoint. Optional until every log has it.
+	 * log itself, L1's by handing it to the monitor's endpoint.
 	 */
-	reset?(instruction: string): Promise<ResetAnswer>;
+	reset(instruction: string): Promise<ResetAnswer>;
 }
 
 /** What two hooks hold around a bundle: its tokens' digests before its append, their signing after its receipts. */
@@ -303,12 +303,10 @@ export interface Transparency {
 		| Refused<"notSubject">
 	>;
 	/**
-	 * Hands an embedder's reset instruction to the log's axis, answering what it answered; `unsupported`
-	 * where the log has no reset. The boundary is taken in as any monitor's record, by `step` or `tend`.
+	 * Hands an embedder's reset instruction to the log's axis, answering what it answered. The boundary
+	 * is taken in as any monitor's record, by `step` or `tend`.
 	 */
-	reset(p: {
-		readonly instruction: string;
-	}): Promise<{ readonly answer: ResetAnswer } | Refused<"unsupported">>;
+	reset(p: { readonly instruction: string }): Promise<{ readonly answer: ResetAnswer }>;
 	/**
 	 * A change of a kind's records held to the frame: only while the flow has no open intent. A kind's
 	 * owner changes them so alone, never in the store directly.

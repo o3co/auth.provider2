@@ -561,9 +561,4 @@ describe("a reset", () => {
 		await world.w3.step({ flow });
 		expect(world.part("keys")).toEqual(seeded.keys);
 	});
-
-	it("answers unsupported where the log has no reset", async () => {
-		const bare = world.replica("w4", { log: ({ reset: _, ...l }) => l });
-		expect(await bare.reset({ instruction: instruction() })).toEqual({ refused: "unsupported" });
-	});
 });

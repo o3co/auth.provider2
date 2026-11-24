@@ -503,9 +503,7 @@ export function transparencyOver(p: {
 			return { stepped, ...did };
 		},
 		async reset(q) {
-			return log.reset
-				? { answer: await log.reset(q.instruction) }
-				: { refused: "unsupported" as const };
+			return { answer: await log.reset(q.instruction) };
 		},
 		async changeHeld(q) {
 			const kind = kinds.get(q.kind);
