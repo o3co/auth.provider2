@@ -124,6 +124,15 @@ describe("the Core's ring by generation", () => {
 		expect(k.coreRing(4)).toBeUndefined();
 	});
 
+	it("gives every Core generation's public keys held, past, current and next, no private member among them", async () => {
+		const { k } = await booted(settings, held);
+		expect(k.coreRings().map((key) => [key.kid, key.generation, "d" in key])).toEqual([
+			["core-1", 1, false],
+			["core-test", 2, false],
+			["core-3", 3, false],
+		]);
+	});
+
 	it("verifies a JWS at once by the keys given, as authority-rules' checks take it, reading its header and payload", async () => {
 		const { k } = await booted(settings, held);
 		const checks: Pick<Checks, "verifyJws"> = { verifyJws: k.verifyJws };

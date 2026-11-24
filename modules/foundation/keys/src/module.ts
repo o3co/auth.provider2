@@ -2,7 +2,7 @@ import { contract, defineModule } from "@mod/kernel";
 import { accessTokenSigning, type KeyHolder, keys, type Ring } from "./contract.ts";
 import { keyHolders } from "./holder.ts";
 import { rs256Deprecated } from "./material/public.ts";
-import { coreJwks, publish } from "./publishing/publishing.ts";
+import { allCoreJwks, coreJwks, publish } from "./publishing/publishing.ts";
 import { verifiedBy } from "./rings/given.ts";
 import { type Rings, readRings } from "./rings/ring.ts";
 import { rs256Named } from "./rings/section.ts";
@@ -58,6 +58,7 @@ export default defineModule(
 				},
 				generation: () => rings.core.generation,
 				coreRing: (generation) => coreJwks(rings, generation),
+				coreRings: () => allCoreJwks(rings),
 				verifyJws: (jws, given) => verifiedBy(jws, given),
 				algorithm: (ring) => rings[ring].signing.alg,
 				nextAlgorithm: (ring) => rings[ring].next?.alg,

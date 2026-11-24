@@ -1,6 +1,7 @@
 import { rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { Published } from "../contract.ts";
+import { publicJwk } from "../material/public.ts";
 import { jwkOf } from "../rings/given.ts";
 import { expired, type Rings } from "../rings/ring.ts";
 
@@ -12,6 +13,15 @@ export function coreJwks(rings: Rings, generation: number) {
 	return key && [{ ...jwkOf(key), generation }];
 }
 
+/**
+ * Every Core generation's public keys held, in the ring's order: the one place they are gathered,
+ * each read as a public JWK (a private member never goes out).
+ */
+export const allCoreJwks = (rings: Rings) =>
+	[...rings.core.generations]
+		.flatMap(([generation]) => coreJwks(rings, generation) ?? [])
+		.filter((jwk) => publicJwk(jwk) !== undefined);
+
 /** The two sets, as the publisher serves them: the authority's unexpired keys (the JWKS), and the Core's ring with its sealing key. */
 export function keySets(rings: Rings, now: number) {
 	const sealing = rings.sealing;
@@ -22,7 +32,7 @@ export function keySets(rings: Rings, now: number) {
 		},
 		"core-keys.json": {
 			keys: [
-				...[...rings.core.generations].flatMap(([generation]) => coreJwks(rings, generation) ?? []),
+				...allCoreJwks(rings),
 				{
 					kty: "EC",
 					crv: "P-256",

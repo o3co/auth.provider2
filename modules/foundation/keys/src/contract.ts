@@ -89,6 +89,8 @@ export interface Keys {
 	generation(): number;
 	/** The public keys of the Core generation named (each with its kid, alg and generation), or none. */
 	coreRing(generation: number): readonly Jwk[] | undefined;
+	/** The public keys of every Core generation held, past, current and next (each with its kid, alg and generation): public members alone. */
+	coreRings(): readonly Jwk[];
 	/** A compact JWS verified by the key of `keys` (JWKs) its kid names, at once: its header and payload, or none. */
 	verifyJws(jws: string, keys: readonly unknown[]): Read | undefined;
 	/** The JWS `alg` the ring signs with now. */
