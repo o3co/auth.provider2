@@ -66,6 +66,8 @@ export interface Prepared {
 	readonly ring: Ring;
 	readonly header: Header;
 	readonly headerText: string;
+	/** How many bytes the signing key's signature takes, before base64url: its size is known before signing. */
+	readonly signatureLength: number;
 }
 
 /** A compact JWS verified against keys given: its header and payload as read. */

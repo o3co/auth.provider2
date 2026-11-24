@@ -48,12 +48,31 @@ describe("a signature prepared, then signed", () => {
 		expect(access.prepare().header).toEqual({ alg: "ES256", typ: "at+jwt", kid: "test" });
 	});
 
+	it("says how long the signing key's signature is, byte for byte as signed: EdDSA, ES256, and RS256 at its key's modulus", async () => {
+		const keys = {
+			ed: generateKeyPairSync("ed25519").privateKey,
+			rsa: generateKeyPairSync("rsa", { modulusLength: 4608 }).privateKey,
+		};
+		for (const [kid, alg] of [
+			["test", "ES256"],
+			["ed", "EdDSA"],
+			["rsa", "RS256"],
+		] as const) {
+			const { access } = await booted({ authority: { signing: { kid, alg } } }, keys);
+			const prepared = access.prepare();
+			const jws = jwsOf(await access.sign(prepared, text("{}")));
+			const signature = Buffer.from(jws.split(".")[2] as string, "base64url");
+			expect([alg, prepared.signatureLength]).toEqual([alg, signature.length]);
+		}
+	});
+
 	it("signs only under a header it prepared: not another's, nor one made by hand", async () => {
 		const { k, access } = await booted();
 		const forged: Prepared = {
 			ring: "authority",
 			header: { alg: "ES256", typ: "JWT", kid: "test" },
 			headerText: '{"alg":"ES256","typ":"JWT","kid":"test"}',
+			signatureLength: 64,
 		};
 		await expect(k.sign(forged, text("{}"))).rejects.toThrow(TypeError);
 		await expect(k.sign(access.prepare(), text("{}"))).rejects.toThrow(TypeError);

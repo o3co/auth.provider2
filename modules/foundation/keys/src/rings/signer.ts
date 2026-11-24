@@ -1,3 +1,4 @@
+import type { KeyObject } from "node:crypto";
 import type { Log } from "@mod/kernel";
 import { tokens } from "@mod/transparency-wire";
 import { compactVerify, decodeProtectedHeader, type ProtectedHeaderParameters } from "jose";
@@ -58,6 +59,23 @@ function nullClaims(value: unknown, at = "", found: string[] = []): string[] {
 const isObject = (value: unknown) =>
 	typeof value === "object" && value !== null && !Array.isArray(value);
 
+/** Each curve's signature, two of its coordinates (RFC 7518 §3.4); an Edwards key's, as RFC 8032 writes it. */
+const curveSignature: Readonly<Record<string, number>> = {
+	prime256v1: 64,
+	secp384r1: 96,
+	secp521r1: 132,
+};
+const edwardsSignature: Readonly<Record<string, number>> = { ed25519: 64, ed448: 114 };
+
+/** How many bytes a key's signature takes: an RSA key's modulus, a curve's coordinates, an Edwards key's. */
+function signatureLengthOf(key: KeyObject): number {
+	const type = key.asymmetricKeyType ?? "";
+	const details = key.asymmetricKeyDetails;
+	if (type === "rsa" || type === "rsa-pss") return Math.ceil((details?.modulusLength ?? 0) / 8);
+	if (type === "ec") return curveSignature[details?.namedCurve ?? ""] ?? 0;
+	return edwardsSignature[type] ?? 0;
+}
+
 /** Signing and verifying under a `typ`, with one ring's keys, through the holder. */
 export interface RingSigner {
 	prepare(typ: string): Prepared;
@@ -77,9 +95,11 @@ export function ringSigner(
 	const issued = new WeakSet<Prepared>();
 	return {
 		prepare: (typ) => {
-			const { kid, alg } = ring.signing;
+			const { kid, alg, key } = ring.signing;
 			const header = Object.freeze({ alg, typ, kid });
-			const prepared = Object.freeze({ ring: name, header, headerText: JSON.stringify(header) });
+			const headerText = JSON.stringify(header);
+			const signatureLength = signatureLengthOf(key);
+			const prepared = Object.freeze({ ring: name, header, headerText, signatureLength });
 			issued.add(prepared);
 			return prepared;
 		},

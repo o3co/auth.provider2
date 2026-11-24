@@ -11,7 +11,7 @@
 - The meaning of what is signed and sealed, and the info and suite words of a sealing: the caller's, and sdk-core-wire's. Which outside keys a module trusts.
 
 ## Offers
-- `keys`: `prepare(ring, typ)`, the header (`alg`, `typ`, `kid`) fixed before signing, and its text; `sign(prepared, bytes)` (a JSON object's bytes signed as given under it) answering the JWS or `withdrawn`; `algorithm(ring)` and `nextAlgorithm(ring)`.
+- `keys`: `prepare(ring, typ)`, the header (`alg`, `typ`, `kid`) fixed before signing, its text and the signature's length (`rings`' card); `sign(prepared, bytes)` (a JSON object's bytes signed as given under it) answering the JWS or `withdrawn`; `algorithm(ring)` and `nextAlgorithm(ring)`.
 - `keys`' verifications, each valid with frozen claims or why not (`malformed`, `typ`, `kid_unknown`, `kid_expired`, `signature`): `verify(ring, token, typ)`, and `verifyOf(generation, token, typ)` by the Core generation named; `generation()`, the one this Core signs as; `coreRing(generation)`, its public keys; `verifyJws(jws, keys)`, at once over the JWKs given (authority-rules' `Checks.verifyJws`).
 - `keys` also: `seal` and `open` (internal module `sealing`), `powers` (whether the holder's signing can be withdrawn outside the Core, and its calls counted outside the Core's account), and `publish`, the app entry `keys-publish <directory>` (internal module `publishing`).
 - `Ring` (`authority` or `core`), `Header`, `Prepared`, `Signed`, `Read`, `Sealed`, `Opened`, `Powers`, `Published`; for adapters, `KeyHolder`, `Held`, `SignAnswer`, `AgreeAnswer`.
