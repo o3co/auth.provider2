@@ -4,7 +4,7 @@ import clientsModule from "@mod/clients/module";
 import { clientsConfig } from "@mod/clients/testing";
 import externalJwtModule from "@mod/external-jwt/module";
 import http from "@mod/http/module";
-import { httpConfig } from "@mod/http/testing";
+import { httpConfig, testRequest } from "@mod/http/testing";
 import { testServer } from "@mod/http-server/testing";
 import issuerModule from "@mod/issuer/module";
 import { issuerConfig } from "@mod/issuer/testing";
@@ -69,7 +69,7 @@ async function boot() {
 		if (!found) throw new Error(`no client ${id}`);
 		return found;
 	};
-	return { checks: app.get(clientAssertion), client };
+	return { checks: app.get(clientAssertion), client, clients: app.get(clients) };
 }
 
 const signed = (key: KeyObject, typ: string, claims: object = {}, alg = "ES256") =>
@@ -123,5 +123,41 @@ describe("a JWT a client signed", () => {
 			kind: "refused",
 			reason: "expired",
 		});
+	});
+});
+
+describe("the key a client's assertion was verified with", () => {
+	const presented = (assertion: string) =>
+		testRequest({
+			method: "POST",
+			form: new Map([
+				["client_assertion_type", ["urn:ietf:params:oauth:client-assertion-type:jwt-bearer"]],
+				["client_assertion", [assertion]],
+			]),
+		});
+	const assertion = (key: KeyObject, jti: string) =>
+		new SignJWT({ iss: "app", sub: "app", aud: issuer, jti, exp: Math.floor(now / 1000) + 60 })
+			.setProtectedHeader({ alg: "ES256", kid: "ec" })
+			.sign(key);
+
+	it("is what the authentication verified: the key, its thumbprint and the client's registry version", async () => {
+		const { checks, clients: c } = await boot();
+		const answer = await c.authenticate(presented(await assertion(ec.privateKey, "j1")));
+		if (answer.kind !== "authenticated") throw new Error(answer.reason);
+		const verified = checks.verifiedOf(answer.proof);
+		expect(verified).toEqual({
+			key: jwk(ec.publicKey, { kid: "ec" }),
+			thumbprint: await thumbprint(jwk(ec.publicKey)),
+		});
+		expect(Object.isFrozen(verified)).toBe(true);
+	});
+
+	it("is none for a proof this module did not make, however it is shaped", async () => {
+		const { checks } = await boot();
+		const forged = {
+			key: jwk(other.publicKey),
+			thumbprint: await thumbprint(jwk(other.publicKey)),
+		};
+		for (const proof of [undefined, forged, "k"]) expect(checks.verifiedOf(proof)).toBeUndefined();
 	});
 });

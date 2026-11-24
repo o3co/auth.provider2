@@ -6,6 +6,7 @@ import { type Clock, type Log, Unavailable } from "@mod/kernel";
 import { decodeJwt } from "jose";
 import { checked } from "./check.ts";
 import { clientKeys, keysOf } from "./keys/keys.ts";
+import { proofOf } from "./proof.ts";
 import { widestClockSkew } from "./section.ts";
 import type { SpentAssertions } from "./store.ts";
 
@@ -82,7 +83,7 @@ export function assertionMethod(p: Parts): AuthMethod {
 		verify: async (request, client) => {
 			const refuse = (reason: string) => {
 				p.log.warn("client-assertion.refused", { client: client.id, reason });
-				return false;
+				return undefined;
 			};
 			if (field(request, "client_assertion_type") !== assertionType) {
 				return refuse("assertion type");
@@ -118,7 +119,9 @@ export function assertionMethod(p: Parts): AuthMethod {
 			const lifetimeMs =
 				assertion.expiresAt - p.clock.now() + widestClockSkew * 1000 + storeClockMarginMs;
 			const saved = await p.spent.save(spentName(client.id, assertion.jti), lifetimeMs);
-			return saved === "exists" ? refuse("used before") : true;
+			if (saved === "exists") return refuse("used before");
+			// What the verification proves, for a grant to bind its token to that very key.
+			return verified.kind === "valid" ? { proof: await proofOf(verified.key, client) } : undefined;
 		},
 	};
 }

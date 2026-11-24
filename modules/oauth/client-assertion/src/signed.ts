@@ -5,6 +5,7 @@ import { thumbprint } from "@mod/keys";
 import { said } from "./check.ts";
 import type { ClientAssertion } from "./contract.ts";
 import { clientKeys, keysOf } from "./keys/keys.ts";
+import { verifiedOf } from "./proof.ts";
 
 /** `holdsKey` and `verifySignedBy` over the client's keys, under the operator's section. */
 export function signedBy(p: {
@@ -14,6 +15,7 @@ export function signedBy(p: {
 	readonly maxLifetimeMs: number;
 }): ClientAssertion {
 	return {
+		verifiedOf,
 		holdsKey: async (client: Client, asked: string) => {
 			const source = keysOf(client.section(clientKeys));
 			if (!("inline" in source)) return false;

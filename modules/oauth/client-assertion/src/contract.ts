@@ -1,5 +1,6 @@
 import type { Client } from "@mod/clients";
 import { contract } from "@mod/kernel";
+import type { Jwk } from "./keys/keys.ts";
 
 export { type ClientKeys, clientKeys, type Jwk } from "./keys/keys.ts";
 export * from "./store.ts";
@@ -9,8 +10,20 @@ export type SignedBy =
 	| { readonly kind: "signed"; readonly claims: Readonly<Record<string, unknown>> }
 	| { readonly kind: "refused"; readonly reason: string };
 
+/** The key a client's assertion was verified with, its JWK SHA-256 thumbprint, and the registry version the client came from. */
+export interface VerifiedKey {
+	readonly key: Jwk;
+	readonly thumbprint: string;
+	readonly version?: number;
+}
+
 /** What the client's keys decide, for the modules that ask of a client's key or signature. */
 export interface ClientAssertion {
+	/**
+	 * The key an authentication by this module's assertion was verified with, from its `proof` as
+	 * `clients` carries it; none for any other value, a proof of another method's or one made elsewhere.
+	 */
+	verifiedOf(proof: unknown): VerifiedKey | undefined;
 	/**
 	 * Whether the client holds the key a JWK SHA-256 thumbprint (RFC 7638) names: one of its keys
 	 * written in, read under the operator's algorithms. A client whose keys are at a jwks-uri holds
