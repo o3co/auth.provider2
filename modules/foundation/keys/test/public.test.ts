@@ -2,15 +2,16 @@ import { createPublicKey, generateKeyPairSync, type KeyObject } from "node:crypt
 import { describe, expect, it } from "vitest";
 import {
 	isCanonicalJws,
-	isVerifyAlgorithm,
 	type Jwk,
 	publicJwk,
 	publicMembers,
 	publicPem,
+	rs256Deprecated,
 	thumbprint,
 	verifiesUnder,
 	verifyAlgorithms,
 } from "../src/contract.ts";
+import { isVerifyAlgorithm } from "../src/material/public.ts";
 
 const jwkOf = (key: KeyObject, extra: Record<string, unknown> = {}): Jwk => ({
 	...(key.export({ format: "jwk" }) as Jwk),
@@ -195,6 +196,11 @@ it("tells an algorithm it verifies under from any other name, an inherited one t
 	for (const other of ["HS256", "none", "toString", "constructor", 256]) {
 		expect(isVerifyAlgorithm(other), String(other)).toBe(false);
 	}
+});
+
+it("says in one text why RS256 is deprecated, for each module that warns of it", () => {
+	expect(rs256Deprecated).toMatch(/^RS256 is deprecated: .*112 bits.*PKCS#1 v1\.5.*FAPI 2\.0/);
+	expect(rs256Deprecated).toMatch(/ES256 is recommended$/);
 });
 
 describe("thumbprint", () => {

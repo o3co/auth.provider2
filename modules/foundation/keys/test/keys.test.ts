@@ -4,7 +4,7 @@ import { quietRuntime, recordingLog } from "@mod/kernel/testing";
 import { promiseNames, stances } from "@mod/promises";
 import { CompactSign, decodeProtectedHeader } from "jose";
 import { afterEach, describe, expect, it } from "vitest";
-import { keys, type Signed } from "../src/contract.ts";
+import { keys, rs256Deprecated, type Signed } from "../src/contract.ts";
 import keysModule from "../src/module.ts";
 import { section as keysSection } from "../src/section.ts";
 import { keysConfig, testHolder } from "../src/testing.ts";
@@ -467,7 +467,7 @@ describe("keys", () => {
 		expect(lines.map((line) => [line.level, line.fields.keys])).toEqual([
 			["warn", "keys.authority.signing.alg"],
 		]);
-		expect(lines[0]?.fields.reason).toMatch(/112 bits.*PKCS#1 v1\.5.*FAPI 2\.0/);
+		expect(lines[0]?.fields.reason).toBe(rs256Deprecated);
 		const everyRing = sectionWith({
 			authority: {
 				signing: { kid: "r", alg: "RS256" },

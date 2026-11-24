@@ -155,12 +155,12 @@ export interface KeyHolder {
 
 export { isCanonicalJws } from "./material/jws.ts";
 export {
-	isVerifyAlgorithm,
 	type Jwk,
 	type PemForm,
 	publicJwk,
 	publicMembers,
 	publicPem,
+	rs256Deprecated,
 	thumbprint,
 	type VerifyAlgorithm,
 	verifiesUnder,
