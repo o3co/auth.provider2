@@ -59,7 +59,7 @@ const method = (name: string, parts: Partial<AuthMethod> = {}) =>
 		m.contribute(authMethods).by(() => ({
 			name,
 			claimed: () => undefined,
-			verify: async () => true,
+			verify: async () => ({}),
 			...parts,
 		})),
 	]);

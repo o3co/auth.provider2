@@ -67,11 +67,8 @@ export interface AuthMethod {
 	claimed(request: HttpRequest): string | undefined;
 	/** Whether the request carries this method's credentials only in part, or in a form it does not take. */
 	malformed?(request: HttpRequest): boolean;
-	/**
-	 * What it verified of the request's credentials for the client, none where they do not hold.
-	 * `true` is the same as a verification carrying nothing; `false` as none.
-	 */
-	verify(request: HttpRequest, client: Client): Promise<Verified | boolean | undefined>;
+	/** What it verified of the request's credentials for the client, none where they do not hold. */
+	verify(request: HttpRequest, client: Client): Promise<Verified | undefined>;
 	/** The work a verify would cost, done for a request refused before it (no such client, say), so the time tells nothing. */
 	decoy?(request: HttpRequest): Promise<void>;
 }

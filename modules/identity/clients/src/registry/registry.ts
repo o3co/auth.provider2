@@ -235,9 +235,8 @@ export function registry(
 			if (found === "invalid") return refusedAfterWork("invalid_record");
 			if (found.method !== only.method.name) return refusedAfterWork("wrong_method");
 			const verified = await only.method.verify(request, found);
-			if (verified === undefined || verified === false) return refused("bad_credentials");
-			const proof =
-				verified === true || verified.proof === undefined ? {} : { proof: verified.proof };
+			if (verified === undefined) return refused("bad_credentials");
+			const proof = verified.proof === undefined ? {} : { proof: verified.proof };
 			return {
 				kind: "authenticated",
 				client: found,
