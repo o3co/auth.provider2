@@ -9,7 +9,7 @@ Internal module of `users`: how long a password check of one identifier waits, a
 - What a check answers, and the identifier's form: users' own. The section's bounds: the package.
 
 ## Offers
-- The rules the package's section `waits` gives: its keys `after`, `first`, `longest` and `forget`, read as `WaitRules`.
+- The rules the package's section `waits` gives: its keys `after`, `first`, `longest` and `forget`, read as `WaitRules`, and `capacity`.
 - `identifierWaits` (rules, timing, capacity) → `run` (an identifier, a check): the check's answer, after its wait; `runPending`: the answer `Pending`, a user found counted a failure until `settle(true)`. `Timing` (a clock, a pause). `queueBound` (4): the checks of one identifier held at once.
 - `failedChecksWithin` (rules): the most failed checks of one identifier in any window of `forgetMs`: one run's, its first wait maybe before the window, and one more for a run forgotten at its edge.
 
@@ -21,7 +21,7 @@ Internal module of `users`: how long a password check of one identifier waits, a
 - At most `queueBound` checks of one identifier are held, the one under way among them: one more is Unavailable at once, never checked and never counted, a known identifier and an unknown one alike. So a check admitted waits at most `queueBound` × `longestMs` (2 minutes by default) beside the checks' own time, however many were sent before it.
 - While a sender keeps an identifier's queue full, its owner's checks are answered Unavailable: the per-identifier wait's own limit. While one keeps a failure on each of `capacity` identifiers within `forgetMs`, every identifier not held is: the table's, so the failed checks stated hold. Limiting each sender is the layer in front's.
 - An identifier is counted alike whether a user holds it or not.
-- Held in this process alone: each instance counts its own checks. At most `capacity` identifiers are held (100 000 unless told, a fixed guard). A new one past it lets go an idle one past its forget time; where none is, it is Unavailable, unchecked, so no failure not forgotten is let go and `failedChecksWithin` holds. A restart forgets them all.
+- Held in this process alone: each instance counts its own checks. At most `capacity` identifiers are held (the section's, 100 000 by default, 1 000 to 1 000 000; about 0.5 KB each at the longest identifier, so 50 MB by default). A new one past it lets go an idle one past its forget time; where none is, it is Unavailable, unchecked, so no failure not forgotten is let go and `failedChecksWithin` holds. A restart forgets them all.
 
 ## Vocabulary
 - run: an identifier's failures, and when the last one came.

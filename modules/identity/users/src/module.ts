@@ -43,6 +43,15 @@ const waits = z
 		forget: waitMs("15m").describe(
 			"How long an identifier goes with no failure before its failures are forgotten.",
 		),
+		capacity: z
+			.number()
+			.int()
+			.min(1_000)
+			.max(1_000_000)
+			.prefault(100_000)
+			.describe(
+				"The identifiers held at once, about 0.5 KB each at the longest: where all keep failures not forgotten, a check of another is Unavailable.",
+			),
 	})
 	.refine((w) => w.first <= w.longest, { message: "first is longer than longest", path: ["first"] })
 	.prefault({})
@@ -98,12 +107,13 @@ export default defineModule(
 			const answering = ledger
 				? contributedSource(ledger, c.log)
 				: registeredUsers(c.section.registered, (inUse) => checkers.checkerOf(inUse));
-			const { after, first, longest, forget } = c.section.waits;
+			const { after, first, longest, forget, capacity } = c.section.waits;
 			const rules = { after, firstMs: first, longestMs: longest, forgetMs: forget };
-			const waited = identifierWaits(rules, {
+			const timing = {
 				now: () => c.clock.monotonic?.() ?? c.clock.now(),
-				pause: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
-			});
+				pause: (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
+			};
+			const waited = identifierWaits(rules, timing, capacity);
 			// Every check of a password waits as its identifier's run of failures says, whoever answers.
 			const source = {
 				...answering,

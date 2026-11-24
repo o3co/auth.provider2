@@ -29,6 +29,7 @@ function waited(source: UserSource) {
 	const waits = identifierWaits(
 		{ after: 1000, firstMs: 1, longestMs: 1, forgetMs: 1000 },
 		{ now: () => 0, pause: async () => {} },
+		1000,
 	);
 	return {
 		...source,
@@ -336,7 +337,7 @@ describe("records", () => {
 it("registers no users, and a user no attributes, that the operator leaves out", () => {
 	expect(usersModule.section?.parse({})).toEqual({
 		registered: [],
-		waits: { after: 3, first: 1000, longest: 30_000, forget: 900_000 },
+		waits: { after: 3, first: 1000, longest: 30_000, forget: 900_000, capacity: 100_000 },
 	});
 	const written = { identifier: "bob", "password-hash": aliceEntry["password-hash"] };
 	expect(record.parse(written)).toEqual({ ...written, attributes: {} });
@@ -348,4 +349,7 @@ it("refuses waits whose first is longer than the longest, or written without a u
 	expect(waitsOf({ first: 1000 })).toBe(false);
 	expect(waitsOf({ after: -1 })).toBe(false);
 	expect(waitsOf({ after: 0, first: "10ms", longest: "10ms", forget: "1s" })).toBe(true);
+	for (const capacity of [999, 1_000_001, 1500.5, "1000"])
+		expect(waitsOf({ capacity }), `${capacity}`).toBe(false);
+	for (const capacity of [1_000, 1_000_000]) expect(waitsOf({ capacity })).toBe(true);
 });

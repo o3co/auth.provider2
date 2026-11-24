@@ -76,14 +76,13 @@ interface Run {
 
 /** The checks of one identifier held at once, the one under way among them: a fixed guard. */
 export const queueBound = 4;
-/** A fixed guard on the identifiers held at once, so unknown identifiers cannot fill memory. */
-const defaultCapacity = 100_000;
 
 /** Waits per identifier, held in this process. */
 export function identifierWaits(
 	rules: WaitRules,
 	timing: Timing,
-	capacity = defaultCapacity,
+	/** The identifiers held at once, so unknown identifiers cannot fill memory. */
+	capacity: number,
 ): Waits {
 	const runs = new Map<string, Run>();
 	const quiet = (run: Run, at: number) => at - run.lastFailureAt >= rules.forgetMs;

@@ -8,7 +8,7 @@ const none: Verified = { kind: "none" };
 const user: Verified = { kind: "user", user: { subject: "s-alice", attributes: {} } };
 
 /** Waits over a clock the test moves, recording each pause asked for and passing that time. */
-function waitsAt(given: WaitRules = rules, capacity?: number) {
+function waitsAt(given: WaitRules = rules, capacity = 100_000) {
 	const clock = { at: 0 };
 	const paused: number[] = [];
 	const timing = {
@@ -18,10 +18,7 @@ function waitsAt(given: WaitRules = rules, capacity?: number) {
 			clock.at += ms;
 		},
 	};
-	const waits =
-		capacity === undefined
-			? identifierWaits(given, timing)
-			: identifierWaits(given, timing, capacity);
+	const waits = identifierWaits(given, timing, capacity);
 	return { waits, paused, clock };
 }
 
