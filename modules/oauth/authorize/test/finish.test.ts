@@ -214,7 +214,12 @@ describe("a login's finish (⑤⑥)", () => {
 		const h = harness();
 		await h.send();
 		expect(h.rooted).toEqual([
-			{ esig: "e-sig-thumbprint", apr: { shard: "s1", n: 9 }, approvedAt: now },
+			{
+				esig: "e-sig-thumbprint",
+				apr: { shard: "s1", n: 9 },
+				approvedAt: now,
+				statement: "t-hash",
+			},
 		]);
 	});
 

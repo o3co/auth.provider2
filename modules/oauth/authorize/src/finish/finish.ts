@@ -149,7 +149,13 @@ export function finishing(p: FinishParts) {
 			}
 			// Rooted before the completion goes out, with what the approval gives an ID token; one never
 			// rooted is never redeemed.
-			const named = { esig: approval.esig, apr: completed.ref, approvedAt: completed.acceptedAt };
+			const named = {
+				esig: approval.esig,
+				apr: completed.ref,
+				approvedAt: completed.acceptedAt,
+				// Its statement's hash, which a refresh family rests on (`approvals`' `rootOf`).
+				statement: approval.hash,
+			};
 			if ((await p.codes.root(code, completed.record, named)) !== "set")
 				throw new Unavailable("authorize");
 			// Published after: a resend is given it only now. One whose publishing failed is answered

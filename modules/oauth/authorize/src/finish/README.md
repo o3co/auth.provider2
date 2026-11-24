@@ -15,7 +15,7 @@ Internal module of `authorize`: the route of a login's finish (⑤⑥).
 - The steps run in this order:
   - the approval used, the scope and audience within the client's allowance, the policies, an OpenID request's claims selected (`claims`; a `sub` asked of another subject, or an essential acr the login does not meet, is `access_denied`, no session opened);
   - the session (from the statement's issue: `provenSince`, and `endsAt` that and the delegation's length), the code made with no root, carrying the acr a passkey's login meets (`acr`'s table, given by the module), its claims pinned to it;
-  - the approval completed, the code rooted in its record with the approval's `esig`, `apr` and acceptance, the completion answered.
+  - the approval completed, the code rooted in its record with the approval's `esig`, `apr`, acceptance and statement's hash, the completion answered.
 - A completion goes out only after its code is rooted: the finish that made the code answers it, then publishes it, and a resent finish is given it only once published. A resend before that is answered `temporarily_unavailable` and makes no code.
 - A code made where the finish fell between completing and rooting is never rooted, as no finish roots a code but the one that made it: never given out, never redeemed, it ends with its lifetime, the approval used. Two finishes at once make two codes; only the one `approvals` keeps is completed and rooted, the other's finish answering `access_denied`.
 - What a code needs (the client's code grant, an S256 challenge, the binding asked for ahead) is checked before the session opens; a session opened for a finish that gives no completion is closed.
