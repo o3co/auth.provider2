@@ -40,11 +40,31 @@ jobs:
       - run: pnpm --dir sdk install --frozen-lockfile
       - run: pnpm --dir sdk check
 
+  # The tests that run child processes (`*.process.test.ts`), apart from `pnpm check` as they are
+  # slow and bound to the machine's load, yet required as the checks are.
+  process-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['24', '26']
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: ${{ matrix.node }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test:process
+
   # The one required check.
   build-and-test:
     if: always()
-    needs: [checks]
+    needs: [checks, process-tests]
     runs-on: ubuntu-latest
     steps:
       - name: Require the checks to pass
         run: test "${{ needs.checks.result }}" = success
+      - name: Require the process tests to pass
+        run: test "${{ needs.process-tests.result }}" = success

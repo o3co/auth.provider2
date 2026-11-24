@@ -11,6 +11,7 @@
 		"typecheck": "tsc -p tsconfig.json",
 		"lint": "biome check .",
 		"test": "vitest run --passWithNoTests",
+		"test:process": "vitest run --config vitest.process.config.ts --passWithNoTests",
 		"check": "pnpm typecheck && pnpm lint && pnpm test && pnpm guard",
 		"guard": "pnpm --filter @mod/guard run guard"
 	},
