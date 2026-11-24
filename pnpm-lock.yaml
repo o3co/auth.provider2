@@ -1162,6 +1162,49 @@ importers:
         specifier: 5.0.5
         version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(vite@8.3.3(@types/node@26.6.5)(yaml@2.9.1))
 
+  modules/oauth/authorize:
+    dependencies:
+      '@mod/approvals':
+        specifier: workspace:*
+        version: link:../../approval/approvals
+      '@mod/client-assertion':
+        specifier: workspace:*
+        version: link:../client-assertion
+      '@mod/client-documents':
+        specifier: workspace:*
+        version: link:../../identity/client-documents
+      '@mod/clients':
+        specifier: workspace:*
+        version: link:../../identity/clients
+      '@mod/http':
+        specifier: workspace:*
+        version: link:../../foundation/http
+      '@mod/issuer':
+        specifier: workspace:*
+        version: link:../issuer
+      '@mod/kernel':
+        specifier: workspace:*
+        version: link:../../foundation/kernel
+      '@mod/promises':
+        specifier: workspace:*
+        version: link:../../foundation/promises
+      '@mod/rate-limit':
+        specifier: workspace:*
+        version: link:../../foundation/rate-limit
+      '@mod/redirect-uris':
+        specifier: workspace:*
+        version: link:../redirect-uris
+      '@mod/sdk-core-wire':
+        specifier: workspace:*
+        version: link:../../wire/sdk-core-wire
+      zod:
+        specifier: 4.6.7
+        version: 4.6.7
+    devDependencies:
+      vitest:
+        specifier: 5.0.5
+        version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(vite@8.3.3(@types/node@26.6.5)(yaml@2.9.1))
+
   modules/oauth/client-allowance:
     dependencies:
       '@mod/clients':

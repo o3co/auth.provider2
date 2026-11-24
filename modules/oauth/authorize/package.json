@@ -1,0 +1,38 @@
+{
+	"name": "@mod/authorize",
+	"private": true,
+	"license": "Apache-2.0",
+	"type": "module",
+	"kind": "feature",
+	"optIn": true,
+	"exports": {
+		".": "./src/contract.ts",
+		"./testing": "./src/testing.ts",
+		"./module": "./src/module.ts"
+	},
+	"dependencies": {
+		"@mod/approvals": "workspace:*",
+		"@mod/client-assertion": "workspace:*",
+		"@mod/client-documents": "workspace:*",
+		"@mod/clients": "workspace:*",
+		"@mod/http": "workspace:*",
+		"@mod/issuer": "workspace:*",
+		"@mod/kernel": "workspace:*",
+		"@mod/promises": "workspace:*",
+		"@mod/rate-limit": "workspace:*",
+		"@mod/redirect-uris": "workspace:*",
+		"@mod/sdk-core-wire": "workspace:*",
+		"zod": "4.6.7"
+	},
+	"peerDependencies": {
+		"vitest": "5.0.5"
+	},
+	"peerDependenciesMeta": {
+		"vitest": {
+			"optional": true
+		}
+	},
+	"devDependencies": {
+		"vitest": "5.0.5"
+	}
+}

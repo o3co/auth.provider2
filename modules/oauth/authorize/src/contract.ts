@@ -1,0 +1,72 @@
+import type { Client } from "@mod/clients";
+import { contract, extensionPoint } from "@mod/kernel";
+import type { AuthorizationItems } from "@mod/sdk-core-wire";
+
+/** A login's start as the screen sent it: each field's text, by its name in `front-core-wire`. */
+export type StartFields = Readonly<Record<string, string>>;
+
+/**
+ * Where a login's request comes from: the JAR's compact bytes it names, a refusal, or none where its
+ * fields are not this source's. Exactly one source answers each start.
+ */
+export interface RequestSource {
+	readonly name: string;
+	jarOf(
+		fields: StartFields,
+		client: Client,
+	): Promise<
+		| { readonly jar: string }
+		| { readonly refused: { readonly error: string; readonly description: string } }
+		| undefined
+	>;
+}
+
+/** The sources of a login's request, keyed by name: the JAR sent by value is `authorize`'s own. */
+export const requestSources = extensionPoint<RequestSource>("authorize.request-sources", {
+	multiplicity: "keyed",
+	keyOf: (source) => source.name,
+});
+
+/**
+ * How to answer a person with no passkey: whether this authorization may lead the screen to offer
+ * `create()`. A hint for the screen's display alone, outside T's signature: whoever registers a key
+ * judges again whether it may.
+ */
+export interface WithoutPasskey {
+	allows(p: { readonly client: Client; readonly items: AuthorizationItems }): Promise<boolean>;
+}
+
+/** At most one; with none, a person with no passkey is refused. */
+export const withoutPasskey = extensionPoint<WithoutPasskey>("authorize.without-passkey", {
+	multiplicity: "many",
+});
+
+declare const storedReservation: unique symbol;
+/** A JAR's reservation as kept: opaque to the store. */
+export type StoredReservation = { readonly [storedReservation]: true };
+
+/** Where each JAR's one use is kept, by its client and `jti`. Throws Unavailable when it cannot tell. */
+export interface JarReservations {
+	/** Keeps the record for its lifetime, unless one is kept already. */
+	create(key: string, record: StoredReservation, lifetimeMs: number): Promise<"created" | "exists">;
+	read(key: string): Promise<StoredReservation | undefined>;
+	/** Changes the record from what it holds; `change` runs again on a lost race. None where none is kept. */
+	change(
+		key: string,
+		change: (current: StoredReservation) => { readonly value: StoredReservation } | undefined,
+	): Promise<{ readonly before: StoredReservation; readonly after: StoredReservation } | undefined>;
+}
+
+export const jarReservations = contract<JarReservations>("authorize.jar-reservations");
+
+/** What the reservations' place must be, each a guarantee its wiring declares. */
+export const jarReservationsNeeds = {
+	/** A reservation lost to eviction or failover would let one JAR start two statements. */
+	neverEvicted: true,
+	survivesCrash: true,
+	survivesFailover: true,
+	/** A stale read could take a used JAR for a fresh one. */
+	confirmedReads: true,
+	/** A reservation written outside the provider would hand one request's statement to another. */
+	authenticated: true,
+} as const;
