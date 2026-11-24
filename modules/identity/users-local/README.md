@@ -11,6 +11,7 @@
 
 ## Offers
 - Composition definition only: a contribution to `users`' `ledgers` (verification, by subject, by identifier, and a create), its spaces and its eraser `users-local` (to `erasure-extensions`' `erasers`).
+- It is not the users axis's default, `users-http` is: a composition keeping its users in the provider names it to compose it.
 - Operator section `password-work` (optional): a bcrypt or scrypt hash, of any secret, of the work the held passwords' hashes take; every password check does that work.
 - Probe `users-local.phase`: out of traffic while the records' phase cannot be read.
 
