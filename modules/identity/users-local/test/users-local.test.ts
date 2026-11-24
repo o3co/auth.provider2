@@ -14,7 +14,7 @@ import storeModule from "@mod/store/module";
 import { simulatedStore, storeConfig } from "@mod/store/testing";
 import { type Ledger, ledgers, users, usersImport } from "@mod/users";
 import usersModule from "@mod/users/module";
-import { memoryUsersStores, testUser } from "@mod/users/testing";
+import { ledgerContract, memoryUsersStores, testUser } from "@mod/users/testing";
 import { describe, expect, it } from "vitest";
 import usersLocal from "../src/module.ts";
 import { localRecords, placed } from "../src/records/records.ts";
@@ -58,6 +58,19 @@ async function withAlice() {
 	const open = await opened();
 	expect(await open.records.place("alice", "s-alice")).toBe("placed");
 	return open;
+}
+
+for (const phase of ["reader", "indexed"] as const) {
+	ledgerContract(`users-local, ${phase}`, {
+		open: async () => {
+			const open = await opened(phase);
+			expect(await open.records.place("alice", "s-alice")).toBe("placed");
+			// It holds no password, so no comparison is ever made to record.
+			return { ledger: open.ledger, checks: [] };
+		},
+		withoutPasswords: true,
+		creates: true,
+	});
 }
 
 const signal = new AbortController().signal;
