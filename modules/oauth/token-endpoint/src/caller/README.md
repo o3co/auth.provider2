@@ -13,7 +13,7 @@ Internal module of `token-endpoint`: calling a contributed grant directly, as th
 
 ## Invariants
 - A form holds strings only; a JSON body takes any value, a non-string one read as mistyped, as the endpoint reads it.
-- A refused issuance comes back as the endpoint's error, and an issued answer's body as the endpoint writes it.
+- A refused issuance comes back as the endpoint's error, and an issued answer's body as the endpoint writes it; an answer whose `access_token` its `issue` did not give throws, where the endpoint answers `500`.
 - Its `issue` signs through `tokens` at once, the bundle recorded nowhere: recording is the endpoint's own step, checked in its tests. It is given `tokens`' `admits`, `prepare` and `sign`, and its revoking by reference (`CallerTokens`), and says the endpoint's stance.
 
 ## Depends on

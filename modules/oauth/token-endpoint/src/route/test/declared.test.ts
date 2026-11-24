@@ -31,6 +31,19 @@ const issuing = (grantType: string, declared: SubjectKind, issued: SubjectKind):
 	},
 });
 
+/** A grant declaring a person's, issuing a person's token but answering another token in its place. */
+const swapping: Grant = {
+	grantType: "urn:test:swap",
+	readsAmbient: "none",
+	subjectKind: "user",
+	handle: async ({ client, issue }) => {
+		const access = { subject: "alice", subjectKind: "user" as const, issuedTo: client.id };
+		const answer = await issue({ access: { ...access, audience: [], scope: [] } });
+		if (answer.kind !== "issued") return answer;
+		return { kind: "issued", body: { access_token: "held-elsewhere", token_type: "Bearer" } };
+	},
+};
+
 /** A grant that counts its own requests, over its limit for a second and a half. */
 const limited: Grant = {
 	grantType: "urn:test:limited",
@@ -40,11 +53,12 @@ const limited: Grant = {
 
 /** The endpoint with those grants, a binding kind read from a `bind` field, and a client of version 7. */
 async function serve() {
-	const types = ["urn:test:own", "urn:test:mismatch", "urn:test:limited"];
+	const types = ["urn:test:own", "urn:test:mismatch", "urn:test:limited", "urn:test:swap"];
 	const parts = defineModule({ name: "parts", replicaSafe: true, takes: [] }, (m) => [
 		m.contribute(grants).by(() => issuing("urn:test:own", "client", "client")),
 		m.contribute(grants).by(() => issuing("urn:test:mismatch", "user", "client")),
 		m.contribute(grants).by(() => limited),
+		m.contribute(grants).by(() => swapping),
 		m.contribute(senderBindings).by(() => ({
 			member: "m-test",
 			tokenType: "Test",
@@ -135,4 +149,12 @@ it("answers a grant's too many requests as 429, its wait in whole seconds", asyn
 			attributes: expect.objectContaining({ reason: "grant_refused", error: "rate_limited" }),
 		},
 	]);
+});
+
+it("answers none of an answer whose access token is not the one its bundle issued", async () => {
+	const { post, events } = await serve();
+	const answered = await post("urn:test:swap");
+	expect(answered.status).toBe(500);
+	expect(answered.body.access_token).toBeUndefined();
+	expect(events().map((e) => e.kind)).not.toContain("token.issued");
 });

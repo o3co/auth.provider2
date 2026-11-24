@@ -12,6 +12,7 @@ import events from "../audit-events.ts";
 import { identifiedClient, identifierOf } from "../identified/identified.ts";
 import { answeredBody } from "./answer.ts";
 import {
+	answeredIssued,
 	bundleOf,
 	type IssuedBundle,
 	type Issuing,
@@ -331,6 +332,7 @@ export function tokenEndpoint(parts: EndpointParts): Pick<Route, "handle" | "una
 			record(grantType, { reason: "grant_refused", error: outcome.error });
 			return grantError(outcome, challenges);
 		}
+		answeredIssued(bundle, grantType, outcome.body);
 		const [subject, ...more] = bundle.subjects.values();
 		if (subject === undefined || more.length > 0) {
 			throw new Error(

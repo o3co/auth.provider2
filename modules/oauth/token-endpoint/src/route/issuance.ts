@@ -11,13 +11,26 @@ import {
 	type Tokens,
 } from "@mod/tokens";
 
-/** What a request's grant issued through `issue`: its subjects, each with its kind; the names of the claims it added. */
+/** What a request's grant issued through `issue`: its subjects, each with its kind; its tokens; the names of the claims it added. */
 export interface IssuedBundle {
 	readonly subjects: Map<string, Pick<AccessGrant, "subject" | "subjectKind">>;
+	readonly tokens: Set<string>;
 	readonly added: Set<string>;
 }
 
-export const bundleOf = (): IssuedBundle => ({ subjects: new Map(), added: new Set() });
+export const bundleOf = (): IssuedBundle => ({
+	subjects: new Map(),
+	tokens: new Set(),
+	added: new Set(),
+});
+
+/** Throws where an answer's access token is not one `issue` gave for this request: the grant's fault. */
+export function answeredIssued(bundle: IssuedBundle, grantType: string, body: object): void {
+	const answered = (body as { readonly access_token?: unknown }).access_token;
+	if (answered !== undefined && !bundle.tokens.has(answered as string)) {
+		throw new Error(`token-endpoint: ${grantType} answered an access token it did not issue`);
+	}
+}
 
 /** How a grant's `issue` issues: the endpoint's runs a bundle; the test caller's signs at once. */
 export interface Issuing {
@@ -79,6 +92,7 @@ export function issuanceFor(
 		});
 		if (issued.kind !== "issued") return { kind: "refused", refusal: issued } satisfies Refused;
 		bundle.subjects.set(JSON.stringify([subjectKind, subject]), { subject, subjectKind });
+		bundle.tokens.add(issued.access.token);
 		// Named from what tokens judged and signed, never the grant read again.
 		for (const name of issued.access.addedClaims ?? []) bundle.added.add(name);
 		if (session === undefined) return issued;

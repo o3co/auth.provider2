@@ -465,3 +465,37 @@ it("refuses an audience asked of a grant that takes none before the grant runs, 
 	});
 	expect(handled).toEqual(["untargeted", "targeted"]);
 });
+
+it("throws for an answer whose access token is not the one its issue gave, as the endpoint answers 500", async () => {
+	const swapping = defineModule({ name: "swapping", replicaSafe: true, takes: [] }, (m) => [
+		m.contribute(grants).by(() => ({
+			grantType: "urn:test:record",
+			readsAmbient: "none",
+			handle: async ({ client, issue }) => {
+				const access = { subject: "s", subjectKind: "user" as const, issuedTo: client.id };
+				const issued = await issue({ access: { ...access, audience: [], scope: [] } });
+				if (issued.kind === "refused") return issued;
+				return { kind: "issued", body: { access_token: "held-elsewhere" } };
+			},
+		})),
+	]);
+	const app = await assemble({
+		modules: [
+			http,
+			testServer(),
+			clientsModule,
+			secretHashModule,
+			tokensStandIn(),
+			grantCaller,
+			clientAllowanceModule,
+			swapping,
+		],
+		config: { ...kernelConfig(), ...httpConfig(), ...configured },
+		runtime,
+	});
+	const thrown = await app
+		.get(grantCalls)
+		.call("urn:test:record", "rec", {})
+		.catch((error: unknown) => error);
+	expect(thrown).toBeInstanceOf(Error);
+});

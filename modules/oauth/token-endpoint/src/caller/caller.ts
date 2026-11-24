@@ -23,7 +23,7 @@ import { clientSubjectStance, tokenEndpointStance } from "../built-in/stance.ts"
 import { composedRule, targetTakes, unread } from "../built-in/targets.ts";
 import { answeredBody } from "../route/answer.ts";
 import { grantInputOf, mistypedRefusal, tokenPath } from "../route/endpoint.ts";
-import { type Issuing, refusedAnswer } from "../route/issuance.ts";
+import { answeredIssued, bundleOf, type Issuing, refusedAnswer } from "../route/issuance.ts";
 
 /** Calls a contributed grant directly, as the token endpoint does once the request has passed it. */
 export interface GrantCalls {
@@ -112,6 +112,7 @@ export function grantInput(
 		readonly authenticated?: unknown;
 	} = {},
 	told: readonly SessionIssuance[] = [],
+	bundle = bundleOf(),
 ): GrantInput {
 	const input = grantInputOf({
 		request: sentRequest(params, grant.bodies?.[0] ?? "form"),
@@ -124,6 +125,7 @@ export function grantInput(
 		targets: options.targets ?? unread,
 		issuing: signedAtOnce(issuing),
 		told,
+		bundle,
 	});
 	// A test that brings its own request replaces only the request, not how the parameters read.
 	return options.request ? { ...input, request: options.request } : input;
@@ -159,6 +161,7 @@ export const grantCaller = defineModule(
 					const grant = table.get(grantType);
 					const client = await known.find(clientId);
 					if (!grant || !client) throw new Error(`no grant ${grantType} or client ${clientId}`);
+					const bundle = bundleOf();
 					const input = grantInput(
 						{ ...issuance, revokeReferenced: checking.revokeReferenced },
 						grant,
@@ -166,6 +169,7 @@ export const grantCaller = defineModule(
 						params,
 						{ ...options, targets: rule },
 						told,
+						bundle,
 					);
 					// The endpoint's own checks before any grant runs, so a grant's declaration is tested too.
 					const mistyped = mistypedRefusal(input.request);
@@ -174,9 +178,9 @@ export const grantCaller = defineModule(
 					if (untargeted) return untargeted;
 					const outcome = await grant.handle(input);
 					if (outcome.kind === "refused") return refusedAnswer(outcome);
-					return outcome.kind === "issued"
-						? { ...outcome, body: answeredBody(outcome.body) }
-						: outcome;
+					if (outcome.kind !== "issued") return outcome;
+					answeredIssued(bundle, grantType, outcome.body);
+					return { ...outcome, body: answeredBody(outcome.body) };
 				},
 			};
 		}),

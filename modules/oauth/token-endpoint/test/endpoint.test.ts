@@ -212,13 +212,22 @@ describe("the audience a request asks for", () => {
 			m.contribute(grants).by(() => ({
 				grantType: "urn:test:echo",
 				readsAmbient: "none",
-				handle: async (input) =>
-					answered(input, { access_token: "contributed-token", token_type: "Bearer" }),
+				handle: async ({ client, issue }) => {
+					const access = {
+						subject: client.id,
+						subjectKind: "client" as const,
+						issuedTo: client.id,
+					};
+					const issued = await issue({ access: { ...access, audience: [], scope: [] } });
+					if (issued.kind !== "issued") return issued;
+					const body = { access_token: issued.access.token, token_type: "Bearer" };
+					return { kind: "issued", body };
+				},
 			})),
 		]);
 		const post = await serve([exchanging], { clients: [echoClients.echo()] });
 		const answer = await post({ grant_type: "urn:test:echo" }, "echo");
-		expect([answer.status, answer.body.access_token]).toEqual([200, "contributed-token"]);
+		expect([answer.status, typeof answer.body.access_token]).toEqual([200, "string"]);
 		expect([answer.headers.get("cache-control"), answer.headers.get("pragma")]).toEqual([
 			"no-store",
 			"no-cache",
