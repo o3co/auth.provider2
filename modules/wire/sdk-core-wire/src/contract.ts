@@ -171,11 +171,17 @@ const completion = z
 	.object({
 		v,
 		iss: z.string().min(1),
+		purpose: z.literal(purposes.authorization).optional(),
 		/** T's SHA-256. */
 		t_hash: z.string().min(1),
 		/** The assertion's bytes' SHA-256. */
 		assertion_hash: z.string().min(1),
 		code: z.string().min(1),
+		/** ⑤'s receipt (`receipt+jwt`), binding T, the assertion and the code. */
+		receipt: z
+			.string()
+			.regex(/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/)
+			.optional(),
 		iat: z.number().int(),
 		exp: z.number().int(),
 	})
@@ -269,6 +275,62 @@ const canonical = (text: string) =>
 	text.length % 4 !== 1 &&
 	sextet(text, text.length - 1) % (text.length % 4 === 2 ? 16 : text.length % 4 === 3 ? 4 : 1) ===
 		0;
+const id = z.string().min(1);
+const times = { iat: z.number().int(), exp: z.number().int() };
+const approved = { v, iss: id, t_hash: bytes32, assertion_hash: bytes32 };
+const label = z.string().regex(/^[^\p{Cc}\p{Cf}\p{Zl}\p{Zp}]{1,64}$/u);
+const keyRow = z
+	.object({ credential_id: id, label, created_at: z.number().int().nonnegative() })
+	.strict();
+const completions = Object.freeze({
+	passkeyAdd: z
+		.object({
+			...approved,
+			purpose: z.literal(purposes.passkeyAdd),
+			creation: compactJws,
+			...times,
+		})
+		.strict(),
+	passkeyManage: z
+		.object({
+			...approved,
+			purpose: z.literal(purposes.passkeyManage),
+			keys: z
+				.array(keyRow)
+				.max(64)
+				.refine((rows) =>
+					rows.every(
+						(row, at) => rows.findIndex((r) => r.credential_id === row.credential_id) === at,
+					),
+				),
+			continued: z
+				.object({
+					stage: z.literal("rename"),
+					seq: z.number().int().min(1).max(16),
+					body_hash: bytes32,
+				})
+				.strict()
+				.optional(),
+			...times,
+		})
+		.strict(),
+	keyChange: z
+		.object({
+			v,
+			iss: id,
+			purpose: z.enum(["first-key", purposes.passkeyAdd, purposes.passkeyManage]),
+			change: z.discriminatedUnion("op", [
+				z.object({ op: z.literal("add"), credential_id: id, key_jkt: thumbprint }).strict(),
+				z.object({ op: z.literal("delete"), credential_id: id }).strict(),
+			]),
+			receipt: compactJws.optional(),
+			status: compactJws.optional(),
+			stateOf: compactJws.optional(),
+			...times,
+		})
+		.strict()
+		.refine((c) => (c.change.op === "add") === (c.purpose !== purposes.passkeyManage)),
+});
 const sealedValue = z
 	.object({
 		enc: z.string().regex(/^B[A-P][A-Za-z0-9_-]{84}[AEIMQUYcgkosw048]$/),
@@ -287,6 +349,7 @@ export const payloads = Object.freeze({
 	startPlain,
 	mailPlain,
 	codePlain,
+	completions,
 	answers: Object.freeze({
 		authorization: authorizationAnswer,
 		statement: z.object({ statement: compactJws }).strict(),

@@ -196,6 +196,114 @@ describe("the answers' forms the Front carries", () => {
 	});
 });
 
+describe("the completions' answers", () => {
+	const base = { v: 1, iss: "https://id.example", iat: 1, exp: 2 };
+	const hash = (c: string) => c.repeat(43);
+	const approved = { ...base, t_hash: hash("E"), assertion_hash: hash("A") };
+	const jkt = hash("A");
+
+	it("takes the authorization's purpose and ⑤'s receipt where given, and none other", () => {
+		const done = { ...base, t_hash: "t", assertion_hash: "a", code: "c" };
+		expect(payloads.completion.safeParse(done).success).toBe(true);
+		expect(
+			payloads.completion.safeParse({ ...done, purpose: "authorization", receipt: "a.b.c" })
+				.success,
+		).toBe(true);
+		for (const change of [{ purpose: "passkey-add" }, { receipt: "a.b" }])
+			expect(
+				payloads.completion.safeParse({ ...done, ...change }).success,
+				JSON.stringify(change),
+			).toBe(false);
+	});
+
+	it("reads a passkey-add's continued creation, its hashes each a SHA-256", () => {
+		const { passkeyAdd } = payloads.completions;
+		const add = { ...approved, purpose: "passkey-add", creation: "a.b.c" };
+		expect(passkeyAdd.safeParse(add).success).toBe(true);
+		for (const change of [
+			{ creation: "x" },
+			{ t_hash: "t" },
+			{ assertion_hash: `${hash("A").slice(0, -1)}B` },
+		])
+			expect(passkeyAdd.safeParse({ ...add, ...change }).success, JSON.stringify(change)).toBe(
+				false,
+			);
+	});
+
+	it("reads a passkey-manage's keys, each credential once and 64 at most, each label 1 to 64 code points of no control, format or line separator", () => {
+		const row = { credential_id: "c1", label: "Laptop", created_at: 0 };
+		const list = (keys: unknown[], more: object = {}) =>
+			payloads.completions.passkeyManage.safeParse({
+				...approved,
+				purpose: "passkey-manage",
+				keys,
+				...more,
+			}).success;
+		expect(list([])).toBe(true);
+		expect(list([row, { ...row, credential_id: "c2", label: "鍵".repeat(64) }])).toBe(true);
+		expect(list([row, { ...row, label: "Phone" }])).toBe(false);
+		const many = Array.from({ length: 65 }, (_, i) => ({ ...row, credential_id: `c${i}` }));
+		expect(list(many.slice(0, 64))).toBe(true);
+		expect(list(many)).toBe(false);
+		for (const label of [
+			"",
+			"x".repeat(65),
+			"a\nb",
+			"a\u0000",
+			"a\u007f",
+			"a\u202eb",
+			"a\u200bb",
+			"a\u2028b",
+			"a\u2029b",
+		])
+			expect(list([{ ...row, label }]), JSON.stringify(label)).toBe(false);
+		expect(list([{ ...row, created_at: -1 }])).toBe(false);
+		expect(list([{ ...row, extra: 1 }])).toBe(false);
+	});
+
+	it("names what a rename's list answers, its stage, sequence and body's hash, so an earlier list is told apart", () => {
+		const continued = { stage: "rename", seq: 2, body_hash: hash("I") };
+		const list = (more: object) =>
+			payloads.completions.passkeyManage.safeParse({
+				...approved,
+				purpose: "passkey-manage",
+				keys: [],
+				...more,
+			}).success;
+		expect(list({ continued })).toBe(true);
+		for (const change of [
+			{ stage: "delete" },
+			{ seq: 0 },
+			{ seq: 17 },
+			{ seq: 1.5 },
+			{ body_hash: "b" },
+			{ extra: 1 },
+		])
+			expect(list({ continued: { ...continued, ...change } }), JSON.stringify(change)).toBe(false);
+	});
+
+	it("reads a key change: a key added under the first key or passkey-add, one deleted under passkey-manage, with what the Core adds", () => {
+		const { keyChange } = payloads.completions;
+		const add = { op: "add", credential_id: "c1", key_jkt: jkt };
+		const del = { op: "delete", credential_id: "c1" };
+		const read = (purpose: string, change: object, more: object = {}) =>
+			keyChange.safeParse({ ...base, purpose, change, ...more }).success;
+		expect(read("first-key", add)).toBe(true);
+		expect(read("passkey-add", add)).toBe(true);
+		expect(
+			read("passkey-manage", del, { receipt: "a.b.c", status: "d.e.f", stateOf: "g.h.i" }),
+		).toBe(true);
+		expect(read("passkey-manage", add)).toBe(false);
+		expect(read("first-key", del)).toBe(false);
+		expect(read("passkey-add", del)).toBe(false);
+		expect(read("first-key", { ...add, key_jkt: "x" })).toBe(false);
+		expect(read("passkey-manage", { ...del, key_jkt: jkt })).toBe(false);
+		expect(read("passkey-manage", { op: "rename", credential_id: "c1" })).toBe(false);
+		expect(read("first-key", add, { receipt: "a.b" })).toBe(false);
+		expect(read("authorization", add)).toBe(false);
+	});
+});
+
 describe("the first key's statements", () => {
 	const common = {
 		v: 1,
