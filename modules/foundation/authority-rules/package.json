@@ -8,6 +8,7 @@
 		".": "./src/contract.ts"
 	},
 	"dependencies": {
+		"@mod/reset-wire": "workspace:*",
 		"@mod/sdk-core-wire": "workspace:*",
 		"@mod/transparency-wire": "workspace:*",
 		"zod": "4.6.7"

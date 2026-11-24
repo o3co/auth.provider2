@@ -13,7 +13,8 @@
 ## Offers
 - `allowed` (an `Ask`: the record's named fields, its opened preimage, its flow's state and judged prefix, the `Checks`, the `Context`) → `Allowance`, the first rule broken (internal module `chain`).
 - `timely` (an `Ask`, the acceptance time): TimeOK. `effectOf` (an `Ask`): Eff(r), the changes a Core record makes, the same in the Core's intent and the monitor's fold.
-- `judge` (a `Reading`: the placed record, what opening its preimage gave or another writer's verified body, the key sets, the versions' windows, the prefix) → `Ruling`: the flow entry with its verdict and outcome, the row J0–J13, whether counted; or a wait (internal module `judgment`). `outcomeOf` (a `Reading`, a verdict).
+- `judge` (a `Reading`: the placed record, what opening its preimage gave or another writer's verified body, the key sets, the versions' windows, the prefix) → `Ruling`: the flow entry with its verdict and outcome, the row J0–J13 or J0r, whether counted; or a wait (internal module `judgment`).
+- `resetFinding` (a reset boundary's body, its flow's state before it, the `Checks`, the `Context` with its `reset`: `ResetContext`, the acceptance time) → `ResetFinding`: verdict, outcome and `reset-wire`'s fault (internal module `reset`), which the monitor runs before placing a reset and `judge` again.
 - `fold` (state, `Envelope`, `Changes`, `Finding`) → the state; `foldFlow` (flow, entries) → transparency-wire's stateOf; `emptyState`; `abandonedFamily` (a bundle's envelope and changes) → the family an abandonment of its op drops, for the Core's intent and `effectOf` alike; `withoutRooted` (state, an item's id) → what a removal or a denial of it leaves (internal module `fold`).
 - `ruleSchemas`: `flowState`, `changes`, and `contents`, each Core kind's preimage content (internal module `evidence`).
 - `tokenRules`, by kind of token:
@@ -23,7 +24,7 @@
 
 ## Invariants
 - Pure: no I/O, clock, randomness, crypto or state. A record's fields, its flow's judged prefix (the entries from position 1 and the state they fold to) and the caller's functions in; a value out. A caller's error of shape (entries out of order, a Core record without its opening) is a TypeError.
-- The one fold (PR-ONE-FOLD) changes the state only for a record verified or unsupported that took, and picks one effect by kind; nothing else changes a state. No change carries a reset, which no rule allows.
+- The one fold (PR-ONE-FOLD) changes the state only for a record verified or unsupported that took, and picks one effect by kind; nothing else changes a state. A reset is a monitor's boundary, which moves the key generation on only where it took.
 - The verdict is the first row of the table it meets, in the table's order; the chain (J7) is checked before the time, and a forged row before an inherited hold (J9).
 - A Core record is held to the ring of its writer's Core generation, the context's: a statement of another generation's ring is forged. A first key's key generation is the signed creation's.
 - Another writer's record is judged with the body its signature verified (`signedRecord`); a role naming a kind it does not write is forged.
@@ -31,7 +32,7 @@
 - A check a client's record needs that the caller does not give (the client's record at its version, the evidence window, the self ceiling) leaves it unchecked: held, never verified nor forged.
 
 ## Depends on
-- `transparency-wire`, `sdk-core-wire` (the protocols); `zod`.
+- `transparency-wire`, `sdk-core-wire`, `reset-wire` (the protocols); `zod`.
 
 ## Vocabulary
 - state (S, M): a flow's live keys, approvals and families by the record that made each, its key generation and use-once marks.

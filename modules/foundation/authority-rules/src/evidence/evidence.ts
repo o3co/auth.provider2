@@ -1,6 +1,7 @@
 import { challengeInput, payloads, typs } from "@mod/sdk-core-wire";
 import { type Preimage, recordKinds, schemas } from "@mod/transparency-wire";
 import { z } from "zod";
+import type { ResetContext } from "../reset/reset.ts";
 
 /** The verification the caller does, for the rules to read evidence without crypto of their own. */
 export interface Checks {
@@ -60,6 +61,8 @@ export interface Context {
 	readonly ring: readonly unknown[];
 	readonly origin: string;
 	readonly limits: RuleTimes;
+	/** A reset's: the installation and the reset instruction's signer sets; where none is given, a reset is held. */
+	readonly reset?: ResetContext;
 }
 
 const id = z.string().min(1);

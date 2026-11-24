@@ -17,6 +17,7 @@ import {
 import type { ClientAt } from "../client/client.ts";
 import { type Checks, type Context, isCoreKind, readPreimage } from "../evidence/evidence.ts";
 import { acceptable, type Changes, type FlowEntry, type FlowState } from "../fold/fold.ts";
+import { type ResetFinding, resetFinding } from "../reset/reset.ts";
 
 /** A placed record of a flow: any but the log's tick. */
 export type FlowRecord = Exclude<LogRecord, { kind: "tick" }>;
@@ -60,7 +61,7 @@ export interface Reading {
 }
 
 /** The rows of the judgment table (kernel-spec §6.1). */
-export type Row = `J${0 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13}`;
+export type Row = `J${0 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13}` | "J0r";
 
 /** A record's judgment: its flow entry and the row that gave it, or why the monitor waits (J1, WaitVer). */
 export type Ruling =
@@ -212,11 +213,42 @@ export function judge(reading: Reading): Ruling {
 	let parent: string | undefined;
 	let via: "code" | "refresh" | "client" | undefined;
 	let client: FlowEntry["client"];
+	let reset: ResetFinding | undefined;
 	const role = record.writer.role;
 	if (role !== "core") {
 		const kinds: readonly string[] = recordKinds[role];
 		if (!kinds.includes(record.kind)) {
 			found = forged("J2", "the writer's role does not write the record's kind");
+		} else if (record.kind === "resetBoundary") {
+			// J0r: the reset rule finds it, an op not its instruction's among its faults. A body that
+			// reads must still name its envelope's flow, op and previous position, as signedRecord holds
+			// every other's: one that does not is the caller's to drop.
+			const bound = schemas.bodies.resetBoundary.safeParse(reading.body);
+			if (bound.success) {
+				const { flow, op, prev } = bound.data;
+				if (
+					flow.of !== record.flow.of ||
+					flow.id !== record.flow.id ||
+					op !== record.op ||
+					prev !== record.position - 1
+				)
+					throw new TypeError(
+						"a reset boundary's body names another flow, op or position than its envelope",
+					);
+			}
+			reset = resetFinding(
+				reading.body,
+				reading.state,
+				reading.checks,
+				reading.context,
+				record.acceptedAt,
+			);
+			found =
+				reset.verdict === "held"
+					? heldAt("J0r")
+					: reset.reason === undefined
+						? { row: "J0r", verdict: reset.verdict }
+						: { row: "J0r", verdict: reset.verdict, reason: reset.reason };
 		} else {
 			// J0 takes another writer's record as its signature verified, its body its kind's; what does
 			// not verify is not there, so it is the caller's to drop before it is judged.
@@ -246,7 +278,10 @@ export function judge(reading: Reading): Ruling {
 		}
 		if (record.kind === "start") client = clientOf(askOf(reading, opened));
 	}
-	const judgment = { verdict: found.verdict, outcome: outcomeOf(reading, found.verdict) };
+	const judgment = {
+		verdict: found.verdict,
+		outcome: reset ? reset.outcome : outcomeOf(reading, found.verdict),
+	};
 	const entry: FlowEntry = {
 		envelope,
 		changes,

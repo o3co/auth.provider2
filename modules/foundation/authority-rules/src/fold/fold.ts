@@ -235,6 +235,7 @@ export function fold(state: FlowState, envelope: Envelope, e: Changes, j: Findin
 			return { ...state, families };
 		}
 		case "erasureBoundary":
+		case "resetBoundary":
 			return nextGeneration(state);
 		case "confirmation":
 		case "tombstone":

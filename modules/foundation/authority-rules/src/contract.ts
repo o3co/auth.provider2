@@ -30,12 +30,12 @@ export {
 	type FlowRecord,
 	judge,
 	type Opening,
-	outcomeOf,
 	type Reading,
 	type Row,
 	type Ruling,
 	type Window,
 } from "./judgment/judgment.ts";
+export { type ResetContext, type ResetFinding, resetFinding } from "./reset/reset.ts";
 export { effectOf };
 
 /**

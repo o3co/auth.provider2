@@ -193,6 +193,9 @@ importers:
 
   modules/foundation/authority-rules:
     dependencies:
+      '@mod/reset-wire':
+        specifier: workspace:*
+        version: link:../../wire/reset-wire
       '@mod/sdk-core-wire':
         specifier: workspace:*
         version: link:../../wire/sdk-core-wire
