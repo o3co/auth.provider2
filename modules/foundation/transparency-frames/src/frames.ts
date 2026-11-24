@@ -42,6 +42,11 @@ export function frameStoreOver(p: {
 	const framesPlace = placeOf(p.space);
 	const places = new Map(p.parts.map((part) => [part.name, placeOf(part.space)]));
 	const held = recordsHeldAcross([framesPlace, ...places.values()], p.where, p.refuse);
+	/** A client's flow's record: under the flow's words alone, which no unit and no part's record uses. */
+	const flowTarget = (flow: IntentUnit["flow"]) => ({
+		place: framesPlace,
+		key: JSON.stringify([flow.of, flow.id]),
+	});
 	const targetsOf = (unit: IntentUnit, records: readonly PartRecord[]) => [
 		{ place: framesPlace, key: JSON.stringify(wordsOf(unit)) },
 		...records.map((r) => {
@@ -49,25 +54,38 @@ export function frameStoreOver(p: {
 			if (!place) throw new TypeError(`transparency-frames: no part ${r.part} is bound`);
 			return { place, key: JSON.stringify([...wordsOf(unit), r.part, r.name]) };
 		}),
+		...("op" in unit ? [flowTarget(unit.flow)] : []),
 	];
 	return {
 		parts: [...places.keys()],
 		async read(unit, records) {
 			const read = await held.read(targetsOf(unit, records));
+			const flow = "op" in unit ? { flow: read.values[records.length + 1] } : {};
 			return {
 				unit,
 				records,
 				frame: read.values[0],
-				held: read.values.slice(1),
+				held: read.values.slice(1, records.length + 1),
 				now: read.now,
+				...flow,
 				basis: read,
 			};
 		},
+		async flowRecord(flow) {
+			return (await held.read([flowTarget(flow)])).values[0];
+		},
 		async write(read, next, deadline) {
 			const record = (n: PartNext) => (n === undefined || "remove" in n ? n : endless(n.value));
+			const frame: PartNext = next.drop
+				? { remove: true }
+				: next.frame === undefined
+					? undefined
+					: { value: next.frame };
+			const flow: PartNext = next.flow === undefined ? undefined : { value: next.flow };
 			const nexts = [
-				next.frame === undefined ? undefined : endless(next.frame),
+				record(frame),
 				...next.records.map(record),
+				...("op" in read.unit ? [record(flow)] : []),
 			];
 			return held.write(read.basis as HeldRead, nexts, deadline);
 		},

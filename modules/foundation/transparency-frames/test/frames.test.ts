@@ -95,3 +95,34 @@ describe("frames over records", () => {
 		);
 	});
 });
+
+describe("a client's flow's record", () => {
+	const op = (name: string) => ({ flow: { of: "client", id: "c1" }, op: name }) as const;
+
+	it("is read with each op's frame and written in its write, held to it; read alone too", async () => {
+		const { s, frames, part } = await storeWith();
+		const store = over(s, frames, [{ name: "p", space: part }]);
+		const a = await store.read(op("a"), []);
+		expect(a.flow).toBeUndefined();
+		expect(await store.write(a, { frame: { x: 1 }, flow: ["a"], records: [] }, a.now + 1000)).toBe(
+			"written",
+		);
+		const b = await store.read(op("b"), []);
+		expect([b.frame, b.flow]).toEqual([undefined, ["a"]]);
+		// Another op's write of the same flow's record moves it.
+		const again = await store.read(op("a"), []);
+		expect(
+			await store.write(b, { frame: { x: 2 }, flow: ["a", "b"], records: [] }, b.now + 1000),
+		).toBe("written");
+		expect(await store.write(again, { drop: true, flow: [], records: [] }, again.now + 1000)).toBe(
+			"moved",
+		);
+		expect(await store.flowRecord?.({ of: "client", id: "c1" })).toEqual(["a", "b"]);
+		const fresh = await store.read(op("a"), []);
+		expect(
+			await store.write(fresh, { drop: true, flow: ["b"], records: [] }, fresh.now + 1000),
+		).toBe("written");
+		expect((await store.read(op("a"), [])).frame).toBeUndefined();
+		expect(await store.flowRecord?.({ of: "client", id: "c1" })).toEqual(["b"]);
+	});
+});
