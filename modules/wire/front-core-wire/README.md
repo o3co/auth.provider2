@@ -13,7 +13,7 @@
 - `requests`: each operation by name, with its `code` and its `fields` in order (`FieldSpec`: name, type, least and greatest length, and an enum's count of values). A length of 0 is "not sent".
 - `FieldType`: `bytes`, `utf8` (valid UTF-8 with no control character), `visible` (0x21 to 0x7e), `b64url`, `jws` (three base64url segments joined by two dots) and `enum` (one byte below its count).
 - `grant` and `clientAssertionType`: the token request's enum values.
-- `wireErrors`: the fixed code of each rejection; `outcomes` and `replies`: each reply's outcome and its fields (a refusal's `retryAfter` among them); `refusals`: the OAuth errors and the limits' words (`rate_limited`, `too_many_attempts`) a refusal names, its `error` the word's place plus one.
+- `wireErrors`: the fixed code of each rejection; `outcomes` and `replies`: each reply's outcome and its fields (a refusal's `retryAfter` among them); `refusals`: the OAuth errors and the limits' words (`rate_limited`, `too_many_attempts`) a refusal names, its `error` the word's place plus one (a word added goes last).
 - `overHttp`: each operation as HTTP (`OverHttp`: a POST's path, a form or JSON body, `bodyNames` and `headerNames`, `enumTexts` (`EnumTexts`), the `discriminator` telling apart operations sharing a path, the `successStatus` (200 unless said), and whether a page of another origin calls it), the status of each refusal (every other `400`), and `declaredSource`; the rules of the text (base64url bytes, decimal or `other` enums, an empty text not sent) are in its doc comment.
 
 ## Invariants

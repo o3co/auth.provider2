@@ -63,6 +63,14 @@ describe("the frame and its answers", () => {
 		expect(refusals.length).toBeLessThan((replies.refused[0] as { values: number }).values);
 	});
 
+	it("keeps each refusal's code, a word added going last", () => {
+		const code = (word: (typeof refusals)[number]) => refusals.indexOf(word) + 1;
+		expect([code("invalid_request"), code("server_error"), code("too_many_attempts")]).toEqual([
+			1, 11, 13,
+		]);
+		expect([code("login_required"), code("invalid_request_uri")]).toEqual([14, 15]);
+	});
+
 	it("holds every word frozen", () => {
 		for (const words of [
 			requests,

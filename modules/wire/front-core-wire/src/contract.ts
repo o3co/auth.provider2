@@ -200,7 +200,12 @@ export const replies = Object.freeze({
 	rejected: Object.freeze([field("code", "enum", 1, 1, 255)] as const),
 });
 
-/** The OAuth errors a refusal names; a refusal's `error` is a word's place plus one. */
+/**
+ * The OAuth errors a refusal names; a refusal's `error` is a word's place plus one, so a word added
+ * goes last. `login_required`: a `prompt=none` the subject is not logged in for (OIDC Core
+ * §3.1.2.6); `invalid_request_uri`: a pushed request's `request_uri` unknown, used or expired
+ * (RFC 9126 §4, RFC 9101 §7).
+ */
 export const refusals = Object.freeze([
 	"invalid_request",
 	"invalid_request_object",
@@ -215,6 +220,8 @@ export const refusals = Object.freeze([
 	"server_error",
 	"rate_limited",
 	"too_many_attempts",
+	"login_required",
+	"invalid_request_uri",
 ] as const);
 
 /** An enum field carried as text: the value each text gives, and the value any other text gives; without `other`, any other is refused. */
