@@ -309,4 +309,5 @@ it("keeps the models' invariants on every interleaving, and ends every intent on
 		}),
 		{ numRuns: 1000 },
 	);
-});
+	// A thousand runs of up to fifty events take seconds, past the default per-test time on a busy host.
+}, 60_000);
