@@ -155,7 +155,7 @@ describe("a client's flow: one frame per op, unconditional appends (KG-07)", () 
 	});
 });
 
-describe("tending a client's flow: each op among its last records, its own unit", () => {
+describe("tending a client's flow: each op its record lists, its own unit", () => {
 	it("abandons a bundle left alone with an unconditional record, and closes once it is verified", async () => {
 		await decide("o1");
 		await sendBoth("o1");
@@ -248,5 +248,25 @@ describe("tending a client's flow by the ops its record lists, however far back"
 		expect([world.frame("old"), world.frame("silent")]).toEqual([undefined, undefined]);
 		expect(await world.listed()).not.toContain("old");
 		expect(await world.listed()).not.toContain("silent");
+	});
+
+	it("goes round the list, so 64 ops it cannot close at its head never keep it from the one behind", async () => {
+		for (let i = 0; i < 64; i++) {
+			await decide(`stuck${i}`, world.w2);
+			await world.w2.send({ flow, op: `stuck${i}`, stage: start(`stuck${i}`), prev: 0 });
+		}
+		await decide("late");
+		await world.w1.send({ flow, op: "late", stage: start("late"), prev: 0 });
+		world.log.judge(flow, 65, verified);
+		world.store.clock.set(leaseMs);
+		// The stuck ops' own records stay unjudged: each turn takes nothing in of them and claims none.
+		for (let turn = 0; turn < 4 && world.frame("late") !== undefined; turn++) {
+			await world.w2.tend(flow);
+			for (const p of world.log.records(flow).filter((r) => r.record.kind === "abandonment"))
+				world.log.judge(flow, p.record.position, verified);
+		}
+		expect(world.frame("late")).toBeUndefined();
+		expect(await world.listed()).toHaveLength(64);
+		expect(await world.listed()).not.toContain("late");
 	});
 });

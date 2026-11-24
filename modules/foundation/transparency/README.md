@@ -12,7 +12,7 @@
 
 ## Offers
 - `transparency`: `decide` (KE-C01, with its kind's records), `send` (KE-C02), `rebase`, `step` (KE-C04), `tend` (KE-C04, C14, C10 and C09 for an idle replica), `changeHeld` (a kind's records, changed while no intent is open). `Refused`, `End`, `Ending`. A writer refused `open` or `notReady` tends the flow and decides again.
-  - On a client's flow, each op is its own unit: `decide` answers the head it looks on from, appends name no previous position, `step` names the op (`own`), and `tend` tends the open ops the flow's record lists, oldest first, 64 in one turn.
+  - On a client's flow, each op is its own unit: `decide` answers the head it looks on from, appends name no previous position, `step` names the op (`own`), and `tend` tends the first 64 open ops the flow's record lists, moving them to its back.
 - `transparencyLog`, the log's axis: the writer, `digest`, `append` (after a previous position, or none on an unconditional flow), `head`, `at`, `of` (what the flow holds of an op: `OpOnFlow`). `Stage`, `Placed`.
 - `frameStore`, the frame's store interface (`IntentUnit`, `FrameRead`, `PartRecord`, `PartNext`, `Json`), and `frameStoreNeeds`: never evicted, survives a crash and a failover, reads confirmed, authenticated. On a client's op, a read holds its flow's record and a write may set it and drop the frame; `flowRecord` reads it alone.
 - `operationKinds` (`OperationKind`: bundle or not, its parts and records, its end's writes, a taker's resend) and `stateOwners` (`StateOwner`: the state's fields it holds, its records, records → fields, state → records), keyed by name.
@@ -32,7 +32,7 @@
 
 ## Data
 - Each intent unit's frame, in its wiring's space with no expiry; it holds an op's changes (`eff`) until the op ends. A client's op's frame is dropped once its op ends, deliberately, in the end's write: no store evicts it.
-- Each client's flow's record: the ops decided on it and not yet ended, written in the same write as each op's frame.
+- Each client's flow's record: the ops decided on it and not yet ended, in the order its tending goes round them, written in the same write as each op's frame, and by a turn of `tend`.
 
 ## Depends on
 - `kernel`, `transparency-wire`, `authority-rules`; `zod`.

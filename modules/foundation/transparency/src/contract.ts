@@ -266,7 +266,7 @@ export interface Transparency {
 	>;
 	/**
 	 * An idle replica's turn on a flow: takes it in to its head, claims an orphan, sends an abandonment;
-	 * on a client's flow, so for each op among its last records.
+	 * on a client's flow, so for the next open ops its record lists, going round them turn by turn.
 	 */
 	tend(flow: Flow): Promise<
 		| {

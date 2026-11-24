@@ -40,7 +40,7 @@ const writeWindowMs = 10_000;
 /** The records a tending takes in at most before it yields the flow, and the client's ops one turn tends. */
 const tendSteps = 64;
 
-/** The open ops a client's flow's record lists; none where it holds none. */
+/** The open ops a client's flow's record lists, in the order its tending goes round them; none where it holds none. */
 const openOps = (value: Json | undefined): readonly string[] => {
 	if (value === undefined) return [];
 	if (!Array.isArray(value) || !value.every((op) => typeof op === "string"))
@@ -359,6 +359,26 @@ export function transparencyOver(p: {
 		return { stepped: count, ...(await claim(unit, ready)) };
 	}
 
+	/**
+	 * The ops one turn on a client's flow tends: the first its record lists, moved to the list's back in
+	 * one write, so the next turn goes on past them and every listed op is reached in its turn.
+	 */
+	async function turnOf(flow: {
+		readonly of: "client";
+		readonly id: string;
+	}): Promise<readonly string[]> {
+		let listed = openOps(await frames.flowRecord(flow));
+		for (let read = 0; read < kindReads && listed.length > tendSteps; read++) {
+			const at = await frames.read({ flow, op: listed[0] as string }, []);
+			listed = openOps(at.flow);
+			const turn = listed.slice(0, tendSteps);
+			const next = [...listed.slice(tendSteps), ...turn];
+			const answer = await frames.write(at, { flow: next, records: [] }, at.now + writeWindowMs);
+			if (answer === "written") return turn;
+		}
+		return listed.slice(0, tendSteps);
+	}
+
 	return {
 		async decide(q) {
 			const kind = kinds.get(q.kind);
@@ -424,15 +444,12 @@ export function transparencyOver(p: {
 			const unit = unitOf(flow);
 			if (unit) return tendUnit(unit);
 			if (flow.of !== "client") return notSubject;
-			// A client's flow: its open ops as its record lists them, oldest first, as many as one turn takes.
+			// A client's flow: the open ops its record lists first, as many as one turn takes.
+			const client = { of: "client", id: flow.id } as const;
 			let stepped = 0;
 			let did = {};
-			const listed = openOps(await frames.flowRecord({ of: "client", id: flow.id }));
-			for (const op of listed.slice(0, tendSteps)) {
-				const { stepped: count, ...claimed } = await tendUnit({
-					flow: { of: "client", id: flow.id },
-					op,
-				});
+			for (const op of await turnOf(client)) {
+				const { stepped: count, ...claimed } = await tendUnit({ flow: client, op });
 				stepped += count;
 				if ("did" in claimed) did = claimed;
 			}
