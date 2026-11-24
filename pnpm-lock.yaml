@@ -2499,6 +2499,25 @@ importers:
         specifier: 5.0.5
         version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(vite@8.3.3(@types/node@26.6.5)(yaml@2.9.1))
 
+  modules/templates/refresh-store:
+    dependencies:
+      '@mod/kernel':
+        specifier: workspace:*
+        version: link:../../foundation/kernel
+      '@mod/refresh':
+        specifier: workspace:*
+        version: link:../../oauth/refresh
+      '@mod/store':
+        specifier: workspace:*
+        version: link:../../foundation/store
+      '@mod/subject-records':
+        specifier: workspace:*
+        version: link:../../foundation/subject-records
+    devDependencies:
+      vitest:
+        specifier: 5.0.5
+        version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(vite@8.3.3(@types/node@26.6.5)(yaml@2.9.1))
+
   modules/templates/session-store:
     dependencies:
       '@mod/kernel':
