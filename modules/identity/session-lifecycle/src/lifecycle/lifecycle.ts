@@ -118,6 +118,7 @@ export function lifecycleOver(parts: LifecycleParts): Lifecycle {
 	};
 	/** Goes on with every pending closing that is due; one that fails does not hold up the rest. */
 	const sweep = async (stopping: AbortSignal) => {
+		await listing.retryAwaiting(stopping);
 		const seen = new Set<string>();
 		const { failed } = await closings.each(async (handle) => {
 			if (stopping.aborted) return;
@@ -127,12 +128,13 @@ export function lifecycleOver(parts: LifecycleParts): Lifecycle {
 		if (!stopping.aborted) keepOnly(seen);
 		if (failed > 0) log.warn("session-lifecycle.sweep_failed", { count: failed });
 	};
-	/** The record, while it is open, before its end, and after the subject's revocation boundary. */
+	/** The record, while it is open, before its end, after the subject's revocation boundary, and not pushed out. */
 	const liveAt = async (handle: string): Promise<OpenRecord | undefined> => {
 		const found = fromStored(await kept.read(handle));
 		if (found?.state !== "open" || found.endsAt <= clock.now()) return undefined;
 		const revoked = (await revocation.check(found.subject, found.openedAt)) === "revoked";
-		return revoked ? undefined : found;
+		if (revoked || (await listing.awaits(found.subject, handle))) return undefined;
+		return found;
 	};
 	const entryOf = async (handle: string): Promise<Entry> => {
 		const found = await liveAt(handle);

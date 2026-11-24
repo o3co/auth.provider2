@@ -12,8 +12,8 @@ Internal module of `session-lifecycle`: a session's record, and its way from ope
 - The store interfaces and their needs (`session-lifecycle`'s root).
 
 ## Offers
-- `lifecycleOver`: the stores, subject revocation, `session`'s seam to the participants, clock, randomness, log, sweep interval and the keeping of attributes → `open`, `close`, `entryOf` and `subjectOf` as `session` describes them, and one sweep of pending closings, which goes on past a failing one.
-- The record of a live session: open, before its end, and after the subject's revocation boundary.
+- `lifecycleOver`: the stores, subject revocation, `session`'s seam to the participants, clock, randomness, log, sweep interval and the keeping of attributes → `open`, `close`, `entryOf` and `subjectOf` as `session` describes them, and one sweep: first what a refused push-out left awaiting, then the pending closings, each going on past a failing one.
+- The record of a live session: open, before its end, after the subject's revocation boundary, and not pushed out awaiting its closing (one read of the listing).
 - A sweep ends at the stop signal, and the host waits for it.
 - A close calls the participants through `session`'s `closingParticipants`, and logs each that failed by name and kind.
 - A login's authentication time, proof's start and end as `session`'s rules read them (`checkAuthenticatedAt`, `checkProvenSince`, `checkEndsAt`, thrown before a login opens anything; `authenticatedAtOf`).

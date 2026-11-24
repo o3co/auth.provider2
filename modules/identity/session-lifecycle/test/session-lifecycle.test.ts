@@ -876,10 +876,40 @@ describe("revoking a subject", () => {
 		await expect(s.open(facts())).rejects.toSatisfy(isUnavailable);
 		expect(await listed(stores, "alice")).toEqual([...rest].sort());
 		expect(await stores.awaiting("alice")).toEqual([first]);
-		expect((await s.entryOf(first)).kind).toBe("entered");
+		expect((await s.entryOf(first)).kind).toBe("absent");
 		await app.get(subjectRevocation).revoke("alice");
 		expect(closer.done).toHaveLength(listingCap);
+		// Closed by the revocation, it is settled too: nothing awaits any more.
+		expect(await stores.awaiting("alice")).toEqual([]);
+	});
+
+	it("lets nobody into a pushed-out session the closings refused, and the next sweep closes and settles it, with no login", async () => {
+		const { app, s, stores, closer, login } = await boot({
+			"sessions-per-subject": 1,
+			"sweep-interval": "1s",
+		});
+		const first = await login();
+		now += 1000;
+		stores.down.closing.failNext("add");
+		await expect(s.open(facts())).rejects.toSatisfy(isUnavailable);
+		expect(await stores.awaiting("alice")).toEqual([first]);
 		expect((await s.entryOf(first)).kind).toBe("absent");
+		expect(closer.calls).toBe(0);
+		await oneSweep();
+		expect(closer.done).toEqual(["alice"]);
+		expect(await stores.awaiting("alice")).toEqual([]);
+		expect(stores.kept.peek(first)).toMatchObject({ state: "closed" });
+		await app.stop(1000);
+	});
+
+	it("settles a session awaiting when a close of it finishes", async () => {
+		const { s, stores, login } = await boot({ "sessions-per-subject": 1 });
+		const first = await login();
+		now += 1000;
+		stores.down.closing.failNext("add");
+		await expect(s.open(facts())).rejects.toSatisfy(isUnavailable);
+		expect((await s.close(first)).kind).toBe("closed");
+		expect(await stores.awaiting("alice")).toEqual([]);
 	});
 
 	it("takes no place in a full listing for a session whose end has passed, pushing nothing out", async () => {
