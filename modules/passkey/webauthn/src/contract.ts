@@ -77,6 +77,16 @@ export interface Ceremonies {
 		challenge: string,
 		origin: string,
 	): { readonly credential: string } | undefined;
+	/**
+	 * The same evidence check again, at a rooted refresh, for an assertion taken at an approval: for
+	 * whichever of `origins` its client data names (the origin was judged when it was taken), by the
+	 * same rules as `verifyAssertion` otherwise. Its credential id where it verifies; none, never a throw.
+	 */
+	reverifyAssertion(
+		assertion: string,
+		publicKey: string,
+		challenge: string,
+	): { readonly credential: string } | undefined;
 }
 
 export const ceremonies = contract<Ceremonies>("webauthn.ceremonies");

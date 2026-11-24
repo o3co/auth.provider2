@@ -94,6 +94,13 @@ describe("the evidence check, state-free and at once", () => {
 				testOrigin,
 			);
 			expect(evidence !== undefined, name).toBe(asserted.kind === "asserted");
+			// The check again at a refresh meets the same rules, for the one origin listed it names.
+			const again = ceremonies.reverifyAssertion(
+				JSON.stringify(response),
+				key.publicKey,
+				challenge,
+			);
+			expect(again, name).toEqual(evidence);
 		}
 	});
 
@@ -111,6 +118,25 @@ describe("the evidence check, state-free and at once", () => {
 				testOrigin,
 			),
 		).toBeUndefined();
+	});
+
+	it("checks again for whichever origin listed the client data names, and none it does not list", async () => {
+		const { authenticator, credential } = await made();
+		const { challenge, options } = asked(credential);
+		const other = JSON.stringify(
+			authenticator.get(options, { origin: "https://other.rp.example" }),
+		);
+		expect(ceremonies.reverifyAssertion(other, credential.publicKey, challenge)).toEqual({
+			credential: credential.id,
+		});
+		expect(
+			ceremonies.verifyAssertion(other, credential.publicKey, challenge, testOrigin),
+		).toBeUndefined();
+		const evil = authenticator.get(options, { origin: "https://evil.example" }, { overlook: true });
+		expect(
+			ceremonies.reverifyAssertion(JSON.stringify(evil), credential.publicKey, challenge),
+		).toBeUndefined();
+		expect(ceremonies.reverifyAssertion(other, credential.publicKey, fresh())).toBeUndefined();
 	});
 
 	it("answers none for an origin the relying party does not list, even where the client data names it", async () => {

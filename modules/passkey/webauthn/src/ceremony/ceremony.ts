@@ -102,9 +102,10 @@ const statuses: readonly unknown[] = ["present", "supported", "notSupported"];
  * relying party offers, for the challenge and origin, with the user present and verified; none
  * otherwise. It reads what the library reads, as `assert` does, and no count, backup state or handle.
  */
-function evidenceCheck(rp: RelyingParty): Ceremonies["verifyAssertion"] {
+/** The evidence check, the rules' and a rooted refresh's: for the origin given, or with none, any it lists. */
+function evidenceCheck(rp: RelyingParty) {
 	const rpIdHash = createHash("sha256").update(rp.id).digest();
-	const verified = (assertion: string, publicKey: string, challenge: string, origin: string) => {
+	const verified = (assertion: string, publicKey: string, challenge: string, given?: string) => {
 		if (!isChallenge(challenge)) return undefined;
 		const { key, hash } = assertionKey(publicKey);
 		const sent = JSON.parse(assertion);
@@ -114,7 +115,9 @@ function evidenceCheck(rp: RelyingParty): Ceremonies["verifyAssertion"] {
 		const data = clientDataOf(sent);
 		if (data?.type !== "webauthn.get" || data.challenge !== challenge) return undefined;
 		// The origin asked, and one the relying party lists: closed where the two settings drift.
-		if (data.origin !== origin || !rp.origins.includes(origin)) return undefined;
+		const origin = given ?? data.origin;
+		if (data.origin !== origin || typeof origin !== "string" || !rp.origins.includes(origin))
+			return undefined;
 		if (frameRefusal(data, rp.topOrigins)) return undefined;
 		const binding = data.tokenBinding as { status?: unknown } | undefined;
 		if (binding !== undefined && !statuses.includes(binding?.status)) return undefined;
@@ -133,7 +136,7 @@ function evidenceCheck(rp: RelyingParty): Ceremonies["verifyAssertion"] {
 			? { credential: id }
 			: undefined;
 	};
-	return (assertion, publicKey, challenge, origin) => {
+	return (assertion: string, publicKey: string, challenge: string, origin?: string) => {
 		// Anything it cannot read, the key included, is evidence that does not verify.
 		try {
 			return verified(assertion, publicKey, challenge, origin);
@@ -241,8 +244,12 @@ export function ceremoniesFor(rp: RelyingParty): Ceremonies {
 		expectedRPID: rp.id,
 		requireUserVerification: verificationOf(v) === "required",
 	});
+	const evidence = evidenceCheck(rp);
 	return {
-		verifyAssertion: evidenceCheck(rp),
+		verifyAssertion: (assertion, publicKey, challenge, origin) =>
+			evidence(assertion, publicKey, challenge, origin),
+		reverifyAssertion: (assertion, publicKey, challenge) =>
+			evidence(assertion, publicKey, challenge),
 		creation: (challenge, user, exclude, v, asked = {}) => {
 			const discoverable = asked.discoverable ?? true;
 			return {
