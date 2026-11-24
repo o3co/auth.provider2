@@ -2,7 +2,7 @@ import { contract, extensionPoint } from "@mod/kernel";
 import { stances } from "@mod/promises";
 import type { Deciding, Refused } from "@mod/transparency";
 import type { CeremonyRefusal, Credential } from "@mod/webauthn";
-import { keyChanges, part } from "./records.ts";
+import { keyChanges, keysGoneWith, part } from "./records.ts";
 
 /**
  * Passkeys: each subject's keys as its flow's state holds them, the reservation of a key being
@@ -15,9 +15,13 @@ export const passkeyPart = part;
 /**
  * The key change's kind of operation, but for its `bundle` and `resend`: its name, its part, its
  * records (the reservation) and its end, which confirms the reservation (`took`) or releases it. The
- * key change's writer registers it on `transparency`'s `operationKinds`, with its own two.
+ * key change's writer registers it on `transparency`'s `operationKinds`, with its own two, and may
+ * append records of its own after passkeys' (its preimage, for a resend), whose end it answers.
  */
 export const passkeyChanges = keyChanges;
+
+/** The credentials a removal of a credential's key takes from a flow's state: it and every key whose chain holds it. */
+export const passkeysGone = keysGoneWith;
 
 export type AssertRefusal = CeremonyRefusal | "unknown-credential" | "not-named" | "raced";
 
@@ -45,15 +49,17 @@ export interface Passkeys {
 		credential: string,
 	): Promise<{ readonly subject: string; readonly publicKey: string } | undefined>;
 	/**
-	 * After a key change ended: tells `passkeyRemovals` of each `gone` credential the subject holds no
-	 * more, then brings the witness's mark in line. Whether the subject holds a key, as the mark agreed.
+	 * After a key change ended, by whoever took the end in: from the applied state alone, tells
+	 * `passkeyRemovals` of each credential gone since the last settle, sets the witness's mark while
+	 * the subject holds a key, and withdraws a mark only once the key generation moved past the one
+	 * it was set for. Idempotent. Whether the subject holds a key.
 	 */
-	settle(subject: string, gone?: readonly string[]): Promise<boolean>;
+	settle(subject: string): Promise<boolean>;
 }
 
 export const passkeys = contract<Passkeys>("passkeys");
 
-export type ReserveRefusal = "pending" | "held" | "taken" | "unknown" | "state" | "open";
+export type ReserveRefusal = "pending" | "held" | "taken" | "fenced" | "unknown" | "state" | "open";
 export type VerifyRefusal = CeremonyRefusal | "unknown" | "state" | "expired" | "open" | "raced";
 
 /** A key change of a subject's flow, decided as its writer's op (`transparency`'s KE-C01). */
@@ -67,17 +73,21 @@ export type Decided = { readonly prev: number } | Refused<string>;
 /** Registering keys, in the order reserve, verifyPending, commit; and removing one. */
 export interface Registrations {
 	/**
-	 * Reserves `credential` for the subject, pending until its possession is shown: refused while
-	 * another is pending, unless `retrying` it (whose key generation it keeps). `first`: only where the
-	 * subject holds no key, as the witness agrees.
+	 * Reserves `credential` for the subject under `generation`, the key generation its approval names
+	 * (`fenced` where the flow's is another): refused while another is pending, unless `retrying` it
+	 * (whose key generation it keeps). `first`: only where the subject holds no key and no mark.
 	 */
 	reserve(p: {
 		readonly subject: string;
 		readonly credential: Credential;
+		readonly generation: number;
 		readonly first?: boolean;
 		readonly retrying?: string;
 	}): Promise<{ readonly reservation: string } | { readonly refused: ReserveRefusal }>;
-	/** Checks an assertion by the reserved key, over a request naming it alone; the key stays pending. */
+	/**
+	 * Checks an assertion by the reserved key, over a request naming it alone; the key stays pending.
+	 * The response that verified it is answered alike again.
+	 */
 	verifyPending(p: {
 		readonly subject: string;
 		readonly reservation: string;
@@ -91,12 +101,15 @@ export interface Registrations {
 	commit(
 		p: KeyChange & { readonly reservation: string; readonly verification: string },
 	): Promise<Decided>;
-	/** Releases a reservation no op is putting on the log. */
+	/** Releases a reservation no op is putting on the log, and its credential's binding where never active. */
 	cancel(p: {
 		readonly subject: string;
 		readonly reservation: string;
 	}): Promise<{ readonly cancelled: true } | { readonly refused: "unknown" | "state" | "open" }>;
-	/** KE-C01 of a removal: refused for the subject's last key (`last`), which only clearing removes. */
+	/**
+	 * KE-C01 of a removal: refused where the subject would hold no key after it (`last`), which only
+	 * clearing removes, and for the reservation's op (`op`).
+	 */
 	remove(p: KeyChange & { readonly credential: string; readonly op: string }): Promise<Decided>;
 }
 
@@ -115,10 +128,14 @@ export const passkeyClearing = contract<PasskeyClearing>("passkeys.clearing", {
 	takersContribute: stances,
 });
 
-/** Who keeps the witness's mark in line with the keys; contributed where a witness is composed. */
+/** Who keeps the witness's mark in line with the keys, a mark for each key generation; contributed where a witness is composed. */
 export interface PasskeyWitnessing {
-	/** Brings the mark in line with `holds`, read anew; whether the subject holds a key, as the mark agreed. */
-	settle(subject: string, holds: () => Promise<boolean>): Promise<boolean>;
+	/** Whether the subject carries a mark, whichever generation set it. */
+	marked(subject: string): Promise<boolean>;
+	/** Sets the mark for `generation` unless one is set. */
+	mark(subject: string, generation: number): Promise<void>;
+	/** Withdraws the mark only where `generation` set it. */
+	withdraw(subject: string, generation: number): Promise<void>;
 }
 
 /** At most one; with none, the keys alone tell, and a passkey witness composed refuses boot. */
@@ -126,7 +143,7 @@ export const passkeyWitnessing = extensionPoint<PasskeyWitnessing>("passkeys.wit
 	multiplicity: "many",
 });
 
-/** Told of a credential a subject holds no more; `emptied`: the subject holds no key after. */
+/** Told of a credential a subject holds no more, at least once; `emptied`: the subject holds no key after. */
 export interface PasskeyRemoval {
 	removed(subject: string, credential: string, emptied: boolean): Promise<void>;
 }

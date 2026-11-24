@@ -74,6 +74,7 @@ export default defineModule(
 		m.provide(passkeys).by(async (c) =>
 			keptOver({
 				...(await c.get(kept)),
+				transparency: await c.get(transparency),
 				witnessing: await witnessingOf(c),
 				removals: await c.collect(passkeyRemovals),
 			}),
@@ -86,6 +87,7 @@ export default defineModule(
 				...(await c.get(kept)),
 				transparency: await c.get(transparency),
 				witnessing: await witnessingOf(c),
+				settle: (await c.get(passkeys)).settle,
 				now: c.clock.now,
 				token: () => Buffer.from(c.random.bytes(16)).toString("base64url"),
 				lifetimeMs: c.section["pending-lifetime"],

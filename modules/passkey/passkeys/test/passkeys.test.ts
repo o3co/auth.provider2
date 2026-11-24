@@ -11,7 +11,9 @@ import {
 	passkeyWitnessing,
 	registrations,
 } from "../src/contract.ts";
-import { world } from "./fixtures/world.ts";
+import { deciding, keyStage, memoryWitnessing, world } from "./fixtures/world.ts";
+
+const flow = { of: "subject", id: "s1" } as const;
 
 const contributing = (
 	name: string,
@@ -79,39 +81,72 @@ describe("passkeys", () => {
 		});
 	});
 
-	it("tells removals of a credential no more held, and settles the witness's mark", async () => {
+	it("moves no count where another subject's record names the credential now", async () => {
+		const w = await world();
+		const { credential } = await w.register();
+		const taken = { ...w.credentials.value(credential.id), subject: "s2" };
+		w.credentials.put(credential.id, taken);
+		const login = w.asserting();
+		expect(await w.keys.assert(login.response, { ...login, allow: [] })).toEqual({
+			kind: "refused",
+			reason: "unknown-credential",
+		});
+		expect(w.credentials.value(credential.id)).toEqual(taken);
+	});
+
+	it("settles from the applied state alone: removals told of every key gone, the mark kept until the generation moves", async () => {
 		const told: Parameters<PasskeyRemoval["removed"]>[] = [];
-		const settled: string[] = [];
 		const watcher = contributing("watcher", (m) => [
 			m.contribute(passkeyRemovals).by(() => ({
 				removed: async (...args: Parameters<PasskeyRemoval["removed"]>) => {
 					told.push(args);
 				},
 			})),
-			m.contribute(passkeyWitnessing).by(() => ({
-				settle: async (subject: string, holds: () => Promise<boolean>) => {
-					settled.push(subject);
-					return holds();
-				},
-			})),
 		]);
-		const w = await world({ modules: [watcher] });
-		const { credential } = await w.register();
-		expect(await w.keys.settle("s1", [credential.id])).toBe(true);
-		expect(told).toEqual([]);
-		expect(await w.keys.settle("s2", ["gone"])).toBe(false);
-		expect(told).toEqual([["s2", "gone", true]]);
-		expect(settled).toEqual(["s1", "s1", "s2"]);
+		const witnessing = memoryWitnessing();
+		const w = await world({ modules: [watcher, witnessing.module] });
+		const one = await w.register();
+		const k1 = w.recordOf("s1", one.credential.id);
+		const two = await w.register("s1", false, w.auth, k1);
+		expect(await w.keys.settle("s1")).toBe(true);
+		expect(witnessing.marks.get("s1")).toBe(0);
+		// Clearing k1 takes k2, whose chain holds it: both are told, by whoever settles, once each.
+		const cleared = await w.clearing.clear({
+			subject: "s1",
+			credential: one.credential.id,
+			op: "rm1",
+			decide: deciding({ removeKey: k1 }),
+		});
+		if (!("prev" in cleared)) throw new Error(cleared.refused);
+		await w.land("s1", "rm1", keyStage(flow, "rm1", { credential: "-", publicKey: "-" }), 2);
+		expect(await w.keys.settle("s1")).toBe(false);
+		expect(await w.keys.settle("s1")).toBe(false);
+		expect(told).toEqual([
+			["s1", one.credential.id, true],
+			["s1", two.credential.id, true],
+		]);
+		expect(w.credentials.value(one.credential.id)).toEqual({ subject: "s1", signCount: 1 });
+		// No key at the same generation keeps the mark; a boundary moving it on lets it go.
+		expect(witnessing.marks.get("s1")).toBe(0);
+		w.log.boundary(flow);
+		await w.t.tend(flow);
+		await w.keys.settle("s1");
+		expect(witnessing.marks.has("s1")).toBe(false);
 	});
 
-	it("reserves no first key where the witness says the subject holds one", async () => {
-		const witness = contributing("witnessing", (m) => [
-			m.contribute(passkeyWitnessing).by(() => ({ settle: async () => true })),
-		]);
-		const w = await world({ modules: [witness] });
-		expect(
-			await w.regs.reserve({ subject: "s1", credential: await w.created(), first: true }),
-		).toEqual({ refused: "held" });
+	it("withdraws no mark for state found missing, and reserves no first key beside a mark", async () => {
+		const witnessing = memoryWitnessing();
+		const w = await world({ modules: [witnessing.module] });
+		witnessing.marks.set("s9", 0);
+		expect(await w.keys.settle("s9")).toBe(false);
+		expect(witnessing.marks.get("s9")).toBe(0);
+		const reserved = await w.reserve({ subject: "s9", credential: await w.created(), first: true });
+		expect(reserved).toEqual({ refused: "held" });
+	});
+
+	it("boots with the key change's writer taking registrations", async () => {
+		const w = await world();
+		expect(await w.app.get(registrations)).toBe(w.regs);
 	});
 
 	const refusedWith = (modules: readonly Module[]) =>
@@ -120,7 +155,7 @@ describe("passkeys", () => {
 	it("refuses to boot with two witnessings, or a witness and no witnessing", async () => {
 		const witnessing = (name: string) =>
 			contributing(name, (m) => [
-				m.contribute(passkeyWitnessing).by(() => ({ settle: async () => false })),
+				m.contribute(passkeyWitnessing).by(() => memoryWitnessing().witnessing),
 			]);
 		expect(await refusedWith([witnessing("a"), witnessing("b")])).toMatch(
 			/more than one passkey witnessing/,

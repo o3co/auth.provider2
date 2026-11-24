@@ -1,7 +1,14 @@
 import { emptyState, type FlowState } from "@mod/authority-rules";
 import type { Ending, Json } from "@mod/transparency";
 import { describe, expect, it } from "vitest";
-import { committing, keyChanges, keysOwner, type Reservation, removing } from "../src/records.ts";
+import {
+	committing,
+	keyChanges,
+	keysGoneWith,
+	keysOwner,
+	type Reservation,
+	removing,
+} from "../src/records.ts";
 
 const reservation: Reservation = {
 	version: "v1",
@@ -17,7 +24,7 @@ const held = (r: Partial<Reservation> = {}) => [{ ...reservation, ...r } as unkn
 const key = (credential: string) => ({
 	credential,
 	publicKey: "p",
-	chain: [],
+	chain: [] as string[],
 	position: 1,
 	acceptedAt: 0,
 });
@@ -29,10 +36,10 @@ const state = (
 	keyGeneration,
 	keys,
 });
-const registering = () => ({
-	digest: "d",
-	eff: { key: { credential: "c1", publicKey: "p1" } },
-	records: [],
+const registered = { digest: "d", eff: { key: { credential: "c1", publicKey: "p1" } } };
+const registering = (_s: FlowState, h: readonly (Json | undefined)[]) => ({
+	...registered,
+	records: h.map(() => undefined),
 });
 
 describe("the key change's end", () => {
@@ -56,7 +63,7 @@ describe("committing (KE-C01 of a registration)", () => {
 	const commit = (s: FlowState, r = held(), at = { now: 50, max: 2 }) =>
 		committing({ reservation: "v1", verification: "x1" }, at, registering)(s, r);
 	it("decides on a verified reservation, writing none of its records", () => {
-		expect(commit(state())).toEqual({ ...registering(), records: [undefined] });
+		expect(commit(state())).toEqual({ ...registered, records: [undefined] });
 	});
 	it("refuses a lapsed one, one of another key generation, a first where a key is held, a full flow", () => {
 		expect(commit(state(), held(), { now: 101, max: 2 })).toEqual({ refused: "expired" });
@@ -69,20 +76,43 @@ describe("committing (KE-C01 of a registration)", () => {
 });
 
 describe("removing", () => {
-	const remove = (s: FlowState, last: boolean) =>
-		removing("c1", last, () => ({ digest: "d", eff: { removeKey: "k1" }, records: [] }))(s, []);
-	it("refuses the last key but where clearing lets it go", () => {
+	const writer = { value: "mine" };
+	const remove = (s: FlowState, last: boolean, credential = "c1", removeKey = "k1") =>
+		removing({ credential, op: "rm", last }, (_s, h) => ({
+			digest: "d",
+			eff: { removeKey },
+			records: h.map(() => writer),
+		}))(s, [...held(), null]);
+	const under = (credential: string, chain: string[]) => ({ ...key(credential), chain });
+	it("refuses what would leave no key, the keys whose chain holds it counted, but where clearing lets it go", () => {
 		expect(remove(state({ k1: key("c1") }), false)).toEqual({ refused: "last" });
+		expect(remove(state({ k1: key("c1"), k2: under("c2", ["k1"]) }), false)).toEqual({
+			refused: "last",
+		});
 		expect(remove(state({ k1: key("c1") }), true)).toMatchObject({ eff: { removeKey: "k1" } });
-		expect(remove(state({ k1: key("c1"), k2: key("c2") }), false)).toMatchObject({ digest: "d" });
-	});
-	it("throws where the writer's changes remove another key", () => {
-		const other = removing("c2", true, () => ({
+		// The writer's own records are kept; passkeys' reservation, first, is left as it is.
+		expect(remove(state({ k1: key("c1"), k2: key("c2") }), false)).toEqual({
 			digest: "d",
 			eff: { removeKey: "k1" },
-			records: [],
-		}));
-		expect(() => other(state({ k1: key("c1"), k2: key("c2") }), [])).toThrow(TypeError);
+			records: [undefined, writer],
+		});
+	});
+	it("refuses the reservation's op, and throws where the writer's changes remove another key", () => {
+		const s = state({ k1: key("c1"), k2: key("c2") });
+		expect(
+			removing({ credential: "c1", op: "v1", last: true }, () => ({
+				digest: "d",
+				eff: {},
+				records: [],
+			}))(s, held()),
+		).toEqual({ refused: "op" });
+		expect(() => remove(s, true, "c2", "k1")).toThrow(TypeError);
+	});
+	it("tells the credentials a removal takes: its key and every key whose chain holds it", () => {
+		const s = state({ k1: key("c1"), k2: under("c2", ["k1"]), k3: key("c3") });
+		expect(keysGoneWith(s, "c1")).toEqual(["c1", "c2"]);
+		expect(keysGoneWith(s, "c3")).toEqual(["c3"]);
+		expect(keysGoneWith(s, "none")).toEqual([]);
 	});
 });
 

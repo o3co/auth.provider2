@@ -1,4 +1,4 @@
-import { ruleSchemas } from "@mod/authority-rules";
+import { type FlowState, ruleSchemas, withoutRooted } from "@mod/authority-rules";
 import type {
 	Deciding,
 	IntentUnit,
@@ -18,6 +18,7 @@ import { z } from "zod";
 export const part = "passkeys";
 const keysRecord = { part, name: "keys" } as const;
 const reservationRecord = { part, name: "reservation" } as const;
+const settledRecord = { part, name: "settled" } as const;
 
 /** A subject's flow: the unit its records are kept under. */
 export const flowOf = (subject: string): Flow => ({ of: "subject", id: subject });
@@ -50,6 +51,9 @@ const reservationShape = z
 		first: z.boolean(),
 		until: z.number(),
 		verification: id.optional(),
+		/** The digest of the response that verified it, and what it showed: the same response, the same answer. */
+		shown: id.optional(),
+		userVerified: z.boolean().optional(),
 	})
 	.strict();
 export type Reservation = z.output<typeof reservationShape>;
@@ -63,20 +67,40 @@ export const pendingAt = (r: Reservation | undefined, now: number) =>
 	(r?.state === "reserved" || r?.state === "verified") && now <= r.until;
 export const asJson = (r: Reservation) => r as unknown as Json;
 
-/** A credential's record: its subject and what the authenticator answers beside the key. */
+/**
+ * A credential's record: the binding to its subject (none once released) and the count, kept as the
+ * log keeps the key's flow; and what the authenticator answered beside the key, dropped once the
+ * subject holds the key no more.
+ */
 const credentialShape = z
 	.object({
-		subject: id,
-		userHandle: id,
+		subject: id.optional(),
 		signCount: z.number().int().nonnegative(),
-		backupEligible: z.boolean(),
-		backedUp: z.boolean(),
-		transports: z.array(z.string()).optional(),
+		details: z
+			.object({
+				userHandle: id,
+				backupEligible: z.boolean(),
+				backedUp: z.boolean(),
+				transports: z.array(z.string()).optional(),
+			})
+			.strict()
+			.optional(),
 	})
 	.strict();
 export type CredentialRecord = z.output<typeof credentialShape>;
 export const credentialRecordOf = (stored: unknown): CredentialRecord =>
 	credentialShape.parse(stored);
+
+/** What the last settle told of: the key generation and the credentials active then. */
+const settledShape = z
+	.object({ generation: z.number().int().nonnegative(), credentials: z.array(id) })
+	.strict();
+export type Settled = z.output<typeof settledShape>;
+export const settledOf = (held: Json | undefined): Settled | undefined => {
+	const read = settledShape.safeParse(held);
+	return read.success ? read.data : undefined;
+};
+export const settledRecords = () => [settledRecord];
 
 /** passkeys as the owner of the keys and the key generation of a subject's flow state. */
 export const keysOwner: StateOwner = {
@@ -92,10 +116,23 @@ export const keysOwner: StateOwner = {
 };
 export const keysRecords = keysOwner.records;
 
+/** The credentials active in a state. */
+export const credentialsOf = (keys: Keys) => Object.values(keys.keys).map((k) => k.credential);
+/** The credentials a removal of `credential`'s key takes: it and every key whose chain holds it. */
+export function keysGoneWith(state: FlowState, credential: string): readonly string[] {
+	const key = activeKey(state, credential);
+	if (!key) return [];
+	const left = new Set(credentialsOf(withoutRooted(state, key[0])));
+	return credentialsOf(state).filter((c) => !left.has(c));
+}
+
 /** The ends that release a verified reservation's version for good (A19: held, abandoned). */
 const ended = new Set(["held", "abandoned"]);
 
-/** The key change's kind, but for its writer's `bundle` and `resend`. */
+/**
+ * The key change's kind, but for its writer's `bundle` and `resend`. Its records are passkeys' alone
+ * (the reservation); a writer keeping its own appends them after, and its end answers for its own.
+ */
 export const keyChanges: Pick<OperationKind, "name" | "parts" | "records" | "end"> = {
 	name: "passkey",
 	parts: [part],
@@ -133,20 +170,35 @@ export function committing(
 		const key = asked.eff.key;
 		if (key?.credential !== r.credential || key.publicKey !== r.publicKey)
 			throw new TypeError("a key change's changes name another key");
-		return { ...asked, records: held.map(() => undefined) };
+		return { ...asked, records: writersOwn(asked.records, held) };
 	};
 }
 
-/** KE-C01 of a removal of an active key; refused for the last unless `last` lets it go. */
-export function removing(credential: string, last: boolean, inner: Deciding): Deciding {
+/** The writer's records of the kind kept as it wrote them; passkeys' reservation, first, left. */
+function writersOwn(records: readonly PartNext[], held: readonly (Json | undefined)[]) {
+	if (records.length !== held.length)
+		throw new TypeError("a key change wrote another count of records than it read");
+	return [undefined, ...records.slice(1)];
+}
+
+/**
+ * KE-C01 of a removal of an active key: refused where no key would be left after it, as the fold
+ * takes every key whose chain holds it too, unless `last` lets the last go. Never the reservation's op.
+ */
+export function removing(
+	p: { readonly credential: string; readonly op: string; readonly last: boolean },
+	inner: Deciding,
+): Deciding {
 	return (state, held) => {
-		const key = activeKey(state, credential);
+		if (reservationOf(held[0])?.version === p.op) return { refused: "op" };
+		const key = activeKey(state, p.credential);
 		if (!key) return { refused: "unknown" };
-		if (!last && Object.keys(state.keys).length === 1) return { refused: "last" };
+		const left = Object.keys(withoutRooted(state, key[0]).keys).length;
+		if (!p.last && left === 0) return { refused: "last" };
 		const asked = inner(state, held);
 		if ("refused" in asked) return asked;
 		if (asked.eff.removeKey !== key[0])
 			throw new TypeError("a key change's changes name another key");
-		return { ...asked, records: held.map(() => undefined) };
+		return { ...asked, records: writersOwn(asked.records, held) };
 	};
 }

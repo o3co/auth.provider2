@@ -1,9 +1,10 @@
 import { createHash, randomBytes } from "node:crypto";
-import type { FlowState } from "@mod/authority-rules";
-import { assemble, defineModule, kernelConfig, type Module } from "@mod/kernel";
+import type { Changes, FlowState } from "@mod/authority-rules";
+import { assemble, defineModule, kernelConfig, type Module, Unavailable } from "@mod/kernel";
 import { quietRuntime } from "@mod/kernel/testing";
 import { stances } from "@mod/promises";
 import {
+	type Deciding,
 	type FrameStore,
 	frameStore,
 	type Json,
@@ -24,11 +25,13 @@ import webauthnModule from "@mod/webauthn/module";
 import { softwareAuthenticator, testOrigin, webauthnConfig } from "@mod/webauthn/testing";
 import {
 	type PasskeyStore,
+	type PasskeyWitnessing,
 	passkeyChanges,
 	passkeyClearing,
 	passkeyPart,
 	passkeyStore,
 	passkeys,
+	passkeyWitnessing,
 	registrations,
 	type StoredCredential,
 } from "../../src/contract.ts";
@@ -79,16 +82,15 @@ export function memoryFrames(parts: readonly string[]) {
 		at: (t: number) => {
 			now = t;
 		},
-		value: (subject: string, name?: string) =>
-			kept.get(
-				keyOf({ of: "subject", id: subject }, name ? { part: passkeyPart, name } : undefined),
-			)?.value,
+		value: (subject: string, name?: string, part = passkeyPart) =>
+			kept.get(keyOf({ of: "subject", id: subject }, name ? { part, name } : undefined))?.value,
 	};
 }
 
 /** A log in memory: conditional appends, and the monitor's findings a test gives. */
 export function memoryLog(now: () => number): TransparencyLog & {
 	judge(flow: Flow, position: number, verdict: "verified" | "held"): void;
+	boundary(flow: Flow): void;
 } {
 	const flows = new Map<string, Placed[]>();
 	const onFlow = (flow: Flow) => {
@@ -136,8 +138,29 @@ export function memoryLog(now: () => number): TransparencyLog & {
 			return {
 				stages: placed.filter((r) => r.op === op).length,
 				last: placed.some((r) => r.op === op && r.last),
-				abandonments: 0,
+				abandonments: placed.filter((r) => r.kind === "abandonment" && r.abandons?.op === op)
+					.length,
 			};
+		},
+		/** The monitor's erasure boundary, judged verified at once. */
+		boundary(flow) {
+			const placed = onFlow(flow);
+			n += 1;
+			const record = {
+				v: 1,
+				flow,
+				kind: "erasureBoundary",
+				op: `m${n}`,
+				stage: 1,
+				last: true,
+				id: `r${n}`,
+				writer: { role: "monitor", key: "mk" },
+				position: placed.length + 1,
+				shard: "s1",
+				n,
+				acceptedAt: now(),
+			} as unknown as Placed["record"];
+			placed.push({ record, finding: { verdict: "verified", outcome: "took" }, changes: {} });
 		},
 		judge(flow, position, verdict) {
 			const placed = onFlow(flow);
@@ -168,46 +191,67 @@ export const keyStage = (flow: Flow, op: string, key: { credential: string; publ
 		preimage: { v: 1, evidence: [], content: { variant: "first", ...key } },
 	}) as Stage;
 
-/** The key change's writer: it registers the kind, with its resend, and stands on the promises. */
-const writer = defineModule({ name: "key-writer", replicaSafe: true, takes: [] }, (m) => [
-	m.contribute(operationKinds).by(() => ({
-		...passkeyChanges,
-		bundle: false,
-		resend: (flow, op, [held]) => {
-			const r = held as { version?: string; credential: string; publicKey: string } | undefined;
-			return r?.version === op ? keyStage(flow, op, r) : undefined;
-		},
-	})),
-	m.contribute(stateOwners).by(() => otherOwner("grants", ["approvals", "consumed"])),
-	m.contribute(stateOwners).by(() => otherOwner("families", ["families"])),
-]);
-/** A taker of passkeys' guarded contracts, standing on a promise as they ask. */
-export const taker = defineModule(
-	{ name: "taker", replicaSafe: true, takes: [registrations, passkeyClearing] },
+/** The writer's own record of the kind, after passkeys': the stage it sends, for a resend. */
+const preimageRecord = { part: "writer", name: "preimage" } as const;
+/**
+ * The key change's writer: it registers the kind with its own record, bundle and resend, takes the
+ * guarded contracts and stands on the promises.
+ */
+export const writer = defineModule(
+	{ name: "key-writer", replicaSafe: true, takes: [registrations, passkeyClearing] },
 	(m) => [
+		m.contribute(operationKinds).by(() => ({
+			...passkeyChanges,
+			bundle: false,
+			parts: [...passkeyChanges.parts, "writer"],
+			records: (flow) => [...passkeyChanges.records(flow), preimageRecord],
+			end: (end, held) => [...passkeyChanges.end(end, held), { remove: true }],
+			resend: (_flow, op, held) => {
+				const stage = held.at(-1) as unknown as Stage | undefined;
+				return stage?.op === op ? stage : undefined;
+			},
+		})),
+		m.contribute(stateOwners).by(() => otherOwner("grants", ["approvals", "consumed"])),
+		m.contribute(stateOwners).by(() => otherOwner("families", ["families"])),
 		m.contribute(stances).by(() => ({
 			promise: "front-compromise-new-authorization",
 			holds: true,
-			by: "taker",
+			by: "key-writer",
 		})),
 	],
 );
 
-/** Credential records in memory. */
+/** The writer's part of KE-C01: its changes, and its stage kept beside the reservation where given. */
+export const deciding =
+	(eff: Changes, stage?: Stage): Deciding =>
+	(_state, held) => ({
+		digest: "d",
+		eff,
+		records: held.map((_, i) =>
+			i === held.length - 1 && stage ? { value: stage as unknown as Json } : undefined,
+		),
+	});
+
+/** Credential records in memory, failing on demand as a store that cannot tell. */
 export function memoryCredentials() {
 	const kept = new Map<string, StoredCredential>();
-	let before: (() => void) | undefined;
+	let failing = false;
+	const fails = () => {
+		if (failing) throw new Unavailable("store");
+	};
 	const store: PasskeyStore = {
 		async create(id, record) {
+			fails();
 			if (kept.has(id)) return "exists";
 			kept.set(id, structuredClone(record));
 			return "created";
 		},
-		read: async (id) => kept.get(id) && structuredClone(kept.get(id)),
+		read: async (id) => {
+			fails();
+			return kept.get(id) && structuredClone(kept.get(id));
+		},
 		async change(id, change) {
-			const run = before;
-			before = undefined;
-			run?.();
+			fails();
 			const record = kept.get(id);
 			if (!record) return undefined;
 			const next = change(structuredClone(record));
@@ -217,10 +261,32 @@ export function memoryCredentials() {
 	};
 	return {
 		store,
-		/** Runs once before the next change reads, as another request would. */
-		beforeChange: (run: () => void) => {
-			before = run;
+		value: (id: string) => kept.get(id) as unknown as Record<string, unknown> | undefined,
+		put: (id: string, value: unknown) => kept.set(id, value as StoredCredential),
+		fail: (on: boolean) => {
+			failing = on;
 		},
+	};
+}
+
+/** A witnessing in memory: one mark per subject, set for a key generation. */
+export function memoryWitnessing() {
+	const marks = new Map<string, number>();
+	const witnessing: PasskeyWitnessing = {
+		marked: async (subject) => marks.has(subject),
+		mark: async (subject, generation) => {
+			if (!marks.has(subject)) marks.set(subject, generation);
+		},
+		withdraw: async (subject, generation) => {
+			if (marks.get(subject) === generation) marks.delete(subject);
+		},
+	};
+	return {
+		marks,
+		witnessing,
+		module: defineModule({ name: "witnessing", replicaSafe: true, takes: [] }, (m) => [
+			m.contribute(passkeyWitnessing).by(() => witnessing),
+		]),
 	};
 }
 
@@ -229,7 +295,7 @@ export async function world(
 	p: { readonly section?: Record<string, unknown>; readonly modules?: readonly Module[] } = {},
 ) {
 	let clock = 1_000_000;
-	const frames = memoryFrames([passkeyPart, "grants", "families"]);
+	const frames = memoryFrames([passkeyPart, "grants", "families", "writer"]);
 	const log = memoryLog(() => clock);
 	const credentials = memoryCredentials();
 	const fakes = defineModule({ name: "fakes", replicaSafe: true, takes: [] }, (m) => [
@@ -241,7 +307,6 @@ export async function world(
 		modules: [
 			fakes,
 			writer,
-			taker,
 			transparencyModule,
 			webauthnModule,
 			passkeysModule,
@@ -275,38 +340,48 @@ export async function world(
 		const options = cer.request(c, allow, v) as never;
 		return { challenge: c, response: a.get(options, client, {}, pick) };
 	};
-	/** The key change's stage sent, judged and taken in by its owner. */
+	/** A reservation under key generation 0 unless told another. */
+	const reserve = (
+		q: Omit<Parameters<typeof regs.reserve>[0], "generation"> & { generation?: number },
+	) => regs.reserve({ generation: 0, ...q });
+	/** A key change sent, judged and taken in by its owner. */
 	const land = async (
 		subject: string,
 		op: string,
-		key: { credential: string; publicKey: string },
+		stage: Stage,
 		prev: number,
 		verdict: "verified" | "held" = "verified",
 	) => {
 		const flow = { of: "subject", id: subject } as const;
-		const sent = await t.send({ flow, op, stage: keyStage(flow, op, key), prev });
+		const sent = await t.send({ flow, op, stage, prev });
 		if (!("answer" in sent) || sent.answer.result !== "accepted") throw new Error("not sent");
 		log.judge(flow, sent.answer.position, verdict);
 		return t.step({ flow, own: op });
 	};
-	/** A key registered for `subject` from the reservation to the Step. */
-	const register = async (subject = "s1", first = true, a = auth) => {
+	/** A key registered for `subject` from the reservation to the Step; `by` the key that approved it. */
+	const register = async (subject = "s1", first = true, a = auth, by?: string) => {
 		const credential = await created(subject, a);
-		const reserved = await regs.reserve({ subject, credential, first });
+		const reserved = await reserve({ subject, credential, first });
 		if (!("reservation" in reserved)) throw new Error(reserved.refused);
 		const shown = asserting([credential], a);
 		const verified = await regs.verifyPending({ subject, ...reserved, ...shown });
 		if (!("verification" in verified)) throw new Error(verified.refused);
 		const key = { credential: credential.id, publicKey: credential.publicKey };
+		const stage = keyStage({ of: "subject", id: subject }, reserved.reservation, key);
 		const committed = await regs.commit({
 			subject,
 			...reserved,
 			verification: verified.verification,
-			decide: () => ({ digest: "d", eff: { key }, records: [] }),
+			decide: deciding({ key: { ...key, ...(by ? { by } : {}) } }, stage),
 		});
 		if (!("prev" in committed)) throw new Error(committed.refused);
-		await land(subject, reserved.reservation, key, committed.prev);
+		await land(subject, reserved.reservation, stage, committed.prev);
 		return { credential, ...reserved };
+	};
+	/** The id of the record that made a credential's key, in the subject's flow state. */
+	const recordOf = (subject: string, id: string) => {
+		const kept = frames.value(subject, "keys") as { keys: Record<string, { credential: string }> };
+		return Object.entries(kept.keys).find(([, k]) => k.credential === id)?.[0] as string;
 	};
 	return {
 		app,
@@ -320,8 +395,10 @@ export async function world(
 		auth,
 		created,
 		asserting,
+		reserve,
 		land,
 		register,
+		recordOf,
 		advance: (ms: number) => {
 			clock += ms;
 		},

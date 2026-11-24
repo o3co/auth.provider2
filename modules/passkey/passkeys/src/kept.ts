@@ -1,5 +1,5 @@
 import { Unavailable } from "@mod/kernel";
-import type { FrameStore } from "@mod/transparency";
+import type { FrameStore, Transparency } from "@mod/transparency";
 import type { Ceremonies, Credential, Verification } from "@mod/webauthn";
 import type {
 	PasskeyRemoval,
@@ -12,8 +12,13 @@ import {
 	activeKey,
 	type CredentialRecord,
 	credentialRecordOf,
+	credentialsOf,
+	flowOf,
+	keyChanges,
 	keysOf,
 	keysRecords,
+	settledOf,
+	settledRecords,
 	unitOf,
 } from "./records.ts";
 
@@ -25,7 +30,7 @@ export interface KeptParts {
 	readonly verification: Verification;
 }
 
-/** The keys a subject's flow holds, as its keys record keeps them. */
+/** The keys a subject's flow holds, as its keys record keeps them: the applied state. */
 export async function keysHeld(frames: FrameStore, subject: string) {
 	const read = await frames.read(unitOf(subject), keysRecords(unitOf(subject).flow));
 	return keysOf(read.held[0]);
@@ -41,28 +46,35 @@ export async function credentialRecord(store: PasskeyStore, id: string) {
 		throw new Unavailable("passkeys");
 	}
 }
+export const stored = (r: CredentialRecord) => r as unknown as StoredCredential;
 
-/** The credential the ceremonies check with: the record's, and the key its flow or reservation holds. */
-export const credentialOf = (id: string, publicKey: string, r: CredentialRecord): Credential => ({
-	id,
-	publicKey,
-	signCount: r.signCount,
-	userHandle: r.userHandle,
-	backupEligible: r.backupEligible,
-	backedUp: r.backedUp,
-	...(r.transports ? { transports: r.transports } : {}),
-});
+/** The credential the ceremonies check with, where the record binds it and keeps its details. */
+export const credentialOf = (
+	id: string,
+	publicKey: string,
+	r: CredentialRecord,
+): Credential | undefined =>
+	r.details && {
+		id,
+		publicKey,
+		signCount: r.signCount,
+		userHandle: r.details.userHandle,
+		backupEligible: r.details.backupEligible,
+		backedUp: r.details.backedUp,
+		...(r.details.transports ? { transports: r.details.transports } : {}),
+	};
 
 /**
- * Moves the count and backup state on, only over the record judged: one whose count moved meanwhile
- * is `raced`.
+ * Moves the count and backup state on, only over the record judged: one whose subject or count moved
+ * meanwhile is `raced`, and changes nothing.
  */
 export async function counted(store: PasskeyStore, judged: CredentialRecord, after: Credential) {
-	const changed = await store.change(after.id, (stored) => {
-		const now = credentialRecordOf(stored);
-		if (now.subject !== judged.subject || now.signCount !== judged.signCount) return undefined;
-		const next = { ...now, signCount: after.signCount, backedUp: after.backedUp };
-		return { value: next as unknown as StoredCredential };
+	const changed = await store.change(after.id, (current) => {
+		const now = credentialRecordOf(current);
+		if (now.subject !== judged.subject || now.signCount !== judged.signCount || !now.details)
+			return undefined;
+		const details = { ...now.details, backedUp: after.backedUp };
+		return { value: stored({ ...now, signCount: after.signCount, details }) };
 	});
 	return changed && credentialRecordOf(changed.after).signCount === after.signCount
 		? "counted"
@@ -72,6 +84,7 @@ export async function counted(store: PasskeyStore, judged: CredentialRecord, aft
 /** Assertions by active keys, their public keys, and the settle after a key change. */
 export function keptOver(
 	p: KeptParts & {
+		readonly transparency: Transparency;
 		readonly witnessing: PasskeyWitnessing | undefined;
 		readonly removals: readonly PasskeyRemoval[];
 	},
@@ -79,12 +92,20 @@ export function keptOver(
 	/** A credential's record and its active key, none where its subject's flow holds no such key. */
 	const active = async (id: string) => {
 		const record = await credentialRecord(p.store, id);
-		if (!record) return undefined;
+		if (!record?.subject) return undefined;
 		const key = activeKey(await keysHeld(p.frames, record.subject), id);
-		return key && { record, publicKey: key[1].publicKey };
+		const credential = key && credentialOf(id, key[1].publicKey, record);
+		return credential && { record, subject: record.subject, credential };
 	};
 	const refused = (reason: "unknown-credential" | "not-named" | "raced") =>
 		({ kind: "refused", reason }) as const;
+	/** Drops a gone credential's details, keeping its binding and count. */
+	const dropDetails = (subject: string, id: string) =>
+		p.store.change(id, (current) => {
+			const now = credentialRecordOf(current);
+			if (now.subject !== subject || !now.details) return undefined;
+			return { value: stored({ subject, signCount: now.signCount }) };
+		});
 	return {
 		async assert(response, asked) {
 			const id = (response as { id?: unknown } | null)?.id;
@@ -96,7 +117,7 @@ export function keptOver(
 			const asserted = await p.ceremonies.assert(
 				response,
 				{ challenge: asked.challenge, named: asked.allow.length > 0 },
-				credentialOf(id, found.publicKey, found.record),
+				found.credential,
 				p.verification,
 			);
 			if (asserted.kind === "refused") return asserted;
@@ -104,24 +125,44 @@ export function keptOver(
 				return refused("raced");
 			return {
 				kind: "asserted",
-				subject: found.record.subject,
+				subject: found.subject,
 				credential: id,
 				userVerified: asserted.userVerified,
-				backupEligible: found.record.backupEligible,
+				backupEligible: found.credential.backupEligible,
 			};
 		},
 		async publicKeyOf(id) {
 			const found = await active(id);
-			return found && { subject: found.record.subject, publicKey: found.publicKey };
+			return found && { subject: found.subject, publicKey: found.credential.publicKey };
 		},
-		async settle(subject, gone = []) {
-			const keys = await keysHeld(p.frames, subject);
-			const emptied = Object.keys(keys.keys).length === 0;
-			for (const id of gone.filter((c) => !activeKey(keys, c))) {
-				for (const removal of p.removals) await removal.removed(subject, id, emptied);
+		async settle(subject) {
+			const records = settledRecords();
+			const read = await p.frames.read(unitOf(subject), [
+				...keysRecords(flowOf(subject)),
+				...records,
+			]);
+			const keys = keysOf(read.held[0]);
+			const before = settledOf(read.held[1]);
+			const now = credentialsOf(keys);
+			// A mark goes only once the generation moved past its own: never for state found missing.
+			if (before && before.generation < keys.keyGeneration)
+				await p.witnessing?.withdraw(subject, before.generation);
+			if (now.length > 0) await p.witnessing?.mark(subject, keys.keyGeneration);
+			for (const id of (before?.credentials ?? []).filter((c) => !now.includes(c))) {
+				for (const removal of p.removals) await removal.removed(subject, id, now.length === 0);
+				await dropDetails(subject, id);
 			}
-			const holds = async () => Object.keys((await keysHeld(p.frames, subject)).keys).length > 0;
-			return p.witnessing ? p.witnessing.settle(subject, holds) : !emptied;
+			const next = { generation: keys.keyGeneration, credentials: now };
+			// Held to what it read; a write refused leaves the next settle to tell the same again.
+			await p.transparency.changeHeld({
+				kind: keyChanges.name,
+				flow: flowOf(subject),
+				records,
+				change: ([held]) => [
+					JSON.stringify(held) === JSON.stringify(read.held[1]) ? { value: next } : undefined,
+				],
+			});
+			return now.length > 0;
 		},
 	};
 }
