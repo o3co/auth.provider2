@@ -1,0 +1,26 @@
+{
+	"name": "@mod/passkey-reset",
+	"private": true,
+	"license": "Apache-2.0",
+	"type": "module",
+	"kind": "feature",
+	"optIn": true,
+	"joins": [
+		"@mod/passkeys"
+	],
+	"exports": {
+		".": "./src/contract.ts",
+		"./module": "./src/module.ts"
+	},
+	"dependencies": {
+		"@mod/kernel": "workspace:*",
+		"@mod/passkeys": "workspace:*",
+		"@mod/promises": "workspace:*",
+		"@mod/reset-wire": "workspace:*",
+		"@mod/transparency": "workspace:*",
+		"zod": "4.6.7"
+	},
+	"devDependencies": {
+		"vitest": "5.0.5"
+	}
+}
