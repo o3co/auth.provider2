@@ -115,7 +115,7 @@ export interface EndpointParts {
 	readonly clients: Clients;
 	readonly issuing: (
 		request: HttpRequest,
-		verified: { readonly binding?: Binding; readonly authenticated: boolean },
+		verified: { readonly binding?: Binding; readonly assertion: boolean },
 	) => Issuing;
 	readonly fencing: IssuanceFencing;
 	readonly told: readonly SessionIssuance[];
@@ -303,7 +303,7 @@ export function tokenEndpoint(parts: EndpointParts): Pick<Route, "handle" | "una
 			...{ request, client, grantType, binding, targets, told, bundle },
 			issuing: issuing(request, {
 				...(binding ? { binding } : {}),
-				authenticated: verified !== undefined,
+				assertion: authenticated.kind === "authenticated" && authenticated.assertion === true,
 			}),
 			authenticated: verified,
 			identified: identifiedBy,

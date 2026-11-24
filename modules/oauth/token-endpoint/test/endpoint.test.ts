@@ -17,7 +17,13 @@ import { type AddedClaims, type IssuanceRequest, issuancePolicies } from "@mod/t
 import { afterEach, describe, expect, it } from "vitest";
 import declared from "../src/audit-events.ts";
 import { tokenEndpointLocation } from "../src/contract.ts";
-import { answered, basicOf, endpointConfig, endpointModules } from "./deployment.ts";
+import {
+	answered,
+	basicOf,
+	logged as book,
+	endpointConfig,
+	endpointModules,
+} from "./deployment.ts";
 
 const logged = recordingLog();
 const quiet = quietRuntime({
@@ -460,6 +466,39 @@ describe("token endpoint", () => {
 		expect((await post({ grant_type: "urn:test:echo" }, "echo")).body).toEqual({
 			authenticated: "undefined",
 		});
+		// A method that is no assertion's verified no assertion sent beside its credentials: none is recorded as evidence.
+		const before = book?.sent.length ?? 0;
+		const beside = { grant_type: "urn:test:echo", proving_id: "proved", client_assertion: "a.b.c" };
+		expect((await post(beside)).body).toEqual({ authenticated: "same" });
+		const starts = book?.sent.slice(before).filter((s) => s.stage.stage === 1);
+		expect(starts?.map((s) => s.stage.preimage.evidence)).toEqual([[]]);
+	});
+
+	it("records the client's assertion as evidence where its method authenticates by one", async () => {
+		const asserting = defineModule({ name: "asserting", replicaSafe: true, takes: [] }, (m) => [
+			m.contribute(authMethods).by(() => ({
+				name: "asserting",
+				assertion: true,
+				signingAlgorithms: ["ES256"],
+				claimed: (r) => (r.form.has("client_assertion") ? "asserted" : undefined),
+				verify: async () => ({}),
+			})),
+			m.contribute(grants).by(() => ({
+				grantType: "urn:test:echo",
+				readsAmbient: "none",
+				handle: async (input) => answered(input, {}),
+			})),
+		]);
+		const asserted = client("asserted", "asserting", { grants: ["urn:test:echo"] });
+		const post = await serve([asserting], { clients: [asserted] });
+		const before = book?.sent.length ?? 0;
+		expect((await post({ grant_type: "urn:test:echo", client_assertion: "a.b.c" })).status).toBe(
+			200,
+		);
+		const starts = book?.sent.slice(before).filter((s) => s.stage.stage === 1);
+		expect(starts?.map((s) => s.stage.preimage.evidence)).toEqual([
+			[{ form: "clientAssertion", value: "a.b.c" }],
+		]);
 	});
 
 	it("answers credentials a method finds malformed as a malformed request", async () => {

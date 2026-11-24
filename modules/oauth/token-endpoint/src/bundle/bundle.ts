@@ -26,14 +26,14 @@ export type Evidence = Preimage["evidence"];
 
 /**
  * The request's evidence, as it was verified: its DPoP proof where it bound the token by DPoP, and
- * its client's assertion where the client's authentication verified a key by it.
+ * its client's assertion where the client's authentication verified that assertion.
  */
 export function evidenceOf(
 	request: HttpRequest,
-	verified: { readonly binding?: Binding; readonly authenticated: boolean },
+	verified: { readonly binding?: Binding; readonly assertion: boolean },
 ): Evidence {
 	const proof = verified.binding?.tokenType === "DPoP" ? request.headers.get("dpop") : undefined;
-	const assertion = verified.authenticated ? request.fields.single("client_assertion") : undefined;
+	const assertion = verified.assertion ? request.fields.single("client_assertion") : undefined;
 	return [
 		...(proof ? [{ form: "dpopProof" as const, value: proof }] : []),
 		...(assertion ? [{ form: "clientAssertion" as const, value: assertion }] : []),

@@ -4,7 +4,7 @@ Internal module of `token-endpoint`: the handler of `POST /oauth/token`, from th
 
 ## Responsibilities
 - Hands a grant what its client's authentication verified (`authenticated`), unread; none for a client a grant identified.
-- A request issues one bundle: a second `issue` is the grant's maker's mistake (a TypeError, `500`), none of it answered. Its evidence is what was verified: the binding read and the authentication.
+- A request issues one bundle: a second `issue` is the grant's maker's mistake (a TypeError, `500`), none of it answered. Its evidence is what was verified: the binding read, and the client's assertion where its authentication is marked `assertion`, never for another method's `proof`.
 - Reads a request's grant type and parameters, authenticates the client, or has a grant identify the client of a request naming none, checks the grant is allowed it and the binding, hands the grant its input, and answers what it gives, as the package's card says.
 - Builds a grant's `admits` and `issue` over an `Issuing` (the endpoint's runs bundles, the test caller's signs at once), with the request's binding, telling the session issuances of a token issued from a session.
 

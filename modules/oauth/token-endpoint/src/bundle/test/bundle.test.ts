@@ -135,13 +135,13 @@ describe("a bundle, owned by the token endpoint (A40)", () => {
 		// Evidence is what was verified: the DPoP proof of a DPoP binding, the assertion of an authentication that verified one.
 		const request = { headers: new Map([["dpop", "p"]]), fields: { single: () => "a" } } as never;
 		const dpop = { member: "jkt", confirmation: "t", tokenType: "DPoP" };
-		expect(evidenceOf(request, { binding: dpop, authenticated: true })).toEqual([
+		expect(evidenceOf(request, { binding: dpop, assertion: true })).toEqual([
 			{ form: "dpopProof", value: "p" },
 			{ form: "clientAssertion", value: "a" },
 		]);
 		const bearer = { member: "x5t#S256", confirmation: "t", tokenType: "Bearer" };
-		expect(evidenceOf(request, { binding: bearer, authenticated: false })).toEqual([]);
-		expect(evidenceOf(request, { authenticated: false })).toEqual([]);
+		expect(evidenceOf(request, { binding: bearer, assertion: false })).toEqual([]);
+		expect(evidenceOf(request, { assertion: false })).toEqual([]);
 	});
 
 	it("signs nothing when its append is refused, its op closed", async () => {

@@ -11,7 +11,7 @@ Internal module of `token-endpoint`: the issuance bundle (A40), its owner's run 
 ## Offers
 - `bundleKind`: the kind of operation `token-endpoint.bundle`, a bundle (never taken over), holding no records of its own.
 - `bundling` (`BundleParts`: `transparency`, the log's digest, tokens' `admits`, `prepare` and `sign`, a fresh ground, the pause and number of looks at the judgment) → the run of one `BundleAsk` (the request and limits, the evidence, its root's reference) → `tokens`' answer.
-- `evidenceOf` (a request, what was verified) → its DPoP proof where the token is bound by DPoP, and its client assertion where the client's authentication verified a key by one; `flowOf` (a grant) → its subject's flow, a person's or the client's own.
+- `evidenceOf` (a request, what was verified) → its DPoP proof where the token is bound by DPoP, and its client assertion where the client's authentication verified that assertion (`clients`' `assertion` mark); `flowOf` (a grant) → its subject's flow, a person's or the client's own.
 
 ## Invariants
 - An op's id is the digest of the evidence verified; with none, of a fresh ground. Its digest is its start's plaintext digest.
