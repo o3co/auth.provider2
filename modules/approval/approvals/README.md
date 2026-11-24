@@ -15,8 +15,9 @@
   - `issue` (purpose, items, the screen's `eEnc` and `eSig`, the key it is counted by) → the statement (`approval+jwt`), its hash, its challenge; or refused: `items`, `limited`, `busy`, `withdrawn`.
   - `use` (statement; an assertion's JSON text as sent, or a possession's verification) → the approval (hash, purpose, items, subject and credential or the verification, when used); or refused.
   - `continue` (hash, sequence number, body, the screen's signature, its step) → continued with what the step answered (`again` where another call took it first); or refused, `pending` while another call holds its step.
-  - `complete` (hash, code) → the completion sealed to `eEnc` (HPKE's `enc` and ciphertext); or refused.
-  - `usedOf` (hash) → a used statement's approval.
+  - `complete` (hash, code) → the completion sealed to `eEnc` (HPKE's `enc` and ciphertext) and the id of the approval's record on the flow, the reference the code's chain roots in; or refused.
+  - `completionOf` (hash) → the completion kept, as `complete` answered it, once `publish` marked it gone out; none before. `publish` (hash): marks it so, once its caller let it go (an authorization's code rooted first).
+  - `usedOf` (hash) → a used statement's approval, with its statement's issue time, `completed` once its completion is kept.
 - Extension point `statementItems` (purpose, the item names it fills, by whom): the purposes are `authorization`, `creation` and `possession`.
 - `approvalStore`, the statements' store interface (create unless held, read, change from what it holds), and `approvalStoreNeeds`. `approvalPart`: its part of each subject's flow, which its wiring binds.
 - Operator section: `statement-lifetime` (default 5 minutes), `issue-limit`, `issue-total` and `issue-window` (default 30 a minute per key, 100 000 a minute in all), `max-concurrent` (default 64 signings at once).

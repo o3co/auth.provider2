@@ -59,6 +59,10 @@ export interface Approval {
 	readonly verification?: string;
 	/** When it was used, by the kernel's clock, in ms: the same evidence again answers the same time. */
 	readonly usedAt?: number;
+	/** Set once an authorization's completion is kept, whether or not it went out yet. */
+	readonly completed?: true;
+	/** When its statement was issued, in ms: where the proof of the login it approves began. */
+	readonly issuedAt: number;
 }
 
 export type UseRefusal = AssertRefusal | "unknown" | "expired" | "used" | "purpose" | "unverified";
@@ -97,6 +101,8 @@ export type Completed =
 			/** The completion, sealed to the screen's `eEnc`: HPKE's `enc` and ciphertext, base64url. */
 			readonly enc: string;
 			readonly ct: string;
+			/** The id of the approval's record on the subject's flow: the reference its code's chain roots in. */
+			readonly record: string;
 	  }
 	| {
 			readonly kind: "refused";
@@ -144,6 +150,16 @@ export interface Approvals {
 	complete(p: { readonly hash: string; readonly code: string }): Promise<Completed>;
 	/** A used statement's approval; none for any other. */
 	usedOf(hash: string): Promise<Approval | undefined>;
+	/**
+	 * The completion kept for an authorization, as `complete` answered it, once its caller published
+	 * it; none before.
+	 */
+	completionOf(hash: string): Promise<Extract<Completed, { kind: "completed" }> | undefined>;
+	/**
+	 * Marks the completion kept for an authorization as gone out, once its caller let it go (an
+	 * authorization's code rooted first): `completionOf` gives it from then on. `published`, again for one published already; `unknown` where none is kept.
+	 */
+	publish(hash: string): Promise<"published" | "unknown">;
 }
 
 /** Taken only by a module that declares where it stands on the promises. */

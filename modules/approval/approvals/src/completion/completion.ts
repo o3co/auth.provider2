@@ -165,20 +165,31 @@ export function completionsOver(p: CompletionParts) {
 					stage = made;
 				}),
 			);
-			if (!("prev" in answer)) return answer.refused === "key" ? "key" : "ended";
+			if (!("prev" in answer))
+				return { refused: answer.refused === "key" ? ("key" as const) : ("ended" as const) };
 			const sent = await transparency.send({ flow, op, stage: stage as Stage, prev: answer.prev });
 			if ("refused" in sent) throw new Unavailable("approvals");
-			if (sent.answer.result === "accepted") return "placed";
+			if (sent.answer.result === "accepted") return { record: sent.answer.id };
 			const mismatch = sent.answer.result === "refused" && sent.answer.refusal === "prevMismatch";
-			if (!sent.end || !mismatch) return sent.end ? "ended" : unavailable();
+			if (!sent.end || !mismatch) return sent.end ? { refused: "ended" as const } : unavailable();
 		}
 		return unavailable();
 	}
+	/** A completion kept on its record, with the approval's record on the flow; none where one is not whole. */
+	const keptOf = (r: StatementRecord): Completed =>
+		r.enc && r.ct && r.record
+			? { kind: "completed", enc: r.enc, ct: r.ct, record: r.record }
+			: refused("ended");
 	const unavailable = (): never => {
 		throw new Unavailable("approvals");
 	};
 
-	async function sealed(hash: string, r: StatementRecord, code: string): Promise<Completed> {
+	async function sealed(
+		hash: string,
+		r: StatementRecord,
+		code: string,
+		record: string,
+	): Promise<Completed> {
 		const nowS = Math.floor(p.now() / 1000);
 		const payload = {
 			v: wireVersion,
@@ -205,13 +216,13 @@ export function completionsOver(p: CompletionParts) {
 		const saved = await p.store.change(hash, (current) => {
 			const now = recordOf(current);
 			return now?.state === "used"
-				? { value: stored({ ...now, state: "completed", enc, ct, code: sha256(code) }) }
+				? { value: stored({ ...now, state: "completed", enc, ct, code: sha256(code), record }) }
 				: undefined;
 		});
 		// The one kept is answered: another call's, where it kept one first; none where none was kept.
 		const after = recordOf(saved?.after);
-		return after?.state === "completed" && after.enc && after.ct && after.code === sha256(code)
-			? { kind: "completed", enc: after.enc, ct: after.ct }
+		return after?.state === "completed" && after.code === sha256(code)
+			? keptOf(after)
 			: refused("ended");
 	}
 
@@ -219,18 +230,15 @@ export function completionsOver(p: CompletionParts) {
 		const r = recordOf(await p.store.read(q.hash));
 		if (!r) return refused("unknown");
 		if (r.purpose !== "authorization") return refused("purpose");
-		if (r.state === "completed" && r.enc && r.ct)
-			return r.code === sha256(q.code)
-				? { kind: "completed", enc: r.enc, ct: r.ct }
-				: refused("code");
+		if (r.state === "completed") return r.code === sha256(q.code) ? keptOf(r) : refused("code");
 		if (r.state !== "used" || r.subject === undefined) return refused("unused");
 		if (p.now() > r.exp) return refused("expired");
 		if (!(await current(p.keys, r.jws))) return refused("unknown");
 		const flow: Flow = { of: "subject", id: r.subject };
 		const op = `approval:${q.hash}`;
 		const placed = await placedOn(flow, op, r, q.code);
-		if (placed !== "placed") return refused(placed);
+		if ("refused" in placed) return refused(placed.refused);
 		if (!(await takenIn(flow, op))) return refused("ended");
-		return sealed(q.hash, r, q.code);
+		return sealed(q.hash, r, q.code, placed.record);
 	};
 }

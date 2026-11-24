@@ -51,6 +51,10 @@ const recordShape = z
 		enc: id.optional(),
 		/** The digest of the code its completion carries. */
 		code: id.optional(),
+		/** The id of the approval's record on the subject's flow, which the code's chain roots in. */
+		record: id.optional(),
+		/** Set once its caller let the completion go out: `completionOf` gives none before. */
+		published: z.literal(true).optional(),
 		ct: id.optional(),
 	})
 	.strict();
@@ -208,6 +212,8 @@ export function statementsOver(p: StatementParts) {
 		...(r.credential === undefined ? {} : { credential: r.credential }),
 		...(r.verification === undefined ? {} : { verification: r.verification }),
 		...(r.usedAt === undefined ? {} : { usedAt: r.usedAt }),
+		...(r.state === "completed" ? { completed: true as const } : {}),
+		issuedAt: issuedAtOf(r.jws),
 	});
 
 	/** Marks the record used, from issued alone; the same evidence again reads as the approval. */
@@ -267,8 +273,35 @@ export function statementsOver(p: StatementParts) {
 		return r && r.state !== "issued" ? approvalOf(hash, r) : undefined;
 	}
 
-	return { issue, use, usedOf };
+	async function completionOf(hash: string) {
+		const r = recordOf(await p.store.read(hash));
+		return r?.state === "completed" && r.published && r.enc && r.ct && r.record
+			? { kind: "completed" as const, enc: r.enc, ct: r.ct, record: r.record }
+			: undefined;
+	}
+
+	/** Marks a kept completion as gone out; `published`, or `unknown` where none is kept. */
+	async function publish(hash: string): Promise<"published" | "unknown"> {
+		const changed = await p.store.change(hash, (current) => {
+			const r = recordOf(current);
+			return r?.state === "completed" && !r.published
+				? { value: stored({ ...r, published: true }) }
+				: undefined;
+		});
+		const after = recordOf(changed?.after);
+		return after?.state === "completed" && after.published ? "published" : "unknown";
+	}
+
+	return { issue, use, usedOf, completionOf, publish };
 }
+
+/** When a statement was issued, in ms, as its signed `iat` says. */
+const issuedAtOf = (jws: string): number =>
+	(
+		JSON.parse(Buffer.from(jws.split(".")[1] ?? "", "base64url").toString("utf8")) as {
+			iat: number;
+		}
+	).iat * 1000;
 
 /** The challenge over a statement: sdk-core-wire's input, hashed; a creation's for `create()`, any other's for `get()`. */
 export const challengeOf = (jws: string, purpose: Purpose = "authorization") =>

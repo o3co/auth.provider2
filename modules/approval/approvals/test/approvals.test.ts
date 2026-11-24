@@ -166,6 +166,7 @@ describe("using a statement", () => {
 				subject: "s1",
 				credential: key.id,
 				usedAt: 1_800_000_000_000,
+				issuedAt: 1_800_000_000_000,
 			},
 		});
 		expect(await w.approvals.use({ statement: t.statement, assertion })).toEqual(used);
@@ -399,6 +400,12 @@ describe("completing an authorization", () => {
 		expect(Object.values((state as { approvals: object }).approvals)).toEqual([
 			expect.objectContaining({ code: sha256("code-1"), client: "c1" }),
 		]);
+		expect(done.record).toBe(record?.record.id);
+		// Given again only once its caller let it go out.
+		expect(await w.approvals.completionOf(t.hash)).toBeUndefined();
+		expect(await w.approvals.publish(t.hash)).toBe("published");
+		expect(await w.approvals.completionOf(t.hash)).toEqual(done);
+		expect(await w.approvals.usedOf(t.hash)).toMatchObject({ completed: true });
 		expect(await w.approvals.complete({ hash: t.hash, code: "code-1" })).toEqual(done);
 		expect(await w.approvals.complete({ hash: t.hash, code: "code-2" })).toEqual({
 			kind: "refused",
@@ -501,6 +508,7 @@ describe("completing an authorization", () => {
 	it("refuses a statement not used, and one of another purpose", async () => {
 		const w = await world();
 		const t = await issued(w);
+		expect(await w.approvals.completionOf(t.hash)).toBeUndefined();
 		expect(await w.approvals.complete({ hash: t.hash, code: "c" })).toEqual({
 			kind: "refused",
 			reason: "unused",
