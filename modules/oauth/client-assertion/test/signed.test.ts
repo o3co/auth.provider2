@@ -77,23 +77,6 @@ const signed = (key: KeyObject, typ: string, claims: object = {}, alg = "ES256")
 		.setProtectedHeader({ alg, typ, kid: "ec" })
 		.sign(key);
 
-describe("whether a client holds a key", () => {
-	it("holds a key of its own written in, by its thumbprint, that the operator's algorithms read", async () => {
-		const { checks, client } = await boot();
-		const app = await client("app");
-		expect(await checks.holdsKey(app, await thumbprint(jwk(ec.publicKey)))).toBe(true);
-		expect(await checks.holdsKey(app, await thumbprint(jwk(other.publicKey)))).toBe(false);
-		// RS256 is not taken by default, so the RSA key is read under none: not one of its keys here.
-		expect(await checks.holdsKey(app, await thumbprint(jwk(rsa.publicKey)))).toBe(false);
-	});
-
-	it("holds none where its keys are at a jwks-uri, as no key set's keys are read here", async () => {
-		const { checks, client } = await boot();
-		const far = await client("far");
-		expect(await checks.holdsKey(far, await thumbprint(jwk(ec.publicKey)))).toBe(false);
-	});
-});
-
 describe("a JWT a client signed", () => {
 	it("is the client's, under the `typ` asked, with its claims", async () => {
 		const { checks, client } = await boot();

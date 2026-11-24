@@ -3,7 +3,7 @@
 ## Responsibilities
 - Contributes `private_key_jwt` (RFC 7523) to `clients`: the client signs a JWT with one of its keys, used once.
 - Contributes the client metadata section that holds the client's keys, its internal module `keys`.
-- Decides, for the modules that ask, whether a client holds a key and whether a JWT is signed by one of its keys.
+- Decides, for the modules that ask, which key a client's assertion was verified with and whether a JWT is signed by one of its keys.
 
 ## Not here
 - Client records, lookup, and choosing among methods: `clients`. OAuth error responses: `token-endpoint`.
@@ -18,7 +18,6 @@
   - `accept-loose-audience` (default false): also takes the client's assertions for a loose audience, below. A lasting setting, set by client for one whose library names the token endpoint.
   - Any other key is refused at boot.
 - `clientAssertion`: `verifiedOf` (an authentication's `proof`) → the key its assertion was verified with (`VerifiedKey`: the JWK as its source holds it, its JWK SHA-256 thumbprint, and the client's registry version where it has one); none for anything this module did not make.
-  - `holdsKey` (a client, a JWK SHA-256 thumbprint) → whether it is one of the client's keys written in that the operator's `algorithms` read; a client whose keys are at a `jwks-uri` holds none here.
   - `verifySignedBy` (a client, a JWT, a `typ`) → its claims, or why not: signed by one of the client's keys, written or at its `jwks-uri`, under `algorithms`, `clock-skew` and `max-lifetime`, its `typ` the one asked; unavailable while the key set cannot be had. Every other claim is the caller's.
 - Store interface for spent assertions, `spentAssertions`: save a name for a lifetime, answering `created` or `exists`.
   - Requirements (`spentAssertionsNeeds`): no eviction, survives a crash, never rolled back by failover.

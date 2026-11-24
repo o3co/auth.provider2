@@ -25,12 +25,6 @@ export interface ClientAssertion {
 	 */
 	verifiedOf(proof: unknown): VerifiedKey | undefined;
 	/**
-	 * Whether the client holds the key a JWK SHA-256 thumbprint (RFC 7638) names: one of its keys
-	 * written in, read under the operator's algorithms. A client whose keys are at a jwks-uri holds
-	 * none here.
-	 */
-	holdsKey(client: Client, thumbprint: string): Promise<boolean>;
-	/**
 	 * A JWT signed by one of the client's keys, written or at its jwks-uri, under the operator's
 	 * algorithms, clock allowance and longest lifetime, its header's `typ` the one asked: its claims,
 	 * the rest the caller's. Throws Unavailable while its key set cannot be had.
