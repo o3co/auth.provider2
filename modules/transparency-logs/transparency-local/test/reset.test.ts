@@ -42,7 +42,6 @@ async function world() {
 		section: { installation: "inst-1", "reset-keys": [{ version: 1, keys: [key.jwk] }] },
 	});
 	const reset = (instruction: string): Promise<ResetAnswer> => {
-		if (!w.log.reset) throw new Error("no reset");
 		return w.log.reset(instruction);
 	};
 	return { ...w, clock, key, reset };
@@ -104,26 +103,28 @@ describe("a reset placed by the log in the Core (L0)", () => {
 			clock,
 			section: { installation: "inst-1", "reset-keys": [{ version: 1, keys: [old.jwk] }] },
 		});
-		const placed = await first.log.reset?.(old.signed(instruction));
+		const placed = await first.log.reset(old.signed(instruction));
 		expect(placed).toMatchObject({ result: "accepted" });
-		expect(await first.log.reset?.(fresh.signed(instruction))).toEqual({
+		expect(await first.log.reset(fresh.signed(instruction))).toEqual({
 			v: 1,
 			result: "conflict",
 		});
-		expect(await first.log.reset?.(old.signed(instruction, "jwt"))).toEqual({
+		expect(await first.log.reset(old.signed(instruction, "jwt"))).toEqual({
 			v: 1,
 			result: "conflict",
 		});
 	});
 
-	it("answers every reset invalid, its installation, where no installation is set", async () => {
+	it("answers every reset of a readable shape invalid, its installation, where no installation is set", async () => {
 		const w = await boot();
 		const key = recoveryKey();
-		expect(await w.log.reset?.(key.signed(instructionFor("sub-1", Date.now())))).toEqual({
+		expect(await w.log.reset(key.signed(instructionFor("sub-1", Date.now())))).toEqual({
 			v: 1,
 			result: "invalid",
 			fault: "installation",
 		});
+		// Its shape is read first: one that does not read is `shape`, installation or none.
+		expect(await w.log.reset("a.b.c")).toEqual({ v: 1, result: "invalid", fault: "shape" });
 	});
 
 	it("refuses to boot with a reset key that is no public key, one named twice in a version, or one of the Core ring", async () => {

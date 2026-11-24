@@ -15,7 +15,7 @@ export const section = z.strictObject({
 		.min(1)
 		.optional()
 		.describe(
-			"This installation's id, as an embedder's reset instruction names it (V22): a reset is placed only where it is set.",
+			"This installation's id, as an embedder's reset instruction names it (V22): a reset is placed only where it is set; where not, each reset of a readable shape is answered invalid (installation).",
 		),
 	"reset-keys": z
 		.array(resetSet)
