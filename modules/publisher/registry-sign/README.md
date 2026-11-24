@@ -4,7 +4,7 @@
 - The publisher's tool: signs one version of the client registry, as the publisher hands it to a Core, outside the provider's process and trust domain.
 
 ## Not here
-- What a version holds and its type: `registry-wire`. Reading a signed version and trusting it: the Core's registry source.
+- What a version holds and its type: `registry-wire`. Reading a signed version and trusting it: the Core's registry source (`clients-registry`).
 - Keeping the publisher's private key, numbering the versions and delivering them: the publisher's.
 
 ## Offers

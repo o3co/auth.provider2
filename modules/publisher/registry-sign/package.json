@@ -12,6 +12,11 @@
 		"zod": "4.6.7"
 	},
 	"devDependencies": {
+		"@mod/clients": "workspace:*",
+		"@mod/clients-registry": "workspace:*",
+		"@mod/kernel": "workspace:*",
+		"@mod/keys": "workspace:*",
+		"@mod/secret-hash": "workspace:*",
 		"vitest": "5.0.5"
 	}
 }
