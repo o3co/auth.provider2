@@ -5,7 +5,7 @@
 
 ## Not here
 - Checking one kind, and its record of who holds it: its own module, which declares what it trusts and its strength to `promises`' `evidenceKinds` under the same name.
-- The waits of a password: `users`' `verify`, which the password's module asks and hands each start's end.
+- The waits of a password: `users`' `verifyAsPart`, which the password's module asks and hands each start's end.
 
 ## Offers
 - Extension point `firstKeyEvidence` (keyed by kind): a `FirstKeyEvidence` names its kind; may `prepare` what the screen needs before it makes the items; `check` (the start, the subject the identifier names or none, its own items) → `passed`, `failed`, or `absent` where its record says the subject holds none, a fault thrown, Unavailable; and may be told the start's end once it checked (`settled`).
