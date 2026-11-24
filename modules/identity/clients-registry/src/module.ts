@@ -36,7 +36,8 @@ export default defineModule(
 					clients: records.size,
 				});
 			});
-			return { find: async (id) => records.get(id) };
+			// Every record is of the version verified under publisher-key above.
+			return { signed: true, find: async (id) => records.get(id) };
 		}),
 		m.contribute(stances).by(() => ({
 			promise: promiseNames.coreContained,

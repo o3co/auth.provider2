@@ -76,8 +76,9 @@ describe("clients-registry", () => {
 		expect((await c.find("rp-1"))?.registered).toBe(false);
 		expect((await c.find("rp-2"))?.kind).toBe("public");
 		expect(await c.find("rp-3")).toBeUndefined();
-		// Each says the version it came from.
+		// Each says the version it came from, and that its publisher signed it.
 		expect((await c.find("rp-1"))?.version).toBe(3);
+		expect((await c.find("rp-1"))?.signed).toBe(true);
 		await app.stop();
 	});
 
@@ -92,7 +93,8 @@ describe("clients-registry", () => {
 	it("leaves a client the operator registered under the same id as the operator wrote it", async () => {
 		const section = await written(signedBy(publisher, version(1, ["shared"])));
 		const app = await boot(section, [{ id: "shared", kind: "public", method: "none" }]);
-		expect((await app.get(clients).find("shared"))?.registered).toBe(true);
+		const shared = await app.get(clients).find("shared");
+		expect([shared?.registered, shared?.signed]).toEqual([true, undefined]);
 		await app.stop();
 	});
 
