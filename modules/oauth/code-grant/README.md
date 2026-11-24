@@ -32,8 +32,7 @@
 - A redemption issues one bundle under the code's root's reference, carried unread, by its code (`via` `code`): its access token, its ID token where the scope has `openid` (`id_token`), and a refresh family for a client allowed the refresh grant, of a code rooted with its statement (`refresh_token`). A code with no root set is used up, issuing nothing.
 - A record that vanished during a redemption is refused and never written back (the code would be unused again). A record of a format or shape not known is a code that cannot be used: refused (not unavailable), or logged and removed from the list.
 - A code is voided (`voiding`) when it comes again, its own record there or ended, or when its session closes while its token is made: its family ended, its token revoked. A reuse marks the code itself, which the redemption reads again after issuing, even one that came before any redemption record. Issuing that fails leaves it used up, giving nothing.
-- A configuration that cannot revoke access tokens refuses boot.
-- Boot is refused where nothing contributes to `grants`' session issuances: its tokens are issued from the code's session and must be recorded there, so that a logout ends them.
+- Boot is refused where access tokens cannot be revoked, and where nothing contributes to `grants`' session issuances: its tokens are issued from the code's session and must be recorded there, so that a logout ends them.
 
 ## Data
 - Codes until their expiry, redemption records for `storedRecordMaxMs`, the void list until each code is settled: in the places `store` declares, with their needs.
