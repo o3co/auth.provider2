@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { Algorithm } from "./ceremony/ceremony.ts";
+import { algorithmNames } from "./ceremony/ceremony.ts";
 
 /** An origin as a browser serializes it: https, or http on localhost; a domain, never an IP literal. */
 const origin = z.string().refine((entry) => {
@@ -39,15 +39,15 @@ export const section = z
 				"The pages that may frame a ceremony; none by default, so any ceremony in a frame is refused.",
 			),
 		algorithms: z
-			.unknown()
+			.array(z.enum(algorithmNames))
+			.min(1)
 			.refine(
-				(names) => Array.isArray(names) && names.length === 1 && names[0] === "ES256",
-				"ES256 alone: the protocol's possession statement and the rules hold a new key as a P-256 point",
+				(names) => names.every((name, at) => names.indexOf(name) === at),
+				"each algorithm once",
 			)
-			.transform((): Algorithm[] => ["ES256"])
-			.prefault(["ES256"])
+			.prefault(["ES256", "EdDSA"])
 			.describe(
-				"The signature algorithms a passkey may use: ES256 alone, as the protocol holds a new key as a P-256 point.",
+				"The algorithms a new passkey may be of, in the order creation offers them: some of ES256, EdDSA and RS256 (RS256 warns at every start). The transparency rules read all three whatever is set.",
 			),
 	})
 	// An entry that is no URL is the origins' own refusal: this never reads one, whether or not zod

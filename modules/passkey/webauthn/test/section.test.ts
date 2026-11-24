@@ -67,47 +67,36 @@ const parsed = (more: object) =>
 		...more,
 	});
 
-it("frames nothing and takes ES256 where nothing is set", () => {
+it("frames nothing and takes ES256 and EdDSA where nothing is set", () => {
 	expect(parsed({}).data).toEqual({
 		"rp-id": "rp.example",
 		"rp-name": "RP",
 		origins: ["https://rp.example"],
 		"top-origins": [],
-		algorithms: ["ES256"],
+		algorithms: ["ES256", "EdDSA"],
 	});
 });
 
-it("takes ES256 alone, refusing any other algorithm, as the protocol holds a new key as a P-256 point", () => {
-	expect(parsed({ algorithms: ["ES256"] }).data?.algorithms).toEqual(["ES256"]);
-	for (const algorithms of [
-		["RS256", "ES256"],
-		["EdDSA"],
-		["RS256"],
-		[],
-		["ES384"],
-		["es256"],
-		[-7],
-		["ES256", "ES256"],
-	]) {
+it("takes some of ES256, EdDSA and RS256, each once, in the order given", () => {
+	for (const algorithms of [["ES256"], ["EdDSA"], ["RS256", "ES256"], ["ES256", "EdDSA", "RS256"]])
+		expect(parsed({ algorithms }).data?.algorithms).toEqual(algorithms);
+	for (const algorithms of [[], ["ES384"], ["es256"], [-7], ["ES256", "ES256"], "ES256"]) {
 		const answer = parsed({ algorithms });
 		expect(answer.success, JSON.stringify(algorithms)).toBe(false);
 		expect(
-			answer.error?.issues.map((i) => i.path.join(".")),
+			answer.error?.issues.map((i) => i.path.join(".").replace(/\.\d+$/, "")),
 			JSON.stringify(algorithms),
 		).toEqual(["algorithms"]);
 	}
-	expect(parsed({ algorithms: ["EdDSA", "ES256"] }).error?.issues[0]?.message).toMatch(
-		/P-256 point/,
-	);
 });
 
 it("refuses boot at webauthn.algorithms naming another algorithm", async () => {
 	const refused = await assemble({
 		modules: [webauthnModule],
-		config: { ...kernelConfig(), ...webauthnConfig({ algorithms: ["EdDSA", "ES256"] }) },
+		config: { ...kernelConfig(), ...webauthnConfig({ algorithms: ["ES384"] as never }) },
 		runtime: quietRuntime(),
 	}).catch((error: unknown) => error);
-	expect((refused as BootRefused).refusals.map((r) => r.where)).toEqual(["webauthn.algorithms"]);
+	expect((refused as BootRefused).refusals.map((r) => r.where)).toEqual(["webauthn.algorithms.0"]);
 });
 
 it("refuses the keys passkeys keeps now, naming each", () => {
@@ -149,4 +138,20 @@ it("warns at every start where other origins' pages may frame a ceremony, by the
 		{ level: "warn", event: "webauthn.framed_by_other_origins", fields: { count: 2 } },
 	]);
 	expect(await warned([])).toEqual([]);
+});
+
+it("warns at every start where RS256 is offered, saying it is weaker and outside FAPI 2.0", async () => {
+	const recorded = recordingLog();
+	await assemble({
+		modules: [webauthnModule],
+		config: { ...kernelConfig(), ...webauthnConfig({ algorithms: ["ES256", "RS256"] }) },
+		runtime: quietRuntime({ log: recorded.log }),
+	});
+	expect(recorded.lines()).toEqual([
+		{
+			level: "warn",
+			event: "webauthn.rs256_offered",
+			fields: { reason: expect.stringMatching(/112-bit.*PKCS#1 v1\.5.*FAPI 2\.0/) },
+		},
+	]);
 });

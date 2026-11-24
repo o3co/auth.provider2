@@ -34,6 +34,11 @@ export default defineModule(
 			// The operator's choice, yet said at every start: other origins' pages may frame a ceremony.
 			const framing = c.section["top-origins"].length;
 			if (framing > 0) c.log.warn("webauthn.framed_by_other_origins", { count: framing });
+			if (c.section.algorithms.includes("RS256"))
+				c.log.warn("webauthn.rs256_offered", {
+					reason:
+						"RS256 is weaker than ES256 and EdDSA: a 2048-bit RSA key holds about 112-bit security, its signature is PKCS#1 v1.5, and FAPI 2.0 does not allow it",
+				});
 			return ceremoniesFor(relyingParty(c.section));
 		}),
 	],

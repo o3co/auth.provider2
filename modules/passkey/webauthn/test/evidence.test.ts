@@ -1,7 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import type { Checks } from "@mod/authority-rules";
 import { challengeInput } from "@mod/sdk-core-wire";
-import { cose, decodeCredentialPublicKey } from "@simplewebauthn/server/helpers";
 import { describe, expect, it } from "vitest";
 import { algorithmNames, ceremoniesFor } from "../src/ceremony/ceremony.ts";
 import type { Credential } from "../src/contract.ts";
@@ -18,17 +17,6 @@ const ceremonies = ceremoniesFor(rp);
 const handle = randomBytes(32).toString("base64url");
 const at = { origin: testOrigin };
 const fresh = () => randomBytes(32).toString("base64url");
-
-/** A credential's COSE P-256 key as the evidence names it: its uncompressed point, base64url. */
-function pointOf(credential: Credential): string {
-	const key = decodeCredentialPublicKey(Buffer.from(credential.publicKey, "base64url")) as Map<
-		number,
-		unknown
-	>;
-	const x = key.get(cose.COSEKEYS.x) as Uint8Array;
-	const y = key.get(cose.COSEKEYS.y) as Uint8Array;
-	return Buffer.concat([Buffer.from([4]), x, y]).toString("base64url");
-}
 
 async function made(authenticator = softwareAuthenticator()) {
 	const challenge = fresh();
@@ -57,7 +45,7 @@ describe("the evidence check, state-free and at once", () => {
 		const { authenticator, credential } = await made();
 		const { challenge, options } = asked(credential);
 		const assertion = JSON.stringify(authenticator.get(options, at));
-		expect(checks.verifyAssertion(assertion, pointOf(credential), challenge, testOrigin)).toEqual({
+		expect(checks.verifyAssertion(assertion, credential.publicKey, challenge, testOrigin)).toEqual({
 			credential: credential.id,
 		});
 	});
@@ -101,7 +89,7 @@ describe("the evidence check, state-free and at once", () => {
 			);
 			const evidence = ceremonies.verifyAssertion(
 				JSON.stringify(response),
-				pointOf(key),
+				key.publicKey,
 				challenge,
 				testOrigin,
 			);
@@ -118,7 +106,7 @@ describe("the evidence check, state-free and at once", () => {
 		expect(
 			ceremonies.verifyAssertion(
 				JSON.stringify(response),
-				pointOf(credential),
+				credential.publicKey,
 				challenge,
 				testOrigin,
 			),
@@ -131,7 +119,7 @@ describe("the evidence check, state-free and at once", () => {
 		const evil = "https://evil.example";
 		const response = authenticator.get(options, { origin: evil }, { overlook: true });
 		expect(
-			ceremonies.verifyAssertion(JSON.stringify(response), pointOf(credential), challenge, evil),
+			ceremonies.verifyAssertion(JSON.stringify(response), credential.publicKey, challenge, evil),
 		).toBeUndefined();
 	});
 
@@ -142,7 +130,7 @@ describe("the evidence check, state-free and at once", () => {
 		const challenge = digest(challengeInput(statement, "get"));
 		const options = ceremonies.request(challenge, [credential]) as RequestOptions;
 		const assertion = JSON.stringify(authenticator.get(options, at));
-		const point = pointOf(credential);
+		const point = credential.publicKey;
 		expect(ceremonies.verifyAssertion(assertion, point, challenge, testOrigin)).toEqual({
 			credential: credential.id,
 		});
@@ -163,7 +151,7 @@ describe("the evidence check, state-free and at once", () => {
 		expect(
 			ceremonies.verifyAssertion(
 				JSON.stringify(response),
-				pointOf(credential),
+				credential.publicKey,
 				challenge,
 				testOrigin,
 			),
@@ -174,7 +162,7 @@ describe("the evidence check, state-free and at once", () => {
 		const { authenticator, credential } = await made();
 		const { challenge, options } = asked(credential);
 		const assertion = JSON.stringify(authenticator.get(options, at));
-		const key = pointOf(credential);
+		const key = credential.publicKey;
 		const check = (a: string, k: string, c: string, o: string) =>
 			ceremonies.verifyAssertion(a, k, c, o);
 		expect(check(assertion, key, fresh(), testOrigin)).toBeUndefined();
@@ -183,14 +171,13 @@ describe("the evidence check, state-free and at once", () => {
 		const notOnCurve = Buffer.concat([Buffer.from([4]), Buffer.alloc(64, 1)]).toString("base64url");
 		const compressed = Buffer.concat([Buffer.from([2]), Buffer.alloc(32, 1)]).toString("base64url");
 		const { credential: other } = await made();
-		for (const k of [
-			notOnCurve,
-			compressed,
-			other.publicKey,
-			`${key}=`,
-			`${credential.publicKey}=`,
-			"",
-		]) {
+		// The key as an uncompressed point, as the rules once named it.
+		const point = Buffer.concat([
+			Buffer.from([4]),
+			Buffer.from(key, "base64url").subarray(10, 42),
+			Buffer.from(key, "base64url").subarray(45),
+		]).toString("base64url");
+		for (const k of [notOnCurve, compressed, point, other.publicKey, `${key}=`, ""]) {
 			expect(check(assertion, k, challenge, testOrigin), k).toBeUndefined();
 		}
 	});
@@ -199,7 +186,7 @@ describe("the evidence check, state-free and at once", () => {
 		const { authenticator, credential } = await made();
 		const { challenge, options } = asked(credential);
 		const response = authenticator.get(options, at);
-		const key = pointOf(credential);
+		const key = credential.publicKey;
 		for (const c of [`${challenge}=`, `${challenge}.listed`, challenge.slice(1), ""]) {
 			expect(
 				ceremonies.verifyAssertion(JSON.stringify(response), key, c, testOrigin),

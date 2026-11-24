@@ -67,7 +67,7 @@ export interface Ceremonies {
 	/**
 	 * Evidence checked at once and against no credential state (authority-rules' `Checks.verifyAssertion`):
 	 * `assertion` the JSON of an assertion response, `publicKey` the key's COSE_Key in base64url, of any
-	 * algorithm a passkey may be of, or an uncompressed P-256 point (ES256).
+	 * algorithm a passkey may be of whatever the relying party offers.
 	 * The assertion's credential id where it verifies, as `assert` requiring verification would, for
 	 * `challenge` and `origin`; none otherwise, never a throw.
 	 */

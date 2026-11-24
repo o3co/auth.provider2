@@ -86,26 +86,11 @@ export function keyThumbprint(
 	return read && { jkt: read.jkt, alg: read.alg };
 }
 
-/**
- * The key an assertion is verified by, and the hash its signature is over (none for EdDSA): a
- * passkey's COSE_Key, or, where the first byte is 0x04, an uncompressed P-256 point. Throws for any
- * other value.
- */
+/** The key an assertion is verified by, a passkey's COSE_Key, and the hash its signature is over (none for EdDSA); throws for any other value. */
 export function assertionKey(publicKey: string): {
 	readonly key: KeyObject;
 	readonly hash: "sha256" | null;
 } {
-	if (!/^[A-Za-z0-9_-]+$/.test(publicKey)) throw new TypeError("no key");
-	const bytes = Buffer.from(publicKey, "base64url");
-	if (bytes[0] === 4) {
-		if (bytes.length !== 65) throw new TypeError("no uncompressed point");
-		const x = bytes.subarray(1, 33).toString("base64url");
-		const y = bytes.subarray(33).toString("base64url");
-		return {
-			key: createPublicKey({ key: { kty: "EC", crv: "P-256", x, y }, format: "jwk" }),
-			hash: "sha256",
-		};
-	}
 	const read = passkeyKey(publicKey);
 	if (!read) throw new TypeError("no passkey's key");
 	return { key: read.key, hash: read.alg === -8 ? null : "sha256" };

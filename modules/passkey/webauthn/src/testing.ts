@@ -9,11 +9,11 @@ export const testOrigin = "https://rp.example";
 
 /**
  * The ceremonies over a relying party a test gives, as the module builds them; a relying party
- * naming no algorithms takes the section's default, ES256.
+ * naming no algorithms takes the section's default, ES256 and EdDSA.
  */
 export const testCeremonies = (
 	rp: Omit<RelyingParty, "algorithms"> & Partial<Pick<RelyingParty, "algorithms">>,
-) => ceremoniesFor({ algorithms: ["ES256"], ...rp });
+) => ceremoniesFor({ algorithms: ["ES256", "EdDSA"], ...rp });
 
 /** The webauthn part of a test's configuration: a relying party at `rp.example`. */
 export function webauthnConfig(settings: Partial<WebauthnSettings> = {}) {
