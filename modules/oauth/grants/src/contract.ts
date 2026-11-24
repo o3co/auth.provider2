@@ -8,6 +8,7 @@ import type {
 	IssuanceRequest,
 	IssuedAccess,
 	IssueLimits,
+	SubjectKind,
 } from "@mod/tokens";
 
 export type OAuthError =
@@ -32,8 +33,13 @@ export type GrantOutcome =
 			/** An OAuth error code, or one the grant owns (such as a polled grant's). */
 			readonly error: OAuthError | (string & {});
 			readonly description?: string;
-			/** `401` when the grant names it; otherwise `400`, or `401` for `invalid_client`. Another is ignored. */
-			readonly status?: 400 | 401;
+			/**
+			 * `401` or `429` when the grant names it; otherwise `400`, or `401` for `invalid_client`.
+			 * Another is ignored.
+			 */
+			readonly status?: 400 | 401 | 429;
+			/** For a `429`, too many requests: how long to wait, in ms, answered as `retry-after` in whole seconds. */
+			readonly retryAfterMs?: number;
 			/** More members of the error body, passed through unread but for the names an error answer drops. */
 			readonly members?: Readonly<Record<string, unknown>>;
 	  };
@@ -124,6 +130,11 @@ export interface Grant {
 	 * which then checks the request's origin itself; `none` otherwise. A declaration, never a proof.
 	 */
 	readonly readsAmbient: "none" | "cookie";
+	/**
+	 * The kind of subject every token it issues is for (`tokens`' word): `user` for a person's,
+	 * `client` for the client's own. A declaration the token endpoint reads, never a proof.
+	 */
+	readonly subjectKind?: SubjectKind;
 	/**
 	 * For a request that names no client and carries nothing a client authenticates with: the client
 	 * the grant's own credential identifies, with what it checked to tell (`identified`), or its

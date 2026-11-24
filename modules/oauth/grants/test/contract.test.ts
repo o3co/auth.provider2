@@ -1,9 +1,11 @@
 import { assemble, BootRefused, contract, defineModule, kernelConfig } from "@mod/kernel";
+import type { SubjectKind } from "@mod/tokens";
 import { expect, expectTypeOf, it } from "vitest";
 import {
 	type BundleRequest,
 	type Grant,
 	type GrantInput,
+	type GrantOutcome,
 	grants,
 	tokenTies,
 } from "../src/contract.ts";
@@ -122,4 +124,26 @@ it("hands a grant what its client's authentication verified, unread", () => {
 	expectTypeOf<GrantInput["authenticated"]>().toEqualTypeOf<unknown>();
 	const input: Pick<GrantInput, "authenticated"> = { authenticated: { key: "k" } };
 	expect(input.authenticated).toEqual({ key: "k" });
+});
+
+it("lets a grant declare the kind of subject it issues for, in tokens' words", () => {
+	expectTypeOf<Grant["subjectKind"]>().toEqualTypeOf<SubjectKind | undefined>();
+	const declared: Pick<Grant, "subjectKind"> = { subjectKind: "client" };
+	expect(declared.subjectKind).toBe("client");
+});
+
+it("lets a grant answer too many requests, with how long to wait", () => {
+	const limited: GrantOutcome = {
+		kind: "error",
+		error: "rate_limited",
+		status: 429,
+		retryAfterMs: 1500,
+	};
+	expectTypeOf<Extract<GrantOutcome, { kind: "error" }>["status"]>().toEqualTypeOf<
+		400 | 401 | 429 | undefined
+	>();
+	expectTypeOf<Extract<GrantOutcome, { kind: "error" }>["retryAfterMs"]>().toEqualTypeOf<
+		number | undefined
+	>();
+	expect(limited).toMatchObject({ status: 429, retryAfterMs: 1500 });
 });
