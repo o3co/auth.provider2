@@ -1,0 +1,18 @@
+# The receivers' parts: a workspace apart from the provider's, whose packages
+# depend on the provider's protocol packages alone (tools/guard checks it).
+packages:
+  - "packages/*"
+  - "tools/*"
+
+# The supply rules the provider's workspace states, stated again here, since a
+# nested workspace reads its own file: a version is held back until it is a day
+# old; a package whose trust evidence is weaker than an earlier version's is
+# refused; a dependency of a dependency comes from the registry alone.
+minimumReleaseAge: 1440
+minimumReleaseAgeExclude:
+  - "@o3co/*"
+trustPolicy: no-downgrade
+blockExoticSubdeps: true
+overrides:
+  "vite@>=8.3.0 <8.3.3": "8.3.3"
+pmOnFail: ignore

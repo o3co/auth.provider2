@@ -1,0 +1,15 @@
+{
+	"name": "@sdk/guard",
+	"private": true,
+	"license": "Apache-2.0",
+	"type": "module",
+	"scripts": {
+		"guard": "node src/main.ts"
+	},
+	"exports": {
+		".": "./src/guard.ts"
+	},
+	"dependencies": {
+		"typescript": "6.0.3"
+	}
+}
