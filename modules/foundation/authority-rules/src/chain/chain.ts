@@ -107,13 +107,13 @@ function ceremonyOf(read: Read<"keyChange">) {
 /** Why the new key is not the one the possession names by its thumbprint, of an algorithm the creation offered. */
 function newKeyRefusal(
 	checks: Checks,
-	creation: { readonly options: { readonly algorithms?: readonly number[] | undefined } },
-	p: { readonly key_jkt?: string | undefined },
+	creation: { readonly options: { readonly algorithms: readonly number[] } },
+	p: { readonly key_jkt: string },
 	publicKey: string,
 ): Refusal {
 	const key = checks.keyThumbprint(publicKey);
 	if (!key) return "the new key is not a key the protocol takes";
-	if (!creation.options.algorithms?.includes(key.alg))
+	if (!creation.options.algorithms.includes(key.alg))
 		return "the new key's algorithm is not one the creation offered";
 	return p.key_jkt === key.jkt ? undefined : "the signed bytes are not the record's";
 }
