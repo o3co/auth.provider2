@@ -107,3 +107,39 @@ describe("an access token at its largest", () => {
 		expect(issued.access.token.length).toBeLessThanOrEqual(16_384 - 80);
 	});
 });
+
+describe("the 16 KiB bound, by the signing key's own signature", () => {
+	// A 6144-bit RSA key takes seconds to make, past the default per-test time.
+	it("refuses at prepare, for an RSA key past 4096 bits, exactly the tokens that would pass 16 KiB once signed", async () => {
+		const rsa = generateKeyPairSync("rsa", { modulusLength: 6144 }).privateKey;
+		const app = await assemble({
+			modules: [...composedWith({ big: rsa }), revokedInMemory(() => runtime.clock.now()).module],
+			config: {
+				...kernelConfig(),
+				...composedHttp(),
+				...keysConfig({ authority: { signing: { kid: "big", alg: "RS256" } } }),
+				...issuerConfig({ url: "https://issuer.example" }),
+				tokens: { "subject-check": "none", revocation: "unsupported" },
+			},
+			runtime,
+		});
+		const t = bothOf(app);
+		// A subject of n characters: no standard claim's length is bounded but by the token's.
+		const at = (n: number) =>
+			t.prepare({ grant: { ...grant, subject: "a".repeat(n) }, grantType: "test" });
+		// The most a claim may hold and still be prepared, found by halving.
+		let [low, high] = [0, 16_384];
+		while (high - low > 1) {
+			const mid = Math.floor((low + high) / 2);
+			if ((await at(mid)).kind === "prepared") low = mid;
+			else high = mid;
+		}
+		const largest = await at(low);
+		if (largest.kind !== "prepared") throw new Error("refused");
+		const signed = await t.sign(largest);
+		if (signed.kind !== "issued") throw new Error(signed.reason);
+		expect(signed.access.token.length).toBeLessThanOrEqual(16_384);
+		expect(signed.access.token.length).toBeGreaterThan(16_384 - 4);
+		expect(await at(high)).toMatchObject({ kind: "refused", reason: "token_too_large" });
+	}, 60_000);
+});

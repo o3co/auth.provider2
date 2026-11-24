@@ -5,14 +5,14 @@ import { promiseNames, promises, stances } from "@mod/promises";
 import promisesModule from "@mod/promises/module";
 import { tokens as receipts } from "@mod/transparency-wire";
 import { describe, expect, it } from "vitest";
+import { bothOf, composedConfig, composedModules, composedWith } from "../../../test/composed.ts";
 import {
 	type AccessGrant,
 	accessTokenIssuance,
 	accessTokens,
 	type PreparedAccess,
-} from "../src/contract.ts";
-import { tokensConfig, tokensStandIn } from "../src/testing.ts";
-import { bothOf, composedConfig, composedModules, composedWith } from "./composed.ts";
+} from "../../contract.ts";
+import { tokensConfig, tokensStandIn } from "../../testing.ts";
 
 const now = 1_800_000_000_000;
 const runtime = quietRuntime({ clock: { now: () => now } });

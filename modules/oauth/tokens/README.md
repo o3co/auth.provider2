@@ -24,7 +24,7 @@
 - Its own stance, as `accessTokenSigning` asks of its taker: it breaks `core-compromise-contained`, as an access token carries no receipt of the transparency log.
 - Operator section: `access-token-lifetime` (written with its unit, `2s` to `1d` in whole seconds, default `5m`, counted from its `iat`, the policies' wait included; a token it leaves less than a second once signed is refused, as `issuance`' card says).
 - Operator section, beside it: `revocation` (`denylist` or `unsupported`), `issuance-timeout` (written with its unit, `1s` to `1m`, default `10s`), `subject-check` (`none` states that no module checks subjects), `added-claims` (`added-claims`' limits, each raised only).
-- `./testing`: the contract test every implementation passes, configuration builders, and a stand-in: in memory, unsigned, ending and reading bindings as `tokens` does.
+- `./testing`: the contract test every implementation passes, configuration builders, a stand-in: in memory, unsigned, ending and reading bindings as `tokens` does; `issueAtOnce`.
 
 ## Invariants
 - Signed and verified through `keys`' `accessTokenSigning` alone; a signing its holder withdraws is unavailable.

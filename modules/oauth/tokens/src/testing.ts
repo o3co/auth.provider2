@@ -821,3 +821,5 @@ export function tokensStandIn(
 		],
 	);
 }
+
+export { issueAtOnce } from "./issuance/at-once.ts";

@@ -140,7 +140,7 @@ export default defineModule(
 				// Its standard claims have no cap of their own: one that would pass what tokens reads once
 				// signed is never made, but refused, the operator told its size and the names of the claims
 				// a grant added.
-				const length = compactLength(prepared.headerText, claimsText, prepared.header.alg);
+				const length = compactLength(prepared.headerText, claimsText, prepared.signatureLength);
 				if (length > compactLimit) {
 					c.log.warn("tokens.token_too_large", {
 						length,

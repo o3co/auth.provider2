@@ -27,20 +27,20 @@ export function issuedAtOf(acceptedAt: number | undefined, now: () => number): n
 	throw new RangeError("tokens: an acceptance time is whole epoch milliseconds");
 }
 
-/** The most bytes a signature of each algorithm takes; RS256's at a 4096-bit modulus, the widest a KMS holds. */
-const signatureBytes: Readonly<Record<string, number>> = { ES256: 64, EdDSA: 114, RS256: 512 };
-
 /**
- * The length of the compact token the texts make once signed under `alg`, at most: each part's
- * base64url without padding, the signature's at its widest; an algorithm not known counts 1 KiB.
+ * The length of the compact token the texts make once signed by a signature of `signatureLength`
+ * bytes: each part's base64url, without padding, and the two dots.
  */
-export function compactLength(headerText: string, claimsText: string, alg: string): number {
+export function compactLength(
+	headerText: string,
+	claimsText: string,
+	signatureLength: number,
+): number {
 	const encoded = (bytes: number) => Math.ceil((bytes * 4) / 3);
-	const signature = Object.hasOwn(signatureBytes, alg) ? (signatureBytes[alg] ?? 1024) : 1024;
 	return (
 		encoded(Buffer.byteLength(headerText)) +
 		encoded(Buffer.byteLength(claimsText)) +
-		encoded(signature) +
+		encoded(signatureLength) +
 		2
 	);
 }
