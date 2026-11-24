@@ -94,7 +94,7 @@ describe("passkeys", () => {
 		expect(w.credentials.value(credential.id)).toEqual(taken);
 	});
 
-	it("settles from the applied state alone: removals told of every key gone, the mark kept until the generation moves", async () => {
+	it("settles from the applied state alone: removals told of every key gone, a mark withdrawn only once the generation moves", async () => {
 		const told: Parameters<PasskeyRemoval["removed"]>[] = [];
 		const watcher = contributing("watcher", (m) => [
 			m.contribute(passkeyRemovals).by(() => ({
@@ -108,29 +108,31 @@ describe("passkeys", () => {
 		const one = await w.register();
 		const k1 = w.recordOf("s1", one.credential.id);
 		const two = await w.register("s1", false, w.auth, k1);
+		const three = await w.register("s1", false);
 		expect(await w.keys.settle("s1")).toBe(true);
 		expect(witnessing.marks.get("s1")).toBe(0);
-		// Clearing k1 takes k2, whose chain holds it: both are told, by whoever settles, once each.
-		const cleared = await w.clearing.clear({
+		// Removing k1 takes k2, whose chain holds it: both are told, by whoever settles, once each.
+		const removed = await w.regs.remove({
 			subject: "s1",
 			credential: one.credential.id,
 			op: "rm1",
 			decide: deciding({ removeKey: k1 }),
 		});
-		if (!("prev" in cleared)) throw new Error(cleared.refused);
-		await w.land("s1", "rm1", keyStage(flow, "rm1", { credential: "-", publicKey: "-" }), 2);
-		expect(await w.keys.settle("s1")).toBe(false);
-		expect(await w.keys.settle("s1")).toBe(false);
+		if (!("prev" in removed)) throw new Error(removed.refused);
+		await w.land("s1", "rm1", keyStage(flow, "rm1", { credential: "-", publicKey: "-" }), 3);
+		expect(await w.keys.settle("s1")).toBe(true);
+		expect(await w.keys.settle("s1")).toBe(true);
 		expect(told).toEqual([
-			["s1", one.credential.id, true],
-			["s1", two.credential.id, true],
+			["s1", one.credential.id, false],
+			["s1", two.credential.id, false],
 		]);
 		expect(w.credentials.value(one.credential.id)).toEqual({ subject: "s1", signCount: 1 });
-		// No key at the same generation keeps the mark; a boundary moving it on lets it go.
 		expect(witnessing.marks.get("s1")).toBe(0);
+		// A boundary empties the keys and moves the generation on: the mark set for the old one goes.
 		w.log.boundary(flow);
 		await w.t.tend(flow);
-		await w.keys.settle("s1");
+		expect(await w.keys.settle("s1")).toBe(false);
+		expect(told.at(-1)).toEqual(["s1", three.credential.id, true]);
 		expect(witnessing.marks.has("s1")).toBe(false);
 	});
 

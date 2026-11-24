@@ -77,21 +77,20 @@ describe("committing (KE-C01 of a registration)", () => {
 
 describe("removing", () => {
 	const writer = { value: "mine" };
-	const remove = (s: FlowState, last: boolean, credential = "c1", removeKey = "k1") =>
-		removing({ credential, op: "rm", last }, (_s, h) => ({
+	const remove = (s: FlowState, credential = "c1", removeKey = "k1") =>
+		removing({ credential, op: "rm" }, (_s, h) => ({
 			digest: "d",
 			eff: { removeKey },
 			records: h.map(() => writer),
 		}))(s, [...held(), null]);
 	const under = (credential: string, chain: string[]) => ({ ...key(credential), chain });
-	it("refuses what would leave no key, the keys whose chain holds it counted, but where clearing lets it go", () => {
-		expect(remove(state({ k1: key("c1") }), false)).toEqual({ refused: "last" });
-		expect(remove(state({ k1: key("c1"), k2: under("c2", ["k1"]) }), false)).toEqual({
+	it("refuses what would leave no key, the keys whose chain holds it counted", () => {
+		expect(remove(state({ k1: key("c1") }))).toEqual({ refused: "last" });
+		expect(remove(state({ k1: key("c1"), k2: under("c2", ["k1"]) }))).toEqual({
 			refused: "last",
 		});
-		expect(remove(state({ k1: key("c1") }), true)).toMatchObject({ eff: { removeKey: "k1" } });
 		// The writer's own records are kept; passkeys' reservation, first, is left as it is.
-		expect(remove(state({ k1: key("c1"), k2: key("c2") }), false)).toEqual({
+		expect(remove(state({ k1: key("c1"), k2: key("c2") }))).toEqual({
 			digest: "d",
 			eff: { removeKey: "k1" },
 			records: [undefined, writer],
@@ -100,13 +99,13 @@ describe("removing", () => {
 	it("refuses the reservation's op, and throws where the writer's changes remove another key", () => {
 		const s = state({ k1: key("c1"), k2: key("c2") });
 		expect(
-			removing({ credential: "c1", op: "v1", last: true }, () => ({
+			removing({ credential: "c1", op: "v1" }, () => ({
 				digest: "d",
 				eff: {},
 				records: [],
 			}))(s, held()),
 		).toEqual({ refused: "op" });
-		expect(() => remove(s, true, "c2", "k1")).toThrow(TypeError);
+		expect(() => remove(s, "c2", "k1")).toThrow(TypeError);
 	});
 	it("tells the credentials a removal takes: its key and every key whose chain holds it", () => {
 		const s = state({ k1: key("c1"), k2: under("c2", ["k1"]), k3: key("c3") });

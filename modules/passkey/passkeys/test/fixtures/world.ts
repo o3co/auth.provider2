@@ -27,7 +27,6 @@ import {
 	type PasskeyStore,
 	type PasskeyWitnessing,
 	passkeyChanges,
-	passkeyClearing,
 	passkeyPart,
 	passkeyStore,
 	passkeys,
@@ -194,11 +193,11 @@ export const keyStage = (flow: Flow, op: string, key: { credential: string; publ
 /** The writer's own record of the kind, after passkeys': the stage it sends, for a resend. */
 const preimageRecord = { part: "writer", name: "preimage" } as const;
 /**
- * The key change's writer: it registers the kind with its own record, bundle and resend, takes the
- * guarded contracts and stands on the promises.
+ * The key change's writer: it registers the kind with its own record, bundle and resend, takes
+ * `registrations` and stands on the promises.
  */
 export const writer = defineModule(
-	{ name: "key-writer", replicaSafe: true, takes: [registrations, passkeyClearing] },
+	{ name: "key-writer", replicaSafe: true, takes: [registrations] },
 	(m) => [
 		m.contribute(operationKinds).by(() => ({
 			...passkeyChanges,
@@ -317,7 +316,6 @@ export async function world(
 	});
 	const keys = await app.get(passkeys);
 	const regs = await app.get(registrations);
-	const clearing = await app.get(passkeyClearing);
 	const t = await app.get(transparency);
 	const cer = await app.get(ceremonies);
 	const challenge = () => randomBytes(32).toString("base64url");
@@ -390,7 +388,6 @@ export async function world(
 		credentials,
 		keys,
 		regs,
-		clearing,
 		t,
 		auth,
 		created,

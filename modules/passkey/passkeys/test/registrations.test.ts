@@ -271,19 +271,6 @@ describe("registrations", () => {
 		expect(await remove(one.credential.id, "rm3")).toEqual({ prev: 4 });
 	});
 
-	it("clears the last key", async () => {
-		const w = await world();
-		const one = await w.register();
-		const k1 = w.recordOf("s1", one.credential.id);
-		const cleared = await w.clearing.clear({
-			subject: "s1",
-			credential: one.credential.id,
-			op: "rm1",
-			decide: deciding({ removeKey: k1 }),
-		});
-		expect(cleared).toEqual({ prev: 1 });
-	});
-
 	it("is unavailable, never a refusal, where the credential store cannot tell", async () => {
 		const w = await world();
 		await w.register();

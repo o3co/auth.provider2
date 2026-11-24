@@ -183,18 +183,17 @@ function writersOwn(records: readonly PartNext[], held: readonly (Json | undefin
 
 /**
  * KE-C01 of a removal of an active key: refused where no key would be left after it, as the fold
- * takes every key whose chain holds it too, unless `last` lets the last go. Never the reservation's op.
+ * takes every key whose chain holds it too. Never the reservation's op.
  */
 export function removing(
-	p: { readonly credential: string; readonly op: string; readonly last: boolean },
+	p: { readonly credential: string; readonly op: string },
 	inner: Deciding,
 ): Deciding {
 	return (state, held) => {
 		if (reservationOf(held[0])?.version === p.op) return { refused: "op" };
 		const key = activeKey(state, p.credential);
 		if (!key) return { refused: "unknown" };
-		const left = Object.keys(withoutRooted(state, key[0]).keys).length;
-		if (!p.last && left === 0) return { refused: "last" };
+		if (Object.keys(withoutRooted(state, key[0]).keys).length === 0) return { refused: "last" };
 		const asked = inner(state, held);
 		if ("refused" in asked) return asked;
 		if (asked.eff.removeKey !== key[0])

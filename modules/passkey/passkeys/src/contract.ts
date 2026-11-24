@@ -107,24 +107,14 @@ export interface Registrations {
 		readonly reservation: string;
 	}): Promise<{ readonly cancelled: true } | { readonly refused: "unknown" | "state" | "open" }>;
 	/**
-	 * KE-C01 of a removal: refused where the subject would hold no key after it (`last`), which only
-	 * clearing removes, and for the reservation's op (`op`).
+	 * KE-C01 of a removal: refused where the subject would hold no key after it (`last`), and for the
+	 * reservation's op (`op`).
 	 */
 	remove(p: KeyChange & { readonly credential: string; readonly op: string }): Promise<Decided>;
 }
 
 /** Taken only by a module that declares where it stands on the promises. */
 export const registrations = contract<Registrations>("passkeys.registrations", {
-	takersContribute: stances,
-});
-
-/** Removing any key of a subject, its last too: the recovery's. */
-export interface PasskeyClearing {
-	clear(p: KeyChange & { readonly credential: string; readonly op: string }): Promise<Decided>;
-}
-
-/** Taken only by a module that declares where it stands on the promises. */
-export const passkeyClearing = contract<PasskeyClearing>("passkeys.clearing", {
 	takersContribute: stances,
 });
 

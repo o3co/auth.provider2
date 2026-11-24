@@ -4,7 +4,6 @@ import { promiseNames, stances } from "@mod/promises";
 import { frameStore, operationKinds, stateOwners, transparency } from "@mod/transparency";
 import { ceremonies } from "@mod/webauthn";
 import {
-	passkeyClearing,
 	passkeyRemovals,
 	passkeyStore,
 	passkeys,
@@ -31,8 +30,6 @@ async function witnessingOf(c: Context) {
 
 /** The parts both faces read the keys with, made once. */
 const kept = contract<KeptParts>("passkeys.kept");
-/** Registering and clearing, made once over the frame and the key change's kind. */
-const registering = contract<ReturnType<typeof registeringOver>>("passkeys.registering");
 
 // Holds nothing of its own: the keys are in the frames' store, the credentials in its own.
 export default defineModule(
@@ -79,7 +76,7 @@ export default defineModule(
 				removals: await c.collect(passkeyRemovals),
 			}),
 		),
-		m.provide(registering).by(async (c) => {
+		m.provide(registrations).by(async (c) => {
 			const kinds = await c.collect(operationKinds);
 			if (!kinds.some((k) => k.name === keyChanges.name))
 				c.refuse("passkeys", `no writer registers the key change's kind ${keyChanges.name}`);
@@ -94,10 +91,5 @@ export default defineModule(
 				max: c.section["max-credentials"],
 			});
 		}),
-		m.provide(registrations).by(async (c) => {
-			const { reserve, verifyPending, commit, cancel, remove } = await c.get(registering);
-			return { reserve, verifyPending, commit, cancel, remove };
-		}),
-		m.provide(passkeyClearing).by(async (c) => ({ clear: (await c.get(registering)).clear })),
 	],
 );

@@ -2,13 +2,7 @@ import { createHash } from "node:crypto";
 import { Unavailable } from "@mod/kernel";
 import type { Transparency } from "@mod/transparency";
 import { type Credential, credentialOf as readCredential } from "@mod/webauthn";
-import type {
-	PasskeyClearing,
-	Passkeys,
-	PasskeyWitnessing,
-	Registrations,
-	ReserveRefusal,
-} from "./contract.ts";
+import type { Passkeys, PasskeyWitnessing, Registrations, ReserveRefusal } from "./contract.ts";
 import {
 	counted,
 	credentialOf,
@@ -51,8 +45,8 @@ const digestOf = (response: unknown) =>
 		.update(JSON.stringify(response) ?? "")
 		.digest("base64url");
 
-/** Registrations and clearing: every change of a reservation is held to the frame (`changeHeld`). */
-export function registeringOver(p: RegisteringParts): Registrations & PasskeyClearing {
+/** Registrations: every change of a reservation is held to the frame (`changeHeld`). */
+export function registeringOver(p: RegisteringParts): Registrations {
 	/** The reservation as read now, with the change held to it: refused where it moved since. */
 	const reservationAt = async (subject: string) => {
 		const records = reservationRecords(subject);
@@ -123,13 +117,6 @@ export function registeringOver(p: RegisteringParts): Registrations & PasskeyCle
 			return now.subject === subject ? { value: stored({ signCount: now.signCount }) } : undefined;
 		});
 	};
-	const removal = (last: boolean) => async (q: Parameters<PasskeyClearing["clear"]>[0]) =>
-		p.transparency.decide({
-			kind: keyChanges.name,
-			flow: flowOf(q.subject),
-			op: q.op,
-			decide: removing({ credential: q.credential, op: q.op, last }, q.decide),
-		});
 
 	return {
 		async reserve(q) {
@@ -233,7 +220,12 @@ export function registeringOver(p: RegisteringParts): Registrations & PasskeyCle
 			await release(q.subject, cancelled);
 			return { cancelled: true };
 		},
-		remove: removal(false),
-		clear: removal(true),
+		remove: (q) =>
+			p.transparency.decide({
+				kind: keyChanges.name,
+				flow: flowOf(q.subject),
+				op: q.op,
+				decide: removing({ credential: q.credential, op: q.op }, q.decide),
+			}),
 	};
 }
