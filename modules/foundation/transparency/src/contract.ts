@@ -193,7 +193,8 @@ export interface StateOwner {
 
 /**
  * The writer's part of KE-C01, on the applied state and its kind's records: the op, or why not. Its
- * `eff` is the writer's to keep equal to `effectOf` of the record it sends (Eff(preimage)).
+ * `eff` is the writer's to keep equal to `effectOf` of its op's last stage's record (Eff(preimage)),
+ * taken in with that record alone: an earlier stage, a start, changes nothing.
  */
 export type Deciding = (
 	state: FlowState,

@@ -297,7 +297,7 @@ export function stepped(
 		const end: End = { op: it.op, kind: it.kind, ending: "abandoned", owner: false };
 		return { frame: advanced(ended(it, "closed")), changes, end };
 	}
-	const changes = r.kind === "noEffect" ? {} : (it.eff ?? {});
+	const changes = r.kind === "noEffect" || !r.last ? {} : (it.eff ?? {});
 	if (!r.last) return { frame: advanced(it), changes, ...owned };
 	const ending = endingOf(r);
 	const end: End = { op: it.op, kind: it.kind, ending, owner: held };

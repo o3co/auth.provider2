@@ -233,13 +233,15 @@ describe("KE-C04, the one Step", () => {
 		});
 		const started = step(frame, at("w1", 10), start);
 		expect(started.frame.intent).toEqual(frame.intent);
-		expect(started.changes).toEqual(family);
+		// The op's changes are its last stage's: its start, an earlier stage, changes nothing.
+		expect(started.changes).toEqual({});
 		expect(started.ownerUntil).toBe(leaseMs - 1);
 		const last = core(2, "op1", true);
 		expect(stepped(started.frame, at("w1", 20), last, { own: false, bundle: bundles })).toEqual({
 			refused: "waits",
 		});
 		const done = step(started.frame, at("w1", 20), last, true);
+		expect(done.changes).toEqual(family);
 		expect(done.frame.intent).toMatchObject({ state: "done", eff: null });
 		expect(done.end).toEqual({ op: "op1", kind: "issue", ending: "took", owner: true });
 		expect(done.ownerUntil).toBe(leaseMs - 1);

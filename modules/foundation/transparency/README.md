@@ -27,7 +27,7 @@
 - Whether an op's last stage is on the flow, and how many abandonments of it are, is read from the log (`of`), never kept in the frame: the answer holds whatever ops came between.
 - The owner rule (kernel-spec §5.1): owner ≜ pending ∧ by this replica ∧ its lease holds, judged on the store clock; an owner's write is refused past its lease's end. A lease's end writes nothing: the intent and its changes stay.
 - A Step takes in the next record alone, once judged, applying `fold` once on the state the owners' records hold, whoever wrote the record; only the intent's end depends on its kind (the end-of-intent table). A replica with no registration of an open intent's kind takes in, claims and ends nothing of it.
-- An end its live owner gives output for (`owner`, `took`) is answered once its write committed. A writer's `eff` is `effectOf` of the record it sends; a family an abandonment drops is `authority-rules`' `abandonedFamily`.
+- An end its live owner gives output for (`owner`, `took`) is answered once its write committed. A writer's `eff` is `effectOf` of its op's last stage's record, taken in with that record alone (a start changes nothing); a family an abandonment drops is `authority-rules`' `abandonedFamily`.
 - A kind's records (a reservation) are decided, ended and changed only with the frame held, never in the store directly: `changeHeld` writes nothing while an intent is open, so being appended is shown by the frame alone.
 - Boot is refused unless every field of a flow's state has one owner, and every part a registration names is bound to a place.
 
