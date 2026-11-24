@@ -1,7 +1,16 @@
 import { assemble, defineModule, isUnavailable, kernelConfig } from "@mod/kernel";
+import { switchedModule, unavailableSwitch } from "@mod/kernel/testing";
 import secretHashModule from "@mod/secret-hash/module";
 import { describe, expect, it } from "vitest";
-import { type Ledger, ledgers, users, usersImport, type Verified } from "../../contract.ts";
+import {
+	type ContactStore,
+	contactStore,
+	type Ledger,
+	ledgers,
+	users,
+	usersImport,
+	type Verified,
+} from "../../contract.ts";
 import usersModule from "../../module.ts";
 import { memoryUsersStores, testUser } from "../../testing.ts";
 
@@ -22,7 +31,11 @@ function keepingLedger(held = new Map<string, string>()): Ledger {
 	};
 }
 
-async function opened(ledger?: Ledger, registered: unknown[] = []) {
+async function opened(
+	ledger?: Ledger,
+	registered: unknown[] = [],
+	stores = memoryUsersStores().module,
+) {
 	const contributing = ledger
 		? [
 				defineModule({ name: "a-ledger", replicaSafe: true, takes: [] }, (m) => [
@@ -31,7 +44,7 @@ async function opened(ledger?: Ledger, registered: unknown[] = []) {
 			]
 		: [];
 	const app = await assemble({
-		modules: [usersModule, secretHashModule, memoryUsersStores().module, ...contributing],
+		modules: [usersModule, secretHashModule, stores, ...contributing],
 		config: { ...kernelConfig(), users: { registered } },
 	});
 	return { importer: app.get(usersImport), u: app.get(users) };
@@ -128,5 +141,53 @@ describe("users' import", () => {
 		await expect(odd.importer.record({ subject: "s-a", identifier: "a" })).rejects.toSatisfy(
 			isUnavailable,
 		);
+	});
+
+	it("leaves the identifier kept where the email then meets a full subject, and answers alike when run again", async () => {
+		const held = new Map<string, string>();
+		const { importer, u } = await opened(keepingLedger(held));
+		for (let i = 0; i < 20; i++)
+			await importer.record({ subject: "s-a", verifiedEmail: `a${i}@example.com` });
+		const record = { subject: "s-a", identifier: "a", verifiedEmail: "late@example.com" };
+		expect(await importer.record(record)).toBe("full");
+		expect(held.get("a")).toBe("s-a");
+		expect(await importer.record(record)).toBe("full");
+		expect([...held]).toEqual([["a", "s-a"]]);
+		expect(await u.contactsOf("s-a")).toHaveLength(20);
+	});
+
+	it("leaves the identifier kept where the contact store fails after it, and imports the rest when run again", async () => {
+		const held = new Map<string, string>();
+		const down = unavailableSwitch<ContactStore>("contact store");
+		const stores = switchedModule(memoryUsersStores().module, contactStore, down);
+		const { importer, u } = await opened(keepingLedger(held), [], stores);
+		const record = { subject: "s-a", identifier: "a", verifiedEmail: "a@example.com" };
+		down.unavailable("save", "read", "update");
+		await expect(importer.record(record)).rejects.toSatisfy(isUnavailable);
+		expect(held.get("a")).toBe("s-a");
+		down.restore();
+		expect(await importer.record(record)).toBe("imported");
+		expect(await u.contactsOf("s-a")).toEqual([{ kind: "email", value: "a@example.com" }]);
+	});
+
+	it("keeps an email for a subject with no identifier, asking the ledger nothing, whether or not it holds the subject", async () => {
+		const asked: string[] = [];
+		const ledger = keepingLedger();
+		const { importer, u } = await opened({
+			...ledger,
+			bySubject: async (subject) => {
+				asked.push(subject);
+				return none;
+			},
+			keep: async (subject, identifier) => {
+				asked.push(identifier);
+				return ledger.keep?.(subject, identifier) ?? "conflict";
+			},
+		});
+		expect(await importer.record({ subject: "s-nobody", verifiedEmail: "n@example.com" })).toBe(
+			"imported",
+		);
+		expect(asked).toEqual([]);
+		expect(await u.contactsOf("s-nobody")).toEqual([{ kind: "email", value: "n@example.com" }]);
 	});
 });

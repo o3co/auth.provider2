@@ -16,7 +16,8 @@ Internal module of `users`: a record brought from another IdP, kept as users and
 
 ## Invariants
 - A record is an object of `subject` (a well-formed subject), `identifier` (a non-empty string, optional) and `verifiedEmail` (an address `mail-address` takes, optional), read once; any other key or shape is `malformed`, asking no one.
-- The identifier is kept first: `conflict` or `outside` writes nothing of the record. A run done again answers `imported` where every part is held as given.
+- The identifier is kept first: `conflict` or `outside` writes nothing of the record. A `full`, or a failure of the contact store, after it leaves the identifier kept; a run done again keeps nothing twice and answers as the rest stands, `imported` once every part is held as given.
+- A record with no identifier keeps its email as the subject's verified contact without asking the ledger, whether or not the ledger holds the subject.
 - A subject past its contacts is `full`; any other failure is thrown, unavailable where the ledger or the store fails.
 
 ## Depends on
