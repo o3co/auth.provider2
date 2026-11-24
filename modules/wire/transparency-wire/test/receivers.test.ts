@@ -111,6 +111,27 @@ describe("the callback's proof (A38) and the ID token's evidence", () => {
 	});
 });
 
+describe("an object a signer set signs", () => {
+	it("reads as JWS JSON General Serialization: one payload, a signature per signer", () => {
+		const signed = {
+			payload: "eyJ2IjoxfQ",
+			signatures: [
+				{ protected: "eyJhbGciOiJFUzI1NiIsImtpZCI6ImEifQ", signature: "c2ln" },
+				{ protected: "eyJhbGciOiJFUzI1NiIsImtpZCI6ImIifQ", signature: "c2ln" },
+			],
+		};
+		expect(schemas.setSigned.parse(signed)).toEqual(signed);
+		for (const bad of [
+			{ ...signed, signatures: [] },
+			{ ...signed, signatures: [signed.signatures[0], signed.signatures[0]] },
+			{ ...signed, header: {} },
+			{ payload: signed.payload, signature: "c2ln" },
+			{ ...signed, payload: "a.b" },
+		])
+			expect(schemas.setSigned.safeParse(bad).success, JSON.stringify(bad)).toBe(false);
+	});
+});
+
 describe("a signer set's purpose", () => {
 	it("names no set for the callback's proof, which E_sig signs", () => {
 		const set = { v: 1, version: 1, keys: [{ kid: "k", key: vector.jwk }], required: 1 };

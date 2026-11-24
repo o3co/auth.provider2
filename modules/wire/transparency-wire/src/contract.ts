@@ -699,6 +699,24 @@ const signedRecord = z
 			fail("a restart's body names its previous position; the install approval sits at 1");
 	});
 
+/**
+ * An object a signer set signs (a status, a checkpoint, a stateOf: KA-18), as RFC 7515's JWS JSON
+ * General Serialization: one payload and a signature per signer. Each protected header names `alg`,
+ * the object's `typ` and its key's `kid`; a reader verifies each signature with the set's key of that
+ * kid and counts the kids that verify against the set's `required`.
+ */
+const setSigned = z
+	.object({
+		payload: base64url,
+		signatures: z
+			.array(z.object({ protected: base64url, signature: base64url }).strict())
+			.min(1)
+			.refine((list) => unique(list, (s) => s.protected), {
+				message: "a protected header is named twice",
+			}),
+	})
+	.strict();
+
 /** The callback's proof (A38): its header, E_sig's public key in it. */
 const callbackHeader = z
 	.object({ alg: z.literal("ES256"), typ: z.literal(logTyps.callback), jwk: p256Key })
@@ -727,6 +745,7 @@ export const schemas = Object.freeze({
 	/** The signed bodies of the records no Core writer writes, each with its `typ`. */
 	bodies,
 	signedRecord,
+	setSigned,
 	callbackHeader,
 	callbackProof,
 	idTokenEvidence,
@@ -760,12 +779,12 @@ export interface ReceiptCheck {
 	readonly frame: (typeof tokens.checks.frames)[number];
 	/** The flow the token must be of: a person's token its `sub`'s subject flow, a client's its client flow. */
 	readonly flow: Flow;
-	/** The newest status the receiver holds. */
+	/** The newest status the receiver holds, as `setSigned` reads it (JWS JSON General Serialization). */
 	readonly status: string;
 	/** The log's keys, fixed from C1's source. */
 	readonly logKeys: readonly ReceiverKey[];
-	/** The status's signer set and how many of it must sign. */
-	readonly statusSigners: { readonly keys: readonly ReceiverKey[]; readonly required: number };
+	/** The status's signer set: its keys by kid and how many of it must sign; the newest version the receiver holds. */
+	readonly statusSigners: SignerSet;
 	/** The receiver's clock, ms. */
 	readonly now: number;
 	/** σ: the most the receiver's clock and the log's differ by, ms. */
