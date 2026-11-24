@@ -37,6 +37,11 @@ export const hpke = Object.freeze({
 		firstKeyRequest: "auth.provider2/first-key/request/v1",
 		firstKeyCode: "auth.provider2/first-key/code/v1",
 	}),
+	/** The additional data a completion is sealed under: its purpose and the hash of the statement it answers. */
+	completionAad: (
+		purpose: "authorization" | "first-key" | "passkey-add" | "passkey-manage",
+		statementHash: string,
+	) => canonicalText({ purpose: `completion/${purpose}`, h: statementHash }),
 });
 
 /** An authorization's items (a closed set): a JAR with any other claim beside its envelope is refused. */
@@ -246,6 +251,17 @@ const compactJws = z.string().regex(/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9
 const authorizationAnswer = z
 	.object({ statement: compactJws, challenge: bytes32, create: z.boolean() })
 	.strict();
+const canonical = (text: string) =>
+	/^[A-Za-z0-9_-]*$/.test(text) &&
+	text.length % 4 !== 1 &&
+	sextet(text, text.length - 1) % (text.length % 4 === 2 ? 16 : text.length % 4 === 3 ? 4 : 1) ===
+		0;
+const sealedValue = z
+	.object({
+		enc: z.string().regex(/^B[A-P][A-Za-z0-9_-]{84}[AEIMQUYcgkosw048]$/),
+		ct: z.string().min(22).refine(canonical),
+	})
+	.strict();
 
 /** The bodies' schemas: what each reader opened or verified, and the answers the Front carries unread (`answers`). */
 export const payloads = Object.freeze({
@@ -256,7 +272,12 @@ export const payloads = Object.freeze({
 	startPlain,
 	mailPlain,
 	codePlain,
-	answers: Object.freeze({ authorization: authorizationAnswer }),
+	answers: Object.freeze({
+		authorization: authorizationAnswer,
+		statement: z.object({ statement: compactJws }).strict(),
+		sealed: z.object({ sealed: sealedValue }).strict(),
+		nonce: z.object({ nonce: bytes32 }).strict(),
+	}),
 });
 
 export type StatementPayload = z.infer<typeof statement>;

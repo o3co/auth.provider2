@@ -148,6 +148,54 @@ describe("②'s answer to an authorization's start", () => {
 	});
 });
 
+describe("the answers' forms the Front carries", () => {
+	const point = Buffer.concat([Buffer.of(4), Buffer.alloc(64, 7)]).toString("base64url");
+	const ct = Buffer.alloc(17, 9).toString("base64url");
+
+	it("reads a statement, a sealed value of a point and a ciphertext, and a nonce, each strict", () => {
+		const { statement, sealed, nonce } = payloads.answers;
+		expect(statement.parse({ statement: "a.b.c" })).toEqual({ statement: "a.b.c" });
+		expect(sealed.parse({ sealed: { enc: point, ct } })).toEqual({ sealed: { enc: point, ct } });
+		expect(nonce.parse({ nonce: "A".repeat(43) })).toEqual({ nonce: "A".repeat(43) });
+		for (const [form, value] of [
+			[statement, { statement: "a.b.c", extra: 1 }],
+			[sealed, { sealed: { enc: point, ct }, extra: 1 }],
+			[sealed, { sealed: { enc: point, ct, aad: "x" } }],
+			[nonce, { nonce: "A".repeat(43), extra: 1 }],
+		] as const)
+			expect(form.safeParse(value).success, JSON.stringify(value)).toBe(false);
+	});
+
+	it("refuses an enc that is no uncompressed point of 65 bytes in its one spelling", () => {
+		const bytes = Buffer.concat([Buffer.of(4), Buffer.alloc(64, 7)]);
+		for (const enc of [
+			Buffer.concat([Buffer.of(2), bytes.subarray(1)]).toString("base64url"),
+			bytes.subarray(0, 64).toString("base64url"),
+			Buffer.concat([bytes, Buffer.of(0)]).toString("base64url"),
+			`${point}=`,
+			`${point.slice(0, -1)}B`,
+		])
+			expect(payloads.answers.sealed.safeParse({ sealed: { enc, ct } }).success, enc).toBe(false);
+	});
+
+	it("refuses a ciphertext shorter than its tag, or not in its one spelling", () => {
+		const tagOnly = Buffer.alloc(16).toString("base64url");
+		expect(payloads.answers.sealed.safeParse({ sealed: { enc: point, ct: tagOnly } }).success).toBe(
+			true,
+		);
+		for (const short of [
+			Buffer.alloc(15).toString("base64url"),
+			`${ct}=`,
+			`${ct.slice(0, -1)}B`,
+			"A".repeat(25),
+		])
+			expect(
+				payloads.answers.sealed.safeParse({ sealed: { enc: point, ct: short } }).success,
+				short,
+			).toBe(false);
+	});
+});
+
 describe("the first key's statements", () => {
 	const common = {
 		v: 1,
@@ -193,6 +241,17 @@ describe("the first key's statements", () => {
 });
 
 describe("the inputs a hash or a signature covers", () => {
+	it("seals a completion under its purpose and the statement's hash, each purpose apart", () => {
+		expect(hpke.completionAad("authorization", "h")).toBe(
+			'{"h":"h","purpose":"completion/authorization"}',
+		);
+		const purposes = ["authorization", "first-key", "passkey-add", "passkey-manage"] as const;
+		expect(new Set(purposes.map((p) => hpke.completionAad(p, "h"))).size).toBe(4);
+		expect(hpke.completionAad("authorization", "h")).not.toBe(
+			hpke.completionAad("authorization", "g"),
+		);
+	});
+
 	it("builds JSON canonically, keys sorted and undefined members left out", () => {
 		expect(canonicalText({ b: 1, a: [2, { d: undefined, c: "x" }] })).toBe(
 			'{"a":[2,{"c":"x"}],"b":1}',
