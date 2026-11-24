@@ -84,6 +84,8 @@ export type Authentication =
 			readonly client: Client;
 			/** What its method verified, handed on unread; none where the method verified none. */
 			readonly proof?: unknown;
+			/** Set where its method authenticates by an assertion (RFC 7521): the request's assertion is what it verified. */
+			readonly assertion?: true;
 			/** Challenges for a later 401 to this client: its method's, or every method's when its method has none. */
 			readonly challenges: readonly string[];
 	  }

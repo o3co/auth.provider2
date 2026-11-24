@@ -242,6 +242,7 @@ export function registry(
 				client: found,
 				challenges: challenges.length > 0 ? challenges : every,
 				...proof,
+				...(only.method.assertion === true ? { assertion: true } : {}),
 			};
 		},
 	});

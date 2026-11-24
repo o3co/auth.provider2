@@ -16,12 +16,17 @@ const asked = (): HttpRequest =>
 	testRequest({ method: "POST", form: new Map([["x_cred", ["c1"]]]) });
 
 /** Clients with one method claiming `c1` and verifying as `verify` answers, and a source of `c1`. */
-async function boot(verify: AuthMethod["verify"], record: Partial<ClientRecord> = {}) {
+async function boot(
+	verify: AuthMethod["verify"],
+	record: Partial<ClientRecord> = {},
+	method: Partial<AuthMethod> = {},
+) {
 	const beside = defineModule({ name: "beside", replicaSafe: false, takes: [] }, (m) => [
 		m.contribute(authMethods).by(() => ({
 			name: "x_method",
 			claimed: (request) => (request.form.has("x_cred") ? "c1" : undefined),
 			verify,
+			...method,
 		})),
 		m.contribute(clientSources).by(() => ({
 			find: async (id) =>
@@ -49,6 +54,17 @@ it("carries what the method verified, unread, in the authenticated answer; none 
 		kind: "refused",
 		reason: "bad_credentials",
 	});
+});
+
+it("says it verified an assertion only where its method authenticates by one, whatever proof another's gives", async () => {
+	const proof = { key: "k" };
+	const byAssertion = { assertion: true, signingAlgorithms: ["ES256"] } as const;
+	expect(await (await boot(async () => ({}), {}, byAssertion)).authenticate(asked())).toMatchObject(
+		{ kind: "authenticated", assertion: true },
+	);
+	const other = await (await boot(async () => ({ proof }))).authenticate(asked());
+	expect(other).toMatchObject({ kind: "authenticated", proof });
+	expect("assertion" in other).toBe(false);
 });
 
 it("says the registry version a source's record came from, and none where it names none", async () => {

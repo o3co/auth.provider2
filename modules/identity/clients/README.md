@@ -10,7 +10,7 @@
 ## Offers
 - `find` (id → client or none) and `authenticate` (request → client or a typed refusal, never null); both throw unavailable when a source is unavailable. A caller records a refusal through `recordRefusedAuthentication` (its audit, the request, the refusal) as `client.authentication.failure`, with `reason` and `source`, never the client id claimed; declared in `./audit-events`.
 - `checkRecord` (record → where it fails, or nothing): the checks `find` holds a source's record to (the registered rule, a known method, each section's schema), each failure a path from the record's root (`sections.consent.uri`), never a value or message; it rejects when a schema throws.
-- An authenticated answer carries the challenges for a later 401 to that client: its method's, or every method's when its method has none; and what its method verified (`proof`, `Verified`), unread, where it verified one.
+- An authenticated answer carries the challenges for a later 401 to that client: its method's, or every method's when its method has none; and what its method verified (`proof`, `Verified`), unread, where it verified one, marked `assertion` for an assertion method's.
 - `bare` (request → whether it carries nothing a client authenticates with, whichever methods are composed). `authenticate`'s `no_credentials` says only that no composed method claimed the request.
 - `registered` (→ the clients the operator registered, in the settings' order, the `i`th at `clients.registered.<i>`), for a boot check that names one by its place, never its id.
 - `methods` names the usable authentication methods, built in and contributed; `signingAlgorithms` names the algorithms they take signed credentials in.
