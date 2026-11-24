@@ -9,6 +9,8 @@ import { defineModule, type Module } from "@mod/kernel";
 import type { z } from "zod";
 import type { KeyHolder } from "./contract.ts";
 import { keyHolders } from "./holder.ts";
+import { underAlg } from "./rings/ring.ts";
+import type { Alg } from "./rings/section.ts";
 import type { section } from "./section.ts";
 
 export type KeysSettings = z.input<typeof section>;
@@ -40,15 +42,11 @@ export function keysConfig(settings: Partial<KeysSettings> = {}) {
 	};
 }
 
-/** The JWS algorithms a key of each kind signs under, and how its signature is written. */
-const signer = (key: KeyObject, input: Uint8Array) =>
-	key.asymmetricKeyType === "ed25519"
-		? sign(null, input, key)
-		: sign("sha256", input, { key, dsaEncoding: "ieee-p1363" });
+/** The JWS algorithms a key of each kind signs under. */
 const algs: Readonly<Record<string, readonly string[]>> = {
 	ed25519: ["EdDSA"],
 	ec: ["ES256"],
-	rsa: ["RS256"],
+	rsa: ["PS256", "RS256"],
 };
 const algsOf = (key: KeyObject) => algs[key.asymmetricKeyType ?? ""] ?? [];
 
@@ -70,10 +68,10 @@ export function testHolder(given: Readonly<Record<string, KeyObject>> = {}): Mod
 				agrees: own && key.asymmetricKeyType === "ec",
 			};
 		},
-		sign: async (kid, _alg, input) => ({
-			kind: "signed",
-			signature: signer(held[kid] as KeyObject, input),
-		}),
+		sign: async (kid, alg, input) => {
+			const [digest, key] = underAlg(alg as Alg, held[kid] as KeyObject);
+			return { kind: "signed", signature: sign(digest, input, key) };
+		},
 		agree: async (kid, peer) => ({
 			kind: "agreed",
 			shared: diffieHellman({ privateKey: held[kid] as KeyObject, publicKey: peer }),

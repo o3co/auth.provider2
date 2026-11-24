@@ -31,7 +31,7 @@
 - A payload the key signed that is no JSON is answered as a bad signature; a compact JWS not in its one form, as malformed.
 - A `withdrawn` answer is apart from a failure, and logged (`keys.withdrawn`, with what it was for and the kid); an outage is the holder's to throw.
 - A `kid` is 1–128 of letters, digits and `. _ ~ -`, unique across the section, as the holder holds keys by kid.
-- A key the holder does not hold, one not of its `alg`'s kind, a signing key the holder cannot sign with under its `alg`, a sealing key that is no P-256 key the holder agrees with, and one key held for two kids (across the rings, the generations and the sealing), refuse boot at its kid's path. EdDSA takes Ed25519, ES256 P-256, RS256 RSA of 2048 bits or more.
+- A key the holder does not hold, one not of its `alg`'s kind, a signing key the holder cannot sign with under its `alg`, a sealing key that is no P-256 key the holder agrees with, and one key held for two kids (across the rings, the generations and the sealing), refuse boot at its kid's path (each `alg`'s kind: `rings`' card); a ring key under RS256, deprecated, boots, warned of at every start (`keys.rs256_deprecated`).
 - Only a key's public half is used to verify and to publish, whatever the holder answers.
 - An outside JWK with a private member, a `kid` that is no string, or a key member not in its one form, is refused; so is a private PEM. An outside key may verify only for signatures (`use`, `key_ops`) and only under an algorithm its kind and curve fit.
 

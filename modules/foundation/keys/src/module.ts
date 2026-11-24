@@ -4,9 +4,14 @@ import { keyHolders } from "./holder.ts";
 import { coreJwks, publish } from "./publishing/publishing.ts";
 import { verifiedBy } from "./rings/given.ts";
 import { type Rings, readRings } from "./rings/ring.ts";
+import { rs256Named } from "./rings/section.ts";
 import { refusingAccessTokens, ringSigner } from "./rings/signer.ts";
 import { sealing } from "./sealing/sealing.ts";
 import { section } from "./section.ts";
+
+/** Why RS256 is deprecated, said at every start where a ring key is RS256. */
+const reason =
+	"RS256 is deprecated: a 2048-bit RSA key gives about 112 bits of strength, padded by PKCS#1 v1.5, and it is outside FAPI 2.0, which takes PS256, ES256 and EdDSA; ES256 is recommended";
 
 const held = contract<Rings & { readonly holder: KeyHolder }>("keys.rings");
 
@@ -18,6 +23,9 @@ export default defineModule(
 			const [holder] = (await c.collect(keyHolders)) as [KeyHolder];
 			const read = readRings(c.section, holder);
 			if ("refused" in read) return c.refuseAll(read.refused);
+			// The operator's choice, yet said at every start, as RS256 is weaker and outside FAPI 2.0.
+			const rs256 = rs256Named(c.section);
+			if (rs256.length > 0) c.log.warn("keys.rs256_deprecated", { keys: rs256.join(" "), reason });
 			return { ...read, holder };
 		}),
 		m.provide(keys).by(async (c) => {

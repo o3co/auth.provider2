@@ -1,4 +1,4 @@
-import { generateKeyPairSync } from "node:crypto";
+import { constants, generateKeyPairSync, sign } from "node:crypto";
 import type { Checks } from "@mod/authority-rules";
 import { assemble, kernelConfig } from "@mod/kernel";
 import { quietRuntime } from "@mod/kernel/testing";
@@ -16,6 +16,9 @@ const jwsOf = (signed: Signed) => {
 const segment = (jws: string, i: number) =>
 	Buffer.from(jws.split(".")[i] as string, "base64url").toString();
 const p256 = () => generateKeyPairSync("ec", { namedCurve: "P-256" });
+// RSA keys are slow to make: made once, as the file loads, never within a test's time.
+const rsa2048 = generateKeyPairSync("rsa", { modulusLength: 2048 });
+const rsa4608 = generateKeyPairSync("rsa", { modulusLength: 4608 });
 
 async function booted(settings: Record<string, unknown> = {}, held = {}) {
 	const app = await assemble({
@@ -48,14 +51,15 @@ describe("a signature prepared, then signed", () => {
 		expect(access.prepare().header).toEqual({ alg: "ES256", typ: "at+jwt", kid: "test" });
 	});
 
-	it("says how long the signing key's signature is, byte for byte as signed: EdDSA, ES256, and RS256 at its key's modulus", async () => {
+	it("says how long the signing key's signature is, byte for byte as signed: EdDSA, ES256, and PS256 and RS256 at its key's modulus", async () => {
 		const keys = {
 			ed: generateKeyPairSync("ed25519").privateKey,
-			rsa: generateKeyPairSync("rsa", { modulusLength: 4608 }).privateKey,
+			rsa: rsa4608.privateKey,
 		};
 		for (const [kid, alg] of [
 			["test", "ES256"],
 			["ed", "EdDSA"],
+			["rsa", "PS256"],
 			["rsa", "RS256"],
 		] as const) {
 			const { access } = await booted({ authority: { signing: { kid, alg } } }, keys);
@@ -149,10 +153,11 @@ describe("the Core's ring by generation", () => {
 		expect(checks.verifyJws(nested, k.coreRing(2) ?? [])).toBeUndefined();
 	});
 
-	it("verifies under EdDSA and RS256 too, by the key's kind", async () => {
+	it("verifies under EdDSA, PS256 and RS256 too, by the key's kind", async () => {
 		for (const [alg, pair] of [
 			["EdDSA", generateKeyPairSync("ed25519")],
-			["RS256", generateKeyPairSync("rsa", { modulusLength: 2048 })],
+			["PS256", rsa2048],
+			["RS256", rsa2048],
 		] as const) {
 			const { k } = await booted(
 				{ core: { generation: 1, keys: [{ generation: 1, kid: "c", alg }] } },
@@ -163,6 +168,29 @@ describe("the Core's ring by generation", () => {
 				header: { alg, typ: "approval+jwt", kid: "c" },
 				payload: {},
 			});
+		}
+	});
+
+	it("refuses an RSA signature padded as the other algorithm, in the ring and among keys given", async () => {
+		const pair = rsa2048;
+		const pss = { padding: constants.RSA_PKCS1_PSS_PADDING, saltLength: 32 };
+		for (const [alg, padding] of [
+			["PS256", {}],
+			["RS256", pss],
+		] as const) {
+			const { k } = await booted(
+				{ core: { generation: 1, keys: [{ generation: 1, kid: "c", alg }] } },
+				{ c: pair.privateKey },
+			);
+			const signed = jwsOf(await k.sign(k.prepare("core", "approval+jwt"), text("{}")));
+			const input = signed.split(".").slice(0, 2).join(".");
+			const other = sign("sha256", Buffer.from(input), { key: pair.privateKey, ...padding });
+			const padded = `${input}.${other.toString("base64url")}`;
+			expect(await k.verify("core", padded, "approval+jwt"), alg).toEqual({
+				kind: "invalid",
+				reason: "signature",
+			});
+			expect(k.verifyJws(padded, k.coreRing(1) ?? []), alg).toBeUndefined();
 		}
 	});
 });

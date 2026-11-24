@@ -2,7 +2,7 @@ import { type KeyObject, verify } from "node:crypto";
 import type { Read } from "../contract.ts";
 import { isCanonicalJws } from "../material/jws.ts";
 import { type Jwk, publicJwk, verifiesUnder } from "../material/public.ts";
-import { kinds } from "./ring.ts";
+import { kinds, underAlg } from "./ring.ts";
 import type { Alg } from "./section.ts";
 import { jsonOf } from "./signer.ts";
 
@@ -30,16 +30,8 @@ export function verifiedBy(jws: string, keys: readonly unknown[]): Read | undefi
 	if (!kinds[alg](read.key)) return undefined;
 	const input = Buffer.from(`${h}.${p}`);
 	const signature = bytesOf(s);
-	const holds =
-		alg === "EdDSA"
-			? verify(null, input, read.key, signature)
-			: verify(
-					"sha256",
-					input,
-					alg === "ES256" ? { key: read.key, dsaEncoding: "ieee-p1363" } : read.key,
-					signature,
-				);
-	if (!holds) return undefined;
+	const [digest, key] = underAlg(alg, read.key);
+	if (!verify(digest, input, key, signature)) return undefined;
 	const payload = jsonOf(bytesOf(p));
 	return payload === undefined ? undefined : { header, payload };
 }

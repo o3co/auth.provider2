@@ -1,4 +1,4 @@
-import { createPublicKey, type KeyObject } from "node:crypto";
+import { constants, createPublicKey, type KeyObject, type SignKeyObjectInput } from "node:crypto";
 import type { Refusal } from "@mod/kernel";
 import type { KeyHolder } from "../contract.ts";
 import type { Alg, Section } from "./section.ts";
@@ -37,16 +37,36 @@ export interface Rings {
 	readonly sealing: SealingKey;
 }
 
-/** RS256's least modulus, in bits (RFC 7518 §3.3). */
+/** The least modulus of an RSA key, in bits (RFC 7518 §3.3, §3.5). */
 const rsaModulusFloor = 2048;
+
+const rsa = (key: KeyObject) =>
+	key.asymmetricKeyType === "rsa" &&
+	(key.asymmetricKeyDetails?.modulusLength ?? 0) >= rsaModulusFloor;
 
 export const kinds: Readonly<Record<Alg, (key: KeyObject) => boolean>> = {
 	EdDSA: (key) => key.asymmetricKeyType === "ed25519",
 	ES256: p256,
-	RS256: (key) =>
-		key.asymmetricKeyType === "rsa" &&
-		(key.asymmetricKeyDetails?.modulusLength ?? 0) >= rsaModulusFloor,
+	PS256: rsa,
+	RS256: rsa,
 };
+
+/**
+ * How the platform's `sign` and `verify` take a key under an algorithm, as a JWS writes the
+ * signature (RFC 7518 §3): its digest, ECDSA's as r and s, PSS's salt as long as the digest.
+ */
+export function underAlg(
+	alg: Alg,
+	key: KeyObject,
+): readonly [digest: string | null, key: KeyObject | SignKeyObjectInput] {
+	if (alg === "EdDSA") return [null, key];
+	if (alg === "ES256") return ["sha256", { key, dsaEncoding: "ieee-p1363" }];
+	if (alg === "PS256") {
+		const pss = constants.RSA_PKCS1_PSS_PADDING;
+		return ["sha256", { key, padding: pss, saltLength: constants.RSA_PSS_SALTLEN_DIGEST }];
+	}
+	return ["sha256", key];
+}
 
 function p256(key: KeyObject): boolean {
 	return key.asymmetricKeyType === "ec" && key.asymmetricKeyDetails?.namedCurve === "prime256v1";

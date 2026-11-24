@@ -3,7 +3,7 @@ import { z } from "zod";
 const kid = z
 	.string()
 	.regex(/^[A-Za-z0-9._~-]{1,128}$/, "kid is 1 to 128 characters of letters, digits and . _ ~ -");
-const alg = z.enum(["EdDSA", "ES256", "RS256"]);
+const alg = z.enum(["EdDSA", "ES256", "PS256", "RS256"]);
 export type Alg = z.output<typeof alg>;
 
 const authority = z.strictObject({
@@ -77,23 +77,29 @@ const core = z
 		}
 	});
 
-/** The section's keys, each with the path the operator wrote it at, in the order a kid is first named. */
-export function namedKids(
-	s: Section,
-): { readonly kid: string; readonly path: readonly (string | number)[] }[] {
+/** A key the section names: the path of its entry, its kid, and the algorithm of a ring key. */
+interface Named {
+	readonly at: readonly (string | number)[];
+	readonly kid: string;
+	readonly alg?: Alg;
+}
+
+/** The section's keys, in the order a kid is first named. */
+function named(s: Section): Named[] {
 	return [
-		{ kid: s.authority.signing.kid, path: ["authority", "signing", "kid"] },
-		...s.authority.previous.map((p, i) => ({
-			kid: p.kid,
-			path: ["authority", "previous", i, "kid"],
-		})),
-		...(s.authority.next
-			? [{ kid: s.authority.next.kid, path: ["authority", "next", "kid"] }]
-			: []),
-		...s.core.keys.map((k, i) => ({ kid: k.kid, path: ["core", "keys", i, "kid"] })),
-		{ kid: s.sealing.kid, path: ["sealing", "kid"] },
+		{ at: ["authority", "signing"], ...s.authority.signing },
+		...s.authority.previous.map((p, i) => ({ at: ["authority", "previous", i], ...p })),
+		...(s.authority.next ? [{ at: ["authority", "next"], ...s.authority.next }] : []),
+		...s.core.keys.map((k, i) => ({ at: ["core", "keys", i], kid: k.kid, alg: k.alg })),
+		{ at: ["sealing"], kid: s.sealing.kid },
 	];
 }
+
+/** The paths of the ring keys' algorithms the section names RS256, which signs and verifies, deprecated. */
+export const rs256Named = (s: Section) =>
+	named(s)
+		.filter((key) => key.alg === "RS256")
+		.map((key) => `keys.${[...key.at, "alg"].join(".")}`);
 
 const rings = z.strictObject({
 	authority: authority.describe("The authority's ring: its public keys are the JWKS."),
@@ -112,8 +118,9 @@ export type Section = z.output<typeof rings>;
 /** The operator section: the two rings and the sealing key, each kid unique across them, as the holder holds keys by kid. */
 export const section = rings.superRefine((s, ctx) => {
 	const seen = new Set<string>();
-	for (const { kid, path } of namedKids(s)) {
-		if (seen.has(kid)) ctx.addIssue({ code: "custom", message: "duplicate kid", path: [...path] });
+	for (const { kid, at } of named(s)) {
+		if (seen.has(kid))
+			ctx.addIssue({ code: "custom", message: "duplicate kid", path: [...at, "kid"] });
 		seen.add(kid);
 	}
 });

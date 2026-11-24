@@ -1,6 +1,6 @@
 import { generateKeyPairSync, type KeyObject } from "node:crypto";
 import { assemble, BootRefused, defineModule, kernelConfig } from "@mod/kernel";
-import { quietRuntime } from "@mod/kernel/testing";
+import { quietRuntime, recordingLog } from "@mod/kernel/testing";
 import { promiseNames, stances } from "@mod/promises";
 import { CompactSign, decodeProtectedHeader } from "jose";
 import { afterEach, describe, expect, it } from "vitest";
@@ -17,6 +17,9 @@ afterEach(() => {
 const runtime = quietRuntime({ clock: { now: () => now } });
 
 const ed25519 = () => generateKeyPairSync("ed25519");
+// RSA keys are slow to make: made once, as the file loads, never within a test's time.
+const rsa = () => generateKeyPairSync("rsa", { modulusLength: 2048 });
+const rsaKeys = { a: rsa(), b: rsa(), c: rsa(), d: rsa() };
 const bytes = (claims: unknown) => new TextEncoder().encode(JSON.stringify(claims));
 const jwsOf = (signed: Signed) => {
 	if (signed.kind !== "signed") throw new Error("expected a signature");
@@ -320,6 +323,10 @@ describe("keys", () => {
 				authority({ signing: { kid: "small", alg: "RS256" } }),
 				"keys.authority.signing.kid",
 			],
+			"RSA key under 2048 bits named PS256": [
+				authority({ signing: { kid: "small", alg: "PS256" } }),
+				"keys.authority.signing.kid",
+			],
 			"signing key held as its public half": [
 				authority({ signing: { ...signing, kid: "public" } }),
 				"keys.authority.signing.kid",
@@ -425,7 +432,8 @@ describe("keys", () => {
 	it("names in alg the RSA or ECDSA algorithm it signs with, and verifies under it [oidc-core-10.1-b]", async () => {
 		const pairs = {
 			ES256: generateKeyPairSync("ec", { namedCurve: "P-256" }),
-			RS256: generateKeyPairSync("rsa", { modulusLength: 2048 }),
+			PS256: rsaKeys.a,
+			RS256: rsaKeys.b,
 		};
 		for (const [alg, pair] of Object.entries(pairs)) {
 			const k = await boot(sectionWith({ authority: { signing: { kid: "k", alg } } }), {
@@ -436,6 +444,51 @@ describe("keys", () => {
 			expect(k.algorithm("authority"), alg).toBe(alg);
 			expect((await k.verify("authority", token, "JWT")).kind, alg).toBe("valid");
 		}
+	});
+
+	it("warns at every start of the ring keys named RS256, by their paths, and of none where none is", async () => {
+		const { a: signing, b: previous, c: next, d: later } = rsaKeys;
+		const held = {
+			r: signing.privateKey,
+			o: previous.publicKey,
+			n: next.publicKey,
+			c2: later.publicKey,
+		};
+		const warned = async (section: unknown) => {
+			const recorded = recordingLog();
+			await assemble({
+				modules: [keysModule, testHolder(held)],
+				config: { ...kernelConfig(), keys: section },
+				runtime: quietRuntime({ clock: { now: () => now }, log: recorded.log }),
+			});
+			return recorded.lines().filter((line) => line.event === "keys.rs256_deprecated");
+		};
+		const lines = await warned(sectionWith({ authority: { signing: { kid: "r", alg: "RS256" } } }));
+		expect(lines.map((line) => [line.level, line.fields.keys])).toEqual([
+			["warn", "keys.authority.signing.alg"],
+		]);
+		expect(lines[0]?.fields.reason).toMatch(/112 bits.*PKCS#1 v1\.5.*FAPI 2\.0/);
+		const everyRing = sectionWith({
+			authority: {
+				signing: { kid: "r", alg: "RS256" },
+				previous: [{ kid: "o", alg: "RS256", "expires-at": "2027-01-01T00:00:00Z" }],
+				next: { kid: "n", alg: "RS256" },
+			},
+			core: {
+				generation: 1,
+				keys: [
+					{ generation: 1, kid: "core-test", alg: "ES256" },
+					{ generation: 2, kid: "c2", alg: "RS256" },
+				],
+			},
+		});
+		expect((await warned(everyRing)).map((line) => line.fields.keys)).toEqual([
+			"keys.authority.signing.alg keys.authority.previous.0.alg keys.authority.next.alg keys.core.keys.1.alg",
+		]);
+		expect(
+			await warned(sectionWith({ authority: { signing: { kid: "r", alg: "PS256" } } })),
+		).toEqual([]);
+		expect(await warned(keysConfig().keys)).toEqual([]);
 	});
 
 	it("is taken only by a module that declares where it stands on the promises", async () => {
