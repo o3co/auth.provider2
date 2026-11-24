@@ -20,7 +20,7 @@ const guarantees: readonly Guarantee[] = [
 	"authenticated",
 ];
 
-/** Each identifier's record, keyed by the identifier: its subject. */
+/** Each identifier's record, keyed by the identifier: its subject, and its password's hash where one was brought. */
 export const identifierSpace: Space = {
 	name: "users-local.identifiers",
 	guarantees,
@@ -43,7 +43,7 @@ export const markSpace: Space = {
 	erasedBy: "users-local",
 };
 
-export type IdentifierRecord = { readonly subject: string };
+export type IdentifierRecord = { readonly subject: string; readonly passwordHash?: string };
 export type SubjectRecord = { readonly identifier: string };
 export type MarkRecord = { readonly token: string };
 
@@ -61,8 +61,15 @@ export const placed = contract<Builders>("users-local.placed");
 
 /** The ledger's records: a user placed by identifier and subject as one, and each read back. */
 export interface LocalRecords {
-	/** Places the user, unless the identifier is held (`exists`), else the subject (`taken`), else the subject is erased (`erased`). */
-	place(identifier: string, subject: string): Promise<"placed" | "exists" | "taken" | "erased">;
+	/**
+	 * Places the user, with its password's hash where given, unless the identifier is held (`exists`),
+	 * else the subject (`taken`), else the subject is erased (`erased`).
+	 */
+	place(
+		identifier: string,
+		subject: string,
+		passwordHash?: string,
+	): Promise<"placed" | "exists" | "taken" | "erased">;
 	byIdentifier(identifier: string): Promise<IdentifierRecord | undefined>;
 	bySubject(subject: string): Promise<SubjectRecord | undefined>;
 }
@@ -84,7 +91,7 @@ function shaped<T>(
 
 export function localRecords(builders: Builders): LocalRecords {
 	return {
-		place: async (identifier, subject) => {
+		place: async (identifier, subject, passwordHash) => {
 			const answer: JointAnswer = await builders.joint.changeSubjectRecords({
 				targets: [
 					{ place: "identifiers", key: identifier },
@@ -92,7 +99,12 @@ export function localRecords(builders: Builders): LocalRecords {
 				],
 				decide: () => ({
 					targets: [
-						{ kind: "create", value: { subject }, lifetimeMs: "endless", subject },
+						{
+							kind: "create",
+							value: passwordHash === undefined ? { subject } : { subject, passwordHash },
+							lifetimeMs: "endless",
+							subject,
+						},
 						{ kind: "create", value: { identifier }, lifetimeMs: "endless", subject },
 					],
 				}),
@@ -104,8 +116,10 @@ export function localRecords(builders: Builders): LocalRecords {
 			throw new Unavailable("users-local");
 		},
 		byIdentifier: async (identifier) =>
-			shaped<IdentifierRecord>(await builders.identifiers.read(identifier), (read) =>
-				isText(read.subject),
+			shaped<IdentifierRecord>(
+				await builders.identifiers.read(identifier),
+				(read) =>
+					isText(read.subject) && (read.passwordHash === undefined || isText(read.passwordHash)),
 			),
 		bySubject: async (subject) =>
 			shaped<SubjectRecord>(await builders.subjects.read(subject), (read) =>

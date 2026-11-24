@@ -13,16 +13,17 @@
 		"@mod/kernel": "workspace:*",
 		"@mod/passkey-witness": "workspace:*",
 		"@mod/promises": "workspace:*",
+		"@mod/secret-hash": "workspace:*",
 		"@mod/store": "workspace:*",
 		"@mod/subject-records": "workspace:*",
-		"@mod/users": "workspace:*"
+		"@mod/users": "workspace:*",
+		"zod": "4.6.7"
 	},
 	"devDependencies": {
 		"@mod/outbound": "workspace:*",
 		"@mod/passkey-witness-http": "workspace:*",
 		"@mod/passkey-witnessing": "workspace:*",
 		"@mod/passkeys": "workspace:*",
-		"@mod/secret-hash": "workspace:*",
 		"@mod/tls-options": "workspace:*",
 		"vitest": "5.0.5"
 	}

@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { type Eraser, erasers, type Walk } from "@mod/erasure-extensions";
 import {
 	assemble,
@@ -12,7 +13,9 @@ import { type PasskeyWitness, passkeyWitnesses } from "@mod/passkey-witness";
 import { passkeyWitnessContract } from "@mod/passkey-witness/testing";
 import { promiseNames, promises } from "@mod/promises";
 import promisesModule from "@mod/promises/module";
+import { secretCheckers } from "@mod/secret-hash";
 import secretHashModule from "@mod/secret-hash/module";
+import { recordingChecker, testScryptHash } from "@mod/secret-hash/testing";
 import { store, storeControl } from "@mod/store";
 import storeModule from "@mod/store/module";
 import { simulatedStore, storeConfig } from "@mod/store/testing";
@@ -24,6 +27,26 @@ import usersLocal from "../src/module.ts";
 import { localRecords, placed } from "../src/records/records.ts";
 
 const runtime = quietRuntime({ clock: { now: () => 1_800_000_000_000 } });
+/** The passwords' work, the cheapest scrypt: a hash of it as `testScryptHash` makes one. */
+const work = "scrypt:10,8,1,32,16";
+const localConfig = { "users-local": { "password-work": work } };
+/** secret-hash's checkers, the work of every computation each check makes recorded, in order, in `checks`. */
+const recordingCheckers = (checks: string[]) =>
+	defineModule({ name: "secret-hash", replicaSafe: true, takes: [] }, (m) => [
+		m.provide(secretCheckers).by(() => ({
+			checkerOf: (inUse) => {
+				const made = recordingChecker(inUse, randomBytes);
+				return {
+					check: async (hash, secret) => {
+						const before = made.works.length;
+						const matched = await made.checker.check(hash, secret);
+						checks.push(...made.works.slice(before));
+						return matched;
+					},
+				};
+			},
+		})),
+	]);
 const seen = contract<{
 	ledgers: readonly Ledger[];
 	erasers: readonly Eraser[];
@@ -39,20 +62,21 @@ const collecting = defineModule(
 		})),
 	],
 );
-/** users-local over a simulated store in the phase given, with users and the records' builders. */
+/** users-local over a simulated store in the phase given, with users and the records' builders; every password computation's work in `checks`. */
 async function opened(phase: "reader" | "indexed" = "indexed") {
+	const checks: string[] = [];
 	const simulated = simulatedStore();
 	if (phase === "indexed") simulated.mark("subject-records.phase", "indexed");
 	const app = await assemble({
 		modules: [
 			simulated.module,
 			usersLocal,
-			secretHashModule,
+			recordingCheckers(checks),
 			usersModule,
 			memoryUsersStores().module,
 			collecting,
 		],
-		config: { ...kernelConfig(), users: {} },
+		config: { ...kernelConfig(), ...localConfig, users: {} },
 		runtime,
 	});
 	const [ledger] = app.get(seen).ledgers;
@@ -61,7 +85,16 @@ async function opened(phase: "reader" | "indexed" = "indexed") {
 	if (!ledger || !eraser || !witness || more.length > 0)
 		throw new Error("users-local contributed no ledger, eraser or one witness");
 	const builders = app.get(placed);
-	return { app, simulated, ledger, witness, eraser, builders, records: localRecords(builders) };
+	return {
+		app,
+		simulated,
+		ledger,
+		witness,
+		eraser,
+		builders,
+		records: localRecords(builders),
+		checks,
+	};
 }
 
 /** Alice, placed as an import would place her: her own subject. */
@@ -75,11 +108,10 @@ for (const phase of ["reader", "indexed"] as const) {
 	ledgerContract(`users-local, ${phase}`, {
 		open: async () => {
 			const open = await opened(phase);
-			expect(await open.records.place("alice", "s-alice")).toBe("placed");
-			// It holds no password, so no comparison is ever made to record.
-			return { ledger: open.ledger, checks: [] };
+			const hash = testScryptHash("correct horse");
+			expect(await open.ledger.keep?.("s-alice", "alice", hash)).toBe("kept");
+			return { ledger: open.ledger, checks: open.checks };
 		},
-		withoutPasswords: true,
 		creates: true,
 	});
 }
@@ -129,20 +161,71 @@ describe("users-local", () => {
 		expect(await ledger.bySubject("alice")).toEqual({ kind: "none" });
 	});
 
-	it("matches no password, a known identifier as an unknown one, asking its records nothing", async () => {
-		const { ledger, builders } = await withAlice();
+	it("declares its passwords by password-work, and refuses to start without one secret-hash reads", async () => {
+		const { ledger } = await opened();
+		expect(ledger.passwords).toEqual({ work });
+		for (const section of [{}, { "password-work": "scrypt:9,8,1,32,16" }, { "password-work": 7 }]) {
+			const refused = await assemble({
+				modules: [simulatedStore().module, usersLocal, secretHashModule],
+				config: { ...kernelConfig(), "users-local": section },
+				runtime,
+			}).catch((error: unknown) => error);
+			expect(refused, JSON.stringify(section)).toBeInstanceOf(BootRefused);
+			expect((refused as BootRefused).refusals.map((r) => r.where)).toEqual([
+				"users-local.password-work",
+			]);
+		}
+	});
+
+	it("keeps a password's hash with its identifier, again as kept, and answers conflict for another hash or none", async () => {
+		const { ledger } = await withAlice();
+		const hash = testScryptHash("correct horse");
+		expect(await ledger.keep?.("s-bob", "bob", hash)).toBe("kept");
+		expect(await ledger.keep?.("s-bob", "bob", hash)).toBe("kept");
+		expect(await ledger.verify("bob", "correct horse")).toMatchObject({
+			user: { subject: "s-bob" },
+		});
+		expect(await ledger.keep?.("s-bob", "bob", testScryptHash("correct horse"))).toBe("conflict");
+		expect(await ledger.keep?.("s-bob", "bob")).toBe("conflict");
+		// Alice is held with no password: one brought for her later is held otherwise.
+		expect(await ledger.keep?.("s-alice", "alice", hash)).toBe("conflict");
+		expect(await ledger.verify("alice", "correct horse")).toEqual({ kind: "none" });
+	});
+
+	it("reads one record and computes the work once for an identifier held with a hash, held with none, or not held", async () => {
+		const { ledger, builders, checks } = await withAlice();
+		expect(await ledger.keep?.("s-bob", "bob", testScryptHash("correct horse"))).toBe("kept");
 		const read = builders.identifiers.read;
-		let reads = 0;
+		const reads: string[] = [];
 		Object.assign(builders.identifiers, {
 			read: (key: string) => {
-				reads += 1;
+				reads.push(key);
 				return read(key);
 			},
 		});
-		for (const identifier of ["alice", "nobody"]) {
-			expect(await ledger.verify(identifier, "anything")).toEqual({ kind: "none" });
+		for (const identifier of ["bob", "alice", "nobody"]) {
+			const [readsBefore, checksBefore] = [reads.length, checks.length];
+			expect(await ledger.verify(identifier, "wrong"), identifier).toEqual({ kind: "none" });
+			expect(reads.slice(readsBefore), identifier).toEqual([identifier]);
+			expect(checks.slice(checksBefore), identifier).toEqual([work]);
 		}
-		expect(reads).toBe(0);
+	});
+
+	it("takes no hash of another work, and answers a check meeting one held unavailable", async () => {
+		const { ledger, records } = await opened();
+		const other = testScryptHash("correct horse", 11);
+		await expect(ledger.keep?.("s-bob", "bob", other)).rejects.toThrow(TypeError);
+		expect(await ledger.byIdentifier?.("bob")).toEqual({ kind: "none" });
+		// One written before the work changed.
+		expect(await records.place("carol", "s-carol", other)).toBe("placed");
+		// And one it cannot read as a hash at all.
+		expect(await records.place("dave", "s-dave", "not a hash")).toBe("placed");
+		for (const identifier of ["carol", "dave"]) {
+			const refused = await ledger
+				.verify(identifier, "correct horse")
+				.catch((error: unknown) => error);
+			expect(isUnavailable(refused), identifier).toBe(true);
+		}
 	});
 
 	it("users offers create through it, and refuses to start beside users in the settings", async () => {
@@ -158,7 +241,7 @@ describe("users-local", () => {
 				usersModule,
 				memoryUsersStores().module,
 			],
-			config: { ...kernelConfig(), users: { registered: [testUser("bob", "p")] } },
+			config: { ...kernelConfig(), ...localConfig, users: { registered: [testUser("bob", "p")] } },
 			runtime,
 		}).catch((e: unknown) => e);
 		expect(error).toBeInstanceOf(BootRefused);
@@ -197,7 +280,7 @@ describe("users-local", () => {
 		]);
 		const app = await assemble({
 			modules: [shared, usersLocal, secretHashModule, collecting],
-			config: kernelConfig(),
+			config: { ...kernelConfig(), ...localConfig },
 			runtime,
 		});
 		const eraser = app.get(seen).erasers.find((e) => e.name === "users-local");
@@ -236,8 +319,8 @@ describe("users-local", () => {
 	it("stands breaking store-write: its witness's marks are in the Core's store beside the passkeys", async () => {
 		const simulated = simulatedStore();
 		const app = await assemble({
-			modules: [simulated.module, usersLocal, promisesModule],
-			config: kernelConfig(),
+			modules: [simulated.module, usersLocal, secretHashModule, promisesModule],
+			config: { ...kernelConfig(), ...localConfig },
 			runtime,
 		});
 		const judged = app
@@ -250,8 +333,12 @@ describe("users-local", () => {
 			reason: expect.stringContaining("passkey witness"),
 		});
 		const refused = await assemble({
-			modules: [simulatedStore().module, usersLocal, promisesModule],
-			config: { ...kernelConfig(), promises: { required: [promiseNames.storeWrite] } },
+			modules: [simulatedStore().module, usersLocal, secretHashModule, promisesModule],
+			config: {
+				...kernelConfig(),
+				...localConfig,
+				promises: { required: [promiseNames.storeWrite] },
+			},
 			runtime,
 		}).catch((e: unknown) => e);
 		expect(BootRefused.is(refused)).toBe(true);
@@ -280,11 +367,19 @@ describe("users-local", () => {
 		expect(await ledger.bySubject("s-mallory")).toEqual({ kind: "none" });
 	});
 
-	it("imports through users' usersImport, the identifier and the verified email", async () => {
+	it("imports through users' usersImport, the identifier, its password's hash and the verified email", async () => {
 		const { app, ledger } = await opened();
-		const record = { subject: "s-carol", identifier: "carol", verifiedEmail: "carol@example.com" };
+		const record = {
+			subject: "s-carol",
+			identifier: "carol",
+			passwordHash: testScryptHash("correct horse"),
+			verifiedEmail: "carol@example.com",
+		};
 		expect(await app.get(usersImport).record(record)).toBe("imported");
 		expect(await ledger.byIdentifier?.("carol")).toMatchObject({ user: { subject: "s-carol" } });
+		expect(await app.get(users).verify("carol", "correct horse")).toMatchObject({
+			user: { subject: "s-carol" },
+		});
 		expect(await app.get(users).contactsOf("s-carol")).toEqual([
 			{ kind: "email", value: "carol@example.com" },
 		]);
@@ -299,15 +394,20 @@ describe("users-local", () => {
 
 	it("declares both spaces authenticated: over the memory store it boots only as the store's setting accepts", async () => {
 		const simulated = simulatedStore();
-		await assemble({ modules: [simulated.module, usersLocal], config: kernelConfig(), runtime });
+		await assemble({
+			modules: [simulated.module, usersLocal, secretHashModule],
+			config: { ...kernelConfig(), ...localConfig },
+			runtime,
+		});
 		for (const space of ["users-local.identifiers", "users-local.subjects", "users-local.marks"]) {
 			expect(simulated.declaredSpace(space).guarantees, space).toContain("authenticated");
 		}
 		const over = (accept: boolean) =>
 			assemble({
-				modules: [storeModule, usersLocal],
+				modules: [storeModule, usersLocal, secretHashModule],
 				config: {
 					...kernelConfig(),
+					...localConfig,
 					...storeConfig({ "accept-unauthenticated": accept }),
 				},
 				runtime,

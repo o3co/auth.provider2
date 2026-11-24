@@ -2,6 +2,7 @@ import { erasers } from "@mod/erasure-extensions";
 import { defineModule, optional, probes } from "@mod/kernel";
 import { passkeyWitnesses } from "@mod/passkey-witness";
 import { promiseNames, stances } from "@mod/promises";
+import { secretCheckers } from "@mod/secret-hash";
 import { type Space, spaces, store, storeControl } from "@mod/store";
 import {
 	indexSpaceOf,
@@ -24,6 +25,7 @@ import {
 	type SubjectRecord,
 	subjectSpace,
 } from "./records/records.ts";
+import { section } from "./section.ts";
 import { localWitness } from "./witness.ts";
 
 export default defineModule(
@@ -31,7 +33,8 @@ export default defineModule(
 		name: "users-local",
 		// It holds nothing in process: its records are behind the store.
 		replicaSafe: true,
-		takes: [store, optional(storeControl)],
+		section,
+		takes: [store, optional(storeControl), secretCheckers],
 	},
 	(m) => [
 		m.contribute(spaces).by(() => identifierSpace),
@@ -72,7 +75,11 @@ export default defineModule(
 				marks: await phasedRecordsIn<MarkRecord>(at(markSpace), phase, "users-local", c.refuse),
 			};
 		}),
-		m.contribute(ledgers).by(async (c) => localLedger(localRecords(await c.get(placed)), c.random)),
+		m.contribute(ledgers).by(async (c) => {
+			const work = c.section["password-work"];
+			const checker = (await c.get(secretCheckers)).checkerOf([work]);
+			return localLedger(localRecords(await c.get(placed)), c.random, { checker, work: work.work });
+		}),
 		m.contribute(passkeyWitnesses).by(async (c) => localWitness(localMarks(await c.get(placed)))),
 		// Its records and the witness are not apart from the Core's store: a store emptied or rolled back takes them.
 		m.contribute(stances).by(() => ({

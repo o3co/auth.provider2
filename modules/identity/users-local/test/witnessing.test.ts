@@ -12,6 +12,7 @@ import witnessHttp from "@mod/passkey-witness-http/module";
 import { passkeyWitnessHttpConfig } from "@mod/passkey-witness-http/testing";
 import witnessingModule from "@mod/passkey-witnessing/module";
 import { type PasskeyWitnessing, passkeyWitnessing } from "@mod/passkeys";
+import secretHashModule from "@mod/secret-hash/module";
 import { simulatedStore } from "@mod/store/testing";
 import { tlsOptionsForTests } from "@mod/tls-options/testing";
 import { describe, expect, it } from "vitest";
@@ -32,7 +33,7 @@ const httpConfig = {
 	}),
 };
 const witnesses: Record<string, () => Module[]> = {
-	"@mod/users-local": () => [simulatedStore().module, usersLocal],
+	"@mod/users-local": () => [simulatedStore().module, usersLocal, secretHashModule],
 	"@mod/passkey-witness-http": () => [outboundModule, tlsOptionsForTests, witnessHttp],
 };
 /** passkey-witnessing over the witness modules given, as combinations brings it with passkeys. */
@@ -41,8 +42,11 @@ const boot = (modules: readonly Module[]) =>
 		modules: [...modules, witnessingModule, collecting],
 		config: {
 			...kernelConfig(),
-			// The outside ledger's sections only where it is composed.
+			// Each ledger's section only where it is composed.
 			...(modules.includes(witnessHttp) ? httpConfig : {}),
+			...(modules.includes(usersLocal)
+				? { "users-local": { "password-work": "scrypt:10,8,1,32,16" } }
+				: {}),
 		},
 		runtime: quietRuntime(),
 	});
