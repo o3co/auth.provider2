@@ -17,8 +17,7 @@
 - `Ring` (`authority` or `core`), `Header`, `Prepared`, `Signed`, `Read`, `Sealed`, `Opened`, `Powers`, `Published`; for adapters, `KeyHolder`, `Held`, `SignAnswer`, `AgreeAnswer`.
 - `accessTokenSigning`: `prepare()` and `sign(prepared, bytes)` an access token (`at+jwt`) on the authority's ring, and `verify(token)`: the one way to either, as `keys` refuses its type.
 - `./holder`, kept for the adapters its `takenBy` names: `keyHolders`, the one holder (exactly one: none, or two, refuses boot, saying to compose one adapter of the keys axis).
-- Outside material (internal module `material`): `publicJwk`, `publicPem` (`withForm`), `thumbprint`, `verifiesUnder`, `verifyAlgorithms` (`VerifyAlgorithm`), `isVerifyAlgorithm`, `publicMembers`, `isCanonicalJws`, `Jwk`, `PemForm`.
-- Secret settings (internal module `secret`): `secretBytes` (exactly or at least n) and `bearerToken` (at least n).
+- Outside material (internal module `material`): `publicJwk`, `publicPem` (`withForm`), `thumbprint`, `verifiesUnder`, `verifyAlgorithms` (`VerifyAlgorithm`), `isVerifyAlgorithm`, `publicMembers`, `isCanonicalJws`, `Jwk`, `PemForm`; secret settings (internal module `secret`): `secretBytes` (exactly or at least n) and `bearerToken` (at least n).
 - Operator section (internal module `rings`): `authority` (`signing`, `next`, `previous` with `expires-at`), `core` (`generation`, `keys`, one for each generation) and `sealing`, each a `kid` and the signing ones an `alg`.
 - `./testing`: `keysConfig` (the section with ES256 keys in both rings and a sealing key) and `testHolder` (a module holding those keys and any given, in process).
 
