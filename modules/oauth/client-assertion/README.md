@@ -17,7 +17,7 @@
   - Or `jwks-uri`: where the client publishes its key set, an https URL (http only where `outbound` allows plain http), as `url-setting` takes it; never beside written keys. A registered client's `jwks-uri` that `outbound`'s policy refuses refuses boot, with the keys to set (`outbound.refusals`).
   - `accept-loose-audience` (default false): also takes the client's assertions for a loose audience, below. A lasting setting, set by client for one whose library names the token endpoint.
   - Any other key is refused at boot.
-- `clientAssertion`: `verifiedOf` (an authentication's `proof`, its client) → the key its assertion was verified with (`VerifiedKey`: the client, the JWK as its source holds it, its JWK SHA-256 thumbprint, and the client's registry version where it has one); none for anything this module did not make, or another client's.
+- `clientAssertion`: `verifiedOf` (an authentication's `proof`, its client) → the key its assertion was verified with (`VerifiedKey`: the client, the JWK as its source holds it, its JWK SHA-256 thumbprint, the client's registry version where it has one, and `written` for a key written in its record, never one at its `jwks-uri`); none for anything this module did not make, or another client's.
   - `verifySignedBy` (a client, a JWT, a `typ`) → its claims, or why not: signed by one of the client's keys, written or at its `jwks-uri`, under `algorithms`, `clock-skew` and `max-lifetime`, its `typ` the one asked; unavailable while the key set cannot be had. Every other claim is the caller's.
 - Store interface for spent assertions, `spentAssertions`: save a name for a lifetime, answering `created` or `exists`.
   - Requirements (`spentAssertionsNeeds`): no eviction, survives a crash, never rolled back by failover.

@@ -17,6 +17,8 @@ export interface VerifiedKey {
 	readonly key: Jwk;
 	readonly thumbprint: string;
 	readonly version?: number;
+	/** Set where the key is one written in the client's record, never one fetched from its `jwks-uri`. */
+	readonly written?: true;
 }
 
 /** What the client's keys decide, for the modules that ask of a client's key or signature. */

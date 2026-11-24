@@ -129,11 +129,14 @@ it("answers the key of the set its assertion was verified with, naming the clien
 	const c = await boot({ "jwks-uri": jwksUri() });
 	const answer = await authenticate(c);
 	if (answer.kind !== "authenticated") throw new Error(answer.reason);
-	expect(c.checks.verifiedOf(answer.proof, answer.client)).toEqual({
+	// Fetched from the client's key set, so not a key written in its record.
+	const verified = c.checks.verifiedOf(answer.proof, answer.client);
+	expect(verified).toEqual({
 		client: "app",
 		key: publicJwk(ec.publicKey, "ec"),
 		thumbprint: await thumbprint(publicJwk(ec.publicKey, "ec")),
 	});
+	expect(verified?.written).toBeUndefined();
 });
 
 it("refuses a key its jwks-uri does not publish [rfc7523-3-u] [rfc7521-5.2-n]", async () => {

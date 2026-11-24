@@ -90,8 +90,9 @@ export function assertionMethod(p: Parts): AuthMethod {
 			}
 			const section = client.section(clientKeys);
 			const loose = section["accept-loose-audience"];
-			// A verifier over this client's written keys, under the algorithms the operator takes.
-			const verifier = p.jwt.verifierOf(keysOf(section), {
+			const source = keysOf(section);
+			// A verifier over this client's keys, under the algorithms the operator takes.
+			const verifier = p.jwt.verifierOf(source, {
 				algorithms: p.algorithms,
 				skewMs: p.skewMs,
 				maxLifetimeMs: p.maxLifetimeMs,
@@ -121,7 +122,10 @@ export function assertionMethod(p: Parts): AuthMethod {
 			const saved = await p.spent.save(spentName(client.id, assertion.jti), lifetimeMs);
 			if (saved === "exists") return refuse("used before");
 			// What the verification proves, for a grant to bind its token to that very key.
-			return verified.kind === "valid" ? { proof: await proofOf(verified.key, client) } : undefined;
+			const written = "inline" in source;
+			return verified.kind === "valid"
+				? { proof: await proofOf(verified.key, client, written) }
+				: undefined;
 		},
 	};
 }

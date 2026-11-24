@@ -135,10 +135,12 @@ describe("the key a client's assertion was verified with", () => {
 		const answer = await c.authenticate(presented(await assertion(ec.privateKey, "j1")));
 		if (answer.kind !== "authenticated") throw new Error(answer.reason);
 		const verified = checks.verifiedOf(answer.proof, answer.client);
+		// A key written in the client's record, not fetched from a key set.
 		expect(verified).toEqual({
 			client: "app",
 			key: jwk(ec.publicKey, { kid: "ec" }),
 			thumbprint: await thumbprint(jwk(ec.publicKey)),
+			written: true,
 		});
 		expect(Object.isFrozen(verified)).toBe(true);
 		// Read for another client, it is none: a proof is its client's alone.
