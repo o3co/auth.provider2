@@ -62,10 +62,20 @@ export function grantInputOf(parts: {
 	readonly bundle?: IssuedBundle;
 	/** What the grant's own `identify` answered with the client; none for a client that authenticated. */
 	readonly identified?: unknown;
-	readonly proof?: unknown;
+	readonly authenticated?: unknown;
 }): GrantInput {
-	const { request, client, grantType, binding, targets, issuing, told, bundle, identified, proof } =
-		parts;
+	const {
+		request,
+		client,
+		grantType,
+		binding,
+		targets,
+		issuing,
+		told,
+		bundle,
+		identified,
+		authenticated,
+	} = parts;
 	const { param, value } = readerOf(request);
 	return {
 		request,
@@ -75,7 +85,7 @@ export function grantInputOf(parts: {
 		target: (audience, within) => targets.target({ param, audience, within }),
 		...(binding ? { binding } : {}),
 		...(identified === undefined ? {} : { identified }),
-		...(proof === undefined ? {} : { proof }),
+		...(authenticated === undefined ? {} : { authenticated }),
 		...issuanceFor(issuing, grantType, binding, told, bundle),
 	};
 }
@@ -103,7 +113,10 @@ const namesOf = (names: ReadonlySet<string>) => {
 /** What the endpoint is built over, from the assembly's contracts and the grants composed. */
 export interface EndpointParts {
 	readonly clients: Clients;
-	readonly issuing: (request: HttpRequest) => Issuing;
+	readonly issuing: (
+		request: HttpRequest,
+		verified: { readonly binding?: Binding; readonly authenticated: boolean },
+	) => Issuing;
 	readonly fencing: IssuanceFencing;
 	readonly told: readonly SessionIssuance[];
 	readonly bindings: SenderBindings;
@@ -284,10 +297,15 @@ export function tokenEndpoint(parts: EndpointParts): Pick<Route, "handle" | "una
 		if (!("grant" in admission)) return admission;
 		const { grant, grantType, binding, identifiedBy } = admission;
 		client = admission.client;
+		// What the client's authentication verified; none for a client a grant identified.
+		const verified = authenticated.kind === "authenticated" ? authenticated.proof : undefined;
 		const input = grantInputOf({
 			...{ request, client, grantType, binding, targets, told, bundle },
-			issuing: issuing(request),
-			proof: authenticated.kind === "authenticated" ? authenticated.proof : undefined,
+			issuing: issuing(request, {
+				...(binding ? { binding } : {}),
+				authenticated: verified !== undefined,
+			}),
+			authenticated: verified,
 			identified: identifiedBy,
 		});
 		const outcome = await grant.handle(input);

@@ -10,16 +10,17 @@ Internal module of `token-endpoint`: the issuance bundle (A40), its owner's run 
 
 ## Offers
 - `bundleKind`: the kind of operation `token-endpoint.bundle`, a bundle (never taken over), holding no records of its own.
-- `bundling` (`BundleParts`: `transparency`, the log's digest, tokens' `admits`, `prepare` and `sign`, a fresh ground, the pause and number of looks at the judgment) → the run of one `BundleAsk` (the request and limits, the evidence, its place in the request, its root's reference) → `tokens`' answer.
-- `evidenceOf` (a request) → its DPoP proof and client assertion as sent; `flowOf` (a grant) → its subject's flow, a person's or the client's own.
+- `bundling` (`BundleParts`: `transparency`, the log's digest, tokens' `admits`, `prepare` and `sign`, a fresh ground, the pause and number of looks at the judgment) → the run of one `BundleAsk` (the request and limits, the evidence, its root's reference) → `tokens`' answer.
+- `evidenceOf` (a request, what was verified) → its DPoP proof where the token is bound by DPoP, and its client assertion where the client's authentication verified a key by one; `flowOf` (a grant) → its subject's flow, a person's or the client's own.
 
 ## Invariants
-- An op's id is the digest of the request's evidence and the bundle's place in the request; with no evidence, of a fresh ground. Its digest is its start's plaintext digest.
-- A refusal of the policies records nothing. A refusal or a failure once its start is recorded closes the op without its bundle; nothing is signed.
+- An op's id is the digest of the evidence verified; with none, of a fresh ground. Its digest is its start's plaintext digest.
+- A refusal of the policies records nothing. A refusal or a failure once its start is recorded closes the op without its bundle on a client's flow; nothing is signed.
+- On a subject's flow, closing (`rebase`) answers `notReady` until the flow is taken in to its head, and a second stage refused `prevMismatch` is answered unavailable, not rebased: neither closes nor resends there, and the op is abandoned once its lease ends, the flow held until then.
 - A refused or lost append of the bundle signs nothing. Signing that falls after the receipts appends the same bundle again, the same id and bytes, and signs again, once.
 - A refusal of the signing after the receipts hands nothing out; the bundle, left alone, is abandoned by a replica tending its flow. A replica that falls is never taken over: the request fails.
 - Only the owner's `took` answers the token; a bundle held, not taken, or not judged after its looks answers unavailable.
 - The start's content is empty, and a client's root is named only where the client's registry version is on the log.
 
 ## Depends on
-- `transparency` (the contract, the kind's shape), `transparency-wire` (a token's digest input, the preimage's evidence), `tokens` (prepare, sign), `http` (the request), `kernel` (unavailable).
+- `transparency` (the contract, the kind's shape), `transparency-wire` (a token's digest input, the preimage's evidence), `tokens` (prepare, sign), `http` (the request), `sender-binding` (the binding), `kernel` (unavailable).

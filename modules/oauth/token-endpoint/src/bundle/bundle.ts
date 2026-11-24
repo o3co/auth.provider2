@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { HttpRequest } from "@mod/http";
 import { isUnavailable, Unavailable } from "@mod/kernel";
+import type { Binding } from "@mod/sender-binding";
 import type {
 	AccessGrant,
 	AccessTokenIssuance,
@@ -23,10 +24,16 @@ export const bundleKind: OperationKind = Object.freeze({
 /** What a start record carries of its request, each as sent. */
 export type Evidence = Preimage["evidence"];
 
-/** The request's evidence: its DPoP proof and its client's assertion, where it carries them. */
-export function evidenceOf(request: HttpRequest): Evidence {
-	const proof = request.headers.get("dpop");
-	const assertion = request.fields.single("client_assertion");
+/**
+ * The request's evidence, as it was verified: its DPoP proof where it bound the token by DPoP, and
+ * its client's assertion where the client's authentication verified a key by it.
+ */
+export function evidenceOf(
+	request: HttpRequest,
+	verified: { readonly binding?: Binding; readonly authenticated: boolean },
+): Evidence {
+	const proof = verified.binding?.tokenType === "DPoP" ? request.headers.get("dpop") : undefined;
+	const assertion = verified.authenticated ? request.fields.single("client_assertion") : undefined;
 	return [
 		...(proof ? [{ form: "dpopProof" as const, value: proof }] : []),
 		...(assertion ? [{ form: "clientAssertion" as const, value: assertion }] : []),
@@ -60,8 +67,6 @@ export interface BundleAsk {
 	readonly request: IssuanceRequest;
 	readonly limits: IssueLimits;
 	readonly evidence: Evidence;
-	/** The n-th bundle of its request, from 0: its op is the request's evidence's and this. */
-	readonly nth: number;
 	readonly root?: string;
 }
 
@@ -108,8 +113,7 @@ export function bundling(parts: BundleParts) {
 		const admitted = await parts.issuance.admits(ask.request);
 		if (admitted.kind === "refused") return admitted;
 		const flow = flowOf(ask.request.grant);
-		const ground =
-			ask.evidence.length > 0 ? JSON.stringify([ask.evidence, ask.nth]) : parts.fresh();
+		const ground = ask.evidence.length > 0 ? JSON.stringify(ask.evidence) : parts.fresh();
 		const op = `start:${sha256(ground)}`;
 		const root = ask.root === undefined ? {} : { root: ask.root };
 		const start: Stage = {

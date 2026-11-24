@@ -448,15 +448,17 @@ describe("token endpoint", () => {
 				grantType: "urn:test:echo",
 				readsAmbient: "none",
 				handle: async (input) =>
-					answered(input, { proof: input.proof === proof ? "same" : String(input.proof) }),
+					answered(input, {
+						authenticated: input.authenticated === proof ? "same" : String(input.authenticated),
+					}),
 			})),
 		]);
 		const proved = client("proved", "proving", { grants: ["urn:test:echo"] });
 		const post = await serve([proving], { clients: [proved, echoClients.echo()] });
 		const by = await post({ grant_type: "urn:test:echo", proving_id: "proved" });
-		expect(by.body).toEqual({ proof: "same" });
+		expect(by.body).toEqual({ authenticated: "same" });
 		expect((await post({ grant_type: "urn:test:echo" }, "echo")).body).toEqual({
-			proof: "undefined",
+			authenticated: "undefined",
 		});
 	});
 
@@ -570,6 +572,23 @@ describe("token endpoint", () => {
 		expect(ran).toBe(3);
 	});
 
+	it("refuses a second bundle from one request as the grant's fault, answering none of it", async () => {
+		const twice = defineModule({ name: "twice", replicaSafe: false, takes: [] }, (m) => [
+			m.contribute(grants).by(() => ({
+				grantType: "urn:test:echo",
+				readsAmbient: "none",
+				handle: async (input) => {
+					await answered(input, {});
+					return answered(input, { second: true });
+				},
+			})),
+		]);
+		const post = await serve([twice], { clients: [echoClients.echo()] });
+		const answer = await post({ grant_type: "urn:test:echo" }, "echo");
+		expect(answer.status).toBe(500);
+		expect(answer.body).not.toHaveProperty("second");
+	});
+
 	it("names the claims a grant added to the tokens it issued, never their values, in the order of their names", async () => {
 		const claimed = (name: string, sets: readonly AddedClaims[]) =>
 			defineModule({ name, replicaSafe: false, takes: [] }, (m) => [
@@ -595,10 +614,7 @@ describe("token endpoint", () => {
 			]);
 		const post = await serve(
 			[
-				claimed("twice", [
-					{ "zeta.example": "z-value", "alpha.example": 1 },
-					{ "alpha.example": 2, "mid.example": true },
-				]),
+				claimed("twice", [{ "zeta.example": "z-value", "alpha.example": 1, "mid.example": true }]),
 				claimed("none", [{}]),
 			],
 			{ clients: [echoClients.echoes()] },

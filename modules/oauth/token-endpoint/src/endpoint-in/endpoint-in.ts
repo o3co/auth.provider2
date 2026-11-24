@@ -44,8 +44,8 @@ export const endpointIn = async (c: BuildContext<unknown>, composed: readonly Gr
 	});
 	return tokenEndpoint({
 		clients: await c.get(clients),
-		issuing: (request) => {
-			const evidence = evidenceOf(request);
+		issuing: (request, verified) => {
+			const evidence = evidenceOf(request, verified);
 			return {
 				admits: issuance.admits,
 				issue: (ask) => issueBundle({ ...ask, evidence }),

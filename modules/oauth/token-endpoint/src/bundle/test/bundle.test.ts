@@ -29,7 +29,6 @@ const ask: BundleAsk = {
 	request: { grant, grantType: "client_credentials" },
 	limits: {},
 	evidence,
-	nth: 0,
 };
 const sha256 = (text: string) => createHash("sha256").update(text).digest("base64url");
 const issued: Issued = {
@@ -128,20 +127,21 @@ describe("a bundle, owned by the token endpoint (A40)", () => {
 		expect(world.book.sent[1]?.stage.preimage).toMatchObject({ parent: start?.id, evidence: [] });
 	});
 
-	it("names its op after the request's evidence and its place in the request, and names its root's reference", async () => {
+	it("names its op after the evidence verified, and names its root's reference", async () => {
 		const issue = world.run(await world.replica("w1"));
 		await issue({ ...ask, root: "registry-7" });
-		await issue({ ...ask, nth: 1 });
-		const ops = records().map((r) => r.op);
-		expect(ops[0]).toBe(`start:${sha256(JSON.stringify([evidence, 0]))}`);
-		expect(ops[2]).toBe(`start:${sha256(JSON.stringify([evidence, 1]))}`);
+		expect(records()[0]?.op).toBe(`start:${sha256(JSON.stringify(evidence))}`);
 		expect(world.book.sent[0]?.stage.preimage).toMatchObject({ root: "registry-7" });
-		expect(
-			evidenceOf({ headers: new Map([["dpop", "p"]]), fields: { single: () => "a" } } as never),
-		).toEqual([
+		// Evidence is what was verified: the DPoP proof of a DPoP binding, the assertion of an authentication that verified one.
+		const request = { headers: new Map([["dpop", "p"]]), fields: { single: () => "a" } } as never;
+		const dpop = { member: "jkt", confirmation: "t", tokenType: "DPoP" };
+		expect(evidenceOf(request, { binding: dpop, authenticated: true })).toEqual([
 			{ form: "dpopProof", value: "p" },
 			{ form: "clientAssertion", value: "a" },
 		]);
+		const bearer = { member: "x5t#S256", confirmation: "t", tokenType: "Bearer" };
+		expect(evidenceOf(request, { binding: bearer, authenticated: false })).toEqual([]);
+		expect(evidenceOf(request, { authenticated: false })).toEqual([]);
 	});
 
 	it("signs nothing when its append is refused, its op closed", async () => {
@@ -210,7 +210,8 @@ describe("a bundle, owned by the token endpoint (A40)", () => {
 		const issue = world.run(await world.replica("w1"));
 		await expect(issue(ask)).rejects.toSatisfy(isUnavailable);
 		world.book.judgeOnAppend({ verdict: "held", outcome: "took" });
-		await expect(issue({ ...ask, nth: 1 })).rejects.toSatisfy(isUnavailable);
+		const other = [{ form: "dpopProof" as const, value: "another proof" }];
+		await expect(issue({ ...ask, evidence: other })).rejects.toSatisfy(isUnavailable);
 	});
 
 	it("records nothing for an issuance the policies refuse, and closes its op on a refusal once its start is recorded", async () => {

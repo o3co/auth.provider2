@@ -18,13 +18,12 @@ export interface IssuedBundle {
 
 export const bundleOf = (): IssuedBundle => ({ subjects: new Map(), added: new Set() });
 
-/** How a grant's `issue` issues: the endpoint's runs a bundle; the test caller's signs at once. `nth` counts from 0. */
+/** How a grant's `issue` issues: the endpoint's runs a bundle; the test caller's signs at once. */
 export interface Issuing {
 	readonly admits: AccessTokenIssuance["admits"];
 	issue(ask: {
 		readonly request: IssuanceRequest;
 		readonly limits: IssueLimits;
-		readonly nth: number;
 		readonly root?: string;
 	}): Promise<Issued>;
 	readonly revokeReferenced: Tokens["revokeReferenced"];
@@ -42,7 +41,7 @@ export function issuanceFor(
 	bundle: IssuedBundle = bundleOf(),
 ) {
 	const bound = binding ? { binding } : {};
-	let nth = 0;
+	let bundled = false;
 	const requestOf = (
 		grant: AccessGrant,
 		{ session, continuing }: Pick<IssuanceRequest, "session" | "continuing">,
@@ -57,6 +56,9 @@ export function issuanceFor(
 		return judged.kind === "allowed" ? judged : { kind: "refused", refusal: judged };
 	};
 	const issue: GrantInput["issue"] = async (asked, from = {}) => {
+		// One request, one bundle (A40): a second is the grant's maker's mistake.
+		if (bundled) throw new TypeError("token-endpoint: a request issues one bundle");
+		bundled = true;
 		const { session, continuing: _, ...limits } = from;
 		// Read once: tokens signs the subject the bundle notes, whatever the grant answers later.
 		const grant = { ...asked.access };
@@ -65,7 +67,6 @@ export function issuanceFor(
 		const issued = await issuing.issue({
 			request: requestOf(grant, from),
 			limits: { ...limits, ...bound },
-			nth: nth++,
 			...root,
 		});
 		if (issued.kind !== "issued") return { kind: "refused", refusal: issued } satisfies Refused;

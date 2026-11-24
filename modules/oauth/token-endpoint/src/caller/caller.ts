@@ -41,7 +41,7 @@ export interface GrantCalls {
 			/** What the grant's own `identify` answered with the client, as the endpoint hands it back. */
 			readonly identified?: unknown;
 			/** What the client's authentication verified, as the endpoint hands it on. */
-			readonly proof?: unknown;
+			readonly authenticated?: unknown;
 		},
 	): Promise<GrantOutcome>;
 }
@@ -82,13 +82,16 @@ const sentRequest = (params: Readonly<Record<string, unknown>>, kind: string): H
 };
 
 /** What the caller issues with: tokens' issuing, and its revoking by reference. */
-export type CallerTokens = Pick<AccessTokenIssuance, "admits" | "issue"> &
+export type CallerTokens = Pick<AccessTokenIssuance, "admits" | "prepare" | "sign"> &
 	Pick<Tokens, "revokeReferenced">;
 
 /** How the caller issues: signed at once, the bundle recorded nowhere (the endpoint's own step, tested there). */
 const signedAtOnce = (t: CallerTokens): Issuing => ({
 	admits: t.admits,
-	issue: ({ request, limits }) => t.issue(request, limits),
+	issue: async ({ request, limits }) => {
+		const prepared = await t.prepare(request, limits);
+		return prepared.kind === "refused" ? prepared : t.sign(prepared);
+	},
 	revokeReferenced: t.revokeReferenced,
 });
 
@@ -106,7 +109,7 @@ export function grantInput(
 		readonly request?: HttpRequest;
 		readonly targets?: TargetRule;
 		readonly identified?: unknown;
-		readonly proof?: unknown;
+		readonly authenticated?: unknown;
 	} = {},
 	told: readonly SessionIssuance[] = [],
 ): GrantInput {
@@ -116,7 +119,7 @@ export function grantInput(
 		grantType: grant.grantType,
 		binding: options.binding,
 		identified: options.identified,
-		proof: options.proof,
+		authenticated: options.authenticated,
 		targets: options.targets ?? unread,
 		issuing: signedAtOnce(issuing),
 		told,
