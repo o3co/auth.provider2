@@ -19,6 +19,7 @@
 	},
 	"devDependencies": {
 		"@mod/authority-rules": "workspace:*",
+		"@mod/sdk-core-wire": "workspace:*",
 		"vitest": "5.0.5"
 	}
 }

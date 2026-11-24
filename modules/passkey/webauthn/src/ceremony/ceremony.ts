@@ -125,7 +125,9 @@ function evidenceCheck(rp: RelyingParty): Ceremonies["verifyAssertion"] {
 			return undefined;
 		const data = clientDataOf(sent);
 		if (data?.type !== "webauthn.get" || data.challenge !== challenge) return undefined;
-		if (data.origin !== origin || frameRefusal(data, rp.topOrigins)) return undefined;
+		// The origin asked, and one the relying party lists: closed where the two settings drift.
+		if (data.origin !== origin || !rp.origins.includes(origin)) return undefined;
+		if (frameRefusal(data, rp.topOrigins)) return undefined;
 		const binding = data.tokenBinding as { status?: unknown } | undefined;
 		if (binding !== undefined && !statuses.includes(binding?.status)) return undefined;
 		const { authenticatorData, signature, clientDataJSON } = response;
@@ -133,6 +135,8 @@ function evidenceCheck(rp: RelyingParty): Ceremonies["verifyAssertion"] {
 		const authData = isoBase64URL.toBuffer(authenticatorData);
 		const { rpIdHash: named, flags } = parseAuthenticatorData(authData);
 		if (!Buffer.from(named).equals(rpIdHash) || !flags.up || !flags.uv) return undefined;
+		// Backed up yet not backup eligible, which the library refuses at assert.
+		if (flags.bs && !flags.be) return undefined;
 		const clientDataHash = createHash("sha256")
 			.update(isoBase64URL.toBuffer(clientDataJSON))
 			.digest();

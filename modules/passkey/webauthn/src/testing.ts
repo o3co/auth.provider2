@@ -45,6 +45,8 @@ export interface Twist {
 	readonly attestationObject?: (authData: Uint8Array) => Uint8Array;
 	/** Answers what a browser would refuse: the options' rules and its own limits are not checked. */
 	readonly overlook?: boolean;
+	/** The authenticator data's flags byte, made from the one it would send. */
+	readonly flags?: (flags: number) => number;
 }
 
 /** Credential creation options, as a relying party sends them in JSON. */
@@ -263,7 +265,14 @@ export function softwareAuthenticator(
 		const [id, credential] = chosen;
 		if (!settings.countless) credential.count += 1;
 		const count = twist.counter ?? credential.count;
-		const data = authData(twist.rpId ?? credential.rpId, false, verified, count);
+		const plain = authData(twist.rpId ?? credential.rpId, false, verified, count);
+		const data = twist.flags
+			? Buffer.concat([
+					plain.subarray(0, 32),
+					Buffer.from([twist.flags(plain[32] ?? 0)]),
+					plain.subarray(33),
+				])
+			: plain;
 		const signed = Buffer.concat([
 			data,
 			createHash("sha256").update(Buffer.from(clientDataJSON, "base64url")).digest(),

@@ -1,5 +1,6 @@
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import type { Checks } from "@mod/authority-rules";
+import { challengeInput } from "@mod/sdk-core-wire";
 import { cose, decodeCredentialPublicKey } from "@simplewebauthn/server/helpers";
 import { describe, expect, it } from "vitest";
 import { algorithmNames, ceremoniesFor } from "../src/ceremony/ceremony.ts";
@@ -105,6 +106,50 @@ describe("the evidence check, state-free and at once", () => {
 				testOrigin,
 			);
 			expect(evidence !== undefined, name).toBe(asserted.kind === "asserted");
+		}
+	});
+
+	it("answers none for an authenticator backed up yet not backup eligible, as assert refuses it", async () => {
+		const { authenticator, credential } = await made();
+		const { challenge, options } = asked(credential);
+		const response = authenticator.get(options, at, { flags: (f: number) => (f | 16) & ~8 });
+		const asserted = await ceremonies.assert(response, { challenge, named: true }, credential);
+		expect(asserted.kind).toBe("refused");
+		expect(
+			ceremonies.verifyAssertion(
+				JSON.stringify(response),
+				pointOf(credential),
+				challenge,
+				testOrigin,
+			),
+		).toBeUndefined();
+	});
+
+	it("answers none for an origin the relying party does not list, even where the client data names it", async () => {
+		const { authenticator, credential } = await made();
+		const { challenge, options } = asked(credential);
+		const evil = "https://evil.example";
+		const response = authenticator.get(options, { origin: evil }, { overlook: true });
+		expect(
+			ceremonies.verifyAssertion(JSON.stringify(response), pointOf(credential), challenge, evil),
+		).toBeUndefined();
+	});
+
+	it("verifies an assertion over a statement as the rules ask it: the digest of the get challenge input", async () => {
+		const { authenticator, credential } = await made();
+		const statement = "eyJhbGciOiJFUzI1NiJ9.eyJzaWQiOiJzIn0.c2ln";
+		const digest = (text: string) => createHash("sha256").update(text).digest("base64url");
+		const challenge = digest(challengeInput(statement, "get"));
+		const options = ceremonies.request(challenge, [credential]) as RequestOptions;
+		const assertion = JSON.stringify(authenticator.get(options, at));
+		const point = pointOf(credential);
+		expect(ceremonies.verifyAssertion(assertion, point, challenge, testOrigin)).toEqual({
+			credential: credential.id,
+		});
+		const create = digest(challengeInput(statement, "create"));
+		const other = digest(challengeInput(`${statement}x`, "get"));
+		for (const c of [create, other]) {
+			expect(ceremonies.verifyAssertion(assertion, point, c, testOrigin)).toBeUndefined();
 		}
 	});
 

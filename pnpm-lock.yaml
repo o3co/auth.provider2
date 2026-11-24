@@ -1187,6 +1187,9 @@ importers:
       '@mod/authority-rules':
         specifier: workspace:*
         version: link:../../foundation/authority-rules
+      '@mod/sdk-core-wire':
+        specifier: workspace:*
+        version: link:../../wire/sdk-core-wire
       vitest:
         specifier: 5.0.5
         version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(vite@8.3.3(@types/node@26.6.5)(yaml@2.9.1))
