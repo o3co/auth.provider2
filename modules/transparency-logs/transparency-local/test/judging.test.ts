@@ -95,4 +95,31 @@ describe("transparency-local's judgment (j0)", () => {
 		const elsewhere = await approval(world, flow, key, { now: clock.now(), parent });
 		expect((await placed(world, elsewhere))?.finding?.verdict).toBe("forged");
 	});
+
+	it("judges forged a client's start and bundle, as the rules hold no op of a client's flow yet (KG-07)", async () => {
+		const world = await boot();
+		const flow = { of: "client", id: "c1" } as const;
+		const start = await world.log.append({
+			kind: "start",
+			flow,
+			op: "cc1",
+			stage: 1,
+			last: false,
+			preimage: { v: 1, parent: "a1", evidence: [], content: { via: "code" } },
+		});
+		if (start.result !== "accepted") throw new Error(start.refusal);
+		const bundle = await world.log.append({
+			kind: "bundle",
+			flow,
+			op: "cc1",
+			stage: 2,
+			last: true,
+			tokens: [{ frame: "accessToken", digest: "a".repeat(43) }],
+			preimage: { v: 1, parent: start.id, root: "a1", evidence: [], content: { via: "code" } },
+		});
+		if (bundle.result !== "accepted") throw new Error(bundle.refusal);
+		for (const position of [start.position, bundle.position]) {
+			expect((await world.log.at(flow, position))?.finding?.verdict).toBe("forged");
+		}
+	});
 });
