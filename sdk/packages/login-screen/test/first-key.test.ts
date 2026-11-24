@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import {
 	canonicalText,
-	continuationInput,
+	continuation,
 	hpke,
 	keyThumbprintInput,
 	purposes,
@@ -264,7 +264,12 @@ describe("firstKey.continuation", () => {
 		if ("error" in signed) throw new Error(signed.error);
 		const signature = Buffer.from(signed.signature, "base64url");
 		expect(signature).toHaveLength(64);
-		const input = continuationInput(await digest(creationCompact), 1, await digest(response));
+		const input = continuation.of(
+			"register",
+			await digest(creationCompact),
+			1,
+			await digest(response),
+		);
 		const publicKey = await crypto.subtle.importKey(
 			"jwk",
 			{ ...keys.eSig },

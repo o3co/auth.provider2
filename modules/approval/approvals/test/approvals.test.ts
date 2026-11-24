@@ -1,5 +1,5 @@
 import { defineModule } from "@mod/kernel";
-import { challengeInput, continuationInput, hpke, typs } from "@mod/sdk-core-wire";
+import { challengeInput, continuation, hpke, typs } from "@mod/sdk-core-wire";
 import { type Stage, transparency, transparencyLog } from "@mod/transparency";
 import { describe, expect, it } from "vitest";
 import { approvalKind, deciding } from "../src/completion/completion.ts";
@@ -265,7 +265,7 @@ describe("a continuation", () => {
 				hash: c.hash,
 				seq,
 				body,
-				signature: signature ?? keys.signs(continuationInput(c.hash, seq, sha256(body))),
+				signature: signature ?? keys.signs(continuation.of("register", c.hash, seq, sha256(body))),
 				step: async () => {
 					runs += 1;
 					return { reserved: `${body}-${runs}` };
@@ -286,7 +286,7 @@ describe("a continuation", () => {
 		expect(runs).toBe(1);
 		expect(await step(1, "b2")).toEqual({ kind: "refused", reason: "seq" });
 		expect(await step(3, "b3")).toEqual({ kind: "refused", reason: "seq" });
-		const other = screenKeys().signs(continuationInput(c.hash, 2, sha256("b2")));
+		const other = screenKeys().signs(continuation.of("register", c.hash, 2, sha256("b2")));
 		expect(await step(2, "b2", other)).toEqual({ kind: "refused", reason: "signature" });
 		expect(await step(2, "b2")).toMatchObject({
 			kind: "continued",
@@ -315,7 +315,7 @@ describe("a continuation", () => {
 			by: "s",
 		});
 		if (c.kind !== "issued") throw new Error(c.reason);
-		const signature = keys.signs(continuationInput(c.hash, 1, sha256("b1")));
+		const signature = keys.signs(continuation.of("register", c.hash, 1, sha256("b1")));
 		let release = () => {};
 		const held = new Promise<void>((resolve) => {
 			release = resolve;
@@ -330,7 +330,7 @@ describe("a continuation", () => {
 		});
 		await new Promise((resolve) => setTimeout(resolve, 10));
 		expect(await call(async () => "second")).toEqual({ kind: "refused", reason: "pending" });
-		const next = keys.signs(continuationInput(c.hash, 2, sha256("b2")));
+		const next = keys.signs(continuation.of("register", c.hash, 2, sha256("b2")));
 		const two = await w.approvals.continue({
 			hash: c.hash,
 			seq: 2,

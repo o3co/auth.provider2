@@ -1,5 +1,5 @@
 import { createPublicKey, verify, type webcrypto } from "node:crypto";
-import { continuationInput, type SigningKey } from "@mod/sdk-core-wire";
+import { continuation, type SigningKey } from "@mod/sdk-core-wire";
 import type { ApprovalStore, Continued, StepResult } from "../contract.ts";
 import { recordOf, type StatementRecord, sha256, stored } from "../statement/statement.ts";
 
@@ -74,7 +74,7 @@ export function continuationsOver(p: {
 		if (!r) return { kind: "refused", reason: "unknown" };
 		if (!continued.has(r.purpose)) return { kind: "refused", reason: "purpose" };
 		const body = sha256(q.body);
-		if (!signedBy(r.e_sig, continuationInput(q.hash, q.seq, body), q.signature))
+		if (!signedBy(r.e_sig, continuation.of("register", q.hash, q.seq, body), q.signature))
 			return { kind: "refused", reason: "signature" };
 		const answered = (x: StatementRecord | undefined, again: boolean): Continued | undefined =>
 			x?.seq === q.seq && x.body === body && x.result !== undefined

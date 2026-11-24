@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
 	canonicalText,
 	challengeInput,
-	continuationInput,
+	continuation,
 	firstKey,
 	hpke,
 	itemsFromJar,
@@ -417,7 +417,28 @@ describe("the inputs a hash or a signature covers", () => {
 			'{"e_enc":"e","e_sig":{"x":"x","y":"y"},"nonce":"n","purpose":"first-key/start"}',
 		);
 		expect(firstKey.aad("mail", "n", "e", key)).not.toBe(aad);
-		expect(continuationInput("h", 1, "b")).toBe('{"body":"b","h":"h","seq":1,"stage":"register"}');
+		expect(continuation.of("register", "h", 1, "b")).toBe(
+			'{"body":"b","h":"h","seq":1,"stage":"register"}',
+		);
+	});
+
+	it("signs each stage of a continuation apart, as ES256's raw r||s, and reads a delete's and a rename's body strict", () => {
+		expect(continuation.stages).toEqual(["register", "delete", "rename"]);
+		const inputs = continuation.stages.map((stage) => continuation.of(stage, "h", 1, "b"));
+		expect(new Set(inputs).size).toBe(3);
+		expect(continuation.signature).toEqual({
+			alg: "ES256",
+			form: "r||s",
+			over: "UTF-8 of continuation.of",
+		});
+		const { delete: del, rename } = continuation.bodies;
+		expect(del.safeParse({ credential_id: "c1" }).success).toBe(true);
+		expect(del.safeParse({ credential_id: "c1", label: "x" }).success).toBe(false);
+		expect(rename.safeParse({ credential_id: "c1", label: "Laptop" }).success).toBe(true);
+		for (const label of ["", "x".repeat(65), "a\u202eb", "a\nb"])
+			expect(rename.safeParse({ credential_id: "c1", label }).success, JSON.stringify(label)).toBe(
+				false,
+			);
 	});
 
 	it("holds every word frozen, and names each sealing's info apart", () => {

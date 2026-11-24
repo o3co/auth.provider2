@@ -1,6 +1,6 @@
 import {
 	type CreationPayload,
-	continuationInput,
+	continuation as continued,
 	hpke,
 	keyThumbprintInput,
 	type PossessionPayload,
@@ -186,7 +186,12 @@ async function continuation(
 	const { e_enc, e_sig } = creation.statement;
 	if (!namesKeys(keys, e_enc, e_sig)) return { error: "keys" };
 	if (!Number.isSafeInteger(seq) || seq < 1) return { error: "sequence" };
-	const input = continuationInput(await digest(creation.compact), seq, await digest(response));
+	const input = continued.of(
+		"register",
+		await digest(creation.compact),
+		seq,
+		await digest(response),
+	);
 	const signature = await crypto.subtle.sign(
 		{ name: "ECDSA", hash: "SHA-256" },
 		keys.signing.privateKey,

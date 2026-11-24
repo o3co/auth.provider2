@@ -436,6 +436,26 @@ export const firstKey = Object.freeze({
 		canonicalText({ purpose: "first-key/recover", nonce, digest }),
 });
 
-/** What a registration's continuation signs: the statement's hash, the stage, the sequence and the response's hash. */
-export const continuationInput = (statementHash: string, seq: number, responseHash: string) =>
-	canonicalText({ h: statementHash, stage: "register", seq, body: responseHash });
+const continuationStages = Object.freeze(["register", "delete", "rename"] as const);
+export type ContinuationStage = (typeof continuationStages)[number];
+
+/**
+ * A statement's continuation (§C.2, §C.6): its stages; what E_sig signs for one (`of`: the
+ * statement's hash, the stage, the sequence and the body's hash, the same bytes for `register` as
+ * before the stages were named); how it signs (`signature`: ES256's raw r||s over `of`'s UTF-8); and
+ * the bodies of a delete and a rename, whose canonical text's SHA-256 is the body's hash.
+ */
+export const continuation = Object.freeze({
+	stages: continuationStages,
+	of: (stage: ContinuationStage, statementHash: string, seq: number, bodyHash: string) =>
+		canonicalText({ h: statementHash, stage, seq, body: bodyHash }),
+	signature: Object.freeze({
+		alg: "ES256",
+		form: "r||s",
+		over: "UTF-8 of continuation.of",
+	} as const),
+	bodies: Object.freeze({
+		delete: z.object({ credential_id: id }).strict(),
+		rename: z.object({ credential_id: id, label }).strict(),
+	}),
+});
