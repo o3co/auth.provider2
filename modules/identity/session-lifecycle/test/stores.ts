@@ -28,6 +28,20 @@ export function memoryStores() {
 	};
 	/** Subjects erased: a session saved, or a listing added, for one is answered `erased`, as a Store that erases does. */
 	const erased = { sessions: new Set<string>(), listed: new Set<string>() };
+	/** Told when a pass over the closing list ends, as each sweep makes one: the next ending's waiters. */
+	let passEnded: (() => void)[] = [];
+	const closings = {
+		...kept.deferred,
+		each: async (...args: Parameters<typeof kept.deferred.each>) => {
+			try {
+				return await kept.deferred.each(...args);
+			} finally {
+				const told = passEnded;
+				passEnded = [];
+				for (const tell of told) tell();
+			}
+		},
+	};
 	/** The writes that take effect once more and then answer Unavailable, as a place whose answer was lost. */
 	const lost = new Set<"sessions.save" | "listed.add">();
 	const answered = async <T>(write: "sessions.save" | "listed.add", done: Promise<T>) => {
@@ -50,7 +64,7 @@ export function memoryStores() {
 					update,
 				});
 			}),
-			m.provide(closingList).by(() => down.closing.wrap(kept.deferred)),
+			m.provide(closingList).by(() => down.closing.wrap(closings)),
 			m.provide(subjectSessions).by(async (c) => {
 				const sets = kept.keyedSets(await c.get(sessionsPerSubject));
 				return down.listed.wrap({
@@ -67,5 +81,7 @@ export function memoryStores() {
 	const members = (subject: string) => kept.keyedSets(1).members(subject);
 	/** The handles pushed out of a subject's listing and not settled yet, read past the switch. */
 	const awaiting = (subject: string) => kept.keyedSets(1).awaiting(subject);
-	return { module, kept, down, lost, erased, members, awaiting };
+	/** The end of the next pass over the closing list: a sweep's, whatever the clock. */
+	const nextPass = () => new Promise<void>((resolve) => passEnded.push(resolve));
+	return { module, kept, down, lost, erased, members, awaiting, nextPass };
 }

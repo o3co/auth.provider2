@@ -15,8 +15,9 @@ import { revocations, subjectRevocation } from "@mod/subject-revocation";
 import revocationModule from "@mod/subject-revocation/module";
 import { subjectRevocationStandIn } from "@mod/subject-revocation/testing";
 import revocationStore from "@mod/subject-revocation-store/module";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import sessionLifecycle from "../src/module.ts";
+import { section } from "../src/section.ts";
 import type { StoredSession } from "../src/store.ts";
 import { type SessionLifecycleSettings, sessionLifecycleConfig } from "../src/testing.ts";
 import { memoryStores } from "./stores.ts";
@@ -38,11 +39,21 @@ const facts = (subject = "alice"): LoginFacts => ({
 /** The handles the stores list under the subject, sorted. */
 const listed = async (stores: ReturnType<typeof memoryStores>, subject: string) =>
 	(await stores.members(subject)).map(({ member }) => member).sort();
-const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-/** Long enough for one sweep at "sweep-interval": "1s". */
-const oneSweep = () => pause(1300);
-/** Long enough for a whole sweep to start and finish after the clock moves. */
-const nextSweep = () => pause(2300);
+/** Goes round the event loop until `ready`, as the work it waits on is under way: no time is waited out. */
+const until = async (ready: () => boolean) => {
+	while (!ready()) await new Promise((resolve) => setImmediate(resolve));
+};
+/** The sweep of the composition booted last: its interval run on a fake clock, waited on to its end. */
+let sweepOnce = async () => {};
+/** Starts that sweep, its interval run on the fake clock, not waiting for its end. */
+let sweepStart = async () => {};
+/** One whole sweep, started and finished. */
+const oneSweep = () => sweepOnce();
+/** One whole sweep, started and finished after the clock moves. */
+const nextSweep = () => sweepOnce();
+afterEach(() => {
+	vi.useRealTimers();
+});
 const configWith = (settings: Partial<SessionLifecycleSettings> = {}) => ({
 	...kernelConfig(),
 	...sessionLifecycleConfig({ "sessions-per-subject": 50, ...settings }),
@@ -80,7 +91,18 @@ async function boot(
 		config: configWith(settings),
 		runtime: quietRuntime({ clock: { now: () => now }, ...parts }),
 	});
+	// The sweep's interval on a fake clock, so a test runs a sweep when it says and waits for its end.
+	vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
 	await app.start();
+	const sweepMs = section.parse(configWith(settings)["session-lifecycle"])["sweep-interval"] * 1000;
+	sweepStart = async () => {
+		await vi.advanceTimersByTimeAsync(sweepMs);
+	};
+	sweepOnce = async () => {
+		const ended = stores.nextPass();
+		await sweepStart();
+		await ended;
+	};
 	const s = app.get(sessions);
 	/** A login's session handle. */
 	const login = async (subject = "alice", given: Partial<LoginFacts> = {}) =>
@@ -389,7 +411,8 @@ describe("session closing", () => {
 		const gate = Promise.withResolvers<void>();
 		closer.gate = gate.promise;
 		const closing = s.close(handle);
-		await pause(10);
+		// The close has reached its participant, which holds at the gate.
+		await until(() => closer.calls > 0);
 		expect(closer.calls).toBe(1);
 		expect((await s.entryOf(handle)).kind).toBe("absent");
 		gate.resolve();
@@ -414,7 +437,8 @@ describe("session closing", () => {
 		const gate = Promise.withResolvers<void>();
 		closer.gate = gate.promise;
 		const first = s.close(handle);
-		await pause(10);
+		// The close has reached its participant, which holds at the gate.
+		await until(() => closer.calls > 0);
 		closer.gate = undefined;
 		expect((await s.close(handle)).kind).toBe("closed");
 		closer.failing = true;
@@ -448,7 +472,8 @@ describe("session closing", () => {
 		closer.gate = gate.promise;
 		closer.failing = true;
 		const first = s.close(handle);
-		await pause(10);
+		// The close has reached its participant, which holds at the gate.
+		await until(() => closer.calls > 0);
 		const closed = stored({
 			format: 1,
 			state: "closed",
@@ -613,7 +638,7 @@ describe("session closing", () => {
 		await nextSweep();
 		expect(failures()).toHaveLength(2);
 		await app.stop(1000);
-	}, 15_000);
+	});
 
 	it("counts a closing's age afresh once a sweep finds it finished, when its record cannot be read again", async () => {
 		const recorded = recordingLog();
@@ -698,12 +723,22 @@ describe("session closing", () => {
 		const gate = Promise.withResolvers<void>();
 		closer.gate = gate.promise;
 		now += 2000;
-		await oneSweep();
+		// The sweep under way, held at the gate in its first closing.
+		const calls = closer.calls;
+		await sweepStart();
+		await until(() => closer.calls > calls);
+		// Another interval while it holds: no second sweep overlaps it.
+		const held = closer.calls;
+		await sweepStart();
+		expect(closer.calls).toBe(held);
 		const stopping = app.stop(5000);
 		closer.gate = undefined;
 		gate.resolve();
 		await stopping;
 		expect(closer.done).toHaveLength(1);
+		// Another interval once stopped: no sweep runs again.
+		await sweepStart();
+		expect([closer.calls, closer.done.length]).toEqual([held, 1]);
 	});
 
 	it("goes on with the other pending closings when one fails in a sweep", async () => {
