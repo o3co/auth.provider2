@@ -27,10 +27,13 @@ import dpop from "../src/module.ts";
 import { type SpentProofs, spentProofs } from "../src/store.ts";
 
 let shift = 0;
+/** When a test sets it, the clock stands at it and only the test's shifts move it. */
+let still: number | undefined;
 afterEach(() => {
 	shift = 0;
+	still = undefined;
 });
-const runtime = quietRuntime({ clock: { now: () => Date.now() + shift } });
+const runtime = quietRuntime({ clock: { now: () => (still ?? Date.now()) + shift } });
 const holder = generateKeyPairSync("ed25519");
 /** The Front's origin, where the endpoints are named, and the issuer, unless a test sets another. */
 const issuer = "https://as.example";
@@ -275,6 +278,8 @@ describe("dpop", () => {
 	});
 
 	it("keeps a proof spent past the widest window, so one widened on the same store takes it no more [guarantee-5-e]", async () => {
+		// Its edges are a second wide: the clock stands still, so a busy host's boots don't use that second.
+		still = Date.now();
 		const spent = spentInMemory();
 		const at = async (window: string, dpopProof: string) =>
 			(await boot({ "proof-window": window, nonce: { required: "never" } }, spent))
