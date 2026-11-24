@@ -187,6 +187,29 @@ describe("passkeys", () => {
 		).toHaveProperty("reservation");
 	});
 
+	it("keeps the current generation's mark where a late settle's old mark lands between another's withdraw and mark", async () => {
+		const witnessing = memoryWitnessing();
+		const w = await world({ modules: [witnessing.module] });
+		await w.register();
+		expect(await w.keys.settle("s1")).toBe(true);
+		// A settle reads the keys at generation 0; its mark waits.
+		const goLate = witnessing.hold();
+		const late = w.keys.settle("s1");
+		w.log.boundary(flow);
+		await w.t.tend(flow);
+		await w.register("s1", true, w.auth, undefined, 1);
+		// The new key's settle withdraws below 1, then its mark waits too.
+		const goNew = witnessing.hold();
+		const settled = w.keys.settle("s1");
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		// The late mark of 0 lands first, then the new mark, then the late settle reads again.
+		goLate();
+		goNew();
+		expect(await settled).toBe(true);
+		await late;
+		expect(witnessing.marks.get("s1")).toBe(1);
+	});
+
 	it("withdraws, at the next settle, a mark of an old generation a settle stopped after setting", async () => {
 		const witnessing = memoryWitnessing();
 		const w = await world({ modules: [witnessing.module] });

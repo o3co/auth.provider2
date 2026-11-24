@@ -126,13 +126,13 @@ export const registrations = contract<Registrations>("passkeys.registrations", {
 export interface PasskeyWitnessing {
 	/** Whether the subject carries a mark, whichever generation set it. */
 	marked(subject: string): Promise<boolean>;
-	/** Sets the mark for `generation` unless one is set. */
+	/** Sets the mark for `generation` unless one of that generation or a later is set; one of a generation before is replaced. */
 	mark(subject: string, generation: number): Promise<void>;
 	/** Withdraws any mark of a generation before `generation`. */
 	withdraw(subject: string, generation: number): Promise<void>;
 }
 
-/** At most one; with none, the keys alone tell, and a passkey witness composed refuses boot. */
+/** At most one; with none (composed by hand), the keys alone tell, and a passkey witness composed refuses boot. */
 export const passkeyWitnessing = extensionPoint<PasskeyWitnessing>("passkeys.witnessing", {
 	multiplicity: "many",
 });

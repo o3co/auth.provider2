@@ -289,7 +289,8 @@ export function memoryCredentials() {
 }
 
 /**
- * A witnessing in memory: one mark per subject, set for a key generation. `hold` makes the next mark
+ * A witnessing in memory: one mark per subject, set for a key generation, a mark of a generation
+ * before replaced. `hold` makes the next mark
  * wait until the test lets it go on.
  */
 export function memoryWitnessing() {
@@ -301,7 +302,8 @@ export function memoryWitnessing() {
 			const waiting = held;
 			held = undefined;
 			await waiting;
-			if (!marks.has(subject)) marks.set(subject, generation);
+			// A mark of a generation before is replaced; one of this or a later stays.
+			if ((marks.get(subject) ?? -1) < generation) marks.set(subject, generation);
 		},
 		withdraw: async (subject, generation) => {
 			if ((marks.get(subject) ?? generation) < generation) marks.delete(subject);
@@ -391,12 +393,18 @@ export async function world(
 		return t.step({ flow, own: op });
 	};
 	/** A key registered for `subject` from the reservation to the Step; `by` the key that approved it. */
-	const register = async (subject = "s1", first = true, a = auth, approver?: string) => {
+	const register = async (
+		subject = "s1",
+		first = true,
+		a = auth,
+		approver?: string,
+		generation = 0,
+	) => {
 		// A key that is not the first is approved by one the subject holds.
 		const held = frames.value(subject, "keys") as { keys: Record<string, unknown> } | undefined;
 		const by = first ? undefined : (approver ?? Object.keys(held?.keys ?? {})[0]);
 		const credential = await created(subject, a);
-		const reserved = await reserve({ subject, credential, first });
+		const reserved = await reserve({ subject, credential, first, generation });
 		if (!("reservation" in reserved)) throw new Error(reserved.refused);
 		const shown = asserting([credential], a);
 		const verified = await regs.verifyPending({ subject, ...reserved, ...shown });
