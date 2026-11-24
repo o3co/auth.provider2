@@ -18,9 +18,9 @@ export async function proofOf(key: Jwk, client: Client): Promise<VerifiedKey> {
 	return proof;
 }
 
-/** A proof this module made, for the client given where one is; none for anything else. */
-export const verifiedOf = (proof: unknown, client?: Client): VerifiedKey | undefined => {
+/** A proof this module made, for the client it verified; none for anything else. */
+export const verifiedOf = (proof: unknown, client: Client): VerifiedKey | undefined => {
 	if (typeof proof !== "object" || proof === null || !made.has(proof)) return undefined;
 	const verified = proof as VerifiedKey;
-	return client === undefined || verified.client === client.id ? verified : undefined;
+	return verified.client === client.id ? verified : undefined;
 };

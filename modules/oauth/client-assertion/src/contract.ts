@@ -24,9 +24,9 @@ export interface ClientAssertion {
 	/**
 	 * The key an authentication by this module's assertion was verified with, from its `proof` as
 	 * `clients` carries it, for the client it verified; none for any other value, a proof of another
-	 * method's, one made elsewhere, or one of another client. `client` is optional while its readers move.
+	 * method's, one made elsewhere, or one of another client.
 	 */
-	verifiedOf(proof: unknown, client?: Client): VerifiedKey | undefined;
+	verifiedOf(proof: unknown, client: Client): VerifiedKey | undefined;
 	/**
 	 * A JWT signed by one of the client's keys, written or at its jwks-uri, under the operator's
 	 * algorithms, clock allowance and longest lifetime, its header's `typ` the one asked: its claims,
