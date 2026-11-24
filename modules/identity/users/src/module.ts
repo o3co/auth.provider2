@@ -35,11 +35,13 @@ const waits = z
 			.int()
 			.min(0)
 			.prefault(3)
-			.describe("Failed checks of one identifier in a row before its checks wait."),
+			.describe(
+				"Failed checks of one identifier, until they are forgotten, before its checks wait.",
+			),
 		first: waitMs("1s").describe("The first wait; each further failure doubles it."),
 		longest: waitMs("30s").describe("The longest wait."),
 		forget: waitMs("15m").describe(
-			"How long a run of failures stays quiet before it is forgotten.",
+			"How long an identifier goes with no failure before its failures are forgotten.",
 		),
 	})
 	.refine((w) => w.first <= w.longest, { message: "first is longer than longest", path: ["first"] })

@@ -108,7 +108,10 @@ export interface Contact {
 }
 
 export interface Users {
-	/** Takes the same work whether or not the user exists; throws Unavailable if the ledger fails. */
+	/**
+	 * Takes the same work whether or not the user exists; throws Unavailable if the ledger fails, or
+	 * where the identifier's checks are queued past their bound.
+	 */
 	verify(identifier: string, password: string): Promise<Verified>;
 	bySubject(subject: string): Promise<BySubject>;
 	/** The user holding the identifier, matched exactly; none for an empty one. Throws Unavailable if the ledger fails. */

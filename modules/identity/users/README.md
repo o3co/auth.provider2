@@ -12,7 +12,7 @@
 - `claimedContacts`, `verifiedContact` (subject, `{ kind: "email", value }`) and `contactsOf`.
 - Extension point `ledgers`: a user ledger (verification, user by subject or unanswerable, by identifier, and optionally a create and an import, `keep`), which takes the same work for an unknown identifier as for a known one.
 - Operator section `registered`: `identifier`, `subject` (default the identifier), `password-hash`, `attributes`.
-- Operator section `waits`: how a password check of an identifier failing in a row waits; its keys: internal module `waits`.
+- Operator section `waits`: how a password check of an identifier that failed waits; its keys: internal module `waits`.
 - Store interface for verified contacts; what it needs, its erasure ports, and the eraser `users`: internal module `stores`.
 - `userAttribute`, typed by `UserAttributes`: the attributes users names, by OIDC claim name `email`, `email_verified`, `name`, `picture` and `groups`; a user may hold others. `isAttributeValue` (name, value): whether users takes the value. `acceptedAttributes` (values of any shape): the named ones users takes, frozen; an email's verification only beside the email. `isWellFormedSubject`: a subject's shape.
 - `usersImport`, called by the app entry `users-import` (`settle-records`): a record brought from another IdP, kept through the ledger's `keep` and as a verified contact; its shape and answers: internal module `imports`. No passkey is brought.
@@ -20,7 +20,7 @@
 
 ## Invariants
 - A subject is 1 to 255 ASCII characters: one outside that refuses boot in the settings (the identifier's, where `subject` is left out), is unavailable in a ledger's answer, and is none when looked up without asking the ledger.
-- Identifiers match exactly, never folded or trimmed, and a password as typed, with no Unicode normalization; an empty identifier or subject is none, and the ledger is not asked; `create` throws TypeError on an empty identifier. A password check waits as its identifier's failures in a row say, an unknown identifier as a known one; the caller knows nothing of it (internal module `waits`).
+- Identifiers match exactly, never folded or trimmed, and a password as typed, with no Unicode normalization; an empty identifier or subject is none, and the ledger is not asked; `create` throws TypeError on an empty identifier. A password check waits as its identifier's failures say, an unknown identifier as a known one, at most 4 checks of one identifier held, so at most 4 × `longest`; one more is Unavailable, unchecked (internal module `waits`).
 - Boot is refused on identifiers that differ only in case, Unicode normal form or surrounding whitespace, on two identifiers with one subject, and on more than one ledger or a ledger beside `registered` users.
 - Unanswerable is never read as none: claimed contacts are then unanswerable. `verifiedContact` for an erased subject: internal module `stores`.
 - A contact is kept once per subject by its `canonicalAddress` form, as first given, up to 20 (a fixed capacity guard: no subject needs more), and another past them throws RangeError; an empty subject or contact value throws TypeError.

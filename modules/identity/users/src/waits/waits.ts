@@ -1,3 +1,4 @@
+import { Unavailable } from "@mod/kernel";
 import type { Verified } from "../contract.ts";
 
 /** How failed checks of one identifier make its next checks wait. */
@@ -20,8 +21,10 @@ export interface Timing {
 
 export interface Waits {
 	/**
-	 * Runs `check` for the identifier after its wait, one check of an identifier at a time. A user
-	 * found ends its run of failures, none adds to it, and a throw leaves it as it was.
+	 * Runs `check` for the identifier after its wait, one check of an identifier at a time. None
+	 * found adds a failure; a user found and a throw leave the run as it was. A check past the
+	 * identifier's queue, or a new identifier where none held can make room, is Unavailable,
+	 * unchecked and uncounted.
 	 */
 	run(identifier: string, check: () => Promise<Verified>): Promise<Verified>;
 }
@@ -34,6 +37,8 @@ interface Run {
 	tail: Promise<unknown>;
 }
 
+/** The checks of one identifier held at once, the one under way among them: a fixed guard. */
+export const queueBound = 4;
 /** A fixed guard on the identifiers held at once, so unknown identifiers cannot fill memory. */
 const defaultCapacity = 100_000;
 
@@ -44,21 +49,34 @@ export function identifierWaits(
 	capacity = defaultCapacity,
 ): Waits {
 	const runs = new Map<string, Run>();
+	const quiet = (run: Run, at: number) => at - run.lastFailureAt >= rules.forgetMs;
 	const waitOf = (run: Run) => {
-		if (timing.now() - run.lastFailureAt >= rules.forgetMs) run.failures = 0;
+		if (quiet(run, timing.now())) run.failures = 0;
 		const past = run.failures - rules.after;
 		return past < 0 ? 0 : Math.min(rules.firstMs * 2 ** past, rules.longestMs);
 	};
-	const runOf = (identifier: string) => {
+	/** An idle run past its forget time first, else the idle one with the fewest failures; none where every run is under way. */
+	const releasable = () => {
+		const at = timing.now();
+		let fewest: [string, Run] | undefined;
+		for (const held of runs) {
+			const [, run] = held;
+			if (run.queued > 0) continue;
+			if (quiet(run, at)) return held[0];
+			if (!fewest || run.failures < fewest[1].failures) fewest = held;
+		}
+		return fewest?.[0];
+	};
+	const admitted = (identifier: string) => {
 		const held = runs.get(identifier);
-		if (held) return held;
+		if (held) {
+			if (held.queued >= queueBound) throw new Unavailable("users");
+			return held;
+		}
 		if (runs.size >= capacity) {
-			for (const [held, run] of runs) {
-				if (run.queued === 0) {
-					runs.delete(held);
-					break;
-				}
-			}
+			const released = releasable();
+			if (released === undefined) throw new Unavailable("users");
+			runs.delete(released);
 		}
 		const run: Run = { failures: 0, lastFailureAt: 0, queued: 0, tail: Promise.resolve() };
 		runs.set(identifier, run);
@@ -66,15 +84,13 @@ export function identifierWaits(
 	};
 	return {
 		run: async (identifier, check) => {
-			const run = runOf(identifier);
+			const run = admitted(identifier);
 			run.queued += 1;
 			const turn = run.tail.then(async () => {
 				const ms = waitOf(run);
 				if (ms > 0) await timing.pause(ms);
 				const answer = await check();
-				if (answer.kind === "user") {
-					run.failures = 0;
-				} else {
+				if (answer.kind !== "user") {
 					run.failures += 1;
 					run.lastFailureAt = timing.now();
 				}
