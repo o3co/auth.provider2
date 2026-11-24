@@ -105,13 +105,21 @@ describe("the client's own ceiling", () => {
 		expect(selfAudiences(two)).toEqual(["https://api", "https://reports"]);
 	});
 
-	it("never names the issuer as the audience, even where an entry writes it", () => {
-		const written = holding({ self: [{ audience: issuer, scopes: ["read"] }] });
-		expect(allowedSelfIssuance(written, "read", [], issuer)).toMatchObject({
-			kind: "error",
-			error: "invalid_target",
+	it("never names the issuer as the audience, and issues nothing to a client whose ceiling writes it", () => {
+		const written = holding({
+			self: [
+				{ audience: issuer, scopes: ["read"] },
+				{ audience: "https://api", scopes: ["read"] },
+			],
 		});
-		expect(allowedSelfIssuance(written, "read", [issuer], issuer)).toMatchObject({
+		const refused = {
+			kind: "error",
+			error: "unauthorized_client",
+			description: "the client's own ceiling names the issuer",
+		};
+		for (const audience of [[], [issuer], ["https://api"]])
+			expect(allowedSelfIssuance(written, "read", audience, issuer)).toEqual(refused);
+		expect(allowedSelfIssuance(one, "read", [issuer], issuer)).toMatchObject({
 			kind: "error",
 			error: "invalid_target",
 		});

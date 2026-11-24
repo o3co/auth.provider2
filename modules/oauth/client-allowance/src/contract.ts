@@ -94,9 +94,10 @@ export interface ClientAllowance {
 	selfAudiences(client: Client): readonly string[];
 	/**
 	 * What a client may be issued for itself, by its own ceiling alone, never the person's delegation:
-	 * only a client of a version its publisher signed (else `unauthorized_client`); the scopes named,
-	 * with no default (`invalid_scope`); one audience, named unless the ceiling holds one entry, never
-	 * the issuer, and every scope within that audience's entry (`invalid_target`, `invalid_scope`).
+	 * only a client of a version its publisher signed, whose ceiling names no issuer (else
+	 * `unauthorized_client`); the scopes named, with no default (`invalid_scope`); one audience,
+	 * named unless the ceiling holds one entry, and every scope within that audience's entry
+	 * (`invalid_target`, `invalid_scope`).
 	 */
 	allowedSelfIssuance(
 		client: Client,
@@ -207,12 +208,16 @@ const allowedSelfIssuance: ClientAllowance["allowedSelfIssuance"] = (
 		const description = "only a client of a version its publisher signed is issued for itself";
 		return { kind: "error", error: "unauthorized_client", description };
 	}
+	const self = selfOf(client);
+	if (self.some((e) => e.audience === issuer)) {
+		const description = "the client's own ceiling names the issuer";
+		return { kind: "error", error: "unauthorized_client", description };
+	}
 	const named = parseScope(requested);
 	if (named === undefined) return { kind: "error", error: "invalid_scope" };
 	if (named.length === 0) {
 		return { kind: "error", error: "invalid_scope", description: "scope is required" };
 	}
-	const self = selfOf(client);
 	const [only, ...more] =
 		audience.length === 0 && self.length === 1 ? [self[0]?.audience] : audience;
 	if (only === undefined || more.length > 0) {
@@ -220,7 +225,7 @@ const allowedSelfIssuance: ClientAllowance["allowedSelfIssuance"] = (
 		return { kind: "error", error: "invalid_target", description };
 	}
 	const entry = self.find((e) => e.audience === only);
-	if (entry === undefined || only === issuer) {
+	if (entry === undefined) {
 		const description = "the audience is not one of the client's own";
 		return { kind: "error", error: "invalid_target", description };
 	}

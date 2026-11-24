@@ -26,6 +26,11 @@ const scope = z
 
 export const allowances: Section<Allowances> = {
 	name: "client-allowance",
+	// A registered client is never of a signed version, so its own ceiling would be read by no one.
+	checkAtBoot: (value) =>
+		value.self.length > 0
+			? "self is read only for a client of a version its publisher signed: write it in the publisher's registry"
+			: undefined,
 	schema: z.strictObject({
 		grants: z
 			.array(z.string())

@@ -59,3 +59,20 @@ it("takes nothing: its one contribution is a value", async () => {
 	// Its own entry alone: another module's takes this composition leaves unused are its owner's to check.
 	expect((await takesUnused(assembly({})))["client-allowance"]).toBeUndefined();
 });
+
+it("refuses boot for a registered client writing its own ceiling, which only a signed version's client has", async () => {
+	const refused = await boot(
+		allowancesFor({ self: [{ audience: "https://api", scopes: ["read"] }] }),
+	).then(
+		() => [],
+		(error: { refusals: readonly { where: string; reason: string }[] }) => error.refusals,
+	);
+	expect(refused).toEqual([
+		{
+			where: "clients.registered.0.sections.client-allowance",
+			reason:
+				"self is read only for a client of a version its publisher signed: write it in the publisher's registry",
+		},
+	]);
+	expect(await boot(allowancesFor({ self: [] }))).toBeDefined();
+});
