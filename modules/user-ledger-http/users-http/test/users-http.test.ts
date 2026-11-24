@@ -1020,11 +1020,10 @@ describe("users-http looking a user up by identifier", () => {
 		}
 	});
 
-	it("answers every lookup by identifier unavailable without identifier-url, asking nothing", async () => {
+	it("offers no lookup by identifier without identifier-url, so users offers none", async () => {
 		const { ledger, users: u } = await open();
-		await expect(ledger.byIdentifier?.("alice")).rejects.toSatisfy(isUnavailable);
-		await expect(u.byIdentifier?.("alice")).rejects.toSatisfy(isUnavailable);
-		expect(received).toEqual([]);
+		expect(ledger.byIdentifier).toBeUndefined();
+		expect(u.byIdentifier).toBeUndefined();
 	});
 
 	it("counts identifier-url among the URLs a credential is sent to, and refuses one outbound's policy refuses", async () => {

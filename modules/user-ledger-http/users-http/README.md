@@ -3,7 +3,7 @@
 ## Responsibilities
 - Contributes a user ledger to `users`: asks the operator's HTTP ledger to verify an identifier and password, to look a user up by subject or by identifier, and to make a subject for an identifier, through `outbound`.
 - Reads each answer once, at this boundary, into a `users` answer (internal module `calls` makes the calls).
-- Without `subject-url`, answers every lookup by subject unanswerable, and without `identifier-url` every lookup by identifier unavailable, asking nothing.
+- Without `subject-url`, answers every lookup by subject unanswerable, asking nothing; without `identifier-url`, it offers no lookup by identifier, so `users` offers none.
 
 ## Not here
 - Verified contacts (`users`). Whether the ledger may be reached, redirects, and the caps on size and time (`outbound`). The names of attributes and the shape of a subject (`users`). Hashing passwords (the ledger's).

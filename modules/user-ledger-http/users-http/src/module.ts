@@ -1,4 +1,4 @@
-import { deepFreeze, defineModule, setting, Unavailable } from "@mod/kernel";
+import { deepFreeze, defineModule, setting } from "@mod/kernel";
 import { bearerToken } from "@mod/keys";
 import { usersWire } from "@mod/ledger-wire";
 import { outbound } from "@mod/outbound";
@@ -27,7 +27,7 @@ const section = z
 			"Where a user is looked up by subject; without it, every lookup by subject is unanswerable.",
 		),
 		"identifier-url": ledgerUrl(
-			"Where a user is looked up by identifier; without it, every lookup by identifier is unavailable.",
+			"Where a user is looked up by identifier; without it, the ledger looks no one up so.",
 		),
 		"create-url": ledgerUrl(
 			"Where a new subject is made for an identifier; without it, the ledger makes no subjects.",
@@ -115,10 +115,13 @@ export default defineModule(
 					subjectUrl === undefined
 						? unanswerable
 						: ask.lookup(subjectUrl, usersWire.bySubject(subject)),
-				byIdentifier: async (identifier) => {
-					if (identifierUrl === undefined) throw new Unavailable("users-http");
-					return ask.lookup(identifierUrl, usersWire.byIdentifier(identifier));
-				},
+				// Only a ledger asked by identifier looks users up so; its absence is the composition's fact.
+				...(identifierUrl === undefined
+					? {}
+					: {
+							byIdentifier: async (identifier: string) =>
+								ask.lookup(identifierUrl, usersWire.byIdentifier(identifier)),
+						}),
 				// Only a ledger asked to make subjects offers it; its absence is the composition's fact.
 				...(createUrl === undefined
 					? {}

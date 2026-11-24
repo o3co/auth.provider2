@@ -10,7 +10,7 @@
 	"asks": [
 		"Users from an outside ledger (`users-http.verify-url`; `users-http.credential` in the local layer when the ledger asks for one).",
 		"`users-http.subject-url`: the lookup by subject; without it, every lookup by subject is unanswerable.",
-		"`users-http.identifier-url`: the lookup by identifier; without it, every lookup by identifier is unavailable.",
+		"`users-http.identifier-url`: the lookup by identifier; without it, the ledger looks no one up so, and users offers no lookup by identifier.",
 		"`users-http.create-url`: the call that makes a subject for an identifier; without it, the ledger makes no subjects."
 	],
 	"exports": {
