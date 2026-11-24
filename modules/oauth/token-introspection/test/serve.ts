@@ -20,7 +20,7 @@ import rateLimitModule from "@mod/rate-limit/module";
 import { rateLimitStandIn } from "@mod/rate-limit/testing";
 import secretHashModule from "@mod/secret-hash/module";
 import { simulatedStore } from "@mod/store/testing";
-import { accessTokenIssuance, type IssueLimits } from "@mod/tokens";
+import { type AccessGrant, accessTokenIssuance, accessTokens, type IssueLimits } from "@mod/tokens";
 import { issueAtOnce, tokensStandIn } from "@mod/tokens/testing";
 import { afterEach } from "vitest";
 import tokenIntrospection from "../src/module.ts";
@@ -123,8 +123,9 @@ export async function serve(
 		audience: ["https://api"],
 		scope: ["read"],
 	};
-	const issue = async (limits?: IssueLimits) => {
-		const asked = { grant, grantType: "client_credentials" };
+	/** Issues "app"'s own token, or one with `as` in its grant, such as a person's. */
+	const issue = async (limits?: IssueLimits, as: Partial<AccessGrant> = {}) => {
+		const asked = { grant: { ...grant, ...as }, grantType: "client_credentials" };
 		const issued = await issueAtOnce(app.get(accessTokenIssuance), asked, limits);
 		if (issued.kind !== "issued") throw new Error(issued.reason);
 		return issued.access.token;
@@ -138,5 +139,6 @@ export async function serve(
 			.slice(from)
 			.filter((line) => line.level === "warn")
 			.map((line) => [line.event, line.fields]);
-	return { base, post, issue, active, events: recorded.events, warnings };
+	const revoke = (token: string) => app.get(accessTokens).revokeAccess(token);
+	return { base, post, issue, revoke, active, events: recorded.events, warnings };
 }

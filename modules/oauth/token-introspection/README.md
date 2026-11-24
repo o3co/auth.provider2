@@ -7,7 +7,7 @@
 ## Not here
 - The token format and its checks: `tokens`.
 - Which audiences a client may see: `client-allowance`'s `maySee`.
-- Client authentication and the shape of OAuth error answers: `clients`, through `token-endpoint`'s `authenticateClient` and `oauthError`.
+- Client authentication: `clients`, called through `token-endpoint`'s `authenticateClient`. The shape of OAuth error answers: `token-endpoint` (`oauthError`).
 - Revocation: `token-revocation`.
 - Refusing a deployment that requires those promises: `promises`, by its stances.
 
@@ -24,8 +24,9 @@
 - The client is authenticated through `token-endpoint`'s `authenticateClient`, handed the audit, which records a refusal as `client.authentication.failure`.
 - A public client is refused `401` `invalid_client`; a repeated parameter or a missing `token` is `invalid_request`.
 - Active only for a token `tokens` verifies whose audience the caller may see; every other token is `active:false`, whatever its hint.
-- An active answer tells `iss`, `sub`, the subject's kind its token carries (`o3co_subject_kind`), `client_id`, `aud`, `scope` where there is one, `exp` and `token_type`, and `cnf` for a bound token; never the token.
+- An active answer tells `iss`, `sub`, the subject's kind its token carries (`o3co_subject_kind`, the name of `tokens`' claim), `client_id`, `aud`, `scope` where there is one, `exp` and `token_type`, and `cnf` for a bound token; never the token.
 - An introspection answer is bound to neither the token asked about nor the request: a resource server trusting it trusts the Front that relays it, so it stands breaking both promises; a deployment requiring either is refused boot by `promises`.
+- It declares no stance on `core-compromise-contained`: that promise is held only for receivers that check receipts, and a resource server trusting an introspection answer, which carries none, is not one; that duty is the receivers', which `promises` names unchecked.
 - An unavailable dependency answers `503` `temporarily_unavailable`, never `active:false`, and records `introspection.unavailable`; `http` then warns `http.unavailable` with what and the route.
 
 ## Depends on

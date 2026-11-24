@@ -22,10 +22,22 @@ describe("introspection", () => {
 		});
 	});
 
-	it("tells the subject's kind its token carries, so a resource server tells a client's token from a person's", async () => {
+	it("tells the subject's kind its token carries, so a resource server tells a client's token from a person's of the same name", async () => {
 		const s = await serve();
-		const answer = await s.post("api", { token: await s.issue() });
-		expect(answer.json).toMatchObject({ active: true, o3co_subject_kind: "client" });
+		const client = await s.post("api", { token: await s.issue() });
+		expect(client.json).toMatchObject({ active: true, sub: "app", o3co_subject_kind: "client" });
+		const person = await s.post("api", {
+			token: await s.issue(undefined, { subjectKind: "user" }),
+		});
+		expect(person.json).toMatchObject({ active: true, sub: "app", o3co_subject_kind: "user" });
+	});
+
+	it("answers a revoked access token inactive and nothing more [rfc7662-4-d]", async () => {
+		const s = await serve();
+		const token = await s.issue();
+		expect(await s.active(token)).toBe(true);
+		expect((await s.revoke(token)).kind).toBe("revoked");
+		expect((await s.post("api", { token })).json).toEqual({ active: false });
 	});
 
 	it("never answers the token it introspects, nor its signature, only what it tells of it [oidc-core-16.4-a]", async () => {
