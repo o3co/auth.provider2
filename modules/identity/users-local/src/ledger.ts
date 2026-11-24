@@ -1,5 +1,4 @@
 import { deepFreeze, type Random, Unavailable } from "@mod/kernel";
-import { readSecretHash, type SecretChecker } from "@mod/secret-hash";
 import type { Created, Ledger, Verified } from "@mod/users";
 import type { LocalRecords } from "./records/records.ts";
 
@@ -11,21 +10,11 @@ const userOf = (subject: string) => deepFreeze({ subject, attributes: {} });
 /** The bytes of a new subject: drawn, so a subject tells nothing of its identifier. */
 const subjectBytes = 16;
 
-/**
- * The ledger over its records: a password checked by `checker`, which does the same work whether or
- * not the identifier holds a hash; a subject made for an identifier, drawn from `random`.
- */
-export function localLedger(records: LocalRecords, checker: SecretChecker, random: Random): Ledger {
+/** The ledger over its records, holding no password; a subject made for an identifier, drawn from `random`. */
+export function localLedger(records: LocalRecords, random: Random): Ledger {
 	return {
-		verify: async (identifier, password) => {
-			const held = await records.byIdentifier(identifier);
-			const written = held?.["password-hash"];
-			const hash = written === undefined ? undefined : readSecretHash(written);
-			// A hash kept that secret-hash cannot read is a record of another shape, never no password.
-			if (written !== undefined && hash === undefined) throw new Unavailable("users-local");
-			const matched = await checker.check(hash, password);
-			return held && hash && matched ? { kind: "user", user: userOf(held.subject) } : none;
-		},
+		// No password is held, so none matches, with the same work, none, for every identifier.
+		verify: async () => none,
 		bySubject: async (subject) =>
 			(await records.bySubject(subject)) ? { kind: "user", user: userOf(subject) } : none,
 		byIdentifier: async (identifier) => {
@@ -35,14 +24,15 @@ export function localLedger(records: LocalRecords, checker: SecretChecker, rando
 		create: async (identifier) => {
 			const subject = Buffer.from(random.bytes(subjectBytes)).toString("hex");
 			const placed = await records.place(identifier, subject);
-			// A drawn subject held already: no answer for the identifier, which may be free.
-			if (placed === "taken") throw new Unavailable("users-local");
-			return placed === "placed" ? deepFreeze({ kind: "created", user: userOf(subject) }) : exists;
+			if (placed === "exists") return exists;
+			// A drawn subject held already, or erased: no answer for the identifier, which may be free.
+			if (placed !== "placed") throw new Unavailable("users-local");
+			return deepFreeze({ kind: "created", user: userOf(subject) });
 		},
 		keep: async (subject, identifier) => {
 			const placed = await records.place(identifier, subject);
 			if (placed === "placed") return "kept";
-			// Held as given, by an earlier import, is kept; held otherwise is a conflict.
+			// Held as given, by an earlier import, is kept; held otherwise, or erased, is a conflict.
 			const held = placed === "exists" ? await records.byIdentifier(identifier) : undefined;
 			return held?.subject === subject ? "kept" : "conflict";
 		},

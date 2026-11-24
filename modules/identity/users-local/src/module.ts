@@ -1,6 +1,5 @@
 import { erasers } from "@mod/erasure-extensions";
 import { defineModule, optional, probes } from "@mod/kernel";
-import { readSecretHash, type SecretHash, secretCheckers } from "@mod/secret-hash";
 import { type Space, spaces, store, storeControl } from "@mod/store";
 import {
 	indexSpaceOf,
@@ -9,7 +8,6 @@ import {
 	subjectRecordsPhase,
 } from "@mod/subject-records";
 import { ledgers } from "@mod/users";
-import { z } from "zod";
 import { localLedger } from "./ledger.ts";
 import {
 	type Builders,
@@ -22,25 +20,12 @@ import {
 	subjectSpace,
 } from "./records/records.ts";
 
-const section = z
-	.strictObject({
-		"password-work": z
-			.string()
-			.refine((s) => readSecretHash(s) !== undefined, "a bcrypt or scrypt hash")
-			.optional()
-			.describe(
-				"A bcrypt or scrypt hash, of any secret, of the work the held passwords' hashes take: every password check does that work.",
-			),
-	})
-	.prefault({});
-
 export default defineModule(
 	{
 		name: "users-local",
-		section,
 		// It holds nothing in process: its records are behind the store.
 		replicaSafe: true,
-		takes: [store, optional(storeControl), secretCheckers],
+		takes: [store, optional(storeControl)],
 	},
 	(m) => [
 		m.contribute(spaces).by(() => identifierSpace),
@@ -78,13 +63,7 @@ export default defineModule(
 				),
 			};
 		}),
-		m.contribute(ledgers).by(async (c) => {
-			const work = c.section["password-work"];
-			// The section refused a hash secret-hash cannot read.
-			const inUse = work === undefined ? [] : [readSecretHash(work) as SecretHash];
-			const checker = (await c.get(secretCheckers)).checkerOf(inUse);
-			return localLedger(localRecords(await c.get(placed)), checker, c.random);
-		}),
+		m.contribute(ledgers).by(async (c) => localLedger(localRecords(await c.get(placed)), c.random)),
 		// Its build takes only its records and collects no `probes`, as an eraser's must (erasure-extensions).
 		m.contribute(erasers).by(async (c) => localEraser(await c.get(placed))),
 		// Out of traffic until the phase reads: no call is judged on a phase not read.

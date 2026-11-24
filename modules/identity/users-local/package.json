@@ -11,13 +11,12 @@
 	"dependencies": {
 		"@mod/erasure-extensions": "workspace:*",
 		"@mod/kernel": "workspace:*",
-		"@mod/secret-hash": "workspace:*",
 		"@mod/store": "workspace:*",
 		"@mod/subject-records": "workspace:*",
-		"@mod/users": "workspace:*",
-		"zod": "4.6.7"
+		"@mod/users": "workspace:*"
 	},
 	"devDependencies": {
+		"@mod/secret-hash": "workspace:*",
 		"vitest": "5.0.5"
 	}
 }

@@ -10,15 +10,17 @@ import { contract, Unavailable } from "@mod/kernel";
 import type { Guarantee, Space } from "@mod/store";
 import type { JointAnswer, phasedJointRecordsIn, phasedRecordsIn } from "@mod/subject-records";
 
-/** What the ledger needs of its records: none dropped or lost, and a read never taken back. */
+/** What the ledger needs of its records: none dropped or lost, a read never taken back, and no outside write taken as its own. */
 const guarantees: readonly Guarantee[] = [
 	"no-eviction",
 	"durable",
 	"replicated",
 	"confirmed-reads",
+	// One write made outside the provider could tie another's subject to an identifier.
+	"authenticated",
 ];
 
-/** Each identifier's record, keyed by the identifier: its subject, and the password's hash where one is held. */
+/** Each identifier's record, keyed by the identifier: its subject. */
 export const identifierSpace: Space = {
 	name: "users-local.identifiers",
 	guarantees,
@@ -33,7 +35,7 @@ export const subjectSpace: Space = {
 	erasedBy: "users-local",
 };
 
-export type IdentifierRecord = { readonly subject: string; readonly "password-hash"?: string };
+export type IdentifierRecord = { readonly subject: string };
 export type SubjectRecord = { readonly identifier: string };
 
 type Places = "identifiers" | "subjects";
@@ -49,12 +51,8 @@ export const placed = contract<Builders>("users-local.placed");
 
 /** The ledger's records: a user placed by identifier and subject as one, and each read back. */
 export interface LocalRecords {
-	/** Places the user, unless the identifier is held (`exists`) or else the subject (`taken`); unavailable where the subject is erased. */
-	place(
-		identifier: string,
-		subject: string,
-		passwordHash?: string,
-	): Promise<"placed" | "exists" | "taken">;
+	/** Places the user, unless the identifier is held (`exists`), else the subject (`taken`), else the subject is erased (`erased`). */
+	place(identifier: string, subject: string): Promise<"placed" | "exists" | "taken" | "erased">;
 	byIdentifier(identifier: string): Promise<IdentifierRecord | undefined>;
 	bySubject(subject: string): Promise<SubjectRecord | undefined>;
 }
@@ -73,14 +71,10 @@ function shaped<T>(
 	}
 	return value as T;
 }
-const identifierShaped = (read: Record<string, unknown>) =>
-	isText(read.subject) && (read["password-hash"] === undefined || isText(read["password-hash"]));
 
 export function localRecords(builders: Builders): LocalRecords {
 	return {
-		place: async (identifier, subject, passwordHash) => {
-			const held: IdentifierRecord =
-				passwordHash === undefined ? { subject } : { subject, "password-hash": passwordHash };
+		place: async (identifier, subject) => {
 			const answer: JointAnswer = await builders.joint.changeSubjectRecords({
 				targets: [
 					{ place: "identifiers", key: identifier },
@@ -88,7 +82,7 @@ export function localRecords(builders: Builders): LocalRecords {
 				],
 				decide: () => ({
 					targets: [
-						{ kind: "create", value: held, lifetimeMs: "endless", subject },
+						{ kind: "create", value: { subject }, lifetimeMs: "endless", subject },
 						{ kind: "create", value: { identifier }, lifetimeMs: "endless", subject },
 					],
 				}),
@@ -96,10 +90,13 @@ export function localRecords(builders: Builders): LocalRecords {
 			if (answer.kind === "written") return "placed";
 			// The identifier's record is the first target, so a held identifier is told before its subject.
 			if (answer.why === "exists") return answer.at.nth === 0 ? "exists" : "taken";
+			if (answer.why === "erased") return "erased";
 			throw new Unavailable("users-local");
 		},
 		byIdentifier: async (identifier) =>
-			shaped<IdentifierRecord>(await builders.identifiers.read(identifier), identifierShaped),
+			shaped<IdentifierRecord>(await builders.identifiers.read(identifier), (read) =>
+				isText(read.subject),
+			),
 		bySubject: async (subject) =>
 			shaped<SubjectRecord>(await builders.subjects.read(subject), (read) =>
 				isText(read.identifier),
