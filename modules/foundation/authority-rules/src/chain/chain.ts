@@ -105,6 +105,28 @@ function ceremonyOf(read: Read<"keyChange">) {
 	return { creation, possession };
 }
 
+/**
+ * Why the new key is not the one the possession names, read by the form it names it in: its
+ * thumbprint, of an algorithm the creation offered, or its uncompressed P-256 point's hash.
+ */
+function newKeyRefusal(
+	checks: Checks,
+	creation: { readonly options: { readonly algorithms?: readonly number[] | undefined } },
+	p: { readonly key_jkt?: string | undefined; readonly key_hash?: string | undefined },
+	publicKey: string,
+): Refusal {
+	if (p.key_jkt !== undefined) {
+		const key = checks.keyThumbprint?.(publicKey);
+		if (!key) return "the new key is not a key the protocol takes";
+		if (!creation.options.algorithms?.includes(key.alg))
+			return "the new key's algorithm is not one the creation offered";
+		return p.key_jkt === key.jkt ? undefined : "the signed bytes are not the record's";
+	}
+	const point = pointOf(publicKey);
+	if (!point) return "the new key is not an uncompressed P-256 point";
+	return p.key_hash === checks.digest(point) ? undefined : "the signed bytes are not the record's";
+}
+
 function firstKeyRefusal(read: Read<"keyChange">): Refusal {
 	const { ask, preimage, content } = read;
 	if (Object.keys(ask.state.keys).length > 0)
@@ -117,15 +139,10 @@ function firstKeyRefusal(read: Read<"keyChange">): Refusal {
 		return "the creation is signed for another key generation than the flow's";
 	if (creation.payload.creation.subject !== ask.record.flow.id)
 		return "the creation is another subject's";
-	const point = pointOf(content.publicKey);
-	if (!point) return "the new key is not an uncompressed P-256 point";
 	const p = possession.payload.possession;
-	const { digest } = ask.checks;
-	if (
-		p.creation_hash !== digest(creation.jws) ||
-		p.key_hash !== digest(point) ||
-		p.credential_id !== content.credential
-	)
+	const named = newKeyRefusal(ask.checks, creation.payload.creation, p, content.publicKey);
+	if (named) return named;
+	if (p.creation_hash !== ask.checks.digest(creation.jws) || p.credential_id !== content.credential)
 		return "the signed bytes are not the record's";
 	const asserted = oneOf(preimage, "assertion");
 	if (

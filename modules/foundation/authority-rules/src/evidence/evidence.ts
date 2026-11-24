@@ -18,6 +18,12 @@ export interface Checks {
 	): { readonly credential: string } | undefined;
 	/** SHA-256 of the text's UTF-8 bytes, or of the bytes, base64url without padding. */
 	digest(data: string | Uint8Array): string;
+	/**
+	 * A passkey's key (its COSE_Key, base64url) to its thumbprint (RFC 7638, as `sdk-core-wire`'s
+	 * `keyThumbprintInput` builds it) and its algorithm as COSE numbers it; none for a key the
+	 * protocol does not take. A caller without it has no possession by thumbprint taken.
+	 */
+	keyThumbprint?(publicKey: string): { readonly jkt: string; readonly alg: number } | undefined;
 }
 
 /** The times the rules hold records to, in milliseconds (a configuration version's). */
@@ -45,6 +51,14 @@ export interface Context {
 }
 
 const id = z.string().min(1);
+/** Bytes in their one unpadded base64url spelling. */
+const canonical = z
+	.string()
+	.refine(
+		(text) =>
+			/^[A-Za-z0-9_-]+$/.test(text) &&
+			Buffer.from(text, "base64url").toString("base64url") === text,
+	);
 const empty = z.object({}).strict();
 /** How a start or a bundle roots: an approval's code, or a family's refresh at its rotation. */
 const via = z.discriminatedUnion("via", [
@@ -56,10 +70,13 @@ const via = z.discriminatedUnion("via", [
 export const contents = Object.freeze({
 	approval: empty,
 	/**
-	 * A first-trust key (the first-key path, F1): its credential and its public key, the uncompressed
-	 * P-256 point base64url; the key generation is the signed creation's (`kg`).
+	 * A first-trust key (the first-key path, F1): its credential and its public key, its COSE_Key (or,
+	 * where the possession names its point's hash, the uncompressed P-256 point) in its one unpadded
+	 * base64url spelling; the key generation is the signed creation's (`kg`).
 	 */
-	keyChange: z.object({ variant: z.literal("first"), credential: id, publicKey: id }).strict(),
+	keyChange: z
+		.object({ variant: z.literal("first"), credential: id, publicKey: canonical })
+		.strict(),
 	start: via,
 	bundle: via,
 	noEffect: empty,

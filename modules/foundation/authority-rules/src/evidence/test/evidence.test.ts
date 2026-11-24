@@ -37,11 +37,15 @@ describe("a Core writer's preimage", () => {
 		).toMatchObject({ content: { via: "refresh", rotation: 2 } });
 	});
 
-	it("holds a key change to the first-key path alone, its key generation left to the signed creation", () => {
-		const first = { variant: "first", credential: "c", publicKey: "pk" };
+	it("holds a key change to the first-key path alone, its key in its one spelling, its key generation left to the signed creation", () => {
+		const first = { variant: "first", credential: "c", publicKey: "pQE" };
 		expect(contents.keyChange.safeParse(first).success).toBe(true);
 		for (const other of [
 			{ ...first, variant: "add" },
+			// The key in its one unpadded base64url spelling alone: another spelling of its bytes, or padded.
+			{ ...first, publicKey: "pQF" },
+			{ ...first, publicKey: "pQE=" },
+			{ ...first, publicKey: "" },
 			{ variant: "remove", key: "k1" },
 			{ ...first, keyGeneration: 0 },
 		])

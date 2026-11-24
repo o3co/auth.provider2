@@ -19,6 +19,7 @@ import {
 	checks,
 	context,
 	coreRecord,
+	coseKey,
 	creation,
 	digest,
 	limits,
@@ -104,6 +105,44 @@ describe("a first-trust key (Rules023e Allowed `ft`)", () => {
 		expect(verdictOn(step(creationJws, possessionJws, notPoint), empty)).toEqual(
 			refused(/uncompressed P-256 point/),
 		);
+	});
+
+	it("takes a new key named by its thumbprint: one the protocol takes, of an algorithm the creation offered (V22)", () => {
+		const step = (
+			key: { credential: string; publicKey: string },
+			offered?: number[] | "none",
+			c = checks,
+		) => {
+			const made = creation(subject.id, undefined, 0, offered === "none" ? undefined : offered);
+			const { algorithms: _, ...options } = made.creation.options;
+			const named =
+				offered === "none" ? { ...made, creation: { ...made.creation, options } } : made;
+			const creationJws = sign(named, "ring-1");
+			const possessionJws = sign(possession(creationJws, key), "ring-1");
+			const s: Step = {
+				record: coreRecord("keyChange", 1),
+				preimage: preimage({
+					evidence: [
+						{ form: "statement", value: creationJws },
+						{ form: "statement", value: possessionJws },
+						{ form: "assertion", value: assertion(key, possessionJws) },
+					],
+					content: { variant: "first", ...key },
+				}),
+			};
+			return allowed({ ...askOf(s, emptyState, []), checks: c });
+		};
+		for (const alg of [-7, -8, -257])
+			expect(step({ credential: "c", publicKey: coseKey(1, alg) })).toEqual(ok);
+		const eddsa = { credential: "c", publicKey: coseKey(1, -8) };
+		expect(step(eddsa, [-7])).toEqual(refused(/algorithm is not one the creation offered/));
+		expect(step(eddsa, "none")).toEqual(refused(/algorithm is not one the creation offered/));
+		const { keyThumbprint: __, ...without } = checks;
+		expect(step(eddsa, undefined, without)).toEqual(refused(/not a key the protocol takes/));
+		const unread = { ...checks, keyThumbprint: () => undefined };
+		expect(step(eddsa, undefined, unread)).toEqual(refused(/not a key the protocol takes/));
+		const other = { ...checks, keyThumbprint: () => ({ jkt: digest("other"), alg: -8 }) };
+		expect(step(eddsa, undefined, other)).toEqual(refused(/signed bytes/));
 	});
 
 	it("is refused unless the new key asserts the possession", () => {

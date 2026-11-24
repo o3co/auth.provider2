@@ -18,6 +18,11 @@ export const digest = (data: string | Uint8Array) =>
 export const point = (seed: number) =>
 	Buffer.concat([Buffer.from([4]), Buffer.alloc(64, seed)]).toString("base64url");
 
+const algorithms = [-7, -8, -257];
+/** A passkey's COSE_Key as this world reads it: a map's head, its algorithm's index, then `seed`'s bytes. */
+export const coseKey = (seed: number, alg = -7) =>
+	Buffer.from([0xa5, algorithms.indexOf(alg), ...Buffer.alloc(32, seed)]).toString("base64url");
+
 export const checks: Checks = {
 	verifyJws(jws, keys) {
 		const [header, payload, kid, ...rest] = jws.split(".");
@@ -32,6 +37,11 @@ export const checks: Checks = {
 		return holds && made.credential ? { credential: made.credential } : undefined;
 	},
 	digest,
+	keyThumbprint(publicKey) {
+		const bytes = Buffer.from(publicKey, "base64url");
+		const alg = bytes[0] === 0xa5 ? algorithms[bytes[1] ?? -1] : undefined;
+		return alg === undefined ? undefined : { jkt: digest(`jkt:${publicKey}`), alg };
+	},
 };
 
 /** The ring of a Core generation: one key, its kid naming the generation. */
@@ -90,7 +100,7 @@ export const authorization = (sid: string, iat = T0) => ({
 		jar_hash: "jh",
 	},
 });
-export const creation = (subject: string, iat = T0, kg = 0) => ({
+export const creation = (subject: string, iat = T0, kg = 0, offered = algorithms) => ({
 	iss: "https://core.example",
 	sid: "creation-1",
 	iat,
@@ -104,28 +114,38 @@ export const creation = (subject: string, iat = T0, kg = 0) => ({
 		ct_hash: "ct",
 		subject,
 		kg,
-		options: { user_id: "u", rp_id: "login.example", exclude_credentials: [] },
+		options: {
+			user_id: "u",
+			rp_id: "login.example",
+			exclude_credentials: [],
+			algorithms: offered,
+		},
 	},
 });
 export const possession = (
 	creationJws: string,
 	key: { credential: string; publicKey: string },
 	iat = T0,
-) => ({
-	iss: "https://core.example",
-	sid: "possession-1",
-	iat,
-	exp: iat + 300,
-	...screen,
-	nonce: "n2",
-	purpose: "possession",
-	possession: {
-		creation_hash: digest(creationJws),
-		key_hash: digest(Buffer.from(key.publicKey, "base64url")),
-		credential_id: key.credential,
-		reservation_id: "res-1",
-	},
-});
+) => {
+	const thumbprint = checks.keyThumbprint?.(key.publicKey);
+	return {
+		iss: "https://core.example",
+		sid: "possession-1",
+		iat,
+		exp: iat + 300,
+		...screen,
+		nonce: "n2",
+		purpose: "possession",
+		possession: {
+			creation_hash: digest(creationJws),
+			...(thumbprint
+				? { key_jkt: thumbprint.jkt }
+				: { key_hash: digest(Buffer.from(key.publicKey, "base64url")) }),
+			credential_id: key.credential,
+			reservation_id: "res-1",
+		},
+	};
+};
 
 export const subject = { of: "subject", id: "sub-1" } as const;
 export type FlowRecord = Exclude<LogRecord, { kind: "tick" }>;
