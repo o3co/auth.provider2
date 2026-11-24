@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { FrameStore, IntentUnit, Json } from "./contract.ts";
 
+export { memoryFrames } from "./memory-frames.ts";
+export { logBook } from "./memory-log.ts";
+
 /** What an implementation of the frame's store interface gives its contract test. */
 export interface FrameStoreHarness {
 	/** A frame store over fresh, empty places, with one part bound. */

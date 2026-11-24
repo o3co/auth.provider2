@@ -55,9 +55,15 @@ export function transparencyOver(p: {
 	const { frames, log, owners, leaseMs } = p;
 	const kinds = new Map(p.kinds.map((k) => [k.name, k]));
 	const bundle = (kind: string) => kinds.get(kind)?.bundle === true;
-	/** The unit of a subject's flow; none for any other, which the driver does not run. */
-	const unitOf = (flow: Flow): IntentUnit | undefined =>
-		flow.of === "subject" ? { flow: { of: "subject", id: flow.id } } : undefined;
+	/** The unit an event names: a subject's flow, or one op of a client's; none for any other. */
+	const unitOf = (flow: Flow, op?: string): IntentUnit | undefined => {
+		if (flow.of === "subject") return { flow: { of: "subject", id: flow.id } };
+		return flow.of === "client" && op !== undefined
+			? { flow: { of: "client", id: flow.id }, op }
+			: undefined;
+	};
+	/** A client's op: its flow is unconditional, holds no state, and its records lie among other ops'. */
+	const perOp = (unit: IntentUnit) => "op" in unit;
 	const notSubject = { refused: "notSubject" } as const;
 	const atNow = (now: number): At => ({
 		replica: log.writer.instance,
@@ -77,7 +83,8 @@ export function transparencyOver(p: {
 
 	/** One read: the frame, every owner's records, then `extra`; the state the owners' records hold. */
 	async function snapshot(unit: IntentUnit, extra: readonly PartRecord[]) {
-		const owned = owners.map((o) => named(o, o.records(unit.flow)));
+		const holding = perOp(unit) ? [] : owners;
+		const owned = holding.map((o) => named(o, o.records(unit.flow)));
 		const records = [...owned.flat(), ...extra];
 		const keys = records.map((r) => `${r.part}\n${r.name}`);
 		if (new Set(keys).size !== keys.length)
@@ -90,7 +97,7 @@ export function transparencyOver(p: {
 			from += rs.length;
 			return read.held.slice(from - rs.length, from);
 		});
-		const parts = owners.map((o, i) => {
+		const parts = holding.map((o, i) => {
 			const fields = o.read(slices[i] ?? []);
 			return Object.fromEntries(o.holds.map((f) => [f, fields[f] ?? emptyState[f]]));
 		});
@@ -170,7 +177,42 @@ export function transparencyOver(p: {
 		};
 	};
 
+	/** Whether a placed record is a Core record of the op: one of its stages, or an abandonment of it. */
+	const ofOp = (placed: Placed, op: string) => {
+		const r = placed.record;
+		if (r.writer.role !== "core") return false;
+		return r.kind === "abandonment" ? r.abandons?.op === op : r.op === op;
+	};
+
+	/**
+	 * A client's op takes in its own next record, passing over the other records before it unjudged:
+	 * nothing is folded, and its frame's applied position is how far along the flow it has looked.
+	 */
+	async function opStep(unit: IntentUnit & { readonly op: string }, own?: string) {
+		const { flow, op } = unit;
+		const { snap, kind } = await withKind(unit);
+		if (unregistered(snap)) return { refused: "stuck" as const };
+		const head = await log.head(flow);
+		for (let position = snap.frame.applied + 1; position <= head; position++) {
+			const placed = await log.at(flow, position);
+			if (!placed || !ofOp(placed, op)) continue;
+			if (!placed.finding) return { refused: "unjudged" as const };
+			const passed = { ...snap.frame, applied: position - 1 };
+			const taken = stepped(passed, snap.at, takenOf(placed), { own: own === op, bundle });
+			if ("refused" in taken) return taken;
+			const extra = taken.end && kind ? kind.end(taken.end, snap.extra) : undefined;
+			const answer = await write(
+				snap,
+				{ frame: taken.frame, ...(extra ? { extra } : {}) },
+				taken.ownerUntil,
+			);
+			return settled(answer) ?? { position, ...(taken.end ? { end: taken.end } : {}) };
+		}
+		return { refused: "atHead" as const };
+	}
+
 	async function step(unit: IntentUnit, own?: string) {
+		if ("op" in unit) return opStep(unit, own);
 		const { flow } = unit;
 		const { snap, kind } = await withKind(unit);
 		if (unregistered(snap)) return { refused: "stuck" as const };
@@ -216,30 +258,36 @@ export function transparencyOver(p: {
 		readonly stage: Stage;
 		readonly prev: number;
 	}) {
-		const unit = unitOf(q.flow);
+		const unit = unitOf(q.flow, q.op);
 		if (!unit) return notSubject;
 		const { snap, kind } = await withKind(unit);
 		const it = intentOf(snap.frame, snap.at);
 		if (!kind || !isOwner(it, snap.at) || it?.op !== q.op || q.stage.op !== q.op) {
 			return { refused: "notOwner" as const };
 		}
-		const answer = await log.append(q.stage, q.prev);
-		const first = q.stage.stage === 1 && q.prev === it.prev;
-		if (answer.result !== "refused" || answer.refusal !== "prevMismatch" || !first)
-			return { answer };
-		// The first stage refused for good: the owner closes the op without a record.
+		const unconditional = perOp(unit);
+		const answer = await (unconditional ? log.append(q.stage) : log.append(q.stage, q.prev));
+		if (answer.result !== "refused") return { answer };
+		// Refused for good: a subject flow's first stage after another record, or any stage of a
+		// client's op but a temporary refusal. The owner closes the op without a record.
+		const first = q.stage.stage === 1 && q.prev === it.prev && answer.refusal === "prevMismatch";
+		if (!(unconditional ? answer.refusal !== "temporary" : first)) return { answer };
 		const closed = closedByOwner(snap.frame, snap.at, q.op);
 		if ("refused" in closed || (await frameWrite(snap, kind, closed)) !== "written")
 			return { answer };
 		return { answer, end: closed.end };
 	}
 
-	async function claim(unit: IntentUnit) {
+	/** Claims an orphan or sends an abandonment; a client's op only once it took in its records to the head (`ready`). */
+	async function claim(unit: IntentUnit, ready: boolean) {
 		const { flow } = unit;
 		const { snap, kind } = await withKind(unit);
 		if (unregistered(snap)) return {};
 		const it = intentOf(snap.frame, snap.at);
-		const head = await log.head(flow);
+		const unconditional = perOp(unit);
+		if (unconditional && !ready) return {};
+		// A client's op has no head of its own: taken in to the flow's, it is at its applied position.
+		const head = unconditional ? snap.frame.applied : await log.head(flow);
 		if (isOrphan(it, snap.at) && it) {
 			// An orphan its taker could not end is marked: taking it over again would meet the same refusal.
 			const resend = it.taken ? undefined : kind?.resend?.(flow, it.op, snap.extra);
@@ -265,19 +313,51 @@ export function transparencyOver(p: {
 			abandons: abandon.abandons,
 			preimage: { v: 1, evidence: [], content: {} },
 		};
-		return { did: "abandonment" as const, answer: await log.append(stage, abandon.prev) };
+		const sent = unconditional ? log.append(stage) : log.append(stage, abandon.prev);
+		return { did: "abandonment" as const, answer: await sent };
+	}
+
+	/** A unit's tending: taken in to its head (the apply phase of an op it took over), then claimed. */
+	async function tendUnit(unit: IntentUnit) {
+		let count = 0;
+		let last: Awaited<ReturnType<typeof step>> | undefined;
+		for (; count < tendSteps; count++) {
+			const first = await frameAt(unit);
+			const it = intentOf(first.frame, first.at);
+			// A replica's tending is the apply phase of an op it took over.
+			const own = it?.taken && isOwner(it, first.at) ? it.op : undefined;
+			last = await step(unit, own);
+			if (!("position" in last)) break;
+		}
+		const ready = last !== undefined && "refused" in last && last.refused === "atHead";
+		return { stepped: count, ...(await claim(unit, ready)) };
+	}
+
+	/** The ops whose Core records are among a client's flow's last records, the latest first. */
+	async function recentOps(flow: Flow) {
+		const head = await log.head(flow);
+		const ops = new Set<string>();
+		for (let position = head; position > Math.max(0, head - tendSteps); position--) {
+			const r = (await log.at(flow, position))?.record;
+			if (r?.writer.role !== "core") continue;
+			ops.add(r.kind === "abandonment" ? (r.abandons?.op ?? r.op) : r.op);
+		}
+		return [...ops];
 	}
 
 	return {
 		async decide(q) {
 			const kind = kinds.get(q.kind);
 			if (!kind) throw new TypeError(`no kind of operation ${q.kind} is registered`);
-			const unit = unitOf(q.flow);
+			const unit = unitOf(q.flow, q.op);
 			if (!unit) return notSubject;
 			const snap = await snapshot(unit, named(kind, kind.records(q.flow)));
 			const head = await log.head(q.flow);
 			const placed = await log.of(q.flow, q.op);
-			const guard = decided(snap.frame, snap.at, {
+			// A client's op is decided once, whatever its end; its flow needs no taking in, so it looks on from the head.
+			if (perOp(unit) && snap.frame.intent !== null) return { refused: "ended" as const };
+			const frame = perOp(unit) ? { ...snap.frame, applied: head } : snap.frame;
+			const guard = decided(frame, snap.at, {
 				op: q.op,
 				kind: q.kind,
 				digest: "-",
@@ -289,7 +369,7 @@ export function transparencyOver(p: {
 			if ("refused" in guard) return guard;
 			const asked = q.decide(snap.state, snap.extra);
 			if ("refused" in asked) return asked;
-			const next = decided(snap.frame, snap.at, {
+			const next = decided(frame, snap.at, {
 				...asked,
 				op: q.op,
 				kind: q.kind,
@@ -299,19 +379,21 @@ export function transparencyOver(p: {
 			});
 			if ("refused" in next) return next;
 			const answer = await write(snap, { frame: next.frame, extra: asked.records });
-			return settled(answer) ?? { prev: snap.frame.applied };
+			return settled(answer) ?? { prev: frame.applied };
 		},
 		send,
 		async rebase(q) {
-			const unit = unitOf(q.flow);
+			const unit = unitOf(q.flow, q.op);
 			if (!unit) return notSubject;
 			const { snap, kind } = await withKind(unit);
 			if (!kind) return { refused: "notOwner" as const };
-			const head = await log.head(q.flow);
+			// A client's op has no previous position to move: its appends name none.
+			const head = perOp(unit) ? snap.frame.applied : await log.head(q.flow);
 			const moved = rebased(snap.frame, snap.at, q.op, head);
 			if ("refused" in moved) return moved;
 			// The first stage is never put again (A16): its refusal closes the op in `send`.
 			if ((await log.of(q.flow, q.op)).stages === 0) return { refused: "unplaced" as const };
+			if (q.recheck(snap.state) && perOp(unit)) return { prev: head };
 			if (q.recheck(snap.state))
 				return settled(await frameWrite(snap, kind, moved)) ?? { prev: head };
 			const closed = closedByOwner(snap.frame, snap.at, q.op);
@@ -320,23 +402,26 @@ export function transparencyOver(p: {
 			return answer === "written" ? { end: closed.end } : { refused: answer };
 		},
 		async step(q) {
-			const unit = unitOf(q.flow);
+			// A client's flow is stepped by its op, which its owner names.
+			const unit = unitOf(q.flow, q.own);
 			return unit ? step(unit, q.own) : notSubject;
 		},
 		async tend(flow) {
 			const unit = unitOf(flow);
-			if (!unit) return notSubject;
-			let count = 0;
-			for (; count < tendSteps; count++) {
-				const first = await frameAt(unit);
-				const it = intentOf(first.frame, first.at);
-				// A replica's tending is the apply phase of an op it took over.
-				const own = it?.taken && isOwner(it, first.at) ? it.op : undefined;
-				const next = await step(unit, own);
-				if (!("position" in next)) break;
+			if (unit) return tendUnit(unit);
+			if (flow.of !== "client") return notSubject;
+			// A client's flow: each op among its last records, its own unit tended in turn.
+			let stepped = 0;
+			let did = {};
+			for (const op of await recentOps(flow)) {
+				const { stepped: count, ...claimed } = await tendUnit({
+					flow: { of: "client", id: flow.id },
+					op,
+				});
+				stepped += count;
+				if ("did" in claimed) did = claimed;
 			}
-			const claimed = await claim(unit);
-			return { stepped: count, ...claimed };
+			return { stepped, ...did };
 		},
 		async changeHeld(q) {
 			const kind = kinds.get(q.kind);

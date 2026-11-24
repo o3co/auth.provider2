@@ -458,8 +458,8 @@ describe("what a replica does not run", () => {
 		expect(world.res().state).toBe("active");
 	});
 
-	it("refuses every event on a flow not of a subject: a client's intent is per op", async () => {
-		const client = { of: "client", id: "c1" } as const;
+	it("refuses every event on a flow neither a subject's nor a client's", async () => {
+		const client = { of: "publisher", id: "p1" } as const;
 		const decide = () => ({ digest: "d", eff: {}, records: [] });
 		expect(await world.w1.decide({ kind: "issue", flow: client, op: "o", decide })).toEqual({
 			refused: "notSubject",

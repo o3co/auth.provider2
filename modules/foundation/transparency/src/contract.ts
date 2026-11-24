@@ -130,7 +130,10 @@ export interface BundleSigning<P> {
 		readonly prepared: P;
 		readonly tokens: NonNullable<AppendRequest["tokens"]>;
 	}>;
-	/** The tokens signed, each carrying its receipt, once the bundle's end is the owner's `took`, its write committed. */
+	/**
+	 * The tokens signed, each carrying its receipt, before the bundle is taken in; answered only once
+	 * its end is the owner's `took`, its write committed.
+	 */
 	sign(prepared: P, receipts: readonly string[]): Promise<readonly string[]>;
 }
 
@@ -185,13 +188,14 @@ export type Deciding = (
 	| { readonly refused: string };
 
 /**
- * The contract the Core's writers take: their ops on a subject flow's one intent, each write one CAS.
- * Any other flow is refused (`notSubject`): a client's intent is per op (`IntentUnit`).
+ * The contract the Core's writers take: their ops on a subject flow's one intent, or each in its own
+ * on a client's flow (`IntentUnit`), each write one CAS. Any other flow is refused (`notSubject`).
  */
 export interface Transparency {
 	/**
 	 * KE-C01: decides the op on the applied state, in one write with its kind's records; never an op
 	 * with a stage on the flow (again only after an empty abandonment). A writer refused `open` or `notReady` tends the flow and decides again.
+	 * A client's op, holding no state, is decided once, on the empty state, answering the flow's head.
 	 */
 	decide(p: {
 		readonly kind: string;
@@ -202,7 +206,10 @@ export interface Transparency {
 		| { readonly prev: number }
 		| Refused<"notSubject" | "sealed" | "notReady" | "open" | "ended" | "moved" | "late" | string>
 	>;
-	/** KE-C02: the owner's stage, after `prev`; its first stage's prevMismatch closes the op. */
+	/**
+	 * KE-C02: the owner's stage, after `prev`; its first stage's prevMismatch closes the op. On a
+	 * client's flow, appended with no previous position, any refusal but a temporary one closes it.
+	 */
 	send(p: {
 		readonly flow: Flow;
 		readonly op: string;
@@ -225,7 +232,8 @@ export interface Transparency {
 		| Refused<"notSubject" | "notOwner" | "notReady" | "unplaced" | "moved" | "late">
 	>;
 	/**
-	 * KE-C04: takes in the next record; `own`: the caller owns that op and is in its apply phase. An
+	 * KE-C04: takes in the next record; `own`: the caller owns that op and is in its apply phase (on a
+	 * client's flow, the op whose own next record it takes in, past any other). An
 	 * end the owner gives output for (`owner`, `took`) is answered once its write committed. A replica
 	 * with no registration of the open intent's kind takes in nothing (`stuck`).
 	 */
@@ -246,7 +254,10 @@ export interface Transparency {
 				| "late"
 		  >
 	>;
-	/** An idle replica's turn on a flow: takes it in to its head, claims an orphan, sends an abandonment. */
+	/**
+	 * An idle replica's turn on a flow: takes it in to its head, claims an orphan, sends an abandonment;
+	 * on a client's flow, so for each op among its last records.
+	 */
 	tend(flow: Flow): Promise<
 		| {
 				readonly stepped: number;
