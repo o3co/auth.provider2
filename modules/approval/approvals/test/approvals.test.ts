@@ -187,6 +187,21 @@ describe("using a statement", () => {
 		expect(await w.approvals.usedOf(t.hash)).toEqual(used.kind === "approved" && used.approval);
 	});
 
+	it("answers what a used authorization rests on: its statement, the assertion as received and its credential", async () => {
+		const w = await world();
+		const key = await w.plant("s1");
+		const t = await issued(w);
+		expect(await w.approvals.rootOf(t.hash)).toBeUndefined();
+		const assertion = w.assert(t.challenge);
+		await w.approvals.use({ statement: t.statement, assertion });
+		expect(await w.approvals.rootOf(t.hash)).toEqual({
+			statement: t.statement,
+			assertion,
+			credential: key.id,
+		});
+		expect(await w.approvals.rootOf("no-such-hash")).toBeUndefined();
+	});
+
 	it("approves one of two assertions given at once, and refuses the other", async () => {
 		const w = await world();
 		await w.plant("s1");

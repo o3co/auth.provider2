@@ -293,6 +293,14 @@ export function statementsOver(p: StatementParts) {
 		return r && r.state !== "issued" ? approvalOf(hash, r) : undefined;
 	}
 
+	async function rootOf(hash: string) {
+		const r = recordOf(await p.store.read(hash));
+		const used = r?.purpose === "authorization" && r.state !== "issued";
+		return used && r.assertion !== undefined && r.credential !== undefined
+			? { statement: r.jws, assertion: r.assertion, credential: r.credential }
+			: undefined;
+	}
+
 	async function completionOf(hash: string) {
 		const r = recordOf(await p.store.read(hash));
 		return r?.state === "completed" && r.published ? completionIn(r) : undefined;
@@ -310,7 +318,7 @@ export function statementsOver(p: StatementParts) {
 		return after?.state === "completed" && after.published ? "published" : "unknown";
 	}
 
-	return { issue, use, usedOf, completionOf, publish };
+	return { issue, use, usedOf, rootOf, completionOf, publish };
 }
 
 /** The thumbprint of a statement's E_sig: none is a record no statement was issued with, so unavailable. */

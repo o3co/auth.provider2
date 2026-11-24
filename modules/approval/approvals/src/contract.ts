@@ -157,6 +157,17 @@ export interface Approvals {
 	/** A used statement's approval; none for any other. */
 	usedOf(hash: string): Promise<Approval | undefined>;
 	/**
+	 * What a used authorization rests on, for a family rooted in it to check again (proposal 3.9): its
+	 * statement as signed, the assertion's JSON text as received, and the credential that made it;
+	 * none for any other statement, or once its record is gone.
+	 */
+	rootOf(
+		hash: string,
+	): Promise<
+		| { readonly statement: string; readonly assertion: string; readonly credential: string }
+		| undefined
+	>;
+	/**
 	 * The completion kept for an authorization, as `complete` answered it, once its caller published
 	 * it; none before.
 	 */

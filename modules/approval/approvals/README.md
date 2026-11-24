@@ -18,6 +18,7 @@
   - `complete` (hash, code) → the completion sealed to `eEnc` (HPKE's `enc` and ciphertext) and the id of the approval's record on the flow, the reference the code's chain roots in, with its `recordRef` (`ref`, an ID token's `apr`) and the log's acceptance time (`acceptedAt`, its `auth_time`); or refused.
   - `completionOf` (hash) → the completion kept, as `complete` answered it, once `publish` marked it gone out; none before. `publish` (hash): marks it so, once its caller let it go (an authorization's code rooted first).
   - `usedOf` (hash) → a used statement's approval, with its statement's issue time, `completed` once its completion is kept.
+  - `rootOf` (hash) → what a used authorization rests on, for a refresh family to check again: its statement, the assertion as received, its credential; none once its record is gone.
 - Extension point `statementItems` (purpose, the item names it fills, by whom): the purposes are `authorization`, `creation` and `possession`.
 - `approvalStore`, the statements' store interface (create unless held, read, change from what it holds), and `approvalStoreNeeds`. `approvalPart`: its part of each subject's flow, which its wiring binds.
 - Operator section: `statement-lifetime` (default 5 minutes), `issue-limit`, `issue-total` and `issue-window` (default 30 a minute per key, 100 000 a minute in all), `max-concurrent` (default 64 signings at once).
