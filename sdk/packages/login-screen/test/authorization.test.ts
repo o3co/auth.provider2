@@ -1,5 +1,5 @@
 import { hpke, purposes, typs } from "@mod/sdk-core-wire";
-import { schemas as logSchemas, logTyps } from "@mod/transparency-wire";
+import { schemas as logSchemas, logTyps, tokens } from "@mod/transparency-wire";
 import { describe, expect, it } from "vitest";
 import { authorization } from "../src/authorization.ts";
 import { digest, utf8 } from "../src/bytes.ts";
@@ -144,60 +144,61 @@ describe("authorization.assertionOptions", () => {
 	});
 });
 
+/** A completion sealed to T's E_enc and ⑤'s receipt for it, the receipt and its approval changed where given. */
+async function answered(
+	receiptChange: Record<string, unknown> = {},
+	receiptHeader = {},
+	approvalChange: Record<string, string> = {},
+) {
+	const w = await world();
+	const assertion = utf8('{"a":1}');
+	const code = "code-1";
+	const completion = {
+		v: 1,
+		iss: issuer,
+		t_hash: await digest(w.tCompact),
+		assertion_hash: await digest(assertion),
+		code,
+		iat: 1,
+		exp: 2,
+	};
+	const aad = utf8("aad");
+	const sealed = await sealTo(
+		Buffer.from(w.keys.eEnc, "base64url"),
+		utf8(hpke.info.completion),
+		aad,
+		utf8(await signCompact(w.ring, completion, { typ: typs.completion })),
+	);
+	const approval = {
+		statement: await digest(w.tCompact),
+		assertion: await digest(assertion),
+		code: await digest(code),
+	};
+	const receiptPayload = {
+		v: 1,
+		iss: "log",
+		id: "r-1",
+		writer: { role: "core", instance: "i", image: "img", generation: 1 },
+		kind: "approval",
+		flow: { of: "subject", id: "sub-1" },
+		position: 3,
+		shard: "s1",
+		n: 7,
+		acceptedAt: 1000,
+		plaintextDigest: await digest("p"),
+		approval: { ...approval, ...approvalChange },
+		...receiptChange,
+	};
+	const receipt = await signCompact(w.log, receiptPayload, {
+		typ: logTyps.receipt,
+		...receiptHeader,
+	});
+	const finish = { ...w.options, assertion, aad };
+	return { w, sealed, receipt, finish, code, receiptPayload, approval };
+}
+
 describe("authorization.finish (A35)", () => {
 	const otherDigest = (seed: string) => digest(`other-${seed}`);
-
-	async function answered(
-		receiptChange: Record<string, unknown> = {},
-		receiptHeader = {},
-		approvalChange: Record<string, string> = {},
-	) {
-		const w = await world();
-		const assertion = utf8('{"a":1}');
-		const code = "code-1";
-		const completion = {
-			v: 1,
-			iss: issuer,
-			t_hash: await digest(w.tCompact),
-			assertion_hash: await digest(assertion),
-			code,
-			iat: 1,
-			exp: 2,
-		};
-		const aad = utf8("aad");
-		const sealed = await sealTo(
-			Buffer.from(w.keys.eEnc, "base64url"),
-			utf8(hpke.info.completion),
-			aad,
-			utf8(await signCompact(w.ring, completion, { typ: typs.completion })),
-		);
-		const approval = {
-			statement: await digest(w.tCompact),
-			assertion: await digest(assertion),
-			code: await digest(code),
-		};
-		const receiptPayload = {
-			v: 1,
-			iss: "log",
-			id: "r-1",
-			writer: { role: "core", instance: "i", image: "img", generation: 1 },
-			kind: "approval",
-			flow: { of: "subject", id: "sub-1" },
-			position: 3,
-			shard: "s1",
-			n: 7,
-			acceptedAt: 1000,
-			plaintextDigest: await digest("p"),
-			approval: { ...approval, ...approvalChange },
-			...receiptChange,
-		};
-		const receipt = await signCompact(w.log, receiptPayload, {
-			typ: logTyps.receipt,
-			...receiptHeader,
-		});
-		const finish = { ...w.options, assertion, aad };
-		return { w, sealed, receipt, finish, code, receiptPayload, approval };
-	}
 
 	it("answers the code and ⑤'s record where the completion and its receipt both bind T, the assertion and the code", async () => {
 		const { w, sealed, receipt, finish, code, receiptPayload } = await answered();
@@ -286,6 +287,75 @@ describe("authorization.finish (A35)", () => {
 		const { w, sealed, receipt, finish } = await answered();
 		expect(await authorization.finish({ ...w.read }, sealed, receipt, finish)).toEqual({
 			error: "statement",
+		});
+	});
+});
+
+describe("authorization.callbackProof (A38)", () => {
+	/** T read, and what `finish` gave for it. */
+	async function taken() {
+		const { w, sealed, receipt, finish } = await answered();
+		const given = await authorization.finish(w.read, sealed, receipt, finish);
+		if ("error" in given) throw new Error(given.error);
+		return { ...w, done: given };
+	}
+
+	it("signs with E_sig the proof the RP reads against the ID token: the request, the code's hash and ⑤'s record", async () => {
+		const { read, keys, t, done } = await taken();
+		const made = await authorization.callbackProof(read, done, keys, 1_700_000_000_123);
+		if ("error" in made) throw new Error(made.error);
+		const [h, p, s] = made.proof.split(".");
+		const header = JSON.parse(Buffer.from(h ?? "", "base64url").toString());
+		const body = JSON.parse(Buffer.from(p ?? "", "base64url").toString());
+		expect(logSchemas.callbackHeader.parse(header)).toEqual({
+			alg: "ES256",
+			typ: logTyps.callback,
+			jwk: keys.eSig,
+		});
+		expect(logSchemas.callbackProof.parse(body)).toEqual({
+			iss: issuer,
+			client_id: t.approval.client_id,
+			state: t.approval.state,
+			code_hash: await digest("code-1"),
+			apr: { shard: "s1", n: 7 },
+			iat: 1_700_000_000,
+		});
+		const key = await crypto.subtle.importKey(
+			"jwk",
+			{ ...keys.eSig },
+			{ name: "ECDSA", namedCurve: "P-256" },
+			false,
+			["verify"],
+		);
+		expect(
+			await crypto.subtle.verify(
+				{ name: "ECDSA", hash: "SHA-256" },
+				key,
+				Buffer.from(s ?? "", "base64url"),
+				utf8(`${h}.${p}`),
+			),
+		).toBe(true);
+		expect(tokens.ecThumbprintInput(keys.eSig)).toBeDefined();
+	});
+
+	it("refuses a T it did not read, or keys other than the ones T names", async () => {
+		const { read, keys, done } = await taken();
+		expect(await authorization.callbackProof({ ...read }, done, keys, 0)).toEqual({
+			error: "statement",
+		});
+		expect(await authorization.callbackProof(read, done, await screenKeys(), 0)).toEqual({
+			error: "keys",
+		});
+	});
+
+	it("refuses a code and record not what finish gave for this T: written by the caller, or given for another T", async () => {
+		const { read, keys, done } = await taken();
+		expect(await authorization.callbackProof(read, { ...done }, keys, 0)).toEqual({
+			error: "finish",
+		});
+		const other = await taken();
+		expect(await authorization.callbackProof(read, other.done, keys, 0)).toEqual({
+			error: "finish",
 		});
 	});
 });

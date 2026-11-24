@@ -1,10 +1,11 @@
 import { canonicalText, itemsFromJar, type StatementPayload } from "@mod/sdk-core-wire";
-import type { RecordRef } from "@mod/transparency-wire";
-import { deepFreeze, digest, fromBase64url, textOf } from "./bytes.ts";
+import { schemas as logSchemas, logTyps, type RecordRef } from "@mod/transparency-wire";
+import { base64url, deepFreeze, digest, fromBase64url, textOf, utf8 } from "./bytes.ts";
 import { challengeOf } from "./challenge.ts";
 import { type CompletionError, type CompletionOptions, readCompletion } from "./completion.ts";
 import type { Sealed } from "./hpke.ts";
 import { type Jwk, keyIdentity } from "./jws.ts";
+import { namesKeys, type ScreenKeys } from "./keys.ts";
 import { readApprovalReceipt } from "./receipt.ts";
 import { readStatement, type StatementError, type StatementOptions } from "./statement.ts";
 
@@ -91,6 +92,13 @@ async function assertionOptions(
 	};
 }
 
+/** A completion as `finish` took it: its code and ⑤'s record. Only `finish` makes one, for the T it was given. */
+export interface Finished {
+	readonly code: string;
+	readonly approval: RecordRef;
+}
+const finished = new WeakMap<Finished, ReadT>();
+
 /** Why a completion is not taken: T not `read`'s, its own refusal, ring and log keys shared, or ⑤'s receipt that does not bind it. */
 export type FinishError = CompletionError | "statement" | "keys" | "receipt";
 
@@ -105,9 +113,7 @@ async function finish(
 	sealed: Sealed,
 	receipt: string,
 	options: Omit<CompletionOptions, "statement"> & { readonly log: readonly Jwk[] },
-): Promise<
-	{ readonly code: string; readonly approval: RecordRef } | { readonly error: FinishError }
-> {
+): Promise<Finished | { readonly error: FinishError }> {
 	if (!issued.has(t)) return { error: "statement" };
 	// A key with no identity verifies nothing, so it shares nothing either.
 	const ring = new Set(options.ring.map(keyIdentity).filter((id) => id !== undefined));
@@ -120,8 +126,52 @@ async function finish(
 		assertion: options.assertion,
 		code,
 	});
-	return bound ? { code, approval: { shard: bound.shard, n: bound.n } } : { error: "receipt" };
+	if (!bound) return { error: "receipt" };
+	const done: Finished = deepFreeze({ code, approval: { shard: bound.shard, n: bound.n } });
+	finished.set(done, t);
+	return done;
 }
 
-/** An authorization's steps on the screen: read T against the JAR, ask the passkey, take the completion. */
-export const authorization = Object.freeze({ read, assertionOptions, finish });
+/**
+ * The callback's proof (A38): what the screen adds to its POST to the RP, signed with E_sig as ES256
+ * (raw r||s), its header carrying E_sig's public key: T's issuer, client and state, the code's whole
+ * UTF-8 SHA-256, ⑤'s record as `finish` gave it, and the device's time in seconds, on which no
+ * freshness rests. The code and record must be what `finish` gave for this T, and the keys the ones
+ * T names.
+ */
+async function callbackProof(
+	t: ReadT,
+	done: Finished,
+	keys: ScreenKeys,
+	now: number,
+): Promise<
+	{ readonly proof: string } | { readonly error: "statement" | "finish" | "keys" | "proof" }
+> {
+	if (!issued.has(t)) return { error: "statement" };
+	if (finished.get(done) !== t) return { error: "finish" };
+	if (!namesKeys(keys, t.statement.e_enc, t.statement.e_sig)) return { error: "keys" };
+	const header = logSchemas.callbackHeader.safeParse({
+		alg: "ES256",
+		typ: logTyps.callback,
+		jwk: keys.eSig,
+	});
+	const body = logSchemas.callbackProof.safeParse({
+		iss: t.statement.iss,
+		client_id: t.statement.approval.client_id,
+		state: t.statement.approval.state,
+		code_hash: await digest(done.code),
+		apr: { shard: done.approval.shard, n: done.approval.n },
+		iat: Math.floor(now / 1000),
+	});
+	if (!header.success || !body.success) return { error: "proof" };
+	const input = `${base64url(utf8(JSON.stringify(header.data)))}.${base64url(utf8(JSON.stringify(body.data)))}`;
+	const signature = await crypto.subtle.sign(
+		{ name: "ECDSA", hash: "SHA-256" },
+		keys.signing.privateKey,
+		utf8(input),
+	);
+	return { proof: `${input}.${base64url(new Uint8Array(signature))}` };
+}
+
+/** An authorization's steps on the screen: read T against the JAR, ask the passkey, take the completion, sign the callback's proof. */
+export const authorization = Object.freeze({ read, assertionOptions, finish, callbackProof });
