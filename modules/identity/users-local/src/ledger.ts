@@ -34,9 +34,17 @@ export function localLedger(records: LocalRecords, checker: SecretChecker, rando
 		},
 		create: async (identifier) => {
 			const subject = Buffer.from(random.bytes(subjectBytes)).toString("hex");
-			return (await records.place(identifier, subject)) === "placed"
-				? deepFreeze({ kind: "created", user: userOf(subject) })
-				: exists;
+			const placed = await records.place(identifier, subject);
+			// A drawn subject held already: no answer for the identifier, which may be free.
+			if (placed === "taken") throw new Unavailable("users-local");
+			return placed === "placed" ? deepFreeze({ kind: "created", user: userOf(subject) }) : exists;
+		},
+		keep: async (subject, identifier) => {
+			const placed = await records.place(identifier, subject);
+			if (placed === "placed") return "kept";
+			// Held as given, by an earlier import, is kept; held otherwise is a conflict.
+			const held = placed === "exists" ? await records.byIdentifier(identifier) : undefined;
+			return held?.subject === subject ? "kept" : "conflict";
 		},
 	};
 }

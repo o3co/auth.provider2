@@ -49,8 +49,12 @@ export const placed = contract<Builders>("users-local.placed");
 
 /** The ledger's records: a user placed by identifier and subject as one, and each read back. */
 export interface LocalRecords {
-	/** Places the user, unless the identifier is held (`exists`); unavailable where the subject is held or erased. */
-	place(identifier: string, subject: string, passwordHash?: string): Promise<"placed" | "exists">;
+	/** Places the user, unless the identifier is held (`exists`) or else the subject (`taken`); unavailable where the subject is erased. */
+	place(
+		identifier: string,
+		subject: string,
+		passwordHash?: string,
+	): Promise<"placed" | "exists" | "taken">;
 	byIdentifier(identifier: string): Promise<IdentifierRecord | undefined>;
 	bySubject(subject: string): Promise<SubjectRecord | undefined>;
 }
@@ -90,8 +94,8 @@ export function localRecords(builders: Builders): LocalRecords {
 				}),
 			});
 			if (answer.kind === "written") return "placed";
-			// Only the identifier's record held answers exists: a subject held or erased is no answer to give.
-			if (answer.why === "exists" && answer.at.nth === 0) return "exists";
+			// The identifier's record is the first target, so a held identifier is told before its subject.
+			if (answer.why === "exists") return answer.at.nth === 0 ? "exists" : "taken";
 			throw new Unavailable("users-local");
 		},
 		byIdentifier: async (identifier) =>

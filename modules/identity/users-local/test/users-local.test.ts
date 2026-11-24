@@ -14,7 +14,7 @@ import secretHashModule from "@mod/secret-hash/module";
 import { recordingChecker } from "@mod/secret-hash/testing";
 import { store, storeControl } from "@mod/store";
 import { simulatedStore } from "@mod/store/testing";
-import { type Ledger, ledgers, users } from "@mod/users";
+import { type Ledger, ledgers, users, usersImport } from "@mod/users";
 import usersModule from "@mod/users/module";
 import { ledgerContract, memoryUsersStores, testPasswordHash, testUser } from "@mod/users/testing";
 import { describe, expect, it } from "vitest";
@@ -218,12 +218,37 @@ describe("users-local", () => {
 		expect(await ledger.byIdentifier("plain")).toMatchObject({ user: { subject: "s-plain" } });
 	});
 
-	it("places nothing for a subject held, and answers it unavailable, never exists", async () => {
+	it("places nothing for a subject held, answering taken, never exists", async () => {
 		const { ledger, records } = await withAlice();
-		await expect(records.place("bob", "s-alice")).rejects.toSatisfy(isUnavailable);
+		expect(await records.place("bob", "s-alice")).toBe("taken");
 		expect(await ledger.byIdentifier("bob")).toEqual({ kind: "none" });
 		expect(await records.place("alice", "s-other")).toBe("exists");
 		expect(await ledger.bySubject("s-other")).toEqual({ kind: "none" });
+	});
+
+	it("keeps an imported identifier for its subject, again as kept, and answers conflict where either is held otherwise", async () => {
+		const { ledger } = await withAlice();
+		expect(await ledger.keep?.("s-bob", "bob")).toBe("kept");
+		expect(await ledger.keep?.("s-bob", "bob")).toBe("kept");
+		expect(await ledger.byIdentifier("bob")).toEqual({
+			kind: "user",
+			user: { subject: "s-bob", attributes: {} },
+		});
+		expect(await ledger.keep?.("s-alice", "alice")).toBe("kept");
+		expect(await ledger.keep?.("s-mallory", "alice")).toBe("conflict");
+		expect(await ledger.keep?.("s-alice", "alice2")).toBe("conflict");
+		expect(await ledger.byIdentifier("alice2")).toEqual({ kind: "none" });
+		expect(await ledger.bySubject("s-mallory")).toEqual({ kind: "none" });
+	});
+
+	it("imports through users' usersImport, the identifier and the verified email", async () => {
+		const { app, ledger } = await opened();
+		const record = { subject: "s-carol", identifier: "carol", verifiedEmail: "carol@example.com" };
+		expect(await app.get(usersImport).record(record)).toBe("imported");
+		expect(await ledger.byIdentifier("carol")).toMatchObject({ user: { subject: "s-carol" } });
+		expect(await app.get(users).contactsOf("s-carol")).toEqual([
+			{ kind: "email", value: "carol@example.com" },
+		]);
 	});
 
 	it("refuses a password-work that is no hash secret-hash reads", async () => {
