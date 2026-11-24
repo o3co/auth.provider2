@@ -188,6 +188,87 @@ describe("a family, founded with a code's redemption", () => {
 		});
 	});
 
+	it("lets one of two commits interleaved on one key live, and ends a family whose code is voided mid-commit", async () => {
+		const w = world();
+		const { records } = w.records;
+		// Both commits reach the key's create before either reads it back.
+		let waiting: (() => void)[] = [];
+		const barrier = () =>
+			new Promise<void>((resolve) => {
+				waiting.push(resolve);
+				if (waiting.length === 2) for (const go of waiting) go();
+			});
+		const create = records.create;
+		records.create = async (name, ...rest) => {
+			if (name === nameOf.key(jkt)) await barrier();
+			return create(name, ...rest);
+		};
+		const parts = (await Promise.all([
+			w.maker.part(request),
+			w.maker.part({ ...request, code: "code-2" }),
+		])) as BundlePart[];
+		const ready = await Promise.all(parts.map((p) => p.prepare(now)));
+		const outcomes = await Promise.allSettled(
+			parts.map((p, i) => p.commit?.(ready[i]?.prepared, { id: `r-${i}`, acceptedAt: now })),
+		);
+		expect(outcomes.map((o) => o.status).sort()).toEqual(["fulfilled", "rejected"]);
+		const lived = await Promise.all(
+			["r-0", "r-1"].map(
+				async (id) => !read.family(await records.read(nameOf.family(id)))?.revoked,
+			),
+		);
+		expect(lived.filter(Boolean)).toHaveLength(1);
+		records.create = create;
+		waiting = [];
+		// A code voided as its family links to it: the family is ended either way.
+		const v = world();
+		const read0 = v.records.records.read;
+		let once = true;
+		v.records.records.read = async (name) => {
+			if (once && name === nameOf.code("code-digest")) {
+				once = false;
+				await v.maker.revoke("code-digest", "alice");
+			}
+			return read0(name);
+		};
+		await expect(founded(v)).rejects.toSatisfy(isUnavailable);
+		expect(read.family(await read0(nameOf.family("r-bundle")))?.revoked).toBe(true);
+	});
+
+	it("ends itself where linking its code or claiming its key fails, its key held to its end where it was claimed", async () => {
+		for (const failing of [nameOf.code("code-digest"), nameOf.key(jkt)]) {
+			const w = world();
+			const { records } = w.records;
+			const [create, change] = [records.create, records.change];
+			records.create = async (name, ...rest) => {
+				if (name === failing) throw new Error("the store fell");
+				return create(name, ...rest);
+			};
+			records.change = async (name, ...rest) => {
+				if (name === failing) throw new Error("the store fell");
+				return change(name, ...rest);
+			};
+			await expect(founded(w), failing).rejects.toThrow("the store fell");
+			expect(read.family(await records.read(nameOf.family("r-bundle")))?.revoked, failing).toBe(
+				true,
+			);
+		}
+		// Claimed, then failing after: the key stays held to the family's end, then is free.
+		const w = world({
+			selections: {
+				follow: async () => {
+					throw new Error("claims-selection down");
+				},
+			},
+		});
+		await expect(founded(w)).rejects.toThrow("claims-selection down");
+		expect(await w.maker.part({ ...request, code: "code-2" })).toEqual({
+			refused: "the key is bound to another family",
+		});
+		w.records.move(lifetimeMs + 120_000);
+		expect(await w.maker.part({ ...request, code: "code-3" })).not.toHaveProperty("refused");
+	});
+
 	it("is ended with its code: a code voided after it was kept, or before, which it is ended at as it is kept", async () => {
 		const w = world();
 		await founded(w);
