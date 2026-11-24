@@ -1189,9 +1189,63 @@ importers:
         specifier: workspace:*
         version: link:../../foundation/kernel
     devDependencies:
+      '@mod/audit':
+        specifier: workspace:*
+        version: link:../../foundation/audit
+      '@mod/client-assertion-store':
+        specifier: workspace:*
+        version: link:../../templates/client-assertion-store
       '@mod/clients':
         specifier: workspace:*
         version: link:../../identity/clients
+      '@mod/dpop':
+        specifier: workspace:*
+        version: link:../dpop
+      '@mod/dpop-store':
+        specifier: workspace:*
+        version: link:../../templates/dpop-store
+      '@mod/external-jwt':
+        specifier: workspace:*
+        version: link:../../foundation/external-jwt
+      '@mod/http':
+        specifier: workspace:*
+        version: link:../../foundation/http
+      '@mod/http-server':
+        specifier: workspace:*
+        version: link:../../foundation/http-server
+      '@mod/keys':
+        specifier: workspace:*
+        version: link:../../foundation/keys
+      '@mod/outbound':
+        specifier: workspace:*
+        version: link:../../foundation/outbound
+      '@mod/rate-limit':
+        specifier: workspace:*
+        version: link:../../foundation/rate-limit
+      '@mod/secret-hash':
+        specifier: workspace:*
+        version: link:../../foundation/secret-hash
+      '@mod/sender-binding':
+        specifier: workspace:*
+        version: link:../sender-binding
+      '@mod/store':
+        specifier: workspace:*
+        version: link:../../foundation/store
+      '@mod/tls-options':
+        specifier: workspace:*
+        version: link:../../foundation/tls-options
+      '@mod/token-endpoint':
+        specifier: workspace:*
+        version: link:../token-endpoint
+      '@mod/tokens':
+        specifier: workspace:*
+        version: link:../tokens
+      '@mod/transparency':
+        specifier: workspace:*
+        version: link:../../foundation/transparency
+      jose:
+        specifier: 6.2.15
+        version: 6.2.15
       vitest:
         specifier: 5.0.5
         version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(vite@8.3.3(@types/node@26.6.5)(yaml@2.9.1))

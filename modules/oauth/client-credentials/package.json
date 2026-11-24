@@ -19,7 +19,25 @@
 		"@mod/kernel": "workspace:*"
 	},
 	"devDependencies": {
+		"@mod/audit": "workspace:*",
+		"@mod/client-assertion-store": "workspace:*",
 		"@mod/clients": "workspace:*",
+		"@mod/dpop": "workspace:*",
+		"@mod/dpop-store": "workspace:*",
+		"@mod/external-jwt": "workspace:*",
+		"@mod/http": "workspace:*",
+		"@mod/http-server": "workspace:*",
+		"@mod/keys": "workspace:*",
+		"@mod/outbound": "workspace:*",
+		"@mod/rate-limit": "workspace:*",
+		"@mod/secret-hash": "workspace:*",
+		"@mod/sender-binding": "workspace:*",
+		"@mod/store": "workspace:*",
+		"@mod/tls-options": "workspace:*",
+		"@mod/token-endpoint": "workspace:*",
+		"@mod/tokens": "workspace:*",
+		"@mod/transparency": "workspace:*",
+		"jose": "6.2.15",
 		"vitest": "5.0.5"
 	}
 }
