@@ -206,6 +206,8 @@ export { referenceOf } from "./reference.ts";
 export interface IssuedFor {
 	readonly id: string;
 	readonly subject: string;
+	/** A person's boundary holds a person's token alone, never a client's of the same name. */
+	readonly subjectKind: SubjectKind;
 	/** Epoch ms. */
 	readonly issuedAt: number;
 	/** Epoch ms: the time its subject's authentication stands from, its standing claim else its issue. */
@@ -238,9 +240,11 @@ export const subjectChecks = extensionPoint<SubjectCheck>("tokens.subject-checks
 	multiplicity: "many",
 });
 
-/** A bundle of credentials about to be answered, as a fence sees it: its subject and its receipt's id. */
+/** A bundle of credentials about to be answered, as a fence sees it: its subject, its kind and its receipt's id. */
 export interface FencedBundle {
 	readonly subject: string;
+	/** `pass` always gives it; a fence reads one given none as a person's. */
+	readonly subjectKind?: SubjectKind;
 	readonly receiptId: string;
 }
 
@@ -264,6 +268,7 @@ export interface IssuanceFencing {
 	 */
 	pass(bundle: {
 		readonly subject: string;
+		readonly subjectKind: SubjectKind;
 	}): Promise<
 		| { readonly kind: "passed" }
 		| { readonly kind: "refused"; readonly fence: string; readonly description: string }

@@ -49,7 +49,7 @@ export interface TokensUnderTest {
 	advance(ms: number): void;
 	/** A binding kind the composition knows: the `cnf` member it writes, and its token type. */
 	readonly known: { readonly member: string; readonly tokenType: string };
-	/** From now on, the composition's subject check answers revoked for this subject's tokens issued up to now. */
+	/** From now on, the composition's subject check answers revoked for this person's tokens issued up to now. */
 	revokeSubject(subject: string): void;
 }
 
@@ -635,6 +635,20 @@ export function tokensContract(
 			expect(fresh.kind === "valid" && fresh.standingAt).toBe(second);
 			expect((await place.tokens.verifyAccess(other.token)).kind).toBe("valid");
 		});
+
+		it("hands the subject check the subject's kind, so a person's revocation leaves a client's token of the same name", async () => {
+			const place = await open({ revocable: true });
+			const person = await issueFor(place.tokens, { ...grant, subject: "c" });
+			const client = await issueFor(place.tokens, {
+				...grant,
+				subject: "c",
+				subjectKind: "client",
+			});
+			place.revokeSubject("c");
+			place.advance(1_000);
+			expect((await place.tokens.verifyAccess(person.token)).kind).toBe("invalid");
+			expect((await place.tokens.verifyAccess(client.token)).kind).toBe("valid");
+		});
 	});
 }
 
@@ -705,7 +719,8 @@ export function tokensStandIn(
 					if (!kept) return { kind: "invalid", reason: "expired" };
 					if (await denylist.holds(kept.id)) return { kind: "invalid", reason: "revoked" };
 					const { id, issuedAt, standingAt } = kept;
-					const issuedFor = { id, subject: kept.grant.subject, issuedAt, standingAt };
+					const { subject, subjectKind } = kept.grant;
+					const issuedFor = { id, subject, subjectKind, issuedAt, standingAt };
 					for (const condition of conditions) {
 						if ((await condition.holds(issuedFor)) === "revoked")
 							return { kind: "invalid", reason: "revoked" };

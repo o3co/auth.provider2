@@ -10,11 +10,11 @@ export function fencingOver(
 	random: { bytes(n: number): Uint8Array },
 ): IssuanceFencing {
 	return {
-		pass: async ({ subject }) => {
+		pass: async ({ subject, subjectKind }) => {
 			if (fences.length === 0) return { kind: "passed" };
 			const receiptId = Buffer.from(random.bytes(idBytes)).toString("base64url");
 			for (const fence of fences) {
-				if ((await fence.fence({ subject, receiptId })) === "refused") {
+				if ((await fence.fence({ subject, subjectKind, receiptId })) === "refused") {
 					return { kind: "refused", fence: fence.name, description: refusedDescription };
 				}
 			}

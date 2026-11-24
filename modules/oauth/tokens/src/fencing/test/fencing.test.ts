@@ -30,19 +30,19 @@ async function boot(answers: readonly ("passed" | "refused" | "unavailable")[]) 
 
 it("passes a bundle with no fence, making no receipt", async () => {
 	const { fencing, asked } = await boot([]);
-	expect(await fencing.pass({ subject: "alice" })).toEqual({ kind: "passed" });
+	expect(await fencing.pass({ subject: "alice", subjectKind: "user" })).toEqual({ kind: "passed" });
 	expect(asked).toEqual([]);
 });
 
 it("passes a bundle through every fence in order, under one receipt id each bundle", async () => {
 	const { fencing, asked } = await boot(["passed", "passed"]);
-	expect(await fencing.pass({ subject: "alice" })).toEqual({ kind: "passed" });
-	await fencing.pass({ subject: "bob" });
-	expect(asked.map((a) => [a.fence, a.bundle.subject])).toEqual([
-		["fence-0", "alice"],
-		["fence-1", "alice"],
-		["fence-0", "bob"],
-		["fence-1", "bob"],
+	expect(await fencing.pass({ subject: "alice", subjectKind: "user" })).toEqual({ kind: "passed" });
+	await fencing.pass({ subject: "bob", subjectKind: "client" });
+	expect(asked.map((a) => [a.fence, a.bundle.subject, a.bundle.subjectKind])).toEqual([
+		["fence-0", "alice", "user"],
+		["fence-1", "alice", "user"],
+		["fence-0", "bob", "client"],
+		["fence-1", "bob", "client"],
 	]);
 	const ids = asked.map((a) => a.bundle.receiptId);
 	expect(ids[0]).toBe(ids[1]);
@@ -53,13 +53,15 @@ it("passes a bundle through every fence in order, under one receipt id each bund
 
 it("ends at the first fence to refuse, naming it with any refusal's description, and is unavailable where one cannot tell", async () => {
 	const refusing = await boot(["passed", "refused", "passed"]);
-	expect(await refusing.fencing.pass({ subject: "alice" })).toEqual({
+	expect(await refusing.fencing.pass({ subject: "alice", subjectKind: "user" })).toEqual({
 		kind: "refused",
 		fence: "fence-1",
 		description: "issuance refused",
 	});
 	expect(refusing.asked.map((a) => a.fence)).toEqual(["fence-0", "fence-1"]);
 	const failing = await boot(["unavailable"]);
-	const failed = await failing.fencing.pass({ subject: "alice" }).catch((e: unknown) => e);
+	const failed = await failing.fencing
+		.pass({ subject: "alice", subjectKind: "user" })
+		.catch((e: unknown) => e);
 	expect(isUnavailable(failed)).toBe(true);
 });

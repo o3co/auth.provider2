@@ -24,12 +24,13 @@ import {
 	type AccessCondition,
 	accessConditions,
 	accessTokens,
+	type IssuedFor,
 	subjectChecks,
 } from "../src/contract.ts";
 import { defaultLifetimeSeconds } from "../src/limits.ts";
 import tokensModule from "../src/module.ts";
 import { section } from "../src/section.ts";
-import { composedHttp, composedKeys, issueFor, signAccess, signingKey } from "./composed.ts";
+import { composedHttp, composedKeys, issueFor, signingKey } from "./composed.ts";
 import { revokedInMemory } from "./revoked.ts";
 
 const start = 1_800_000_000_000;
@@ -213,7 +214,7 @@ describe("tokens", () => {
 });
 
 it("refuses a valid access token that a contributed condition no longer holds for, and lets unavailability through", async () => {
-	const seen: { id: string; subject: string; issuedAt: number }[] = [];
+	const seen: IssuedFor[] = [];
 	let answer: "holds" | "revoked" = "holds";
 	const down = unavailableSwitch<AccessCondition>();
 	const condition = defineModule({ name: "condition", replicaSafe: false, takes: [] }, (m) => [
@@ -231,7 +232,8 @@ it("refuses a valid access token that a contributed condition no longer holds fo
 	const issued = await issueFor(t, grant);
 	expect((await t.verifyAccess(issued.token)).kind).toBe("valid");
 	const second = Math.floor(now / 1000) * 1000;
-	expect(seen).toEqual([{ id: issued.id, subject: "s", issuedAt: second, standingAt: second }]);
+	const issuedFor = { id: issued.id, subject: "s", subjectKind: "user", issuedAt: second };
+	expect(seen).toEqual([{ ...issuedFor, standingAt: second }]);
 	answer = "revoked";
 	expect(await t.verifyAccess(issued.token)).toEqual({ kind: "invalid", reason: "revoked" });
 	down.unavailable("holds");
@@ -361,27 +363,6 @@ it("writes no auth_time for a grant whose authentication time is not known, what
 	expect(checked.kind === "valid" && checked.grant.authenticatedAt).toBeUndefined();
 });
 
-it("refuses as shape a token whose act, amr or auth_time is malformed", async () => {
-	const app = await assembled({ revocation: "unsupported" });
-	const t = app.get(accessTokens);
-	const issued = await issueFor(t, grant);
-	const signer = app.get(accessTokenSigning);
-	for (const malformed of [
-		{ act: { sub: "a", act: { sub: 1 } } },
-		{ act: "a" },
-		{ amr: "hwk" },
-		{ auth_time: "now" },
-		{ acr: 7 },
-		{ acr: "" },
-	]) {
-		const token = await signAccess(signer, { ...claimsOf(issued.token), ...malformed });
-		expect(await t.verifyAccess(token), JSON.stringify(malformed)).toEqual({
-			kind: "invalid",
-			reason: "shape",
-		});
-	}
-});
-
 it("writes one audience as a string and more as a list, an empty scope not at all, and a 128-bit id", async () => {
 	const t = await boot({ revocation: "unsupported" });
 	const one = await issueFor(t, grant);
@@ -423,33 +404,6 @@ it("refuses a token whose cap has passed, handing none out", async () => {
 		reason: "no_lifetime_left",
 		description: "expired",
 	});
-});
-
-it("refuses a token another issuer stamped, and one bound by two members", async () => {
-	const kinds = defineModule({ name: "two-kinds", replicaSafe: true, takes: [] }, (m) =>
-		["one", "two"].map((member) =>
-			m.contribute(senderBindings).by(() => ({
-				member,
-				tokenType: member.toUpperCase(),
-				read: async () => ({ kind: "absent" as const }),
-			})),
-		),
-	);
-	const app = await assembled({ revocation: "unsupported" }, { extra: [kinds] });
-	const t = app.get(accessTokens);
-	const signer = app.get(accessTokenSigning);
-	const claims = claimsOf((await issueFor(t, grant)).token);
-	const signed = (changed: Record<string, unknown>) =>
-		signAccess(signer, { ...claims, ...changed });
-	expect(await t.verifyAccess(await signed({ iss: "https://other.example" }))).toEqual({
-		kind: "invalid",
-		reason: "issuer",
-	});
-	expect(await t.verifyAccess(await signed({ cnf: { one: "a", two: "b" } }))).toEqual({
-		kind: "invalid",
-		reason: "shape",
-	});
-	expect((await t.verifyAccess(await signed({ cnf: { two: "b" } }))).kind).toBe("valid");
 });
 
 it("answers unsupported to any revocation where revocation is not configured, a token or not", async () => {

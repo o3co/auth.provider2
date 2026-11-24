@@ -178,6 +178,7 @@ export default defineModule(
 					const issuedFor = {
 						id: checked.access.id,
 						subject: checked.access.grant.subject,
+						subjectKind: checked.access.grant.subjectKind,
 						issuedAt: checked.issuedAt,
 						standingAt: checked.access.standingAt,
 					};
