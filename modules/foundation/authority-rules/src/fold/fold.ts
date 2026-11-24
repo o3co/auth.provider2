@@ -132,8 +132,11 @@ const under = (itemId: string, item: Item, x: string) => itemId === x || item.ch
 const keep = <T extends Item>(items: Readonly<Record<string, T>>, x: string) =>
 	Object.fromEntries(Object.entries(items).filter(([k, item]) => !under(k, item, x)));
 
-/** The state without `x` and everything rooted at it: Revoke, and a key's removal. */
-function without(s: FlowState, x: string): FlowState {
+/**
+ * The state without `x` and everything rooted at it: Revoke, and a key's removal. A caller asking
+ * what a removal leaves (the keys that go with it) reads it here rather than repeating the rule.
+ */
+export function withoutRooted(s: FlowState, x: string): FlowState {
 	return {
 		...s,
 		keys: keep(s.keys, x),
@@ -167,7 +170,7 @@ function update(s: FlowState, k: Envelope, e: Changes): FlowState {
 			next = { ...next, keys: { ...next.keys, [k.id]: key } };
 		}
 	}
-	if (e.removeKey !== undefined) next = without(next, e.removeKey);
+	if (e.removeKey !== undefined) next = withoutRooted(next, e.removeKey);
 	if (e.approval) {
 		const key = own(next.keys, e.approval.key);
 		if (key) {
@@ -214,7 +217,7 @@ export function fold(state: FlowState, envelope: Envelope, e: Changes, j: Findin
 	if (!(acceptable(j.verdict) && j.outcome === "took")) return state;
 	switch (envelope.kind) {
 		case "denial":
-			return e.revoke === undefined ? state : without(state, e.revoke);
+			return e.revoke === undefined ? state : withoutRooted(state, e.revoke);
 		case "abandonment": {
 			if (e.abandon === undefined || !own(state.families, e.abandon)) return state;
 			const { [e.abandon]: _dropped, ...families } = state.families;

@@ -12,6 +12,7 @@ Internal module of `authority-rules`: a flow's state and the one fold over it (k
 ## Offers
 - `flowState`, `changes` (schemas), `FlowState`, `Changes`, `Envelope` (`Env(r)` with the record's id), `Finding` (verdict, outcome), `FlowEntry` (with the parent and, for a start or a bundle, `via`), `RecordKind`, `emptyState`, `acceptable`, `own` (an item by id).
 - `fold` (state, envelope, changes, finding) → the state. `foldFlow` (flow, entries) → stateOf.
+- `withoutRooted` (state, an item's id) → the state without it and every item whose chain holds it: the rule a denial and a key's removal take, for a caller asking what a removal leaves.
 - `abandonedFamily` (a bundle's envelope and changes) → the family an abandonment of its op drops, by the name the fold gives it.
 
 ## Invariants

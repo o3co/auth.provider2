@@ -13,6 +13,7 @@ import {
 	flowState,
 	fold,
 	foldFlow,
+	withoutRooted,
 } from "../fold.ts";
 
 // Each case names the model definition it is taken from: kernel-spec §6.3 (Fold, Revoke, Abandon,
@@ -184,6 +185,13 @@ describe("Revoke, Abandon and NextGen (kernel-spec §6.3)", () => {
 		const s = step(chained(), env("keyChange"), { removeKey: "k2" });
 		expect(Object.keys(s.keys)).toEqual(["k1", "other"]);
 		expect(s.families).toEqual({});
+	});
+
+	it("tells what a removal or a denial of an item leaves, as the fold takes it (Rules023 Fold `rev`: Under)", () => {
+		const s = chained();
+		expect(withoutRooted(s, "k1")).toEqual(step(s, env("denial"), { revoke: "k1" }));
+		expect(Object.keys(withoutRooted(s, "k1").keys)).toEqual(["other"]);
+		expect(withoutRooted(s, "none")).toEqual(s);
 	});
 
 	it("drops the abandoned op's family and keeps the marks; a family already gone is no change (Step023 Fold `abn`, W_RevBetween; OI-02)", () => {

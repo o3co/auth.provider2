@@ -21,6 +21,7 @@ export {
 	fold,
 	foldFlow,
 	type RecordKind,
+	withoutRooted,
 } from "./fold/fold.ts";
 export {
 	type FlowRecord,
