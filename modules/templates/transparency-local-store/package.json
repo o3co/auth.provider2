@@ -9,6 +9,10 @@
 		"./module": "./src/module.ts"
 	},
 	"dependencies": {
+		"@mod/client-allowance": "workspace:*",
+		"@mod/client-assertion": "workspace:*",
+		"@mod/clients": "workspace:*",
+		"@mod/issuer": "workspace:*",
 		"@mod/kernel": "workspace:*",
 		"@mod/store": "workspace:*",
 		"@mod/transparency-local": "workspace:*"

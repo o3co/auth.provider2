@@ -2384,6 +2384,18 @@ importers:
 
   modules/templates/transparency-local-store:
     dependencies:
+      '@mod/client-allowance':
+        specifier: workspace:*
+        version: link:../../oauth/client-allowance
+      '@mod/client-assertion':
+        specifier: workspace:*
+        version: link:../../oauth/client-assertion
+      '@mod/clients':
+        specifier: workspace:*
+        version: link:../../identity/clients
+      '@mod/issuer':
+        specifier: workspace:*
+        version: link:../../oauth/issuer
       '@mod/kernel':
         specifier: workspace:*
         version: link:../../foundation/kernel

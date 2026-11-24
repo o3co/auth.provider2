@@ -1,3 +1,6 @@
+import type { Client } from "@mod/clients";
+import { clients } from "@mod/clients";
+import { issuer } from "@mod/issuer";
 import { assemble, BootRefused, defineModule, kernelConfig } from "@mod/kernel";
 import { quietRuntime } from "@mod/kernel/testing";
 import keysModule from "@mod/keys/module";
@@ -7,7 +10,7 @@ import { type Guarantee, type Store, spaces, store } from "@mod/store";
 import storeModule from "@mod/store/module";
 import { simulatedStore, storeConfig } from "@mod/store/testing";
 import { transparencyLog } from "@mod/transparency";
-import { logStore } from "@mod/transparency-local";
+import { clientRecords, logStore } from "@mod/transparency-local";
 import transparencyLocal from "@mod/transparency-local/module";
 import { opIds } from "@mod/transparency-wire";
 import webauthnModule from "@mod/webauthn/module";
@@ -26,6 +29,33 @@ const config = (settings = { "accept-unauthenticated": true }) => ({
 	...kernelConfig(),
 	...storeConfig(settings),
 });
+/** A signed client of version 3, its one key and its own ceiling: `read` at the API. */
+const svc: Client = {
+	id: "svc",
+	kind: "confidential",
+	method: "private_key_jwt",
+	registered: false,
+	version: 3,
+	signed: true,
+	section: <T>(s: { readonly name: string }) =>
+		(s.name === "client-assertion"
+			? { keys: [{ kty: "EC", kid: "k" }], "accept-loose-audience": false }
+			: {
+					grants: ["client_credentials"],
+					scopes: [],
+					audiences: [],
+					self: [{ audience: "https://api.example", scopes: ["read"] }],
+				}) as T,
+};
+/** The clients and the issuer the wiring reads a client's record by. */
+const beside = defineModule({ name: "beside", replicaSafe: true, takes: [] }, (m) => [
+	m
+		.provide(clients)
+		.by(() => ({ find: async (id: string) => (id === svc.id ? svc : undefined) }) as never),
+	m
+		.provide(issuer)
+		.by(() => ({ url: "https://core.example", endpointOrigin: "https://core.example" })),
+]);
 const refusal = (error: unknown) =>
 	BootRefused.is(error)
 		? error.refusals.map((r) => `${r.where}: ${r.reason}`).join("\n")
@@ -35,7 +65,7 @@ describe("transparency-local-store", () => {
 	it("declares the log's space with a guarantee for each need transparency-local states", async () => {
 		const simulated = simulatedStore();
 		await assemble({
-			modules: [simulated.module, wiring],
+			modules: [simulated.module, wiring, beside],
 			config: kernelConfig(),
 			runtime: quietRuntime(),
 		});
@@ -44,9 +74,26 @@ describe("transparency-local-store", () => {
 		expect(declared.subjectData).toBe("retained");
 	});
 
+	it("gives transparency-local each client's record as clients holds it: version, signed, keys and its own ceiling", async () => {
+		const app = await assemble({
+			modules: [storeModule, wiring, beside],
+			config: config(),
+			runtime: quietRuntime(),
+		});
+		const records = await app.get(clientRecords);
+		const read = await records.find("svc");
+		if (!read) throw new Error("no client");
+		expect([records.version(read), records.signed(read)]).toEqual([3, true]);
+		expect(records.keys(read)).toEqual([{ kty: "EC", kid: "k" }]);
+		expect(records.ceiling(read, "https://api.example", "read")).toBe(true);
+		expect(records.ceiling(read, "https://api.example", "write")).toBe(false);
+		expect(records.ceiling(read, "https://core.example", "read")).toBe(false);
+		expect(await records.find("other")).toBeUndefined();
+	});
+
 	it("writes the records read as one, held to every version read, and reads them back", async () => {
 		const app = await assemble({
-			modules: [storeModule, wiring],
+			modules: [storeModule, wiring, beside],
 			config: config(),
 			runtime: quietRuntime(),
 		});
@@ -63,7 +110,7 @@ describe("transparency-local-store", () => {
 
 	it("boots over a store that does not tell an outside write apart only as the store's setting accepts", async () => {
 		const refused = await assemble({
-			modules: [storeModule, wiring],
+			modules: [storeModule, wiring, beside],
 			config: config({ "accept-unauthenticated": false }),
 			runtime: quietRuntime(),
 		}).catch(refusal);
@@ -78,7 +125,7 @@ describe("transparency-local-store", () => {
 			}),
 		]);
 		const refused = await assemble({
-			modules: [lacking, wiring],
+			modules: [lacking, wiring, beside],
 			config: kernelConfig(),
 			runtime: quietRuntime(),
 		})
@@ -101,6 +148,7 @@ describe("transparency-local-store", () => {
 			modules: [
 				storeModule,
 				wiring,
+				beside,
 				keysModule,
 				testHolder(),
 				webauthnModule,

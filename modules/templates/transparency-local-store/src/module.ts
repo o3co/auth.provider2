@@ -1,6 +1,10 @@
+import { clientAllowance } from "@mod/client-allowance";
+import { clientKeys } from "@mod/client-assertion";
+import { type Client, clients } from "@mod/clients";
+import { issuer } from "@mod/issuer";
 import { defineModule } from "@mod/kernel";
 import { type Guarantee, type Space, spaces, store } from "@mod/store";
-import { logStore, type logStoreNeeds, logStoreOver } from "@mod/transparency-local";
+import { clientRecords, logStore, type logStoreNeeds, logStoreOver } from "@mod/transparency-local";
 
 /** Each need transparency-local states for its log, as the guarantee the log's space declares. */
 const guaranteeFor: Record<keyof typeof logStoreNeeds, Guarantee> = {
@@ -19,9 +23,22 @@ const log: Space = {
 
 // Holds nothing of its own, so it is safe on many instances.
 export default defineModule(
-	{ name: "transparency-local-store", replicaSafe: true, takes: [store] },
+	{ name: "transparency-local-store", replicaSafe: true, takes: [store, clients, issuer] },
 	(m) => [
 		m.contribute(spaces).by(() => log),
+		// A client as `clients` holds it: its written keys, and its own ceiling at the issuer.
+		m.provide(clientRecords).by(async (c) => {
+			const registry = await c.get(clients);
+			const { url } = await c.get(issuer);
+			return {
+				find: registry.find,
+				version: (client: Client) => client.version,
+				signed: (client: Client) => client.signed === true,
+				keys: (client: Client) => client.section(clientKeys).keys,
+				ceiling: (client: Client, audience: string, scope: string) =>
+					clientAllowance.allowedSelfIssuance(client, scope, [audience], url).kind === "allowed",
+			};
+		}),
 		m.provide(logStore).by(async (c) =>
 			logStoreOver({
 				store: await c.get(store),
