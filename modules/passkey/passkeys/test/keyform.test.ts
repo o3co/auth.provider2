@@ -38,16 +38,17 @@ const t = signed({
 });
 
 describe("the key passkeys keeps, one form for webauthn and the rules", () => {
-	it.each(["ES256", "EdDSA"] as const)(
+	it.each(["ES256", "EdDSA", "RS256"] as const)(
 		"keeps a %s key as its COSE_Key, which passkeys' assert and the rules' approval both take",
 		async (algorithm) => {
-			const w = await world();
+			const w = await world({ webauthn: { algorithms: ["ES256", "EdDSA", "RS256"] } });
 			const auth = softwareAuthenticator({ algorithm });
 			const { credential } = await w.register("s1", true, auth);
 			const held = w.frames.value("s1", "keys") as { keys: FlowState["keys"] };
 			const [[id, key] = []] = Object.entries(held.keys);
 			expect(key?.publicKey).toBe(credential.publicKey);
-			expect(keyThumbprint(key?.publicKey ?? "")?.alg).toBe(algorithm === "ES256" ? -7 : -8);
+			const alg = { ES256: -7, EdDSA: -8, RS256: -257 }[algorithm];
+			expect(keyThumbprint(key?.publicKey ?? "")?.alg).toBe(alg);
 
 			const named = w.asserting([credential], auth);
 			expect(

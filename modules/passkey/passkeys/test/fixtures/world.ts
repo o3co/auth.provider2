@@ -331,7 +331,11 @@ export function memoryWitnessing() {
 
 /** passkeys composed with transparency, webauthn and a key change's writer, over memory. */
 export async function world(
-	p: { readonly section?: Record<string, unknown>; readonly modules?: readonly Module[] } = {},
+	p: {
+		readonly section?: Record<string, unknown>;
+		readonly modules?: readonly Module[];
+		readonly webauthn?: Parameters<typeof webauthnConfig>[0];
+	} = {},
 ) {
 	let clock = 1_000_000;
 	const frames = memoryFrames([passkeyPart, "grants", "families", "writer"]);
@@ -351,7 +355,7 @@ export async function world(
 			passkeysModule,
 			...(p.modules ?? []),
 		],
-		config: { ...kernelConfig(), ...webauthnConfig(), passkeys: p.section ?? {} },
+		config: { ...kernelConfig(), ...webauthnConfig(p.webauthn), passkeys: p.section ?? {} },
 		runtime: quietRuntime({ clock: { now: () => clock } }),
 	});
 	const keys = await app.get(passkeys);
