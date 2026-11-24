@@ -6,7 +6,7 @@ import { subjectErasure, subjectRevocation } from "@mod/subject-revocation";
 import revocationModule from "@mod/subject-revocation/module";
 import revocationStore from "@mod/subject-revocation-store/module";
 import { accessTokenIssuance, accessTokens, type IssuanceFence, issuanceFences } from "@mod/tokens";
-import { tokensStandIn } from "@mod/tokens/testing";
+import { issueAtOnce, tokensStandIn } from "@mod/tokens/testing";
 import { beforeEach, expect, it } from "vitest";
 import subjectTokens from "../src/module.ts";
 
@@ -45,7 +45,7 @@ async function boot() {
 			scope: [],
 			...(standingAt === undefined ? {} : { standingAt }),
 		};
-		const issued = await app.get(accessTokenIssuance).issue({ grant, grantType: "test" });
+		const issued = await issueAtOnce(app.get(accessTokenIssuance), { grant, grantType: "test" });
 		if (issued.kind !== "issued") throw new Error(issued.reason);
 		return issued.access.token;
 	};
