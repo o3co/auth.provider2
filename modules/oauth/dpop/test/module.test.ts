@@ -154,10 +154,10 @@ describe("dpop", () => {
 		expect(await publishedAlgorithms(section)).toEqual(["ES256", "EdDSA"]);
 	});
 
-	it("takes ES256, ES384 and EdDSA by default, and RS256 only where the section names it", async () => {
-		expect(await publishedAlgorithms()).toEqual(["ES256", "ES384", "EdDSA"]);
-		const named = { algorithms: ["ES256", "RS256"], nonce: { required: "never" } };
-		expect(await publishedAlgorithms(named)).toEqual(["ES256", "RS256"]);
+	it("takes FAPI 2.0's ES256, PS256 and EdDSA by default, and ES384 and RS256 only where the section names them", async () => {
+		expect(await publishedAlgorithms()).toEqual(["ES256", "PS256", "EdDSA"]);
+		const named = { algorithms: ["ES256", "ES384", "RS256"], nonce: { required: "never" } };
+		expect(await publishedAlgorithms(named)).toEqual(["ES256", "ES384", "RS256"]);
 	});
 
 	it("contributes dpop_jkt as how a client asks for its binding ahead, taking a SHA-256 thumbprint in its one form alone", async () => {
@@ -944,6 +944,21 @@ it("warns at every start where no nonce is asked, and not where one is", async (
 	]);
 	const secret = randomBytes(32).toString("base64");
 	expect(await warned({ required: "as", secret })).toEqual([]);
+});
+
+it("warns at every start where the section names RS256, and not where it does not", async () => {
+	const warned = async (algorithms?: readonly string[]) => {
+		const recorded = recordingLog();
+		const nonce = { required: "never" };
+		const section = algorithms === undefined ? { nonce } : { algorithms, nonce };
+		await assemble({ ...assembly(section), runtime: quietRuntime({ log: recorded.log }) });
+		return recorded.lines().filter((line) => line.event === "dpop.rs256_deprecated");
+	};
+	const lines = await warned(["ES256", "RS256"]);
+	expect(lines.map((line) => line.level)).toEqual(["warn"]);
+	expect(lines[0]?.fields.reason).toMatch(/112 bits.*PKCS#1 v1\.5.*FAPI 2\.0/);
+	expect(await warned(["ES256", "PS256"])).toEqual([]);
+	expect(await warned()).toEqual([]);
 });
 
 it("takes all it names, asking nonces or not", async () => {

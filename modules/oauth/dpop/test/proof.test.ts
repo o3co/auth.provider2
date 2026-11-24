@@ -1,4 +1,4 @@
-import { createHash, generateKeyPairSync, type KeyObject, sign } from "node:crypto";
+import { constants, createHash, generateKeyPairSync, type KeyObject, sign } from "node:crypto";
 import type { HttpRequest } from "@mod/http";
 import { testRequest } from "@mod/http/testing";
 import type { Scene } from "@mod/sender-binding";
@@ -11,6 +11,9 @@ const now = Date.now();
 const iat = Math.floor(now / 1000);
 const pair = generateKeyPairSync("ed25519");
 const jwk = await exportJWK(pair.publicKey);
+// RSA keys are slow to make: made once, as the file loads, never within a test's time.
+const rsa = generateKeyPairSync("rsa", { modulusLength: 2048 });
+const weakRsa = generateKeyPairSync("rsa", { modulusLength: 1024 });
 const token = "access-token";
 
 /** Where a proof is checked: the token endpoint at issuance, or a resource the token is presented at. */
@@ -227,6 +230,35 @@ describe("DPoP proof", () => {
 			}),
 			"signature does not verify",
 			{ algorithms: [...rules.algorithms, "RS256"] },
+		);
+	});
+
+	it("takes a proof by an RSA key under PS256, and refuses one under PS256 padded as RS256 or by a key under 2048 bits [rfc9449-4.3-e]", async () => {
+		const rsaJwk = await exportJWK(rsa.publicKey);
+		const weak = weakRsa;
+		const weakJwk = await exportJWK(weak.publicKey);
+		const pss = { padding: constants.RSA_PKCS1_PSS_PADDING, saltLength: 32 };
+		const algorithms = [...rules.algorithms, "PS256"];
+		for (const at of [endpoint, resource]) {
+			const pss = await proof({}, { alg: "PS256", jwk: rsaJwk }, rsa.privateKey, at);
+			expect((await check(pss, { algorithms }, at)).kind, at.path).toBe("proved");
+		}
+		await expectRefused(
+			async (at) => ({
+				"PKCS#1 v1.5 under PS256": signedByHand(
+					{ alg: "PS256", typ: "dpop+jwt", jwk: rsaJwk },
+					claimsAt(at),
+					(input) => sign("sha256", input, rsa.privateKey),
+				),
+				// Signed by hand, since the library will not sign with a short RSA key.
+				"RSA under 2048 bits under PS256": signedByHand(
+					{ alg: "PS256", typ: "dpop+jwt", jwk: weakJwk },
+					claimsAt(at),
+					(input) => sign("sha256", input, { key: weak.privateKey, ...pss }),
+				),
+			}),
+			"signature does not verify",
+			{ algorithms },
 		);
 	});
 

@@ -28,10 +28,12 @@ const spentName = (jkt: string, jti: string) =>
 
 const section = z.strictObject({
 	algorithms: z
-		.array(z.enum(["ES256", "ES384", "EdDSA", "RS256"]))
+		.array(z.enum(["ES256", "PS256", "EdDSA", "ES384", "RS256"]))
 		.min(1)
-		.prefault(["ES256", "ES384", "EdDSA"])
-		.describe("The signing algorithms a DPoP proof may use."),
+		.prefault(["ES256", "PS256", "EdDSA"])
+		.describe(
+			"The signing algorithms a DPoP proof may use: by default FAPI 2.0's; RS256 is deprecated.",
+		),
 	"proof-window": setting
 		.duration("s")
 		.pipe(z.number().int().min(1).max(widestWindow))
@@ -86,6 +88,10 @@ const section = z.strictObject({
 		}),
 });
 
+/** Why RS256 is deprecated: the operator's choice, yet said at every start where the section names it. */
+const rs256Reason =
+	"RS256 is deprecated: a 2048-bit RSA key gives about 112 bits of strength, padded by PKCS#1 v1.5, and it is outside FAPI 2.0, which takes PS256, ES256 and EdDSA; ES256 is recommended";
+
 /** Kept longer than any proof is accepted by this much, so clock differences never let one back. */
 const clockAllowanceMs = 60_000;
 
@@ -102,6 +108,9 @@ export default defineModule(
 				c.log.warn("dpop.nonce_not_asked", {
 					reason: "no nonce is asked, so a proof made ahead is taken within its window",
 				});
+			}
+			if (c.section.algorithms.includes("RS256")) {
+				c.log.warn("dpop.rs256_deprecated", { reason: rs256Reason });
 			}
 			// The section holds a secret wherever a nonce is asked.
 			const asked =
