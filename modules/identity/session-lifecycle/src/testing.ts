@@ -1,0 +1,220 @@
+import { isUnavailable } from "@mod/kernel";
+import { describe, expect, it } from "vitest";
+import type { z } from "zod";
+import type { section } from "./section.ts";
+import type { ClosingList, SessionStore, StoredSession, SubjectSessions } from "./store.ts";
+
+export type SessionLifecycleSettings = z.input<typeof section>;
+
+export function sessionLifecycleConfig(settings: Partial<SessionLifecycleSettings> = {}) {
+	return { "session-lifecycle": { ...settings } };
+}
+
+/** A place that keeps session-lifecycle's records, closings and listings, as one implementation of its store interfaces offers it. */
+export interface SessionStorePlace {
+	readonly sessions: SessionStore;
+	readonly closings: ClosingList;
+	readonly subjects: SubjectSessions;
+	/** Moves the place's clock on, so lifetimes run out. */
+	advance(ms: number): void;
+	/** Before the next update of `handle` writes, another writer changes its record as given. */
+	raceNextUpdate(handle: string, change: (record: StoredSession) => StoredSession): void;
+	/** Handles the closings keep together, and how many it keeps before it refuses. */
+	readonly crowd: { readonly limit: number; handles(count: number): readonly string[] };
+	/** Where answers can be lost: the next write takes effect, but its answer is lost. */
+	readonly loseNextAnswer?: () => void;
+	/** Where the place replicates: a replica takes over, keeping only what was confirmed. */
+	readonly failover?: () => Promise<void>;
+	/** Where the place can restart: it does, keeping only what it holds durably. */
+	readonly restart?: () => Promise<void>;
+	/** Where memory can run short: it does, keeping only what is kept from eviction. */
+	readonly pressMemory?: () => Promise<void>;
+}
+
+/**
+ * What session-lifecycle needs from any implementation of its store interfaces: records kept whole and
+ * once, changed only from what they hold, ended at exactly their lifetime or never; closings kept
+ * until done, through lost answers and failovers, never pushed out.
+ */
+export function sessionStoreContract(name: string, open: () => Promise<SessionStorePlace>): void {
+	let n = 0;
+	const fresh = () => `s-${++n}-${Math.random().toString(36).slice(2)}`;
+	const held = (value: object) => value as unknown as StoredSession;
+	const counted = (record: StoredSession) => (record as unknown as { n: number }).n;
+	const plus = (by: number) => (record: StoredSession) => ({
+		value: held({ n: counted(record) + by }),
+	});
+	/** What an add answered, for a subject the place has not erased. */
+	const listedOf = (added: Awaited<ReturnType<SubjectSessions["add"]>>) => {
+		if (typeof added === "string") throw new Error(`listed as ${added}`);
+		return added;
+	};
+	const closingsIn = async (closings: ClosingList) => {
+		const found: string[] = [];
+		await closings.each(async (handle) => {
+			found.push(handle);
+		});
+		return found.sort();
+	};
+
+	describe(`session-lifecycle's store interfaces: ${name}`, () => {
+		it("keeps a record whole and once per handle, whatever it holds", async () => {
+			const { sessions } = await open();
+			const handle = fresh();
+			const odd = held({ state: "unheard-of", nested: { list: [1, "two"] } });
+			expect(await sessions.save(handle, odd, 60_000, "alice")).toBe("created");
+			expect(await sessions.save(handle, held({ n: 1 }), 60_000, "alice")).toBe("exists");
+			expect(await sessions.read(handle)).toEqual(odd);
+			expect(await sessions.update(handle, () => undefined)).toEqual({ before: odd, after: odd });
+			expect(await sessions.update(fresh(), plus(1))).toBeUndefined();
+			expect(await sessions.read(fresh())).toBeUndefined();
+		});
+
+		it("changes a record only from what it holds, again after a racing writer", async () => {
+			const place = await open();
+			const handle = fresh();
+			await place.sessions.save(handle, held({ n: 1 }), 60_000, "alice");
+			expect(await place.sessions.update(handle, plus(1))).toEqual({
+				before: held({ n: 1 }),
+				after: held({ n: 2 }),
+			});
+			place.raceNextUpdate(handle, (record) => held({ n: counted(record) * 10 }));
+			expect((await place.sessions.update(handle, plus(1)))?.after).toEqual(held({ n: 21 }));
+		});
+
+		it("ends a record at exactly its lifetime, or never when it is left without one", async () => {
+			const place = await open();
+			const [ending, endless] = [fresh(), fresh()];
+			await place.sessions.save(ending, held({ n: 1 }), 1000, "alice");
+			await place.sessions.save(endless, held({ n: 1 }), 1000, "alice");
+			place.advance(999);
+			await place.sessions.update(ending, (record) => ({ value: record, lifetimeMs: 1000 }));
+			await place.sessions.update(endless, (record) => ({ value: record, lifetimeMs: "endless" }));
+			place.advance(999);
+			expect(await place.sessions.read(ending)).toBeDefined();
+			place.advance(1);
+			expect(await place.sessions.read(ending)).toBeUndefined();
+			place.advance(10 * 365 * 86_400_000);
+			expect(await place.sessions.read(endless)).toEqual(held({ n: 1 }));
+		});
+
+		it("lists a subject's sessions each for its lifetime, until one is removed", async () => {
+			const { subjects, advance } = await open();
+			const [subject, other, ending, lasting] = [fresh(), fresh(), fresh(), fresh()];
+			const members = async (of: string) =>
+				(await subjects.members(of)).map(({ member }) => member).sort();
+			expect(listedOf(await subjects.add(subject, ending, 1000)).pushedOut).toEqual([]);
+			await subjects.add(subject, lasting, 60_000);
+			await subjects.add(other, ending, 60_000);
+			expect(await members(subject)).toEqual([ending, lasting].sort());
+			advance(1000);
+			expect(await members(subject)).toEqual([lasting]);
+			await subjects.remove(subject, lasting);
+			await subjects.remove(fresh(), lasting);
+			expect(await members(subject)).toEqual([]);
+			expect(await members(other)).toEqual([ending]);
+		});
+
+		it("pushes out over its cap only others, the ones ending first, never the handle being added", async () => {
+			const { subjects } = await open();
+			const subject = fresh();
+			// Each handle ends before every one listed earlier, so the one ending first is the one being added.
+			for (let n = 0; n < 10_000; n++) {
+				const handle = fresh();
+				const { pushedOut } = listedOf(await subjects.add(subject, handle, 1_000_000 - n));
+				if (pushedOut.length === 0) continue;
+				expect(pushedOut).not.toContain(handle);
+				expect((await subjects.members(subject)).map(({ member }) => member)).toContain(handle);
+				return;
+			}
+			throw new Error("the listing pushed none out");
+		});
+
+		it("refuses, where the stores erase, every session saved and every listing added for a subject they erased, and only for that subject", async (context) => {
+			const { sessions, subjects } = await open();
+			if (!sessions.erase || !subjects.erase) return context.skip();
+			const [handle, other] = [fresh(), fresh()];
+			await sessions.save(handle, held({ n: 1 }), 60_000, "erin");
+			await subjects.add("erin", handle, 60_000);
+			const signal = new AbortController().signal;
+			const told: StoredSession[] = [];
+			const report = await sessions.erase.call(sessions, "erin", signal, (record) => {
+				told.push(record);
+			});
+			// A Store that erases nothing now (its records not indexed yet) says so, and fences nothing.
+			if (report.kind === "stopped") return context.skip();
+			expect(report).toMatchObject({ kind: "erased", removed: 1 });
+			expect(told).toEqual([held({ n: 1 })]);
+			expect(await subjects.erase.call(subjects, "erin", signal)).toMatchObject({ kind: "erased" });
+			expect(await sessions.read(handle)).toBeUndefined();
+			expect(await subjects.members("erin")).toEqual([]);
+			expect(await sessions.save(fresh(), held({ n: 2 }), 60_000, "erin")).toBe("erased");
+			expect(await subjects.add("erin", other, 60_000)).toBe("erased");
+			expect(await sessions.save(other, held({ n: 3 }), 60_000, "finn")).toBe("created");
+		});
+
+		it("keeps closings until done, and a closing whose handling failed", async () => {
+			const { closings } = await open();
+			const [failing, settled, handled] = [fresh(), fresh(), fresh()];
+			for (const handle of [failing, settled, handled]) await closings.add(handle);
+			const swept = await closings.each(async (handle) => {
+				if (handle === failing) throw new Error("not yet");
+				if (handle === settled) await closings.done(handle);
+			});
+			expect(swept.failed).toBe(1);
+			expect(await closingsIn(closings)).toEqual([failing, handled].sort());
+		});
+
+		it("refuses a closing past a full place without pushing out one it keeps", async () => {
+			const { closings, crowd } = await open();
+			const [over, ...kept] = crowd.handles(crowd.limit + 1);
+			for (const handle of kept) await closings.add(handle);
+			await expect(closings.add(over as string)).rejects.toSatisfy(isUnavailable);
+			expect(await closingsIn(closings)).toEqual([...kept].sort());
+		}, 60_000);
+
+		it("keeps records, closings and listings through a restart and through memory pressure", async (context) => {
+			const place = await open();
+			const { restart, pressMemory } = place;
+			if (!restart || !pressMemory) return context.skip();
+			const [handle, subject, kept] = [fresh(), fresh(), fresh()];
+			await place.sessions.save(handle, held({ n: 1 }), 60_000, "alice");
+			await place.closings.add(kept);
+			await place.subjects.add(subject, handle, 60_000);
+			await restart();
+			await pressMemory();
+			expect(await place.sessions.read(handle)).toEqual(held({ n: 1 }));
+			expect(await closingsIn(place.closings)).toEqual([kept]);
+			expect(await place.subjects.members(subject)).toMatchObject([{ member: handle }]);
+		});
+
+		// Each interface fails over after its own writes: a later write in another space would
+		// confirm them, and hide a space that does not replicate.
+		it("settles writes whose answers were lost, and keeps each interface's through a failover", async (context) => {
+			const place = await open();
+			const { loseNextAnswer: lose, failover } = place;
+			if (!lose || !failover) return context.skip();
+			const [handle, retired, kept, settled] = [fresh(), fresh(), fresh(), fresh()];
+			lose();
+			expect(await place.sessions.save(handle, held({ n: 1 }), 60_000, "alice")).toBe("created");
+			lose();
+			expect((await place.sessions.update(handle, plus(1)))?.after).toEqual(held({ n: 2 }));
+			await failover();
+			expect(await place.sessions.read(handle)).toEqual(held({ n: 2 }));
+			lose();
+			await place.closings.add(kept);
+			await place.closings.add(settled);
+			lose();
+			await place.closings.done(settled);
+			await failover();
+			expect(await closingsIn(place.closings)).toEqual([kept]);
+			await place.subjects.add(kept, retired, 60_000);
+			lose();
+			await place.subjects.add(kept, handle, 60_000);
+			lose();
+			await place.subjects.remove(kept, retired);
+			await failover();
+			expect(await place.subjects.members(kept)).toMatchObject([{ member: handle }]);
+		});
+	});
+}

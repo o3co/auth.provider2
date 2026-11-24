@@ -1,0 +1,36 @@
+{
+	"name": "@mod/session-lifecycle",
+	"private": true,
+	"license": "Apache-2.0",
+	"type": "module",
+	"kind": "adapter",
+	"replaces": "@mod/session",
+	"default": true,
+	"exports": {
+		".": "./src/contract.ts",
+		"./module": "./src/module.ts",
+		"./testing": "./src/testing.ts"
+	},
+	"dependencies": {
+		"@mod/erasure-extensions": "workspace:*",
+		"@mod/kernel": "workspace:*",
+		"@mod/login-attributes": "workspace:*",
+		"@mod/session": "workspace:*",
+		"@mod/subject-revocation": "workspace:*",
+		"zod": "4.6.7"
+	},
+	"peerDependencies": {
+		"vitest": "5.0.5"
+	},
+	"peerDependenciesMeta": {
+		"vitest": {
+			"optional": true
+		}
+	},
+	"devDependencies": {
+		"@mod/records": "workspace:*",
+		"@mod/store": "workspace:*",
+		"@mod/subject-revocation-store": "workspace:*",
+		"vitest": "5.0.5"
+	}
+}
