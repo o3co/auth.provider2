@@ -1,5 +1,5 @@
 import { kinds, mayNeed } from "@mod/kinds";
-import { axesIn } from "./composed.ts";
+import { axesIn } from "./axes/axes.ts";
 import type { Declared, Package } from "./declared.ts";
 
 /** What a package declared outside the workspace says of itself, in the words composing reads. */
@@ -96,6 +96,7 @@ const packageOf = (d: Declaration): Package => ({
 	...(d.replaces !== undefined ? { replaces: d.replaces } : {}),
 	...(d.adapts !== undefined ? { adapts: d.adapts } : {}),
 	default: d.default === true,
+	neverDefault: false,
 	forWiring: false,
 	outside: true,
 });
@@ -121,8 +122,9 @@ function graphRefusals(declared: Declared): string[] {
 	const axes = [...adapters].flatMap(([owner, of]) => {
 		const defaults = of.filter((p) => p.default).length;
 		if (defaults > 1) return [`${owner}: ${defaults} defaults among its adapters`];
-		if (of.length > 1 && defaultOf(owner) === undefined) {
-			return [`${owner}: no default among its ${of.length} adapters`];
+		const eligible = of.filter((p) => !p.neverDefault).length;
+		if (eligible > 1 && defaultOf(owner) === undefined) {
+			return [`${owner}: no default among its ${eligible} adapters`];
 		}
 		return [];
 	});

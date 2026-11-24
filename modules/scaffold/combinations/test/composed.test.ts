@@ -16,6 +16,8 @@ vi.setConfig({ testTimeout: 30_000 });
 const declared = declaredIn(join(import.meta.dirname, "composition"));
 /** An axis owner with no module of its own, read once: reading a workspace takes a while. */
 const owned = declaredIn(join(import.meta.dirname, "owner-bridge"));
+/** An axis whose only adapter declares itself never the default. */
+const explicit = declaredIn(join(import.meta.dirname, "never-default"));
 
 it("composes a selection with what it needs to run, each axis's default where its owner is composed, then wirings and bridges", () => {
 	expect(composedWith(declared, { features: { login: ["@c/app"] } })).toEqual([
@@ -163,4 +165,15 @@ it("refuses an owner chosen for its own axis where it has no module, naming the 
 	).toThrow(
 		"axes.@o/session = @o/session: the owner has no module, so it cannot serve its own axis",
 	);
+});
+
+it("never takes an adapter declaring itself never the default as its axis's default, even its only one", () => {
+	const selection = { features: { app: ["@n/app"] } };
+	expect(composedWith(explicit, selection)).toEqual(["@n/app", "@n/owner"]);
+	expect(fullWith(explicit)).toEqual(["@n/app", "@n/owner"]);
+	expect(composedWith(explicit, { ...selection, axes: { "@n/owner": "@n/local" } })).toEqual([
+		"@n/app",
+		"@n/owner",
+		"@n/local",
+	]);
 });

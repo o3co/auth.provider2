@@ -1,0 +1,9 @@
+{
+	"name": "@n/local",
+	"kind": "adapter",
+	"adapts": "@n/owner",
+	"neverDefault": true,
+	"exports": {
+		"./module": "./src/module.ts"
+	}
+}

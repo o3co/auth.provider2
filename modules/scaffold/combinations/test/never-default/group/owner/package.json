@@ -1,0 +1,7 @@
+{
+	"name": "@n/owner",
+	"kind": "foundation",
+	"exports": {
+		"./module": "./src/module.ts"
+	}
+}

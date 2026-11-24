@@ -1,34 +1,12 @@
 import { kinds } from "@mod/kinds";
-import { completedWith, type Declared, type Package } from "./declared.ts";
+import { axesIn, axisOf } from "./axes/axes.ts";
+import { completedWith, type Declared } from "./declared.ts";
 
 /** What to compose: features in named groups, an adapter (or the owner itself) by axis owner, and anything added. */
 export interface Selection {
 	readonly features: Readonly<Record<string, readonly string[]>>;
 	readonly axes?: Readonly<Record<string, string>>;
 	readonly add?: readonly string[];
-}
-
-/** The axis owner a package adapts to or replaces. */
-const axisOf = (p: Package | undefined) => p?.replaces ?? p?.adapts;
-
-/** Each axis's adapters, by owner; the default is the one declaring it, or else the only one (of the workspace's, where it has any). */
-export function axesIn(declared: Declared) {
-	const adapters = new Map<string, Package[]>();
-	for (const p of declared.packages.values()) {
-		const owner = axisOf(p);
-		if (owner !== undefined) adapters.set(owner, [...(adapters.get(owner) ?? []), p]);
-	}
-	const defaultOf = (owner: string) => {
-		const of = adapters.get(owner) ?? [];
-		// An adapter declared outside never takes the place of the workspace's only one.
-		const ours = of.filter((p) => !p.outside);
-		const only = ours.length > 0 ? ours : of;
-		return (of.find((p) => p.default) ?? (only.length === 1 ? only[0] : undefined))?.name;
-	};
-	/** The adapter declared the default that replaces an owner: it composes in the owner's place, a module or not. */
-	const replacingOf = (owner: string) =>
-		(adapters.get(owner) ?? []).find((p) => p.default && p.replaces === owner)?.name;
-	return { adapters, defaultOf, replacingOf };
 }
 
 export const addableOf = (declared: Declared) =>
