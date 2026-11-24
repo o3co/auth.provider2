@@ -1,0 +1,22 @@
+{
+	"name": "@mod/approval-binding",
+	"private": true,
+	"license": "Apache-2.0",
+	"type": "module",
+	"kind": "feature",
+	"joins": [
+		"@mod/sender-binding",
+		"@mod/approvals"
+	],
+	"exports": {
+		"./module": "./src/module.ts"
+	},
+	"dependencies": {
+		"@mod/approvals": "workspace:*",
+		"@mod/kernel": "workspace:*",
+		"@mod/sender-binding": "workspace:*"
+	},
+	"devDependencies": {
+		"vitest": "5.0.5"
+	}
+}
