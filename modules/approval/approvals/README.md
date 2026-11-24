@@ -12,10 +12,10 @@
 
 ## Offers
 - `approvals`, taken only by a module standing on the promises (`promises`' `stances`):
-  - `issue` (purpose, items, the screen's `eEnc` and `eSig`, the key it is counted by) → the statement (`approval+jwt`), its hash, its challenge; or refused: `items`, `limited`, `busy`, `withdrawn`.
-  - `use` (statement; an assertion's JSON text as sent, or a possession's verification) → the approval (hash, purpose, items, subject and credential or the verification, when used); or refused.
+  - `issue` (purpose, items, the screen's `eEnc` and `eSig`, the key it is counted by) → the statement (`approval+jwt`), its hash, its challenge; or refused: `items` (a screen key of no point, or an `eSig` of no thumbprint, among them), `limited`, `busy`, `withdrawn`.
+  - `use` (statement; an assertion's JSON text as sent, or a possession's verification) → the approval (hash, purpose, items, subject and credential or the verification, when used, its `eSig`'s thumbprint `esig`); or refused.
   - `continue` (hash, sequence number, body, the screen's signature, its step) → continued with what the step answered (`again` where another call took it first); or refused, `pending` while another call holds its step.
-  - `complete` (hash, code) → the completion sealed to `eEnc` (HPKE's `enc` and ciphertext) and the id of the approval's record on the flow, the reference the code's chain roots in; or refused.
+  - `complete` (hash, code) → the completion sealed to `eEnc` (HPKE's `enc` and ciphertext) and the id of the approval's record on the flow, the reference the code's chain roots in, with its `recordRef` (`ref`, an ID token's `apr`) and the log's acceptance time (`acceptedAt`, its `auth_time`); or refused.
   - `completionOf` (hash) → the completion kept, as `complete` answered it, once `publish` marked it gone out; none before. `publish` (hash): marks it so, once its caller let it go (an authorization's code rooted first).
   - `usedOf` (hash) → a used statement's approval, with its statement's issue time, `completed` once its completion is kept.
 - Extension point `statementItems` (purpose, the item names it fills, by whom): the purposes are `authorization`, `creation` and `possession`.

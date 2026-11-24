@@ -4,10 +4,12 @@ import type { Keys } from "@mod/keys";
 import type { Passkeys } from "@mod/passkeys";
 import type { RateLimit, Window } from "@mod/rate-limit";
 import { canonicalText, challengeInput, payloads, typs, versions } from "@mod/sdk-core-wire";
+import { tokens } from "@mod/transparency-wire";
 import { z } from "zod";
 import type {
 	Approval,
 	ApprovalStore,
+	Completed,
 	IssueAsk,
 	Issued,
 	ItemsOf,
@@ -53,6 +55,10 @@ const recordShape = z
 		code: id.optional(),
 		/** The id of the approval's record on the subject's flow, which the code's chain roots in. */
 		record: id.optional(),
+		/** That record's reference on the log, its shard and number. */
+		ref: z.object({ shard: id, n: z.number().int().positive() }).strict().optional(),
+		/** When the log accepted that record, in ms. */
+		acceptedAt: z.number().optional(),
 		/** Set once its caller let the completion go out: `completionOf` gives none before. */
 		published: z.literal(true).optional(),
 		ct: id.optional(),
@@ -66,6 +72,19 @@ export const recordOf = (kept: StoredStatement | undefined): StatementRecord | u
 	if (!read.success) throw new Unavailable("approvals");
 	return read.data;
 };
+/** The completion a record keeps, where it keeps one whole; none otherwise. */
+export const completionIn = (r: StatementRecord): Kept | undefined =>
+	r.enc && r.ct && r.record && r.ref && r.acceptedAt !== undefined
+		? {
+				kind: "completed",
+				enc: r.enc,
+				ct: r.ct,
+				record: r.record,
+				ref: r.ref,
+				acceptedAt: r.acceptedAt,
+			}
+		: undefined;
+type Kept = Extract<Completed, { kind: "completed" }>;
 export const stored = (r: StatementRecord) => r as unknown as StoredStatement;
 
 /** Each purpose's items schema, by the names sdk-core-wire gives them. */
@@ -149,9 +168,9 @@ export function statementsOver(p: StatementParts) {
 						[ask.purpose]: ask.items,
 					};
 		const schema = { authorization: payloads.statement, ...payloads }[ask.purpose];
-		return schema.safeParse(payload).success && isPoint(ask.screen.eEnc)
-			? { payload, common, screen }
-			: undefined;
+		const keys =
+			isPoint(ask.screen.eEnc) && tokens.ecThumbprintInput(ask.screen.eSig) !== undefined;
+		return schema.safeParse(payload).success && keys ? { payload, common, screen } : undefined;
 	}
 
 	async function signed(
@@ -214,6 +233,7 @@ export function statementsOver(p: StatementParts) {
 		...(r.usedAt === undefined ? {} : { usedAt: r.usedAt }),
 		...(r.state === "completed" ? { completed: true as const } : {}),
 		issuedAt: issuedAtOf(r.jws),
+		esig: esigOf(r.e_sig),
 	});
 
 	/** Marks the record used, from issued alone; the same evidence again reads as the approval. */
@@ -275,9 +295,7 @@ export function statementsOver(p: StatementParts) {
 
 	async function completionOf(hash: string) {
 		const r = recordOf(await p.store.read(hash));
-		return r?.state === "completed" && r.published && r.enc && r.ct && r.record
-			? { kind: "completed" as const, enc: r.enc, ct: r.ct, record: r.record }
-			: undefined;
+		return r?.state === "completed" && r.published ? completionIn(r) : undefined;
 	}
 
 	/** Marks a kept completion as gone out; `published`, or `unknown` where none is kept. */
@@ -294,6 +312,13 @@ export function statementsOver(p: StatementParts) {
 
 	return { issue, use, usedOf, completionOf, publish };
 }
+
+/** The thumbprint of a statement's E_sig: none is a record no statement was issued with, so unavailable. */
+const esigOf = (key: unknown): string => {
+	const input = tokens.ecThumbprintInput(key);
+	if (input === undefined) throw new Unavailable("approvals");
+	return sha256(input);
+};
 
 /** When a statement was issued, in ms, as its signed `iat` says. */
 const issuedAtOf = (jws: string): number =>

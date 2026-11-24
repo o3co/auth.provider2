@@ -12,6 +12,7 @@ import type {
 import type { Flow, Preimage } from "@mod/transparency-wire";
 import type { ApprovalStore, Completed } from "../contract.ts";
 import {
+	completionIn,
 	current,
 	itemsIn,
 	recordOf,
@@ -169,17 +170,17 @@ export function completionsOver(p: CompletionParts) {
 				return { refused: answer.refused === "key" ? ("key" as const) : ("ended" as const) };
 			const sent = await transparency.send({ flow, op, stage: stage as Stage, prev: answer.prev });
 			if ("refused" in sent) throw new Unavailable("approvals");
-			if (sent.answer.result === "accepted") return { record: sent.answer.id };
+			if (sent.answer.result === "accepted") {
+				const { id, shard, n, acceptedAt } = sent.answer;
+				return { record: id, ref: { shard, n }, acceptedAt };
+			}
 			const mismatch = sent.answer.result === "refused" && sent.answer.refusal === "prevMismatch";
 			if (!sent.end || !mismatch) return sent.end ? { refused: "ended" as const } : unavailable();
 		}
 		return unavailable();
 	}
 	/** A completion kept on its record, with the approval's record on the flow; none where one is not whole. */
-	const keptOf = (r: StatementRecord): Completed =>
-		r.enc && r.ct && r.record
-			? { kind: "completed", enc: r.enc, ct: r.ct, record: r.record }
-			: refused("ended");
+	const keptOf = (r: StatementRecord): Completed => completionIn(r) ?? refused("ended");
 	const unavailable = (): never => {
 		throw new Unavailable("approvals");
 	};
@@ -188,7 +189,7 @@ export function completionsOver(p: CompletionParts) {
 		hash: string,
 		r: StatementRecord,
 		code: string,
-		record: string,
+		placed: Pick<StatementRecord, "record" | "ref" | "acceptedAt">,
 	): Promise<Completed> {
 		const nowS = Math.floor(p.now() / 1000);
 		const payload = {
@@ -216,7 +217,7 @@ export function completionsOver(p: CompletionParts) {
 		const saved = await p.store.change(hash, (current) => {
 			const now = recordOf(current);
 			return now?.state === "used"
-				? { value: stored({ ...now, state: "completed", enc, ct, code: sha256(code), record }) }
+				? { value: stored({ ...now, state: "completed", enc, ct, code: sha256(code), ...placed }) }
 				: undefined;
 		});
 		// The one kept is answered: another call's, where it kept one first; none where none was kept.
@@ -239,6 +240,6 @@ export function completionsOver(p: CompletionParts) {
 		const placed = await placedOn(flow, op, r, q.code);
 		if ("refused" in placed) return refused(placed.refused);
 		if (!(await takenIn(flow, op))) return refused("ended");
-		return sealed(q.hash, r, q.code, placed.record);
+		return sealed(q.hash, r, q.code, placed);
 	};
 }

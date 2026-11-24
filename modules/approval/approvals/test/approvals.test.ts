@@ -1,6 +1,7 @@
 import { defineModule } from "@mod/kernel";
 import { challengeInput, continuation, hpke, typs } from "@mod/sdk-core-wire";
 import { type Stage, transparency, transparencyLog } from "@mod/transparency";
+import { tokens } from "@mod/transparency-wire";
 import { describe, expect, it } from "vitest";
 import { approvalKind, deciding } from "../src/completion/completion.ts";
 import { type IssueAsk, statementItems } from "../src/contract.ts";
@@ -87,6 +88,12 @@ describe("issuing a statement", () => {
 		const all = await world();
 		const wrong = { ...ask, items: { ...items, response_type: "token" } } as unknown as IssueAsk;
 		expect(await all.approvals.issue(wrong)).toEqual({ kind: "refused", reason: "items" });
+		// An E_sig of no thumbprint, a point off the curve, is a key no ID token could name.
+		const off = { ...screen, eSig: { ...screen.eSig, y: screen.eSig.x } };
+		expect(await all.approvals.issue({ ...ask, screen: off })).toEqual({
+			kind: "refused",
+			reason: "items",
+		});
 	});
 
 	it("counts its issuing by the caller's key", async () => {
@@ -167,6 +174,8 @@ describe("using a statement", () => {
 				credential: key.id,
 				usedAt: 1_800_000_000_000,
 				issuedAt: 1_800_000_000_000,
+				// The thumbprint of the screen's E_sig the statement was issued with (RFC 7638).
+				esig: sha256(tokens.ecThumbprintInput(payloadOf(t.statement).e_sig) ?? "-"),
 			},
 		});
 		expect(await w.approvals.use({ statement: t.statement, assertion })).toEqual(used);
@@ -401,6 +410,9 @@ describe("completing an authorization", () => {
 			expect.objectContaining({ code: sha256("code-1"), client: "c1" }),
 		]);
 		expect(done.record).toBe(record?.record.id);
+		// Its reference on the log, as an ID token's `apr` names it.
+		expect(done.ref).toEqual({ shard: record?.record.shard, n: record?.record.n });
+		expect(done.acceptedAt).toBe(record?.record.acceptedAt);
 		// Given again only once its caller let it go out.
 		expect(await w.approvals.completionOf(t.hash)).toBeUndefined();
 		expect(await w.approvals.publish(t.hash)).toBe("published");

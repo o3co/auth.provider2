@@ -57,6 +57,7 @@ function harness(
 		credential: "cred",
 		usedAt: now,
 		issuedAt: iat * 1000,
+		esig: "e-sig-thumbprint",
 	};
 	approval = {
 		...approval,
@@ -76,7 +77,14 @@ function harness(
 			},
 			complete: async ({ code }) => {
 				log.push(`complete ${code}`);
-				const answer = p.completed ?? { kind: "completed", enc: "e", ct: "c", record: "r9" };
+				const answer = p.completed ?? {
+					kind: "completed",
+					enc: "e",
+					ct: "c",
+					record: "r9",
+					ref: { shard: "s1", n: 9 },
+					acceptedAt: now,
+				};
 				if (answer.kind === "completed") {
 					kept = answer;
 					approval = { ...approval, completed: true };

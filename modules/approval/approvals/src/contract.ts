@@ -63,6 +63,8 @@ export interface Approval {
 	readonly completed?: true;
 	/** When its statement was issued, in ms: where the proof of the login it approves began. */
 	readonly issuedAt: number;
+	/** Its statement's E_sig's thumbprint (RFC 7638's SHA-256, base64url), as an ID token's `esig` names it. */
+	readonly esig: string;
 }
 
 export type UseRefusal = AssertRefusal | "unknown" | "expired" | "used" | "purpose" | "unverified";
@@ -103,6 +105,10 @@ export type Completed =
 			readonly ct: string;
 			/** The id of the approval's record on the subject's flow: the reference its code's chain roots in. */
 			readonly record: string;
+			/** That record's reference on the log (`transparency-wire`'s `recordRef`), as an ID token's `apr` names it. */
+			readonly ref: { readonly shard: string; readonly n: number };
+			/** When the log accepted that record, in ms: an ID token's `auth_time`, in seconds. */
+			readonly acceptedAt: number;
 	  }
 	| {
 			readonly kind: "refused";
