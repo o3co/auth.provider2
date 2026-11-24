@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { type Changes, tokenRules } from "@mod/authority-rules";
+import { type Changes, type FlowState, tokenRules } from "@mod/authority-rules";
 import type { BundlePart, Rooting } from "@mod/grants";
 import type { HttpRequest } from "@mod/http";
 import { isUnavailable, Unavailable } from "@mod/kernel";
@@ -102,6 +102,26 @@ const noEvidence = refusedFor(
 	"a client's own token is issued to a client of a registry version, on its assertion and DPoP proof, one each",
 );
 const usedEvidence = refusedFor("evidence_used", "the client's assertion or DPoP proof is used");
+const noFamily = "family";
+const endedFamily = refusedFor("family", "the family has ended");
+
+const ownFamily = (state: FlowState, id: string) =>
+	Object.hasOwn(state.families, id) ? state.families[id] : undefined;
+
+const groundNames = { clientAssertion: "assertion", dpopProof: "proof" } as const;
+/** A person's start's ground: its evidence's signing inputs as received (no signature: one is remade without the key), by OpIdOf's names. */
+function personGround(evidence: Evidence): string | undefined {
+	if (evidence.length === 0) return undefined;
+	const inputs = Object.fromEntries(
+		evidence.map(({ form, value }) => [
+			groundNames[form as keyof typeof groundNames] ?? form,
+			value.slice(0, value.lastIndexOf(".")),
+		]),
+	);
+	return JSON.stringify(
+		Object.fromEntries(Object.entries(inputs).sort(([a], [b]) => a.localeCompare(b))),
+	);
+}
 
 /** A client's start's op id, its elements and its registry version (V23 OpIdOf, Elems); or why not. */
 function clientStartOf(ask: BundleAsk) {
@@ -126,11 +146,23 @@ const decideTries = 3;
 export function bundling(deps: BundleParts) {
 	const { transparency } = deps;
 
-	async function decided(flow: Flow, op: string, digest: string, eff: Changes) {
-		const decide = () => ({ digest, eff, records: [] });
+	async function decided(
+		flow: Flow,
+		op: string,
+		make: (state: FlowState) => Stage | undefined,
+		eff: Changes,
+	) {
+		let start: Stage | undefined;
+		const decide = (state: FlowState) => {
+			start = make(state);
+			return start
+				? { digest: deps.digest(start.preimage), eff, records: [] }
+				: { refused: noFamily };
+		};
 		for (let tried = 0; tried < decideTries; tried++) {
 			const answer = await transparency.decide({ kind: bundleKind.name, flow, op, decide });
-			if ("prev" in answer) return answer.prev;
+			if ("prev" in answer) return { prev: answer.prev, start: start as Stage };
+			if (answer.refused === noFamily) return undefined;
 			if (answer.refused === "open" || answer.refused === "notReady") await transparency.tend(flow);
 			else if (answer.refused !== "moved") break;
 		}
@@ -160,29 +192,29 @@ export function bundling(deps: BundleParts) {
 		// A client's op is its evidence's, checked before it is decided; a person's, as it was verified.
 		const client = flow.of === "client" ? clientStartOf(ask) : undefined;
 		if (flow.of === "client" && !client) return noEvidence;
-		const ground = () => (ask.evidence.length > 0 ? JSON.stringify(ask.evidence) : deps.fresh());
-		const op = client ? client.op : `start:${sha256(ground())}`;
+		const op = client ? client.op : `start:${sha256(personGround(ask.evidence) ?? deps.fresh())}`;
 		const root = ask.root === undefined ? {} : { root: ask.root };
 		// A person's start names its root as its parent, and how it roots there; a client's has none.
 		const parent = !client && ask.root !== undefined ? { parent: ask.root } : {};
-		const via = client ? { via: "client" } : ask.via ? { ...ask.via } : {};
 		const parts = ask.parts ?? [];
-		const start: Stage = {
-			kind: "start",
-			flow,
-			op,
-			stage: 1,
-			last: false,
-			...client?.named,
-			preimage: {
-				v: 1,
-				...root,
-				...parent,
-				evidence: ask.evidence,
-				content: via,
-			},
+		// A refresh's rotation is its family's on the applied state: none there, the family is not live.
+		const contentOn = (state: FlowState) => {
+			if (client) return { via: "client" };
+			if (ask.via?.via !== "refresh") return ask.via ? { ...ask.via } : {};
+			const family = ask.root === undefined ? undefined : ownFamily(state, ask.root);
+			const own = family?.client === ask.request.grant.issuedTo;
+			return family && own ? { via: "refresh", rotation: family.rotation } : undefined;
 		};
-		const prev = await decided(flow, op, deps.digest(start.preimage), effectOfBundle(ask, client));
+		const startOn = (state: FlowState): Stage | undefined => {
+			const content = contentOn(state);
+			if (!content) return undefined;
+			const preimage = { v: 1 as const, ...root, ...parent, evidence: ask.evidence, content };
+			return { kind: "start", flow, op, stage: 1, last: false, ...client?.named, preimage };
+		};
+		const decision = await decided(flow, op, startOn, effectOfBundle(ask, client));
+		if (!decision) return endedFamily;
+		const { prev, start } = decision;
+		const via = start.preimage.content;
 		const started = await transparency.send({ flow, op, stage: start, prev });
 		if ("refused" in started) throw new Unavailable("token-endpoint");
 		// Its evidence used: refused for good; its owner does nothing, the op left to its lease's end.
@@ -253,22 +285,25 @@ export function bundling(deps: BundleParts) {
 		};
 		const signAll = async ({ receipts: received, placed }: Awaited<ReturnType<typeof append>>) => {
 			const signed = await deps.issuance.sign(prepared);
-			if (signed.kind === "refused") return { signed, made: [] };
+			if (signed.kind === "refused") return { signed, made: [], placed };
 			const settled = await Promise.allSettled(
 				parts.map((part, i) => part.sign(readied[i]?.prepared, received[i + 1] as string, placed)),
 			);
 			const failed = settled.find((one) => one.status === "rejected");
 			if (failed) throw failed.reason;
-			return { signed, made: settled.map((one) => (one as PromiseFulfilledResult<string>).value) };
+			const made = settled.map((one) => (one as PromiseFulfilledResult<string>).value);
+			return { signed, made, placed };
 		};
 		// Signing that falls after the receipts: the same bundle again, then every token signed again, once.
 		const received = await append();
-		const { signed, made } = await signAll(received).catch(async (error: unknown) => {
+		const { signed, made, placed } = await signAll(received).catch(async (error: unknown) => {
 			if (!isUnavailable(error)) throw error;
 			return signAll(await append());
 		});
 		if (signed.kind === "refused") return signed;
 		await takenIn(flow, op);
+		// Taken in: each part commits (V12); one that fails answers no token, the bundle on the log.
+		await Promise.all(parts.map((part, i) => part.commit?.(readied[i]?.prepared, placed)));
 		return parts.length === 0 ? signed : { ...signed, parts: made };
 	};
 }

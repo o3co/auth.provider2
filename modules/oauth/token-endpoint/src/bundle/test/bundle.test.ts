@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { effectOf, emptyState, tokenRules } from "@mod/authority-rules";
+import { effectOf, emptyState, type FlowState, tokenRules } from "@mod/authority-rules";
 import { assemble, defineModule, isUnavailable, kernelConfig, Unavailable } from "@mod/kernel";
 import type { AccessGrant, Issued, PreparedAccess } from "@mod/tokens";
 import {
@@ -57,6 +57,19 @@ const expired = {
 	description: "expired",
 } as const;
 
+/** The families live on every subject flow's applied state, as a test puts them. */
+let liveFamilies: Record<string, FlowState["families"][string]> = {};
+const familyAt = (rotation: number) => ({
+	approval: "r-approval",
+	chain: ["k1"],
+	client: "svc",
+	rotation,
+	position: 1,
+	acceptedAt: now,
+});
+/** The signing input of a JWS as received: all but its signature. */
+const signingInput = (jws: string) => jws.slice(0, jws.lastIndexOf("."));
+
 let world: Awaited<ReturnType<typeof makeWorld>>;
 async function makeWorld(wrap: (log: TransparencyLog) => TransparencyLog = (l) => l) {
 	const frames = memoryFrames(["state"]);
@@ -73,7 +86,7 @@ async function makeWorld(wrap: (log: TransparencyLog) => TransparencyLog = (l) =
 						holds: ["keyGeneration", "keys", "approvals", "families", "consumed"],
 						parts: ["state"],
 						records: () => [{ part: "state", name: "state" }],
-						read: () => ({}),
+						read: () => ({ families: { ...liveFamilies } }),
 						write: () => [undefined],
 					})),
 					m.contribute(operationKinds).by(() => bundleKind),
@@ -110,6 +123,7 @@ async function makeWorld(wrap: (log: TransparencyLog) => TransparencyLog = (l) =
 	return { frames, book, replica, run, signs, prepared };
 }
 beforeEach(async () => {
+	liveFamilies = {};
 	world = await makeWorld();
 	world.book.judgeOnAppend({ verdict: "verified", outcome: "took" });
 });
@@ -224,7 +238,21 @@ describe("a bundle, owned by the token endpoint (A40)", () => {
 		await issue({ ...ask, request: { ...ask.request, grant: person }, root: "approval-7" });
 		const subject = { of: "subject", id: "alice" } as const;
 		const [start] = world.book.records(subject).map((p) => p.record);
-		expect(start?.op).toBe(`start:${sha256(JSON.stringify(evidence))}`);
+		// Named by its evidence's signing inputs as received, by name: a signature remade names the same op.
+		const [assertion, proof] = evidence.map((e) => signingInput(e.value));
+		const ground = { assertion, proof };
+		expect(start?.op).toBe(`start:${sha256(JSON.stringify(ground))}`);
+		const resigned = evidence.map((e) => ({ ...e, value: `${signingInput(e.value)}.b3RoZXI` }));
+		// The same op, decided already: nothing more is recorded on the flow.
+		await expect(
+			issue({
+				...ask,
+				evidence: resigned,
+				request: { ...ask.request, grant: person },
+				root: "approval-7",
+			}),
+		).rejects.toSatisfy(isUnavailable);
+		expect(world.book.records(subject).map((p) => p.record.op)).toEqual([start?.op, start?.op]);
 		expect(world.book.sent[0]?.stage.preimage).toMatchObject({ root: "approval-7", content: {} });
 		// Evidence is what was verified: the DPoP proof of a DPoP binding, the assertion of an authentication that verified one.
 		const request = { headers: new Map([["dpop", "p"]]), fields: { single: () => "a" } } as never;
@@ -259,15 +287,44 @@ describe("a bundle, owned by the token endpoint (A40)", () => {
 			content: { via: "code" },
 		});
 		expect(bundle?.kind).toBe("bundle");
-		await world.run(await world.replica("w1"))({
+		// A refresh names its family's rotation on the applied state; a family not live there is refused, nothing recorded.
+		liveFamilies = { "r-family": familyAt(2) };
+		const refresh: BundleAsk = {
 			...asked,
 			evidence: [],
+			root: "r-family",
 			via: { via: "refresh" },
-		});
+		};
+		await world.run(await world.replica("w1"))(refresh);
 		expect(world.book.sent[2]?.stage.preimage).toMatchObject({
-			parent: "r-approval",
-			content: { via: "refresh" },
+			parent: "r-family",
+			content: { via: "refresh", rotation: 2 },
 		});
+		expect(world.book.sent[3]?.stage.preimage).toMatchObject({
+			content: { via: "refresh", rotation: 2 },
+		});
+		const sent = world.book.sent.length;
+		expect(
+			await world.run(await world.replica("w1"))({
+				...refresh,
+				root: "r-gone",
+				evidence: [{ form: "dpopProof", value: jws(claimed("p-gone")) }],
+			}),
+		).toMatchObject({
+			kind: "refused",
+			reason: "family",
+		});
+		expect(world.book.sent).toHaveLength(sent);
+		// Another client's family, on the same flow, is refused alike.
+		liveFamilies = { "r-family": { ...familyAt(3), client: "another" } };
+		const another = [{ form: "dpopProof" as const, value: jws(claimed("p-another")) }];
+		expect(
+			await world.run(await world.replica("w1"))({ ...refresh, evidence: another }),
+		).toMatchObject({
+			kind: "refused",
+			reason: "family",
+		});
+		expect(world.book.sent).toHaveLength(sent);
 	});
 
 	it("decides its op's changes as the rules read its bundle: a family and the code's mark by a code, a rotation by a refresh, none for a client's", async () => {
@@ -276,14 +333,15 @@ describe("a bundle, owned by the token endpoint (A40)", () => {
 			const t = await world.replica("w1");
 			const effs: unknown[] = [];
 			const decide: typeof t.decide = (q) => {
-				const decided = q.decide(emptyState, []);
+				const decided = q.decide({ ...emptyState, families: { r1: familyAt(0) } }, []);
 				if (!("refused" in decided)) effs.push(decided.eff);
 				return t.decide(q);
 			};
 			return { issue: world.run({ ...t, decide }), effs };
 		};
 		const person = { ...grant, subject: "alice", subjectKind: "user" as const };
-		const rootings = [{ via: "code" }] as const;
+		const rootings = [{ via: "code" }, { via: "refresh" }] as const;
+		liveFamilies = { r1: familyAt(0) };
 		for (const [i, via] of rootings.entries()) {
 			const { issue, effs } = await watching();
 			const evidence = [{ form: "dpopProof" as const, value: jws(claimed(`p${i}`)) }];
@@ -480,6 +538,45 @@ describe("a bundle, owned by the token endpoint (A40)", () => {
 			}),
 		).rejects.toSatisfy(isUnavailable);
 		expect([appended, signed]).toEqual([2, 1]);
+	});
+
+	it("hands each part the bundle's record when signing, and commits it once the bundle is taken in; a commit that fails answers no token", async () => {
+		const person = { ...grant, subject: "alice", subjectKind: "user" as const };
+		const events: string[] = [];
+		let fails = false;
+		const part = {
+			frame: "family" as const,
+			prepare: async () => ({ prepared: "f", digest: "f-d" }),
+			sign: async (_prepared: unknown, _receipt: string, placed: { id: string }) => {
+				events.push(`sign ${placed.id}`);
+				return "refresh-token";
+			},
+			commit: async (prepared: unknown, placed: { id: string; acceptedAt: number }) => {
+				events.push(`commit ${String(prepared)} ${placed.id} ${placed.acceptedAt}`);
+				if (fails) throw new Unavailable("refresh");
+			},
+		};
+		const asked = { ...ask, request: { ...ask.request, grant: person }, root: "r", parts: [part] };
+		expect(await world.run(await world.replica("w1"))(asked)).toMatchObject({
+			parts: ["refresh-token"],
+		});
+		const subject = { of: "subject", id: "alice" } as const;
+		const bundle = world.book.records(subject).at(-1)?.record;
+		expect(events).toEqual([`sign ${bundle?.id}`, `commit f ${bundle?.id} ${bundle?.acceptedAt}`]);
+		// Committed only after its owner's took: one that falls answers nothing.
+		world.book.judgeOnAppend(undefined);
+		events.length = 0;
+		const other = [{ form: "dpopProof" as const, value: jws(claimed("p-commit")) }];
+		await expect(
+			world.run(await world.replica("w1"))({ ...asked, evidence: other }),
+		).rejects.toSatisfy(isUnavailable);
+		expect(events.some((e) => e.startsWith("commit"))).toBe(false);
+		world.book.judgeOnAppend({ verdict: "verified", outcome: "took" });
+		fails = true;
+		const third = [{ form: "dpopProof" as const, value: jws(claimed("p-commit-3")) }];
+		await expect(
+			world.run(await world.replica("w1"))({ ...asked, evidence: third }),
+		).rejects.toSatisfy(isUnavailable);
 	});
 
 	it("signs nothing when its append is refused, its op left to its lease's end but on abandoned", async () => {

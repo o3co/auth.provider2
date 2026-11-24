@@ -101,6 +101,8 @@ const signedAtOnce = (t: CallerTokens): Issuing => ({
 		const made = await Promise.all(
 			parts.map((part, i) => part.sign(readied[i]?.prepared, "test-receipt", placed)),
 		);
+		// Committed at once, as the endpoint commits once the bundle is taken in.
+		await Promise.all(parts.map((part, i) => part.commit?.(readied[i]?.prepared, placed)));
 		return { ...signed, parts: made };
 	},
 	revokeReferenced: t.revokeReferenced,
