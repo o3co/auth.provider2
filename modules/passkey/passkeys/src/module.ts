@@ -4,13 +4,14 @@ import { promiseNames, stances } from "@mod/promises";
 import { frameStore, operationKinds, stateOwners, transparency } from "@mod/transparency";
 import { ceremonies } from "@mod/webauthn";
 import {
+	passkeyGenerations,
 	passkeyRemovals,
 	passkeyStore,
 	passkeys,
 	passkeyWitnessing,
 	registrations,
 } from "./contract.ts";
-import { type KeptParts, keptOver } from "./kept/kept.ts";
+import { type KeptParts, keptOver, keysHeld } from "./kept/kept.ts";
 import { keyChanges, keysOwner } from "./records.ts";
 import { registeringOver } from "./registering/registering.ts";
 import { type Settings, section } from "./section.ts";
@@ -76,6 +77,10 @@ export default defineModule(
 				removals: await c.collect(passkeyRemovals),
 			}),
 		),
+		m.provide(passkeyGenerations).by(async (c) => {
+			const { frames } = await c.get(kept);
+			return { generation: async (subject) => (await keysHeld(frames, subject)).keyGeneration };
+		}),
 		m.provide(registrations).by(async (c) => {
 			const kinds = await c.collect(operationKinds);
 			if (!kinds.some((k) => k.name === keyChanges.name))

@@ -60,6 +60,18 @@ export interface Passkeys {
 
 export const passkeys = contract<Passkeys>("passkeys");
 
+/**
+ * A subject's key generation, as its applied state holds it (resets that took, and erasures): what an
+ * embedder's reset instruction names as `kg` on L0's path. The applied state may lag the log's head
+ * (a boundary not yet taken in), never lead it: read after a `tend`. L1's embedder reads the
+ * monitor's signed `stateOf` instead, never a Core's answer (V22 §B.6).
+ */
+export interface PasskeyGenerations {
+	generation(subject: string): Promise<number>;
+}
+
+export const passkeyGenerations = contract<PasskeyGenerations>("passkeys.generations");
+
 export type ReserveRefusal = "pending" | "held" | "taken" | "fenced" | "unknown" | "state" | "open";
 export type VerifyRefusal = CeremonyRefusal | "unknown" | "state" | "expired" | "open";
 

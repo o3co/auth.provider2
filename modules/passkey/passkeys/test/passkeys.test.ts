@@ -14,6 +14,7 @@ import { softwareAuthenticator } from "@mod/webauthn/testing";
 import { describe, expect, it } from "vitest";
 import {
 	type PasskeyRemoval,
+	passkeyGenerations,
 	passkeyRemovals,
 	passkeyWitnessing,
 	registrations,
@@ -279,5 +280,19 @@ describe("passkeys", () => {
 			() => [],
 		);
 		expect(await refusedWith([silent])).toMatch(/taken only by a module that contributes/);
+	});
+});
+
+describe("passkeyGenerations", () => {
+	it("answers a subject's key generation as its applied state holds it, moved on by a boundary taken in", async () => {
+		const w = await world();
+		const generations = await w.app.get(passkeyGenerations);
+		expect(await generations.generation("s1")).toBe(0);
+		w.log.boundary(flow);
+		// The boundary is on the log, not yet taken in: the applied state lags it.
+		expect(await generations.generation("s1")).toBe(0);
+		await w.t.tend(flow);
+		expect(await generations.generation("s1")).toBe(1);
+		expect(await generations.generation("other")).toBe(0);
 	});
 });
