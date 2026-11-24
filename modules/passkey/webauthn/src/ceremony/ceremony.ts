@@ -1,4 +1,4 @@
-import { createHash, createPublicKey, type KeyObject, verify } from "node:crypto";
+import { createHash, createPublicKey, verify } from "node:crypto";
 import { verifyAuthenticationResponse, verifyRegistrationResponse } from "@simplewebauthn/server";
 import {
 	cose,
@@ -96,58 +96,29 @@ function frameRefusal(
 	return data.crossOrigin === true && listed ? undefined : "top-origin";
 }
 
-/**
- * A credential's key, its stored COSE key in base64url, as Node's crypto verifies with it, and the
- * hash its signature takes (none for EdDSA); throws for a key of an algorithm not among `taken`
- * (COSE ids), one whose key type or curve is not its algorithm's, and an RSA key under 2048 bits.
- */
-function keyOf(
-	publicKey: string,
-	taken: readonly number[],
-): { readonly key: KeyObject; readonly hash: string | null } {
-	if (!/^[A-Za-z0-9_-]+$/.test(publicKey)) throw new TypeError("no key");
-	const cose = decodeCredentialPublicKey(Buffer.from(publicKey, "base64url")) as Map<
-		number,
-		unknown
-	>;
-	const [kty, alg, crv] = [cose.get(1), cose.get(3), cose.get(-1)];
-	if (typeof alg !== "number" || !taken.includes(alg))
-		throw new TypeError("an algorithm not taken");
-	const part = (label: number) => {
-		const value = cose.get(label);
-		if (!(value instanceof Uint8Array)) throw new TypeError("no key part");
-		return Buffer.from(value).toString("base64url");
-	};
-	const jwk = (key: Record<string, string>) => createPublicKey({ key, format: "jwk" });
-	if (alg === coseIds.ES256 && kty === 2 && crv === 1) {
-		return { key: jwk({ kty: "EC", crv: "P-256", x: part(-2), y: part(-3) }), hash: "sha256" };
-	}
-	if (alg === coseIds.EdDSA && kty === 1 && crv === 6) {
-		return { key: jwk({ kty: "OKP", crv: "Ed25519", x: part(-2) }), hash: null };
-	}
-	if (alg === coseIds.RS256 && kty === 3) {
-		const key = jwk({ kty: "RSA", n: part(-1), e: part(-2) });
-		if ((key.asymmetricKeyDetails?.modulusLength ?? 0) < 2048)
-			throw new TypeError("a short RSA key");
-		return { key, hash: "sha256" };
-	}
-	throw new TypeError("a key unlike its algorithm");
+/** A P-256 key from its uncompressed point in base64url (0x04, x, y); throws for any other value. */
+function pointKey(point: string) {
+	if (!/^[A-Za-z0-9_-]+$/.test(point)) throw new TypeError("no point");
+	const bytes = Buffer.from(point, "base64url");
+	if (bytes.length !== 65 || bytes[0] !== 4) throw new TypeError("no uncompressed point");
+	const x = bytes.subarray(1, 33).toString("base64url");
+	const y = bytes.subarray(33).toString("base64url");
+	return createPublicKey({ key: { kty: "EC", crv: "P-256", x, y }, format: "jwk" });
 }
 
 const statuses: readonly unknown[] = ["present", "supported", "notSupported"];
 
 /**
- * The evidence check: an assertion's credential where it verifies by the stored key given, of an
- * algorithm the relying party takes, for the challenge and origin, at the relying party, with the
- * user present and verified; none otherwise. It reads what the library reads, as `assert` does,
- * and no count, backup state or handle.
+ * The evidence check: an ES256 assertion's credential where it verifies by the point given, for the
+ * challenge and origin, at the relying party, with the user present and verified; none otherwise.
+ * It reads what the library reads, as `assert` does, and no count, backup state or handle.
  */
 function evidenceCheck(rp: RelyingParty): Ceremonies["verifyAssertion"] {
 	const rpIdHash = createHash("sha256").update(rp.id).digest();
-	const taken = rp.algorithms.map((name) => coseIds[name]);
-	const verified = (assertion: string, publicKey: string, challenge: string, origin: string) => {
-		if (!isChallenge(challenge)) return undefined;
-		const { key, hash } = keyOf(publicKey, taken);
+	const taken = rp.algorithms.includes("ES256");
+	const verified = (assertion: string, point: string, challenge: string, origin: string) => {
+		if (!taken || !isChallenge(challenge)) return undefined;
+		const key = pointKey(point);
 		const sent = JSON.parse(assertion);
 		const { id, rawId, type, response } = sent ?? {};
 		if (typeof id !== "string" || id === "" || id !== rawId || type !== "public-key")
@@ -166,14 +137,14 @@ function evidenceCheck(rp: RelyingParty): Ceremonies["verifyAssertion"] {
 			.update(isoBase64URL.toBuffer(clientDataJSON))
 			.digest();
 		const signed = Buffer.concat([authData, clientDataHash]);
-		return verify(hash, signed, key, isoBase64URL.toBuffer(signature))
+		return verify("sha256", signed, key, isoBase64URL.toBuffer(signature))
 			? { credential: id }
 			: undefined;
 	};
-	return (assertion, publicKey, challenge, origin) => {
+	return (assertion, point, challenge, origin) => {
 		// Anything it cannot read, the key included, is evidence that does not verify.
 		try {
-			return verified(assertion, publicKey, challenge, origin);
+			return verified(assertion, point, challenge, origin);
 		} catch {
 			return undefined;
 		}

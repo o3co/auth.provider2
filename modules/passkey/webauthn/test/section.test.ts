@@ -1,4 +1,4 @@
-import { assemble, kernelConfig } from "@mod/kernel";
+import { assemble, type BootRefused, kernelConfig } from "@mod/kernel";
 import { quietRuntime, recordingLog } from "@mod/kernel/testing";
 import { expect, it } from "vitest";
 import webauthnModule from "../src/module.ts";
@@ -67,21 +67,47 @@ const parsed = (more: object) =>
 		...more,
 	});
 
-it("frames nothing and takes every algorithm where nothing is set", () => {
+it("frames nothing and takes ES256 where nothing is set", () => {
 	expect(parsed({}).data).toEqual({
 		"rp-id": "rp.example",
 		"rp-name": "RP",
 		origins: ["https://rp.example"],
 		"top-origins": [],
-		algorithms: ["EdDSA", "ES256", "RS256"],
+		algorithms: ["ES256"],
 	});
 });
 
-it("takes the algorithms named, in their order, and refuses none, one it cannot verify, or one named twice", () => {
-	expect(parsed({ algorithms: ["RS256", "ES256"] }).data?.algorithms).toEqual(["RS256", "ES256"]);
-	for (const algorithms of [[], ["ES384"], ["es256"], [-7], ["ES256", "ES256"]]) {
-		expect(parsed({ algorithms }).success, JSON.stringify(algorithms)).toBe(false);
+it("takes ES256 alone, refusing any other algorithm, as the protocol holds a new key as a P-256 point", () => {
+	expect(parsed({ algorithms: ["ES256"] }).data?.algorithms).toEqual(["ES256"]);
+	for (const algorithms of [
+		["RS256", "ES256"],
+		["EdDSA"],
+		["RS256"],
+		[],
+		["ES384"],
+		["es256"],
+		[-7],
+		["ES256", "ES256"],
+	]) {
+		const answer = parsed({ algorithms });
+		expect(answer.success, JSON.stringify(algorithms)).toBe(false);
+		expect(
+			answer.error?.issues.map((i) => i.path.join(".")),
+			JSON.stringify(algorithms),
+		).toEqual(["algorithms"]);
 	}
+	expect(parsed({ algorithms: ["EdDSA", "ES256"] }).error?.issues[0]?.message).toMatch(
+		/P-256 point/,
+	);
+});
+
+it("refuses boot at webauthn.algorithms naming another algorithm", async () => {
+	const refused = await assemble({
+		modules: [webauthnModule],
+		config: { ...kernelConfig(), ...webauthnConfig({ algorithms: ["EdDSA", "ES256"] }) },
+		runtime: quietRuntime(),
+	}).catch((error: unknown) => error);
+	expect((refused as BootRefused).refusals.map((r) => r.where)).toEqual(["webauthn.algorithms"]);
 });
 
 it("refuses the keys passkeys keeps now, naming each", () => {
