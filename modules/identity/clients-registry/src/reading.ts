@@ -46,7 +46,10 @@ export function versionOf(
 		return at("file", `does not fit registry-wire's version, at ${paths.join(", ")}`);
 	}
 	if (parsed.data.version < s["min-version"]) {
-		return at("min-version", "is above the version the file holds: an older version is refused");
+		return at(
+			"min-version",
+			"the file's version is below min-version: an older version is refused",
+		);
 	}
 	return { version: parsed.data };
 }

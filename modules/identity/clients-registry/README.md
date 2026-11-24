@@ -2,7 +2,7 @@
 
 ## Responsibilities
 - Contributes a client source to `clients`: the clients of the registry version the publisher signed, read from a file once at boot and checked before any is answered.
-- Declares where it stands on the promise its clients bear on: the publisher's clients are as the publisher signed them, not the Core's to rewrite.
+- Declares where it stands on the promise its clients bear on: a version comes as a file the Core reads, so it breaks it.
 
 ## Not here
 - Signing a version: the publisher's tool. What a version holds and its type: `registry-wire`.
@@ -13,6 +13,7 @@
 ## Offers
 - Composition definition only: a contribution to `clients`' `clientSources`, and a stance (`promises`' `stances`).
 - Operator section `clients-registry`: `file` (the path of the signed version), `publisher-key` (the publisher's public key as a JWK, with its `kid` and its `alg`) and `min-version` (the least version number taken), each required.
+- As the one adapter of `clients`, it is composed wherever `clients` is; a composition of the operator's registered clients alone chooses the owner for its axis (`axes: {"@mod/clients": "@mod/clients"}` in `combinations`' `composed`), and needs no registry.
 - At start, the line `clients-registry.read` (`info`): the version number read and how many clients it holds.
 
 ## Invariants
@@ -23,7 +24,7 @@
 - A refusal names the setting's key path and why, never a path, an id or a value read.
 - The file is read once, at boot; a version written after it changes nothing until the next boot.
 - A client is answered as the version holds it, mapped field by field into `clients`' record; `clients` holds it to each section's schema at request time, and a client the operator registered under the same id wins.
-- It stands holding `core-compromise-contained`: the clients it answers are the publisher's, signed outside the Core.
+- It stands breaking `core-compromise-contained` at `clients-registry.file`: a version reaches the Core as a file it reads at boot, not on the log's publisher flow, so no one outside can check which version the Core answered by.
 - It holds nothing beyond what it read, so it is safe on many instances given the same file on each.
 
 ## Depends on

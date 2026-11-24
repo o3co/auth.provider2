@@ -167,6 +167,7 @@ describe("clients-registry", () => {
 			await written(signedBy(publisher, version(4)), { "min-version": 5 }),
 		);
 		expect(refusals.map((r) => r.where)).toEqual(["clients-registry.min-version"]);
+		expect(refusals[0]?.reason).toContain("the file's version is below min-version");
 		const app = await boot(await written(signedBy(publisher, version(5)), { "min-version": 5 }));
 		await app.stop();
 	});
@@ -196,14 +197,32 @@ describe("clients-registry", () => {
 		}
 	});
 
-	it("stands holding the Core's containment: the publisher's clients are not the Core's to rewrite", async () => {
+	it("stands breaking the Core's containment at its file: no one outside sees which version the Core answers by", async () => {
 		const app = await boot(await written(signedBy(publisher, version(1))));
 		const contained = app
 			.get(promises)
 			.judgment()
 			.find((j) => j.promise === promiseNames.coreContained);
-		expect(contained).toMatchObject({ held: true, breaking: [] });
+		expect(contained?.held).toBe(false);
+		expect(contained?.breaking).toContainEqual({
+			by: "clients-registry",
+			setting: "clients-registry.file",
+			reason: expect.stringContaining("boot"),
+		});
 		await app.stop();
+	});
+
+	it("refuses boot where it is required to hold the Core's containment", async () => {
+		const refused = await assemble({
+			modules,
+			config: {
+				...configOf(await written(signedBy(publisher, version(1)))),
+				promises: { required: [promiseNames.coreContained] },
+			},
+			runtime: quietRuntime(),
+		}).catch((error: unknown) => error);
+		expect(BootRefused.is(refused)).toBe(true);
+		expect((refused as BootRefused).refusals.map((r) => r.where)).toEqual(["promises.required.0"]);
 	});
 
 	it("takes nothing it does not use", async () => {

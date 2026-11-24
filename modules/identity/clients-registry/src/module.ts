@@ -38,8 +38,11 @@ export default defineModule(
 		}),
 		m.contribute(stances).by(() => ({
 			promise: promiseNames.coreContained,
-			holds: true,
+			holds: false,
 			by: "clients-registry",
+			setting: "clients-registry.file",
+			reason:
+				"a version reaches the Core as a file it reads at boot, not on the log's publisher flow, so no one outside can check which version the Core answered by",
 		})),
 	],
 );
