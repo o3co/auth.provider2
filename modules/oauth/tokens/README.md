@@ -19,7 +19,7 @@
 - Extension points: issuance policies (request → allowed / refused with an audit reason and a client description); access conditions, and exactly one subject check (token id, subject, issue time, standing time → holds / revoked; unavailable when unknown); a revoked answer fails the token as revoked. Issuance fences, passed by `issuanceFencing.pass` (internal module `fencing`).
 - `token-denylist`'s store interface for revoked tokens and its needs, passed on: a store wiring wires `tokens` and implements it.
 - `jwks_uri` among `issuer`'s metadata: `jwks.json`, the key set `keys-publish` writes, under the issuer's URL, on its static origin and never the Front's. For an issuer with a path, it is under that path, as the discovery document's OpenID Connect place is: `keys-publish` writes into that path of the publisher's directory.
-- Its stance on the promises, as `accessTokenSigning` asks of its taker: it breaks `core-compromise-contained`, as an access token carries no receipt of the transparency log.
+- The promises (`promises`' `stances`): `accessTokens` is taken only by a module that declares where it stands (`takersContribute`); one declaring nothing refuses boot. Its own stance, as `accessTokenSigning` asks of its taker: it breaks `core-compromise-contained`, as an access token carries no receipt of the transparency log.
 - `accessTokenLifetimeSeconds`: the lifetime `issue` applies where a grant gives no `lifetimeSeconds`, in whole seconds from 2 to 86400, fixed when `tokens` is built, for a grant with a ceiling to read at build time. It is not the longest life any token may have: a grant's own `lifetimeSeconds` may differ. A boot check against it does not reach tokens already issued, or instances still on other settings.
 - Operator section: `access-token-lifetime` (written with its unit, `2s` to `1d` in whole seconds, default `5m`, counted from when `issue` is asked, the policies' wait included; a token it leaves less than a second once signed is refused, as `issuance`' card says).
 - Operator section, beside it: `revocation` (`denylist` or `unsupported`), `issuance-timeout` (written with its unit, `1s` to `1m`, default `10s`), `subject-check` (`none` states that no module checks subjects), `added-claims` (`added-claims`' limits, each raised only).
@@ -31,8 +31,7 @@
 - Unavailable keys, store or checks answer unavailable, never a negative verdict.
 - Added claims are the grant's statement: signed with the rest, a resource cannot tell them from the provider's, so composing a grant trusts it with its tokens' content.
 - An added claim follows `added-claims`' rules, its shape, reserved names and limits, and `claims`'; one outside them is the grant's maker's mistake (TypeError at `issue`, `prepare` and `admits`, a 500 with no audit).
-- A token over 16 KiB once signed is refused, not issued, and warned of (`issuance`' card).
-- An access token's `iat`, its end and what is left of it are `issuance`' card's; its standing time, `standing`'s.
+- An access token's `iat`, its end, what is left of it, and its refusal and warning past 16 KiB once signed are `issuance`' card's; its standing time, `standing`'s.
 
 ## Depends on
 - `kernel`, `keys`, `issuer`, `sender-binding`, `added-claims`, `token-denylist`, `promises`

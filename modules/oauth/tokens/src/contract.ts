@@ -1,5 +1,6 @@
 import type { AddedClaims } from "@mod/added-claims";
 import { contract, extensionPoint } from "@mod/kernel";
+import { stances } from "@mod/promises";
 import type { Binding, TokenValidity } from "@mod/sender-binding";
 
 export type { AddedClaims, AddedValue } from "@mod/added-claims";
@@ -197,7 +198,8 @@ export interface Tokens extends TokenValidity<AccessCheck> {
 	revokeAccess(token: string): Promise<Revocation>;
 }
 
-export const accessTokens = contract<Tokens>("tokens");
+/** Taken only by a module that declares where it stands on the promises, as it issues authority. */
+export const accessTokens = contract<Tokens>("tokens", { takersContribute: stances });
 
 export { referenceOf } from "./reference.ts";
 

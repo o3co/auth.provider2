@@ -1,7 +1,7 @@
-import { assemble, defineModule, isUnavailable } from "@mod/kernel";
+import { assemble, type BootRefused, defineModule, isUnavailable } from "@mod/kernel";
 import { quietRuntime } from "@mod/kernel/testing";
 import { accessTokenSigning } from "@mod/keys";
-import { promises } from "@mod/promises";
+import { promiseNames, promises, stances } from "@mod/promises";
 import promisesModule from "@mod/promises/module";
 import { tokens as receipts } from "@mod/transparency-wire";
 import { describe, expect, it } from "vitest";
@@ -80,4 +80,27 @@ it("says where it stands on the promises, as accessTokenSigning asks of its take
 		by: "tokens",
 		reason: "an access token carries no receipt of the transparency log",
 	});
+});
+
+it("is taken only by a module that declares where it stands on the promises, as issuing authority asks", async () => {
+	const taking = (declares: boolean) =>
+		defineModule({ name: "issuing", replicaSafe: true, takes: [accessTokens] }, (m) =>
+			declares
+				? [
+						m.contribute(stances).by(() => ({
+							promise: promiseNames.clientToken,
+							holds: false,
+							by: "issuing",
+						})),
+					]
+				: [],
+		);
+	const unsaid = await boot([...composedWith(), taking(false)]).catch((error: unknown) => error);
+	expect((unsaid as BootRefused).refusals).toEqual([
+		{
+			where: "issuing",
+			reason: "tokens is taken only by a module that contributes to promises.stances",
+		},
+	]);
+	await expect(boot([...composedWith(), taking(true)])).resolves.toBeDefined();
 });
