@@ -131,6 +131,8 @@ export default defineModule(
 					sets.add(subject, handle, lifetimeMs, subject),
 				members: sets.members,
 				remove: sets.remove,
+				awaiting: sets.awaiting,
+				settled: sets.settled,
 				erase: sets.erase,
 				migrate: sets.migrate,
 			};
