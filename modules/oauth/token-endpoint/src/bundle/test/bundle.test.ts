@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { clientRules, effectOf, emptyState } from "@mod/authority-rules";
+import { effectOf, emptyState, tokenRules } from "@mod/authority-rules";
 import { assemble, defineModule, isUnavailable, kernelConfig, Unavailable } from "@mod/kernel";
 import type { AccessGrant, Issued, PreparedAccess } from "@mod/tokens";
 import {
@@ -42,7 +42,7 @@ const ask: BundleAsk = {
 };
 const sha256 = (text: string) => createHash("sha256").update(text).digest("base64url");
 const started = (e: BundleAsk["evidence"]) => {
-	const read = clientRules.start(e, sha256);
+	const read = tokenRules.client.start(e, sha256);
 	if ("refused" in read) throw new Error(read.refused);
 	return read;
 };

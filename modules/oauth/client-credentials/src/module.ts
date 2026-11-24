@@ -1,4 +1,4 @@
-import { clientRules } from "@mod/authority-rules";
+import { tokenRules } from "@mod/authority-rules";
 import { clientAssertion } from "@mod/client-assertion";
 import { grants } from "@mod/grants";
 import { issuer } from "@mod/issuer";
@@ -16,7 +16,7 @@ const section = z.strictObject({
 				.number()
 				.int()
 				.min(60)
-				.max(clientRules.lifetimeMs / 1000),
+				.max(tokenRules.client.lifetimeMs / 1000),
 		)
 		.prefault("5m")
 		.describe(

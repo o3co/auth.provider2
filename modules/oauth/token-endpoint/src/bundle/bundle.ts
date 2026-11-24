@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { type Changes, clientRules } from "@mod/authority-rules";
+import { type Changes, tokenRules } from "@mod/authority-rules";
 import type { BundlePart, Rooting } from "@mod/grants";
 import type { HttpRequest } from "@mod/http";
 import { isUnavailable, Unavailable } from "@mod/kernel";
@@ -105,7 +105,7 @@ const usedEvidence = refusedFor("evidence_used", "the client's assertion or DPoP
 
 /** A client's start's op id, its elements and its registry version (V23 OpIdOf, Elems); or why not. */
 function clientStartOf(ask: BundleAsk) {
-	const read = clientRules.start(ask.evidence, sha256);
+	const read = tokenRules.client.start(ask.evidence, sha256);
 	// A client of no registry version has no root a monitor reads: nothing is decided for it.
 	if ("refused" in read || ask.version === undefined) return undefined;
 	return { op: read.op, named: { registryVersion: ask.version, elements: [...read.elements] } };
@@ -194,7 +194,7 @@ export function bundling(deps: BundleParts) {
 		// Its owner closes the op without its bundle: nothing of it is signed.
 		const close = () => transparency.rebase({ flow, op, recheck: () => false }).catch(() => {});
 		// KE-C02: no bundle after a start that may not have taken by its evidence's times.
-		if (client && !clientRules.within(ask.evidence, acceptedAt, evidenceWindowMs)) {
+		if (client && !tokenRules.client.within(ask.evidence, acceptedAt, evidenceWindowMs)) {
 			await close();
 			throw new Unavailable("token-endpoint");
 		}

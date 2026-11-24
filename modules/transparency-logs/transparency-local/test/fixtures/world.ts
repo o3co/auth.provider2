@@ -1,5 +1,5 @@
 import { createHash, generateKeyPairSync, randomBytes, sign as signBytes } from "node:crypto";
-import { clientRules } from "@mod/authority-rules";
+import { tokenRules } from "@mod/authority-rules";
 import { assemble, defineModule, kernelConfig, type Module } from "@mod/kernel";
 import { quietRuntime } from "@mod/kernel/testing";
 import { keys } from "@mod/keys";
@@ -141,7 +141,7 @@ export function clientStart(
 	evidence: ReturnType<typeof clientEvidence>,
 	version: number,
 ): Stage {
-	const read = clientRules.start(evidence, digest);
+	const read = tokenRules.client.start(evidence, digest);
 	if ("refused" in read) throw new Error(read.refused);
 	return {
 		kind: "start",

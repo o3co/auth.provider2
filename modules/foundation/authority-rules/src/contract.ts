@@ -2,6 +2,7 @@ import { effectOf } from "./chain/chain.ts";
 import { lifetimeMs, startOf, within } from "./client/client.ts";
 import { contents } from "./evidence/evidence.ts";
 import { changes, flowState } from "./fold/fold.ts";
+import { cHash } from "./id-token/id-token.ts";
 
 /**
  * The transparency core's judgment rules, one library the Core's local check and the monitor both
@@ -38,11 +39,16 @@ export {
 export { effectOf };
 
 /**
- * A client's flow's: `start` (its evidence, a digest) → its op id (OpIdOf) and its elements (Elems),
- * or why not; `within` (its evidence, a time, a window) → whether its times hold it as TimeOK reads
- * them; `lifetimeMs`, the longest a client's own token lives from its start (15 minutes).
+ * The rules by kind of token, as the Core derives what they check:
+ * - `client`, a client's own flow's: `start` (its evidence, a digest) → its op id (OpIdOf) and its
+ *   elements (Elems), or why not; `within` (its evidence, a time, a window) → whether its times hold
+ *   it as TimeOK reads them; `lifetimeMs`, the longest its token lives from its start (15 minutes).
+ * - `idToken`: `cHash` (a code's SHA-256 digest) → its `c_hash`, the left half (A21).
  */
-export const clientRules = Object.freeze({ start: startOf, within, lifetimeMs });
+export const tokenRules = Object.freeze({
+	client: Object.freeze({ start: startOf, within, lifetimeMs }),
+	idToken: Object.freeze({ cHash }),
+});
 
 /** The schemas the rules hold: a flow's state, a record's changes, and a Core writer's preimage content by kind. */
 export const ruleSchemas = Object.freeze({ flowState, changes, contents });

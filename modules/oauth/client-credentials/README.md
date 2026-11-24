@@ -10,7 +10,7 @@
 ## Offers
 - Contribution to `grants`: `client_credentials` (`clientCredentialsGrantType`), declaring the client's own subject (`subjectKind` `client`), reading no ambient credential, taking its audience from the request.
 - `clientCredentials` (issuer, `client-assertion`'s `verifiedOf`, the limits: a count, the requests a minute, the clients suspended) → the grant, for an assembly of one's own; `dpopMember`, the `cnf` member a DPoP-bound token carries.
-- Operator section: `lifetime`, how long its token lives (`1m` to `15m`, `authority-rules`' `clientRules.lifetimeMs`, default `5m`, written with its unit), `requests`, the requests a client may make in a minute (1–100000, default 60), and `suspended`, the clients issued nothing, by id (default none).
+- Operator section: `lifetime`, how long its token lives (`1m` to `15m`, `authority-rules`' `tokenRules.client.lifetimeMs`, default `5m`, written with its unit), `requests`, the requests a client may make in a minute (1–100000, default 60), and `suspended`, the clients issued nothing, by id (default none).
 - It opts in (`optIn`): `combinations`' full template leaves it out unless something composed needs it; composing it brings `dpop`, which it needs to run.
 
 ## Invariants

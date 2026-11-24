@@ -16,7 +16,9 @@
 - `judge` (a `Reading`: the placed record, what opening its preimage gave or another writer's verified body, the key sets, the versions' windows, the prefix) → `Ruling`: the flow entry with its verdict and outcome, the row J0–J13, whether counted; or a wait (internal module `judgment`). `outcomeOf` (a `Reading`, a verdict).
 - `fold` (state, `Envelope`, `Changes`, `Finding`) → the state; `foldFlow` (flow, entries) → transparency-wire's stateOf; `emptyState`; `abandonedFamily` (a bundle's envelope and changes) → the family an abandonment of its op drops, for the Core's intent and `effectOf` alike; `withoutRooted` (state, an item's id) → what a removal or a denial of it leaves (internal module `fold`).
 - `ruleSchemas`: `flowState`, `changes`, and `contents`, each Core kind's preimage content (internal module `evidence`).
-- `clientRules` (internal module `client`): `start` (a client's start's evidence, a digest) → its op id (OpIdOf) and evidence elements (Elems), or why not, for the Core to derive them as the rules check them; `within`, whether its evidence's times hold an acceptance time, as TimeOK reads them; `lifetimeMs`, the longest a client's own token lives from its start: 15 minutes, a constant the Core narrows within.
+- `tokenRules`, by kind of token:
+  - `client` (internal module `client`): `start` (a client's start's evidence, a digest) → its op id (OpIdOf) and evidence elements (Elems), or why not, for the Core to derive them as the rules check them; `within`, whether its evidence's times hold an acceptance time, as TimeOK reads them; `lifetimeMs`, the longest a client's own token lives from its start: 15 minutes, a constant the Core narrows within..
+  - `idToken` (internal module `id-token`): `cHash` (a code's SHA-256 digest) → an ID token's `c_hash`, its left half, for an ID token of an algorithm of SHA-256 (A21).
 - Types: `Ask`, `Named`, `Allowance`, `Checks`, `Context`, `RuleTimes`, `ClientAt`, `ClientEvidence`, `StartOf`, `Reading`, `Opening`, `Window`, `Ruling`, `Row`, `FlowRecord`, `FlowEntry`, `FlowState`, `Changes`, `Envelope`, `Finding`, `RecordKind`.
 
 ## Invariants
