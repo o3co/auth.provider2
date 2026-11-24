@@ -88,9 +88,19 @@ export type CallerTokens = Pick<AccessTokenIssuance, "admits" | "prepare" | "sig
 /** How the caller issues: signed at once, the bundle recorded nowhere (the endpoint's own step, tested there). */
 const signedAtOnce = (t: CallerTokens): Issuing => ({
 	admits: t.admits,
-	issue: async ({ request, limits }) => {
+	issue: async ({ request, limits, parts = [] }) => {
 		const prepared = await t.prepare(request, limits);
-		return prepared.kind === "refused" ? prepared : t.sign(prepared);
+		if (prepared.kind === "refused") return prepared;
+		// The parts take the access token's issue time, as a bundle gives them its start's.
+		const issuedAt = (JSON.parse(prepared.claimsText) as { iat: number }).iat * 1000;
+		const readied = await Promise.all(parts.map((part) => part.prepare(issuedAt)));
+		const signed = await t.sign(prepared);
+		if (signed.kind === "refused" || parts.length === 0) return signed;
+		// Each part signed at once too, with a receipt that names no log.
+		const made = await Promise.all(
+			parts.map((part, i) => part.sign(readied[i]?.prepared, "test-receipt")),
+		);
+		return { ...signed, parts: made };
 	},
 	revokeReferenced: t.revokeReferenced,
 });

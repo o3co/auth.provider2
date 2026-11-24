@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
-import { clientRules } from "@mod/authority-rules";
+import { type Changes, clientRules } from "@mod/authority-rules";
+import type { BundlePart, Rooting } from "@mod/grants";
 import type { HttpRequest } from "@mod/http";
 import { isUnavailable, Unavailable } from "@mod/kernel";
 import type { Binding } from "@mod/sender-binding";
@@ -64,7 +65,7 @@ export interface BundleParts {
 	readonly looks: number;
 }
 
-/** One bundle asked: its access token's request and limits, the request's evidence, its root's reference, its client's registry version. */
+/** One bundle asked: its access token's request and limits, the request's evidence, its root's reference and how a person's roots there, its client's registry version, its parts. */
 export interface BundleAsk {
 	readonly request: IssuanceRequest;
 	readonly limits: IssueLimits;
@@ -72,6 +73,21 @@ export interface BundleAsk {
 	readonly root?: string;
 	/** The registry version the client's record came from, where its source names one. */
 	readonly version?: number;
+	readonly via?: Rooting;
+	readonly parts?: readonly BundlePart[];
+}
+
+/** A bundle's answer: the access token's, and each part's token in the order asked. */
+export type BundleIssued =
+	| Issued
+	| (Extract<Issued, { kind: "issued" }> & { readonly parts: readonly string[] });
+
+/** What a bundle's op changes, as `authority-rules`' `effectOf` reads its bundle. */
+export function effectOfBundle(ask: Pick<BundleAsk, "root" | "via">, client: unknown): Changes {
+	if (client || ask.root === undefined || !ask.via) return {};
+	return ask.via.via === "code"
+		? { family: { approval: ask.root }, consume: [`code:${ask.root}`] }
+		: { rotate: ask.root };
 }
 
 /** A client's own token refused before its op is decided, or once its evidence is found used. */
@@ -95,11 +111,7 @@ function clientStartOf(ask: BundleAsk) {
 	return { op: read.op, named: { registryVersion: ask.version, elements: [...read.elements] } };
 }
 
-/**
- * The widest the Core takes a client's evidence's times by (client-assertion's `clock-skew`, dpop's
- * `proof-window`): a start within it took, as the rules' window is wider (transparency-local's
- * `evidence-window`, at least 6m).
- */
+/** The widest the Core takes a client's evidence's times by: within the rules' wider window (`evidence-window`, at least 6m). */
 const evidenceWindowMs = 5 * 60_000;
 
 /** How many times deciding is tried while the flow is not ready, tending it between. */
@@ -111,11 +123,11 @@ const decideTries = 3;
  * and answered only once taken in as its owner's `took`. Unavailable when the log or the judgment
  * does not come; a refusal after the receipts hands nothing out, the bundle left to be abandoned.
  */
-export function bundling(parts: BundleParts) {
-	const { transparency } = parts;
+export function bundling(deps: BundleParts) {
+	const { transparency } = deps;
 
-	async function decided(flow: Flow, op: string, digest: string) {
-		const decide = () => ({ digest, eff: {}, records: [] });
+	async function decided(flow: Flow, op: string, digest: string, eff: Changes) {
+		const decide = () => ({ digest, eff, records: [] });
 		for (let tried = 0; tried < decideTries; tried++) {
 			const answer = await transparency.decide({ kind: bundleKind.name, flow, op, decide });
 			if ("prev" in answer) return answer.prev;
@@ -127,7 +139,7 @@ export function bundling(parts: BundleParts) {
 
 	/** The owner's look at its bundle until it is taken in: its own `took` alone answers. */
 	async function takenIn(flow: Flow, op: string) {
-		for (let look = 0; look < parts.looks; look++) {
+		for (let look = 0; look < deps.looks; look++) {
 			const stepped = await transparency.step({ flow, own: op });
 			if ("position" in stepped) {
 				if (!stepped.end) continue;
@@ -136,21 +148,25 @@ export function bundling(parts: BundleParts) {
 			}
 			if (stepped.refused === "moved") continue;
 			if (!["unjudged", "atHead", "waits"].includes(stepped.refused)) break;
-			await parts.pause(look);
+			await deps.pause(look);
 		}
 		throw new Unavailable("token-endpoint");
 	}
 
-	return async (ask: BundleAsk): Promise<Issued> => {
-		const admitted = await parts.issuance.admits(ask.request);
+	return async (ask: BundleAsk): Promise<BundleIssued> => {
+		const admitted = await deps.issuance.admits(ask.request);
 		if (admitted.kind === "refused") return admitted;
 		const flow = flowOf(ask.request.grant);
 		// A client's op is its evidence's, checked before it is decided; a person's, as it was verified.
 		const client = flow.of === "client" ? clientStartOf(ask) : undefined;
 		if (flow.of === "client" && !client) return noEvidence;
-		const ground = () => (ask.evidence.length > 0 ? JSON.stringify(ask.evidence) : parts.fresh());
+		const ground = () => (ask.evidence.length > 0 ? JSON.stringify(ask.evidence) : deps.fresh());
 		const op = client ? client.op : `start:${sha256(ground())}`;
 		const root = ask.root === undefined ? {} : { root: ask.root };
+		// A person's start names its root as its parent, and how it roots there; a client's has none.
+		const parent = !client && ask.root !== undefined ? { parent: ask.root } : {};
+		const via = client ? { via: "client" } : ask.via ? { ...ask.via } : {};
+		const parts = ask.parts ?? [];
 		const start: Stage = {
 			kind: "start",
 			flow,
@@ -161,11 +177,12 @@ export function bundling(parts: BundleParts) {
 			preimage: {
 				v: 1,
 				...root,
+				...parent,
 				evidence: ask.evidence,
-				content: client ? { via: "client" } : {},
+				content: via,
 			},
 		};
-		const prev = await decided(flow, op, parts.digest(start.preimage));
+		const prev = await decided(flow, op, deps.digest(start.preimage), effectOfBundle(ask, client));
 		const started = await transparency.send({ flow, op, stage: start, prev });
 		if ("refused" in started) throw new Unavailable("token-endpoint");
 		// Its evidence used: refused for good; its owner does nothing, the op left to its lease's end.
@@ -181,7 +198,7 @@ export function bundling(parts: BundleParts) {
 			await close();
 			throw new Unavailable("token-endpoint");
 		}
-		const prepared = await parts.issuance
+		const prepared = await deps.issuance
 			.prepare(ask.request, { ...ask.limits, acceptedAt })
 			.catch(async (error: unknown) => {
 				await close();
@@ -191,6 +208,12 @@ export function bundling(parts: BundleParts) {
 			await close();
 			return prepared;
 		}
+		const readied = await Promise.all(parts.map((part) => part.prepare(acceptedAt))).catch(
+			async (error: unknown) => {
+				await close();
+				throw error;
+			},
+		);
 		const digested = receipts.digestInput(prepared.headerText, prepared.claimsText);
 		if ("error" in digested)
 			throw new TypeError(`token-endpoint: a token's texts: ${digested.error}`);
@@ -202,32 +225,49 @@ export function bundling(parts: BundleParts) {
 			op,
 			stage: 2,
 			last: true,
-			tokens: [{ frame: "accessToken", digest: sha256(digested.input) }],
+			tokens: [
+				{ frame: "accessToken", digest: sha256(digested.input) },
+				...parts.map((part, i) => ({ frame: part.frame, digest: readied[i]?.digest ?? "" })),
+			],
 			preimage: {
 				v: 1,
 				...root,
 				parent: id,
 				evidence: [],
-				content: client ? { via: "client", token } : {},
+				content: client ? { via: "client", token } : via,
 			},
 		};
 		const append = async () => {
 			const sent = await transparency.send({ flow, op, stage: bundle, prev: position });
 			if ("refused" in sent) throw new Unavailable("token-endpoint");
-			if (sent.answer.result === "accepted") return;
+			if (sent.answer.result === "accepted") {
+				// One receipt per token, in its order, the access token's first: else none is signed.
+				if (sent.answer.receipts.length !== bundle.tokens?.length)
+					throw new Unavailable("token-endpoint");
+				return sent.answer.receipts;
+			}
 			// A client's op, refused, is its lease's end's to leave, unless the refusal closed it.
 			if (!client && !sent.end) await close();
 			throw new Unavailable("token-endpoint");
 		};
-		await append();
-		const signed = await parts.issuance.sign(prepared).catch(async (error: unknown) => {
+		const signAll = async (received: readonly string[]) => {
+			const signed = await deps.issuance.sign(prepared);
+			if (signed.kind === "refused") return { signed, made: [] };
+			const settled = await Promise.allSettled(
+				parts.map((part, i) => part.sign(readied[i]?.prepared, received[i + 1] as string)),
+			);
+			const failed = settled.find((one) => one.status === "rejected");
+			if (failed) throw failed.reason;
+			return { signed, made: settled.map((one) => (one as PromiseFulfilledResult<string>).value) };
+		};
+		// Signing that falls after the receipts: the same bundle again, then every token signed again, once.
+		const received = await append();
+		const { signed, made } = await signAll(received).catch(async (error: unknown) => {
 			if (!isUnavailable(error)) throw error;
-			// Signing fell after the receipts: the same bundle again, the same id and bytes, then signed again.
-			await append();
-			return parts.issuance.sign(prepared);
+			return signAll(await append());
 		});
 		if (signed.kind === "refused") return signed;
 		await takenIn(flow, op);
-		return signed;
+		return parts.length === 0 ? signed : { ...signed, parts: made };
 	};
 }

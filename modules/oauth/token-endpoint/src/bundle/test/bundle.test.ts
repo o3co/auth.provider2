@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { clientRules } from "@mod/authority-rules";
+import { clientRules, effectOf, emptyState } from "@mod/authority-rules";
 import { assemble, defineModule, isUnavailable, kernelConfig, Unavailable } from "@mod/kernel";
 import type { AccessGrant, Issued, PreparedAccess } from "@mod/tokens";
 import {
@@ -236,6 +236,205 @@ describe("a bundle, owned by the token endpoint (A40)", () => {
 		const bearer = { member: "x5t#S256", confirmation: "t", tokenType: "Bearer" };
 		expect(evidenceOf(request, { binding: bearer, assertion: false })).toEqual([]);
 		expect(evidenceOf(request, { assertion: false })).toEqual([]);
+	});
+
+	it("roots a person's start at its approval, by its code or by its family's refresh, the start naming the root as its parent", async () => {
+		const person = { ...grant, subject: "alice", subjectKind: "user" as const };
+		const asked = { ...ask, request: { ...ask.request, grant: person }, root: "r-approval" };
+		await world.run(await world.replica("w1"))({ ...asked, via: { via: "code" } });
+		const subject = { of: "subject", id: "alice" } as const;
+		const [start, bundle] = world.book.records(subject).map((p) => p.record);
+		expect(world.book.sent[0]?.stage.preimage).toEqual({
+			v: 1,
+			root: "r-approval",
+			parent: "r-approval",
+			evidence,
+			content: { via: "code" },
+		});
+		expect(world.book.sent[1]?.stage.preimage).toEqual({
+			v: 1,
+			root: "r-approval",
+			parent: start?.id,
+			evidence: [],
+			content: { via: "code" },
+		});
+		expect(bundle?.kind).toBe("bundle");
+		await world.run(await world.replica("w1"))({
+			...asked,
+			evidence: [],
+			via: { via: "refresh", rotation: 2 },
+		});
+		expect(world.book.sent[2]?.stage.preimage).toMatchObject({
+			parent: "r-approval",
+			content: { via: "refresh", rotation: 2 },
+		});
+	});
+
+	it("decides its op's changes as the rules read its bundle: a family and the code's mark by a code, a rotation by a refresh, none for a client's", async () => {
+		/** The changes each op is decided with, on the replica given. */
+		const watching = async () => {
+			const t = await world.replica("w1");
+			const effs: unknown[] = [];
+			const decide: typeof t.decide = (q) => {
+				const decided = q.decide(emptyState, []);
+				if (!("refused" in decided)) effs.push(decided.eff);
+				return t.decide(q);
+			};
+			return { issue: world.run({ ...t, decide }), effs };
+		};
+		const person = { ...grant, subject: "alice", subjectKind: "user" as const };
+		const rootings = [{ via: "code" }, { via: "refresh", rotation: 1 }] as const;
+		for (const [i, via] of rootings.entries()) {
+			const { issue, effs } = await watching();
+			const evidence = [{ form: "dpopProof" as const, value: jws(claimed(`p${i}`)) }];
+			await issue({
+				...ask,
+				evidence,
+				request: { ...ask.request, grant: person },
+				root: `r${i}`,
+				via,
+			});
+			const bundle = world.book.sent.filter((sent) => sent.stage.kind === "bundle").at(-1)?.stage;
+			if (!bundle) throw new Error("no bundle");
+			const read = { record: bundle, preimage: bundle.preimage, state: emptyState, prior: [] };
+			expect(effs).toEqual([effectOf(read as never)]);
+			expect(effs[0]).not.toEqual({});
+		}
+		const client = await watching();
+		await client.issue(ask);
+		expect(client.effs).toEqual([{}]);
+	});
+
+	it("carries its parts beside its access token: each prepared at the start's acceptance, its digest recorded, signed after with its own receipt", async () => {
+		const person = { ...grant, subject: "alice", subjectKind: "user" as const };
+		const made: { frame: string; at?: number; receipt?: string }[] = [];
+		const part = (frame: "idToken" | "family") => ({
+			frame,
+			prepare: async (acceptedAt: number) => {
+				made.push({ frame, at: acceptedAt });
+				return { prepared: `${frame}-prepared`, digest: `${frame}-digest` };
+			},
+			sign: async (prepared: unknown, receipt: string) => {
+				made.push({ frame, receipt });
+				return `${String(prepared)}-signed`;
+			},
+		});
+		const answer = await world.run(await world.replica("w1"))({
+			...ask,
+			request: { ...ask.request, grant: person },
+			root: "r-approval",
+			via: { via: "code" },
+			parts: [part("idToken"), part("family")],
+		});
+		expect(answer).toEqual({
+			...issued,
+			parts: ["idToken-prepared-signed", "family-prepared-signed"],
+		});
+		const subject = { of: "subject", id: "alice" } as const;
+		const [start, bundle] = world.book.records(subject).map((p) => p.record);
+		expect(bundle?.tokens?.slice(1)).toEqual([
+			{ frame: "idToken", digest: "idToken-digest" },
+			{ frame: "family", digest: "family-digest" },
+		]);
+		// Prepared before the bundle is recorded, signed only after, each with its own receipt.
+		expect(made).toEqual([
+			{ frame: "idToken", at: start?.acceptedAt },
+			{ frame: "family", at: start?.acceptedAt },
+			{ frame: "idToken", receipt: "h.p1.s" },
+			{ frame: "family", receipt: "h.p2.s" },
+		]);
+	});
+
+	it("signs no part, closing its op, when a part cannot be prepared; and none where the log answers its receipts otherwise", async () => {
+		const person = { ...grant, subject: "alice", subjectKind: "user" as const };
+		const asked = { ...ask, request: { ...ask.request, grant: person }, root: "r" };
+		let signed = 0;
+		const failing = {
+			frame: "idToken" as const,
+			prepare: async () => {
+				throw new Error("keys");
+			},
+			sign: async () => {
+				signed++;
+				return "t";
+			},
+		};
+		await expect(
+			world.run(await world.replica("w1"))({ ...asked, parts: [failing] }),
+		).rejects.toThrow("keys");
+		const subject = { of: "subject", id: "alice" } as const;
+		expect(world.book.records(subject).map((p) => p.record.kind)).toEqual(["start"]);
+		world = await makeWorld((log) => ({
+			...log,
+			append: async (stage, prev) => {
+				const answer = await log.append(stage, prev);
+				return answer.result === "accepted" ? { ...answer, receipts: ["h.p.s"] } : answer;
+			},
+		}));
+		world.book.judgeOnAppend({ verdict: "verified", outcome: "took" });
+		const ready = { ...failing, prepare: async () => ({ prepared: "p", digest: "d" }) };
+		await expect(
+			world.run(await world.replica("w1"))({ ...asked, parts: [ready] }),
+		).rejects.toSatisfy(isUnavailable);
+		expect(signed).toBe(0);
+	});
+
+	it("appends the same bundle again and signs every token again, each with its own receipt, where a part's signing fell", async () => {
+		const person = { ...grant, subject: "alice", subjectKind: "user" as const };
+		const receipts: string[] = [];
+		let falls = 1;
+		const part = {
+			frame: "idToken" as const,
+			prepare: async () => ({ prepared: "p", digest: "d" }),
+			sign: async (_prepared: unknown, receipt: string) => {
+				receipts.push(receipt);
+				if (falls-- > 0) throw new Unavailable("keys");
+				return "id-token";
+			},
+		};
+		const answer = await world.run(await world.replica("w1"))({
+			...ask,
+			request: { ...ask.request, grant: person },
+			root: "r",
+			parts: [part],
+		});
+		expect(answer).toEqual({ ...issued, parts: ["id-token"] });
+		expect(receipts).toEqual(["h.p1.s", "h.p1.s"]);
+		const bundles = world.book.sent.filter((sent) => sent.stage.kind === "bundle");
+		expect(bundles).toHaveLength(2);
+		expect(bundles[1]?.stage).toEqual(bundles[0]?.stage);
+	});
+
+	it("signs nothing again where the bundle appended again answers its receipts otherwise", async () => {
+		let appended = 0;
+		world = await makeWorld((log) => ({
+			...log,
+			append: async (stage, prev) => {
+				const answer = await log.append(stage, prev);
+				if (stage.kind !== "bundle" || answer.result !== "accepted") return answer;
+				return ++appended === 1 ? answer : { ...answer, receipts: ["h.p.s"] };
+			},
+		}));
+		world.book.judgeOnAppend({ verdict: "verified", outcome: "took" });
+		const person = { ...grant, subject: "alice", subjectKind: "user" as const };
+		let signed = 0;
+		const part = {
+			frame: "idToken" as const,
+			prepare: async () => ({ prepared: "p", digest: "d" }),
+			sign: async () => {
+				signed++;
+				throw new Unavailable("keys");
+			},
+		};
+		await expect(
+			world.run(await world.replica("w1"))({
+				...ask,
+				request: { ...ask.request, grant: person },
+				root: "r",
+				parts: [part],
+			}),
+		).rejects.toSatisfy(isUnavailable);
+		expect([appended, signed]).toEqual([2, 1]);
 	});
 
 	it("signs nothing when its append is refused, its op left to its lease's end but on abandoned", async () => {

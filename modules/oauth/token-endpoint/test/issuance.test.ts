@@ -39,3 +39,31 @@ it("notes the subject it hands tokens, reading the grant once", async () => {
 	expect(signed).toEqual(["bob"]);
 	expect([...bundle.subjects.values()]).toEqual([{ subject: "bob", subjectKind: "user" }]);
 });
+
+it("hands a bundle's root, its rooting and its parts on, and answers each part's token", async () => {
+	const asked: unknown[] = [];
+	const issuing = {
+		issue: async (ask: unknown) => {
+			asked.push(ask);
+			return { kind: "issued", access: { id: "a", expiresAt: 1, token: "t" }, parts: ["id"] };
+		},
+	};
+	const { issue } = issuanceFor(issuing as never, "urn:test", undefined);
+	const part = {
+		frame: "idToken" as const,
+		prepare: async () => ({ prepared: 1, digest: "d" }),
+		sign: async () => "id",
+	};
+	const access = {
+		subject: "s",
+		subjectKind: "user" as const,
+		issuedTo: "c",
+		audience: [],
+		scope: [],
+	};
+	const answer = await issue({ access, root: "r", via: { via: "code" }, parts: [part] });
+	expect(answer).toMatchObject({ kind: "issued", parts: ["id"] });
+	expect(asked[0]).toMatchObject({ root: "r", via: { via: "code" }, parts: [part] });
+	await issuanceFor(issuing as never, "urn:test", undefined).issue({ access });
+	expect(Object.keys(asked[1] as object).sort()).toEqual(["limits", "request"]);
+});

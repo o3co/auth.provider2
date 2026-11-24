@@ -1,4 +1,4 @@
-import type { GrantInput, Refused, SessionIssuance } from "@mod/grants";
+import type { BundlePart, GrantInput, Refused, Rooting, SessionIssuance } from "@mod/grants";
 import type { Binding } from "@mod/sender-binding";
 import {
 	type AccessGrant,
@@ -39,7 +39,11 @@ export interface Issuing {
 		readonly request: IssuanceRequest;
 		readonly limits: IssueLimits;
 		readonly root?: string;
-	}): Promise<Issued>;
+		readonly via?: Rooting;
+		readonly parts?: readonly BundlePart[];
+	}): Promise<
+		Issued | (Extract<Issued, { kind: "issued" }> & { readonly parts?: readonly string[] })
+	>;
 	readonly revokeReferenced: Tokens["revokeReferenced"];
 }
 
@@ -85,10 +89,14 @@ export function issuanceFor(
 			);
 		}
 		const root = asked.root === undefined ? {} : { root: asked.root };
+		const via = asked.via === undefined ? {} : { via: asked.via };
+		const parts = asked.parts === undefined ? {} : { parts: asked.parts };
 		const issued = await issuing.issue({
 			request: requestOf(grant, from),
 			limits: { ...limits, ...bound },
 			...root,
+			...via,
+			...parts,
 		});
 		if (issued.kind !== "issued") return { kind: "refused", refusal: issued } satisfies Refused;
 		bundle.subjects.set(JSON.stringify([subjectKind, subject]), { subject, subjectKind });
