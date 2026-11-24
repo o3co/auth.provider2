@@ -6,6 +6,7 @@
 ## Not here
 - Composing modules by their kinds: `combinations`.
 - Checking each package's dependencies against them: `guard-imports`. The budget's other words for kinds: `guard`.
+- Holding a companion's dependencies, its tests' among them, to `companionReach`: no check does in the workspace, as `guard-imports` reads the levels alone; `combinations` asks `mayNeed` of the needs declared outside it.
 
 ## Offers
 - `kinds`: the words a manifest's `kind` may name, each one word; `Kind`, one of them.
