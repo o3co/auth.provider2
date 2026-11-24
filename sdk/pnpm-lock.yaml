@@ -32,9 +32,6 @@ importers:
 
   packages/rp-kit:
     dependencies:
-      '@mod/sdk-core-wire':
-        specifier: link:../../../modules/wire/sdk-core-wire
-        version: link:../../../modules/wire/sdk-core-wire
       '@mod/transparency-wire':
         specifier: link:../../../modules/wire/transparency-wire
         version: link:../../../modules/wire/transparency-wire

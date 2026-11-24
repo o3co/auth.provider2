@@ -7,7 +7,6 @@
 		".": "./src/contract.ts"
 	},
 	"dependencies": {
-		"@mod/sdk-core-wire": "link:../../../modules/wire/sdk-core-wire",
 		"@mod/transparency-wire": "link:../../../modules/wire/transparency-wire"
 	}
 }
