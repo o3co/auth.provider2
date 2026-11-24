@@ -49,6 +49,8 @@ function harness(
 		scopes?: string[];
 		/** What the claims' selection answers. */
 		picked?: Picked;
+		/** The acr a passkey's login meets. */
+		acr?: string;
 	} = {},
 ) {
 	const log: string[] = [];
@@ -153,8 +155,10 @@ function harness(
 			lifetimeMs: () => 60_000,
 		},
 		claims: {
-			select: async (_client, subject, scope, claims) => {
-				log.push(`select ${subject} ${scope.join(" ")} ${JSON.stringify(claims)}`);
+			select: async (_client, subject, scope, claims, acr) => {
+				log.push(
+					`select ${subject} ${scope.join(" ")} ${JSON.stringify(claims)}${acr ? ` ${acr}` : ""}`,
+				);
 				return p.picked ?? { kind: "none" };
 			},
 			keep: async (redemption, _selection, lifetimeMs, subject) => {
@@ -171,6 +175,7 @@ function harness(
 		},
 		issuer,
 		delegationS: 3600,
+		...(p.acr === undefined ? {} : { acr: p.acr }),
 	};
 	const finish = finishing(parts);
 	const send = async (json: Record<string, unknown> = { statement, assertion: "{}" }) => {
@@ -254,6 +259,21 @@ describe("a login's finish (⑤⑥)", () => {
 		expect(plain.log.some((line) => line.startsWith("select") || line.startsWith("keep"))).toBe(
 			false,
 		);
+	});
+
+	it("gives the code the acr a passkey's login meets, and opens no session where an essential acr asked is not met", async () => {
+		const met = harness({ acr: "urn:acr:passkey" });
+		await met.send();
+		expect(met.issued[0]).toMatchObject({ acr: "urn:acr:passkey" });
+		expect(harness().issued[0]?.acr).toBeUndefined();
+		const unmet = harness({
+			scope: "openid read",
+			scopes: ["openid", "read"],
+			claims: {},
+			picked: { kind: "acrUnmet" },
+		});
+		expect(await unmet.send()).toMatchObject({ status: 400, json: { error: "access_denied" } });
+		expect(unmet.log.some((line) => line.startsWith("open"))).toBe(false);
 	});
 
 	it("answers a resent finish the completion kept, making no second code", async () => {

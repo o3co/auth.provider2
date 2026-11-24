@@ -29,6 +29,8 @@ export interface FinishParts {
 	readonly issuer: string;
 	/** How long a login's delegation lasts from its statement's issue, in seconds (O27). */
 	readonly delegationS: number;
+	/** The acr a passkey's login meets, by `acr`'s table; none where it meets none. */
+	readonly acr?: string;
 }
 
 const refused = (status: number, error: string, description: string): HttpResponse =>
@@ -98,9 +100,11 @@ export function finishing(p: FinishParts) {
 		if (admitted.kind === "refused") return denied("the login was not approved");
 		// An OpenID request's claims, selected before the session opens; a `sub` asked of another refuses it.
 		const picked = allowed.scope.includes(openid)
-			? await p.claims.select(client, subject, items.scope.split(" "), items.claims)
+			? await p.claims.select(client, subject, items.scope.split(" "), items.claims, p.acr)
 			: ({ kind: "none" } as const);
 		if (picked.kind === "otherSubject") return denied("the login is not of the subject asked");
+		// OpenID Connect Core §5.5.1.1: an essential acr not met is an authentication that failed.
+		if (picked.kind === "acrUnmet") return denied("the login does not meet the acr asked");
 		const opened = await p.sessions.open({
 			subject,
 			amr: passkeyAmr,
@@ -124,6 +128,7 @@ export function finishing(p: FinishParts) {
 				session: handle,
 				subject,
 				binding: asked.binding,
+				...(p.acr === undefined ? {} : { acr: p.acr }),
 			});
 			// Pinned to the code before its root is set: a code never rooted is never redeemed.
 			if (picked.kind === "selected")
@@ -170,7 +175,12 @@ export const finishTakes = [
 /** The route of ⑤⑥, its parts taken from the composition, counted per source. */
 export async function finishRoute(
 	c: Pick<BuildContext<unknown>, "get">,
-	p: { readonly issuer: string; readonly delegationS: number; readonly window: Window },
+	p: {
+		readonly issuer: string;
+		readonly delegationS: number;
+		readonly window: Window;
+		readonly acr: string | undefined;
+	},
 ) {
 	return {
 		method: "POST" as const,
@@ -190,6 +200,7 @@ export async function finishRoute(
 			claims: await claimsPinningIn(c),
 			issuer: p.issuer,
 			delegationS: p.delegationS,
+			...(p.acr === undefined ? {} : { acr: p.acr }),
 		}),
 	};
 }

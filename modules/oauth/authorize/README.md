@@ -34,7 +34,7 @@
 - Each JAR's reservation, by its client and `jti`: the digest of the start that used it and the answer made, until the JAR's expiry and the clock skew.
 
 ## Depends on
-- `kernel`, `http` (the routes), `clients` and `client-documents` (the client, its section), `client-assertion` (`verifySignedBy`), `client-allowance`, `redirect-uris`, `approvals`, `code-grant`, `oidc` (the `claims` parameter's reading), `claims-selection`, `session`, `tokens` (the policies), `sender-binding` (the binding asked for ahead), `acr` (`amrSources`), `issuer`, `rate-limit`, `promises` (its stance), `sdk-core-wire`; `zod`.
+- `kernel`, `http` (the routes), `clients` and `client-documents` (the client, its section), `client-assertion` (`verifySignedBy`), `client-allowance`, `redirect-uris`, `approvals`, `code-grant`, `oidc` (the `claims` parameter's reading), `claims-selection`, `session`, `tokens` (the policies), `sender-binding` (the binding asked for ahead), `acr` (`amrSources`, the acr a passkey's login meets), `issuer`, `rate-limit`, `promises` (its stance), `sdk-core-wire`; `zod`.
 
 ## Vocabulary
 - start: ②, a login's first request from the screen. JAR: the client's signed request (RFC 9101). reservation: a JAR's one use. source: where a start's JAR comes from.

@@ -17,7 +17,8 @@ export function claimsRefusal(claims: unknown, openid: boolean): string | undefi
 export type Picked =
 	| { readonly kind: "none" }
 	| { readonly kind: "selected"; readonly selection: Selection }
-	| { readonly kind: "otherSubject" };
+	| { readonly kind: "otherSubject" }
+	| { readonly kind: "acrUnmet" };
 
 /** How the finish selects an OpenID request's claims and pins them to its code. */
 export interface ClaimsPinning {
@@ -30,6 +31,8 @@ export interface ClaimsPinning {
 		subject: string,
 		scope: readonly string[],
 		claims: unknown,
+		/** The acr the login meets, which an essential acr asked is held to. */
+		acr: string | undefined,
 	): Promise<Picked>;
 	/** Kept for the code by its digest, for its lifetime and a minute more (`claims-selection`). */
 	keep: ClaimsSelections["keepForCode"];
@@ -39,7 +42,7 @@ export function claimsPinning(
 	selections: Pick<ClaimsSelections, "select" | "keepForCode">,
 ): ClaimsPinning {
 	return {
-		select: async (client, subject, scope, claims) => {
+		select: async (client, subject, scope, claims, acr) => {
 			if (claims === undefined) return { kind: "none" };
 			const asked = claimsAsked(claims);
 			// Read at ② already: one that reads otherwise now is no request the start let through.
@@ -47,6 +50,10 @@ export function claimsPinning(
 				throw new TypeError("authorize: claims read malformed at the finish");
 			// Core §5.5.1: a `sub` asked is the one subject the login may answer for.
 			if (asked.subs.some((subs) => !subs.includes(subject))) return { kind: "otherSubject" };
+			// §5.5.1.1: an essential acr is met by the login's own, one of its values where it names any.
+			const met = (values: readonly string[]) =>
+				acr !== undefined && (values.length === 0 || values.includes(acr));
+			if (asked.acr.some((one) => one.essential && !met(one.values))) return { kind: "acrUnmet" };
 			const { idToken, userinfo } = asked.selection;
 			const names = [...new Set([...idToken.names, ...userinfo.names].map(({ name }) => name))];
 			const agreed = { scopes: scope, names };

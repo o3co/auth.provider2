@@ -1,4 +1,4 @@
-import { amrSources } from "@mod/acr";
+import { acr, amrSources } from "@mod/acr";
 import { approvals, statementItems } from "@mod/approvals";
 import { clientAssertion } from "@mod/client-assertion";
 import { documentCopies } from "@mod/client-documents";
@@ -39,6 +39,7 @@ export default defineModule(
 			requestSources,
 			withoutPasskey,
 			statementItems,
+			acr,
 			...finishTakes,
 		],
 	},
@@ -106,6 +107,8 @@ export default defineModule(
 				issuer: (await c.get(issuer)).url,
 				delegationS: c.section["delegation-lifetime"],
 				window: { limit: c.section.requests, ms: c.section.window * 1000 },
+				// The one acr a passkey's login meets, as `acr`'s table fixes it.
+				acr: (await c.get(acr)).current(passkeyAmr),
 			}),
 		),
 	],

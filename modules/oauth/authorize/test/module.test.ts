@@ -1,3 +1,4 @@
+import { acr } from "@mod/acr";
 import { approvals, statementItems } from "@mod/approvals";
 import { claimsSelections } from "@mod/claims-selection";
 import { clientAssertion } from "@mod/client-assertion";
@@ -43,6 +44,7 @@ const fakes = defineModule(
 		m.provide(sessions).by(() => ({}) as never),
 		m.provide(codes).by(() => ({ issuesIdTokens: () => false }) as never),
 		m.provide(claimsSelections).by(() => ({}) as never),
+		m.provide(acr).by(() => ({ current: () => undefined }) as never),
 		m.provide(senderBinding).by(() => ({}) as never),
 		m
 			.provide(issuer)
@@ -93,6 +95,7 @@ describe("authorize, composed", () => {
 			m.provide(sessions).by(() => ({}) as never),
 			m.provide(codes).by(() => ({ issuesIdTokens: () => false }) as never),
 			m.provide(claimsSelections).by(() => ({}) as never),
+			m.provide(acr).by(() => ({ current: () => undefined }) as never),
 			m.provide(senderBinding).by(() => ({}) as never),
 			m
 				.provide(issuer)
