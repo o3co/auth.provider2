@@ -198,8 +198,19 @@ export interface Tokens extends TokenValidity<AccessCheck> {
 	revokeAccess(token: string): Promise<Revocation>;
 }
 
+/** Checking and revoking access tokens: taken by any module. */
+export const accessTokens = contract<Tokens>("tokens");
+
+/** Issuing access tokens: the members of `Tokens` that make one, and the lifetime they apply. */
+export type AccessTokenIssuance = Pick<
+	Tokens,
+	"admits" | "prepare" | "sign" | "issue" | "accessTokenLifetimeSeconds"
+>;
+
 /** Taken only by a module that declares where it stands on the promises, as it issues authority. */
-export const accessTokens = contract<Tokens>("tokens", { takersContribute: stances });
+export const accessTokenIssuance = contract<AccessTokenIssuance>("tokens.issuance", {
+	takersContribute: stances,
+});
 
 export { referenceOf } from "./reference.ts";
 
@@ -243,8 +254,7 @@ export const subjectChecks = extensionPoint<SubjectCheck>("tokens.subject-checks
 /** A bundle of credentials about to be answered, as a fence sees it: its subject, its kind and its receipt's id. */
 export interface FencedBundle {
 	readonly subject: string;
-	/** `pass` always gives it; a fence reads one given none as a person's. */
-	readonly subjectKind?: SubjectKind;
+	readonly subjectKind: SubjectKind;
 	readonly receiptId: string;
 }
 

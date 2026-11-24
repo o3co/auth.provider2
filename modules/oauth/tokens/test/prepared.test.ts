@@ -5,7 +5,12 @@ import { promiseNames, promises, stances } from "@mod/promises";
 import promisesModule from "@mod/promises/module";
 import { tokens as receipts } from "@mod/transparency-wire";
 import { describe, expect, it } from "vitest";
-import { type AccessGrant, accessTokens, type PreparedAccess } from "../src/contract.ts";
+import {
+	type AccessGrant,
+	accessTokenIssuance,
+	accessTokens,
+	type PreparedAccess,
+} from "../src/contract.ts";
 import { tokensConfig } from "../src/testing.ts";
 import { composedConfig, composedModules, composedWith } from "./composed.ts";
 
@@ -82,25 +87,27 @@ it("says where it stands on the promises, as accessTokenSigning asks of its take
 	});
 });
 
-it("is taken only by a module that declares where it stands on the promises, as issuing authority asks", async () => {
-	const taking = (declares: boolean) =>
-		defineModule({ name: "issuing", replicaSafe: true, takes: [accessTokens] }, (m) =>
+it("is taken for issuing only by a module that declares where it stands on the promises, and for checking tokens by any", async () => {
+	const taking = (handle: typeof accessTokens | typeof accessTokenIssuance, declares: boolean) =>
+		defineModule({ name: "taker", replicaSafe: true, takes: [handle] }, (m) =>
 			declares
 				? [
 						m.contribute(stances).by(() => ({
 							promise: promiseNames.clientToken,
 							holds: false,
-							by: "issuing",
+							by: "taker",
 						})),
 					]
 				: [],
 		);
-	const unsaid = await boot([...composedWith(), taking(false)]).catch((error: unknown) => error);
+	const booted = (module: ReturnType<typeof taking>) => boot([...composedWith(), module]);
+	const unsaid = await booted(taking(accessTokenIssuance, false)).catch((error: unknown) => error);
 	expect((unsaid as BootRefused).refusals).toEqual([
 		{
-			where: "issuing",
-			reason: "tokens is taken only by a module that contributes to promises.stances",
+			where: "taker",
+			reason: "tokens.issuance is taken only by a module that contributes to promises.stances",
 		},
 	]);
-	await expect(boot([...composedWith(), taking(true)])).resolves.toBeDefined();
+	await expect(booted(taking(accessTokenIssuance, true))).resolves.toBeDefined();
+	await expect(booted(taking(accessTokens, false))).resolves.toBeDefined();
 });

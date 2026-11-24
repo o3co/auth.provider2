@@ -1,5 +1,5 @@
 import { addedClaimsLimits, addedClaimsWith } from "@mod/added-claims";
-import { defineModule, isUnavailable, Unavailable } from "@mod/kernel";
+import { contract, defineModule, isUnavailable, Unavailable } from "@mod/kernel";
 import { type Binding, senderBindings } from "@mod/sender-binding";
 import { denylistAllowanceMs, denylistOver } from "@mod/token-denylist";
 import { describe, expect, it } from "vitest";
@@ -9,6 +9,7 @@ import {
 	type AccessGrant,
 	type Actor,
 	accessConditions,
+	accessTokenIssuance,
 	accessTokens,
 	type IssuancePolicy,
 	type IssuanceVerdict,
@@ -19,7 +20,13 @@ import {
 	subjectChecks,
 	type Tokens,
 } from "./contract.ts";
-import { authenticatedAheadMs, issuing, judging, type MakeAccess } from "./issuance/issuance.ts";
+import {
+	authenticatedAheadMs,
+	issuanceOf,
+	issuing,
+	judging,
+	type MakeAccess,
+} from "./issuance/issuance.ts";
 import { defaultLifetimeSeconds, expiryOf, keptGrant, lifetimeOf, tokenId } from "./limits.ts";
 import { namedBy } from "./reference.ts";
 import type { section } from "./section.ts";
@@ -652,6 +659,9 @@ export function tokensContract(
 	});
 }
 
+/** The stand-in built once, which both handles hand on. */
+const builtStandIn = contract<Tokens>("tokens.stand-in");
+
 /**
  * A stand-in for tests of the modules that use tokens: it keeps what it issued in memory, with
  * opaque tokens and no signing. Lifetimes run on the composition's clock and end as tokens' do,
@@ -674,7 +684,7 @@ export function tokensStandIn(
 			takes: [accessConditions, subjectChecks, senderBindings, issuancePolicies],
 		},
 		(m) => [
-			m.provide(accessTokens).by(async (c) => {
+			m.provide(builtStandIn).by(async (c) => {
 				const revocable = options.revocable ?? true;
 				const configured = options.lifetimeSeconds ?? defaultLifetimeSeconds;
 				const conditions = [
@@ -798,6 +808,8 @@ export function tokensStandIn(
 				};
 				return stand;
 			}),
+			m.provide(accessTokens).by((c) => c.get(builtStandIn)),
+			m.provide(accessTokenIssuance).by(async (c) => issuanceOf(await c.get(builtStandIn))),
 		],
 	);
 }

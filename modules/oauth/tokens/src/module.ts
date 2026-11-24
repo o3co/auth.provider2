@@ -1,6 +1,6 @@
 import { addedClaimsWith } from "@mod/added-claims";
 import { issuer, metadata } from "@mod/issuer";
-import { defineModule, Unavailable } from "@mod/kernel";
+import { contract, defineModule, Unavailable } from "@mod/kernel";
 import { accessTokenSigning } from "@mod/keys";
 import { promiseNames, stances } from "@mod/promises";
 import { senderBinding } from "@mod/sender-binding";
@@ -8,6 +8,7 @@ import { denylistAllowanceMs, denylistOver, revokedTokens } from "@mod/token-den
 import { grantClaims } from "./claims/claims.ts";
 import {
 	accessConditions,
+	accessTokenIssuance,
 	accessTokens,
 	issuanceFences,
 	issuanceFencing,
@@ -16,12 +17,15 @@ import {
 	type Tokens,
 } from "./contract.ts";
 import { fencingOver } from "./fencing/fencing.ts";
-import { issuing, judging, type MakeAccess } from "./issuance/issuance.ts";
+import { issuanceOf, issuing, judging, type MakeAccess } from "./issuance/issuance.ts";
 import { expiryOf, keptGrant, lifetimeOf, tokenId } from "./limits.ts";
 import { namedBy } from "./reference.ts";
 import { section } from "./section.ts";
 import { standingOf } from "./standing/standing.ts";
 import { checkingWith, compactLimit } from "./verification/verification.ts";
+
+/** The one access tokens built, which both handles hand on. */
+const built = contract<Tokens>("tokens.built");
 
 /** Whether the section keeps revoked access tokens in a denylist, which takes token-denylist's store. */
 const denylisted = (s: { readonly revocation: "denylist" | "unsupported" }) =>
@@ -59,7 +63,7 @@ export default defineModule(
 		m
 			.provide(issuanceFencing)
 			.by(async (c) => fencingOver(await c.collect(issuanceFences), c.random)),
-		m.provide(accessTokens).by(async (c) => {
+		m.provide(built).by(async (c) => {
 			const signing = await c.get(accessTokenSigning);
 			const bindings = await c.get(senderBinding);
 			const subjects = await c.collect(subjectChecks);
@@ -211,5 +215,7 @@ export default defineModule(
 			};
 			return access;
 		}),
+		m.provide(accessTokens).by((c) => c.get(built)),
+		m.provide(accessTokenIssuance).by(async (c) => issuanceOf(await c.get(built))),
 	],
 );

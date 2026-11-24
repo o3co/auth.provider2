@@ -12,6 +12,8 @@ Internal module of `tokens`: the judgment `admits`, `prepare` and `issue` share,
 ## Offers
 - `judging` (the policies, the clock, the deadline) → the judgment `admits`, `prepare` and `issue` share.
 - `issuing` (the judgment, the making, the clock) → `admits`, `prepare`, `sign` and `issue`, alike for tokens and its stand-in; `MakeAccess` and `MadeAccess`, the making it takes: a token's header and claims texts, and its signing.
+- `accessTokenLifetimeSeconds`: the lifetime `issue` applies where a grant gives no `lifetimeSeconds`, in whole seconds from 2 to 86400, fixed when `tokens` is built, for a grant with a ceiling to read at build time. It is not the longest life any token may have: a grant's own `lifetimeSeconds` may differ. A boot check against it does not reach tokens already issued, or instances still on other settings.
+- `issuanceOf` (the access tokens built) → the members `accessTokenIssuance` hands on.
 - `authenticatedAheadMs`, `issuanceTimeoutMs`: tokens' own rule's bound and the policies' default deadline.
 - `refusedDescription`: the description of an issuance refused for a reason the client is not to learn, a policy's unreadable answer or a fence's refusal.
 

@@ -2,6 +2,7 @@ import type { AddedClaims } from "@mod/added-claims";
 import { deepFreeze, Unavailable } from "@mod/kernel";
 import { checkClaims } from "../claims/claims.ts";
 import type {
+	AccessTokenIssuance,
 	Admitted,
 	IssuancePolicy,
 	IssuanceRequest,
@@ -178,3 +179,12 @@ export function issuing(
 		},
 	};
 }
+
+/** The members of built access tokens that issue, for the handle taken to issue. */
+export const issuanceOf = (t: Tokens): AccessTokenIssuance => ({
+	admits: t.admits,
+	prepare: t.prepare,
+	sign: t.sign,
+	issue: t.issue,
+	accessTokenLifetimeSeconds: t.accessTokenLifetimeSeconds,
+});
