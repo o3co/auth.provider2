@@ -432,13 +432,14 @@ describe("the inputs a hash or a signature covers", () => {
 			over: "UTF-8 of continuation.of",
 		});
 		const { delete: del, rename } = continuation.bodies;
-		expect(del.safeParse({ credential_id: "c1" }).success).toBe(true);
-		expect(del.safeParse({ credential_id: "c1", label: "x" }).success).toBe(false);
-		expect(rename.safeParse({ credential_id: "c1", label: "Laptop" }).success).toBe(true);
+		expect(del.safeParse({ credential_id: "AQID" }).success).toBe(true);
+		expect(del.safeParse({ credential_id: "AQID", label: "x" }).success).toBe(false);
+		expect(rename.safeParse({ credential_id: "AQID", label: "Laptop" }).success).toBe(true);
 		for (const label of ["", "x".repeat(65), "a\u202eb", "a\nb"])
-			expect(rename.safeParse({ credential_id: "c1", label }).success, JSON.stringify(label)).toBe(
-				false,
-			);
+			expect(
+				rename.safeParse({ credential_id: "AQID", label }).success,
+				JSON.stringify(label),
+			).toBe(false);
 	});
 
 	it("holds every word frozen, and names each sealing's info apart", () => {
@@ -447,5 +448,69 @@ describe("the inputs a hash or a signature covers", () => {
 		const infos = Object.values(hpke.info);
 		expect(new Set(infos).size).toBe(infos.length);
 		expect(new Set(Object.values(typs)).size).toBe(Object.values(typs).length);
+	});
+});
+
+describe("a sealed continuation's body (V24)", () => {
+	const sig = `${"A".repeat(85)}A`;
+	const bytes = (text: string) => Buffer.byteLength(text);
+
+	it("seals a delete's and a rename's body with its signature, padded with spaces to one length, and reads it back", () => {
+		expect(continuation.sealed).toEqual(["delete", "rename"]);
+		const deleted = continuation.plainOf("delete", { credential_id: "AQID" }, sig);
+		if (deleted === undefined) throw new Error("no plain");
+		expect(bytes(deleted)).toBe(continuation.plainBytes);
+		expect(deleted.trimEnd()).toBe(`{"body":{"credential_id":"AQID"},"sig":"${sig}"}`);
+		expect(continuation.readPlain("delete", deleted)).toEqual({
+			body: { credential_id: "AQID" },
+			sig,
+		});
+		const renamed = continuation.plainOf("rename", { credential_id: "AQID", label: "鍵" }, sig);
+		expect(renamed && continuation.readPlain("rename", renamed)).toEqual({
+			body: { credential_id: "AQID", label: "鍵" },
+			sig,
+		});
+	});
+
+	it("fits the worst rename: a credential id of 1023 bytes and 64 characters escaped longest", () => {
+		// A lone surrogate is refused; a quote escapes to two bytes, a four-byte character takes four.
+		expect(
+			continuation.bodies.rename.safeParse({ credential_id: "A", label: "\ud800" }).success,
+		).toBe(false);
+		for (const id of ["A", "AB", "A=", "a+b"])
+			expect(continuation.bodies.delete.safeParse({ credential_id: id }).success, id).toBe(false);
+		const worst = { credential_id: "A".repeat(1364), label: "😀".repeat(64) };
+		const plain = continuation.plainOf("rename", worst, sig);
+		expect(plain && bytes(plain)).toBe(continuation.plainBytes);
+		expect(
+			continuation.plainOf("rename", { ...worst, credential_id: "A".repeat(1365) }, sig),
+		).toBeUndefined();
+	});
+
+	it("reads no text of another length, not canonical, of another stage's body or a signature of no shape", () => {
+		const plain = continuation.plainOf("delete", { credential_id: "AQID" }, sig) ?? "";
+		const pad = (text: string) => `${text}${" ".repeat(continuation.plainBytes - bytes(text))}`;
+		for (const text of [
+			plain.slice(0, -1),
+			`${plain} `,
+			pad(`{"sig":"${sig}","body":{"credential_id":"AQID"}}`),
+			pad(`{"body":{"credential_id":"AQID"}, "sig":"${sig}"}`),
+			pad(`{"body":{"credential_id":"AQID"},"sig":"${sig.slice(1)}"}`),
+			pad(`{"body":{"credential_id":"AQID","label":"x"},"sig":"${sig}"}`),
+		])
+			expect(continuation.readPlain("delete", text), text.trimEnd()).toBeUndefined();
+		expect(continuation.plainOf("delete", { credential_id: "AQID" }, "x")).toBeUndefined();
+	});
+
+	it("binds a sealed body to its stage, statement and sequence", () => {
+		const aads = [
+			continuation.aad("delete", "h", 1),
+			continuation.aad("rename", "h", 1),
+			continuation.aad("delete", "g", 1),
+			continuation.aad("delete", "h", 2),
+		];
+		expect(new Set(aads).size).toBe(4);
+		expect(aads[0]).toBe('{"h":"h","purpose":"continuation/delete","seq":1}');
+		expect(hpke.info.continuation).toBe("auth.provider2/continuation/v1");
 	});
 });

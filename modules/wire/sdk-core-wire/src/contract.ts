@@ -38,6 +38,7 @@ export const hpke = Object.freeze({
 		completion: "auth.provider2/completion/v1",
 		firstKeyRequest: "auth.provider2/first-key/request/v1",
 		firstKeyCode: "auth.provider2/first-key/code/v1",
+		continuation: "auth.provider2/continuation/v1",
 	}),
 	/** The additional data a completion is sealed under: its purpose and the hash of the statement it answers. */
 	completionAad: (
@@ -278,7 +279,7 @@ const canonical = (text: string) =>
 const id = z.string().min(1);
 const times = { iat: z.number().int(), exp: z.number().int() };
 const approved = { v, iss: id, t_hash: bytes32, assertion_hash: bytes32 };
-const label = z.string().regex(/^[^\p{Cc}\p{Cf}\p{Zl}\p{Zp}]{1,64}$/u);
+const label = z.string().regex(/^[^\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}]{1,64}$/u);
 const keyRow = z
 	.object({ credential_id: id, label, created_at: z.number().int().nonnegative() })
 	.strict();
@@ -438,6 +439,29 @@ export const firstKey = Object.freeze({
 
 const continuationStages = Object.freeze(["register", "delete", "rename"] as const);
 export type ContinuationStage = (typeof continuationStages)[number];
+type SealedStage = "delete" | "rename";
+const plainBytes = 2048;
+const utf8Length = (text: string) => {
+	let bytes = 0;
+	for (const char of text) {
+		const point = char.codePointAt(0) ?? 0;
+		bytes += point < 0x80 ? 1 : point < 0x800 ? 2 : point < 0x10000 ? 3 : 4;
+	}
+	return bytes;
+};
+const credentialId = z
+	.string()
+	.regex(/^[A-Za-z0-9_-]{1,1364}$/)
+	.refine(canonical);
+const deleteBody = z.object({ credential_id: credentialId }).strict();
+const renameBody = z.object({ credential_id: credentialId, label }).strict();
+const sealedPlain = (stage: SealedStage) =>
+	z
+		.object({
+			body: stage === "delete" ? deleteBody : renameBody,
+			sig: z.string().regex(/^[A-Za-z0-9_-]{85}[AQgw]$/),
+		})
+		.strict();
 
 /**
  * A statement's continuation (§C.2, §C.6): its stages; what E_sig signs for one (`of`: the
@@ -447,6 +471,37 @@ export type ContinuationStage = (typeof continuationStages)[number];
  */
 export const continuation = Object.freeze({
 	stages: continuationStages,
+	/** The stages whose body is sealed to the Core, its signature inside the seal (V24). */
+	sealed: Object.freeze(["delete", "rename"] as const),
+	/** The additional data a sealed body is bound to: its stage, its statement's hash and its sequence. */
+	aad: (stage: SealedStage, statementHash: string, seq: number) =>
+		canonicalText({ purpose: `continuation/${stage}`, h: statementHash, seq }),
+	/** The bytes every sealed body is, its canonical text padded with spaces, so its length tells nothing. */
+	plainBytes,
+	/** What a sealed stage seals: `{ body, sig }`'s canonical text, spaces padding it to `plainBytes`; none for no shape. */
+	plainOf: (stage: SealedStage, body: unknown, sig: string): string | undefined => {
+		const read = sealedPlain(stage).safeParse({ body, sig });
+		if (!read.success) return undefined;
+		const text = canonicalText(read.data);
+		const size = utf8Length(text);
+		return size > plainBytes ? undefined : `${text}${" ".repeat(plainBytes - size)}`;
+	},
+	/** An opened text read: `plainBytes` long, canonical then spaces alone, each part of its shape; none otherwise. */
+	readPlain: (
+		stage: SealedStage,
+		text: string,
+	): { readonly body: unknown; readonly sig: string } | undefined => {
+		if (utf8Length(text) !== plainBytes) return undefined;
+		const trimmed = text.replace(/ +$/, "");
+		let parsed: unknown;
+		try {
+			parsed = JSON.parse(trimmed);
+		} catch {
+			return undefined;
+		}
+		const read = sealedPlain(stage).safeParse(parsed);
+		return read.success && canonicalText(read.data) === trimmed ? read.data : undefined;
+	},
 	of: (stage: ContinuationStage, statementHash: string, seq: number, bodyHash: string) =>
 		canonicalText({ h: statementHash, stage, seq, body: bodyHash }),
 	signature: Object.freeze({
@@ -454,8 +509,5 @@ export const continuation = Object.freeze({
 		form: "r||s",
 		over: "UTF-8 of continuation.of",
 	} as const),
-	bodies: Object.freeze({
-		delete: z.object({ credential_id: id }).strict(),
-		rename: z.object({ credential_id: id, label }).strict(),
-	}),
+	bodies: Object.freeze({ delete: deleteBody, rename: renameBody }),
 });
