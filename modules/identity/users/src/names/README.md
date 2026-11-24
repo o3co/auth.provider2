@@ -3,7 +3,7 @@
 Internal module of `users`: what an IdP name stands for, within one boot and across boots.
 
 ## Responsibilities
-- Refuses a name or issuer that is no non-empty string, a name that stands for two issuers within one boot (within one list or across them), and a name standing for another issuer than the one kept for it from an earlier boot.
+- Refuses a name or issuer that is no non-empty string, a name that stands for two issuers within one boot (within one list or across them), and a name standing for another issuer than the one kept for it from an earlier boot: a name stands for one issuer across boots, with a ledger composed too.
 - Keeps each declared name's issuer, and moves it as the operator states: in the link store, and, where a name store is offered (the link store's `issuers`), a copy there.
 
 ## Not here
