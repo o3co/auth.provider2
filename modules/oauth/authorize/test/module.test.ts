@@ -1,4 +1,5 @@
 import { approvals, statementItems } from "@mod/approvals";
+import { claimsSelections } from "@mod/claims-selection";
 import { clientAssertion } from "@mod/client-assertion";
 import { clients } from "@mod/clients";
 import { codes } from "@mod/code-grant";
@@ -40,7 +41,8 @@ const fakes = defineModule(
 		m.provide(jarReservations).by(() => ({}) as never),
 		m.provide(accessTokenIssuance).by(() => ({}) as never),
 		m.provide(sessions).by(() => ({}) as never),
-		m.provide(codes).by(() => ({}) as never),
+		m.provide(codes).by(() => ({ issuesIdTokens: () => false }) as never),
+		m.provide(claimsSelections).by(() => ({}) as never),
 		m.provide(senderBinding).by(() => ({}) as never),
 		m
 			.provide(issuer)
@@ -89,7 +91,8 @@ describe("authorize, composed", () => {
 			m.provide(jarReservations).by(() => ({}) as never),
 			m.provide(accessTokenIssuance).by(() => ({}) as never),
 			m.provide(sessions).by(() => ({}) as never),
-			m.provide(codes).by(() => ({}) as never),
+			m.provide(codes).by(() => ({ issuesIdTokens: () => false }) as never),
+			m.provide(claimsSelections).by(() => ({}) as never),
 			m.provide(senderBinding).by(() => ({}) as never),
 			m
 				.provide(issuer)

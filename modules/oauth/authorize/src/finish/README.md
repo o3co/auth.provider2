@@ -12,11 +12,14 @@ Internal module of `authorize`: the route of a login's finish (⑤⑥).
 - `finishing` (`FinishParts`) → the handler; `finishRoute` (the parts taken from the composition, the issuer, the delegation's length, the window) → the route; `finishTakes`, the contracts it takes.
 
 ## Invariants
-- The steps run in this order: the approval used, the scope and audience within the client's allowance, the policies, the session (from the statement's issue: `provenSince`, and `endsAt` that and the delegation's length), the code made with no root, the approval completed, the code rooted in its record, the completion answered.
+- The steps run in this order:
+  - the approval used, the scope and audience within the client's allowance, the policies, an OpenID request's claims selected (`claims`; a `sub` asked of another subject is `access_denied`, no session opened);
+  - the session (from the statement's issue: `provenSince`, and `endsAt` that and the delegation's length), the code made with no root, its claims pinned to it;
+  - the approval completed, the code rooted in its record with the approval's `esig`, `apr` and acceptance, the completion answered.
 - A completion goes out only after its code is rooted: the finish that made the code answers it, then publishes it, and a resent finish is given it only once published. A resend before that is answered `temporarily_unavailable` and makes no code.
 - A code made where the finish fell between completing and rooting is never rooted, as no finish roots a code but the one that made it: never given out, never redeemed, it ends with its lifetime, the approval used. Two finishes at once make two codes; only the one `approvals` keeps is completed and rooted, the other's finish answering `access_denied`.
 - What a code needs (the client's code grant, an S256 challenge, the binding asked for ahead) is checked before the session opens; a session opened for a finish that gives no completion is closed.
 - A login with a passkey is named by `amr` `pop` and `user`, what its assertion proves: a key held (its signature) and the person present (its flags). No `hwk`, as no attestation is taken and a synced passkey is bound to no one device; no `mfa`, as verifying the user is the authenticator's own word, and strength is `acr`'s.
 
 ## Depends on
-- `kernel`, `approvals`, `clients`, `client-allowance`, `code-grant`, `tokens`, `session`, `sender-binding`, `http`, `rate-limit`.
+- `kernel`, `approvals`, `clients`, `client-allowance`, `code-grant`, `tokens`, `session`, `sender-binding`, `http`, `rate-limit`; the package's `claims`.

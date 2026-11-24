@@ -16,4 +16,4 @@ Internal module of `authorize`: the route of a login's start (②).
 - Starts are counted per source by `rate-limit`'s policy; statements are counted by `approvals` per source key and in all. Its refusal `limited` is `rate_limited`, `items` is `invalid_request_object`, any other `temporarily_unavailable`; the same start may then try again.
 
 ## Depends on
-- `clients` (`find`), `redirect-uris` (`redirects`, `matches`), `approvals` (`issue`), `sdk-core-wire` (`itemsFromJar`, `jarClaims`), `http` (the answer); the package's `jar`.
+- `clients` (`find`), `redirect-uris` (`redirects`, `matches`), `approvals` (`issue`), `sdk-core-wire` (`itemsFromJar`, `jarClaims`), `http` (the answer); the package's `jar` and `claims`.

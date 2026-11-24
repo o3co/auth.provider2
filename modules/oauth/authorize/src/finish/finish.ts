@@ -1,13 +1,14 @@
 import { type Approvals, approvals, type ItemsOf } from "@mod/approvals";
 import { clientAllowance } from "@mod/client-allowance";
 import { type Clients, clients } from "@mod/clients";
-import { type Codes, challengeShape, codeGrantType, codes } from "@mod/code-grant";
+import { type Codes, challengeShape, codeGrantType, codes, openid } from "@mod/code-grant";
 import { type HttpRequest, type HttpResponse, jsonAnswer, use } from "@mod/http";
 import { type BuildContext, Unavailable } from "@mod/kernel";
 import { requestsPerSource, type Window } from "@mod/rate-limit";
 import { type SenderBindings, senderBinding } from "@mod/sender-binding";
 import { type Sessions, sessions } from "@mod/session";
 import { type AccessTokenIssuance, accessTokenIssuance } from "@mod/tokens";
+import { type ClaimsPinning, claimsPinningIn, claimsTakes } from "../claims/claims.ts";
 
 /**
  * How a person's login with a passkey is named in the session and the token (RFC 8176), by what its
@@ -22,7 +23,8 @@ export interface FinishParts {
 	readonly clients: Pick<Clients, "find">;
 	readonly issuance: Pick<AccessTokenIssuance, "admits">;
 	readonly sessions: Pick<Sessions, "open" | "close">;
-	readonly codes: Pick<Codes, "issue" | "root">;
+	readonly codes: Pick<Codes, "issue" | "root" | "digestOf" | "lifetimeMs">;
+	readonly claims: ClaimsPinning;
 	readonly bindings: Pick<SenderBindings, "requestedOf">;
 	readonly issuer: string;
 	/** How long a login's delegation lasts from its statement's issue, in seconds (O27). */
@@ -94,6 +96,11 @@ export function finishing(p: FinishParts) {
 		};
 		const admitted = await p.issuance.admits({ grant, grantType: codeGrantType });
 		if (admitted.kind === "refused") return denied("the login was not approved");
+		// An OpenID request's claims, selected before the session opens; a `sub` asked of another refuses it.
+		const picked = allowed.scope.includes(openid)
+			? await p.claims.select(client, subject, items.scope.split(" "), items.claims)
+			: ({ kind: "none" } as const);
+		if (picked.kind === "otherSubject") return denied("the login is not of the subject asked");
 		const opened = await p.sessions.open({
 			subject,
 			amr: passkeyAmr,
@@ -118,6 +125,14 @@ export function finishing(p: FinishParts) {
 				subject,
 				binding: asked.binding,
 			});
+			// Pinned to the code before its root is set: a code never rooted is never redeemed.
+			if (picked.kind === "selected")
+				await p.claims.keep(
+					p.codes.digestOf(code),
+					picked.selection,
+					p.codes.lifetimeMs(),
+					subject,
+				);
 			const completed = await p.approvals.complete({ hash: approval.hash, code });
 			if (completed.kind === "refused") {
 				await close();
@@ -127,8 +142,10 @@ export function finishing(p: FinishParts) {
 					? bad("the statement cannot be used")
 					: denied("the login was not approved");
 			}
-			// Rooted before the completion goes out; one never rooted is never redeemed.
-			if ((await p.codes.root(code, completed.record)) !== "set")
+			// Rooted before the completion goes out, with what the approval gives an ID token; one never
+			// rooted is never redeemed.
+			const named = { esig: approval.esig, apr: completed.ref, approvedAt: completed.acceptedAt };
+			if ((await p.codes.root(code, completed.record, named)) !== "set")
 				throw new Unavailable("authorize");
 			// Published after: a resend is given it only now. One whose publishing failed is answered
 			// here all the same, its code rooted; a resend of it is told to ask again.
@@ -142,7 +159,13 @@ export function finishing(p: FinishParts) {
 }
 
 /** The contracts the finish takes, for the module to declare. */
-export const finishTakes = [accessTokenIssuance, sessions, codes, senderBinding] as const;
+export const finishTakes = [
+	accessTokenIssuance,
+	sessions,
+	codes,
+	senderBinding,
+	...claimsTakes,
+] as const;
 
 /** The route of ⑤⑥, its parts taken from the composition, counted per source. */
 export async function finishRoute(
@@ -164,6 +187,7 @@ export async function finishRoute(
 			sessions: await c.get(sessions),
 			codes: await c.get(codes),
 			bindings: await c.get(senderBinding),
+			claims: await claimsPinningIn(c),
 			issuer: p.issuer,
 			delegationS: p.delegationS,
 		}),

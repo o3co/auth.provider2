@@ -16,6 +16,7 @@ import {
 	bindingsIn,
 	byValue,
 	filledItems,
+	idTokensIn,
 	issuerMetadata,
 	startRoute,
 	unfilled,
@@ -95,6 +96,7 @@ export default defineModule(
 					approvals: await c.get(approvals),
 					withoutPasskey: passkeyless[0],
 					bindings: await bindingsIn(c),
+					idTokens: await idTokensIn(c),
 				},
 				window,
 			);

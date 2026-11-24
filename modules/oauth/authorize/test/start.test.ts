@@ -73,6 +73,8 @@ function harness(
 		refuse?: () => string | undefined;
 		sources?: readonly RequestSource[];
 		slow?: () => Promise<void>;
+		/** Whether an ID token is made; made unless told otherwise. */
+		idTokens?: boolean;
 	} = {},
 ) {
 	const asked: IssueAsk[] = [];
@@ -118,6 +120,7 @@ function harness(
 		}),
 		approvals,
 		withoutPasskey: p.allows === undefined ? undefined : { allows: async () => p.allows === true },
+		idTokens: p.idTokens ?? true,
 		bindings: {
 			requestedOf: (param) => {
 				const jkt = param("dpop_jkt");
@@ -347,19 +350,32 @@ describe("a login's start (②)", () => {
 		expect(await h.body(h.fields(request))).toMatchObject({ status: 200 });
 	});
 
-	it("refuses an OpenID request and one asking claims before T is made", async () => {
-		const h = harness();
+	it("refuses an OpenID request before T where no ID token is made", async () => {
+		const h = harness({ idTokens: false });
 		expect(await h.body(h.fields(jar(claims({ scope: "openid read" }))))).toMatchObject({
 			status: 400,
 			json: { error: "invalid_scope" },
 		});
-		expect(
-			await h.body(h.fields(jar(claims({ jti: "j9", claims: { id_token: {} } })))),
-		).toMatchObject({
-			status: 400,
-			json: { error: "invalid_request_object" },
-		});
 		expect(h.asked).toHaveLength(0);
+	});
+
+	it("takes an OpenID request's claims into T, refusing before T one malformed or asked without openid", async () => {
+		const h = harness();
+		const asking = { id_token: { email: { essential: true } } };
+		const openid = await h.body(h.fields(jar(claims({ scope: "openid read", claims: asking }))));
+		expect(openid.status).toBe(200);
+		expect(h.asked).toHaveLength(1);
+		for (const [jti, asked] of [
+			["j9", { scope: "read", claims: { id_token: {} } }],
+			["j10", { scope: "openid read", claims: { id_token: { email: { values: [] } } } }],
+			["j11", { scope: "openid read", claims: [] }],
+		] as const) {
+			expect(await h.body(h.fields(jar(claims({ jti, ...asked }))))).toMatchObject({
+				status: 400,
+				json: { error: "invalid_request_object" },
+			});
+		}
+		expect(h.asked).toHaveLength(1);
 	});
 
 	it("refuses, before T, a challenge not of S256's shape and a dpop_jkt out of its form", async () => {

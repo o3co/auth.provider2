@@ -1189,6 +1189,9 @@ importers:
       '@mod/approvals':
         specifier: workspace:*
         version: link:../../approval/approvals
+      '@mod/claims-selection':
+        specifier: workspace:*
+        version: link:../claims-selection
       '@mod/client-allowance':
         specifier: workspace:*
         version: link:../client-allowance
@@ -1213,6 +1216,9 @@ importers:
       '@mod/kernel':
         specifier: workspace:*
         version: link:../../foundation/kernel
+      '@mod/oidc':
+        specifier: workspace:*
+        version: link:../oidc
       '@mod/promises':
         specifier: workspace:*
         version: link:../../foundation/promises

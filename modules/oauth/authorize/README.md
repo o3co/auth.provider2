@@ -26,7 +26,7 @@
 - A login is started only by a JAR its client signed (`typ` `oauth-authz-req+jwt`, under `client-assertion`'s algorithms, clock skew and longest lifetime), its `iss` and `client_id` the client, its `aud` this issuer, with a `jti` and an `exp` not past and at most `jar-max-lifetime` away; exactly one request source answers each start.
 - A JAR starts one login (A20, internal module `jar`): the same JAR with the same screen keys is answered the same T, made by one call at a time; with other keys, or another JAR under its `jti`, it is refused. Its reservation outlives the JAR's expiry by the clock skew, the margin between replicas' clocks.
 - Boot is refused where an item every T carries is filled by no module (`dpop_jkt` with no `approval-binding`), or two modules answer a person with no passkey.
-- No ID token is issued: a JAR whose scope names `openid`, or that asks `claims`, is refused before T is made (`invalid_scope`, `invalid_request_object`); so is one whose client may not use the code grant, whose challenge is not S256's shape, or whose `dpop_jkt` is out of its form, so nothing a code needs fails once the person tapped.
+- A JAR asking `openid` where `code-grant` makes no ID token is refused before T is made (`invalid_scope`), and one whose `claims` is malformed or asked without `openid` (`invalid_request_object`, internal module `claims`); so is one whose client may not use the code grant, whose challenge is not S256's shape, or whose `dpop_jkt` is out of its form, so nothing a code needs fails once the person tapped.
 - `prompt` is no item of T: `none` is `login_required`, as every login asks the person's passkey; `login`, `consent` and `select_account` are met by that tap and dropped; any other word is refused. A JAR claim no item names is refused.
 - The redirect URI is one the client registered, by `redirect-uris`' rule, before anything is reserved or signed.
 
@@ -34,7 +34,7 @@
 - Each JAR's reservation, by its client and `jti`: the digest of the start that used it and the answer made, until the JAR's expiry and the clock skew.
 
 ## Depends on
-- `kernel`, `http` (the routes), `clients` and `client-documents` (the client, its section), `client-assertion` (`verifySignedBy`), `client-allowance`, `redirect-uris`, `approvals`, `code-grant`, `session`, `tokens` (the policies), `sender-binding` (the binding asked for ahead), `acr` (`amrSources`), `issuer`, `rate-limit`, `promises` (its stance), `sdk-core-wire`; `zod`.
+- `kernel`, `http` (the routes), `clients` and `client-documents` (the client, its section), `client-assertion` (`verifySignedBy`), `client-allowance`, `redirect-uris`, `approvals`, `code-grant`, `oidc` (the `claims` parameter's reading), `claims-selection`, `session`, `tokens` (the policies), `sender-binding` (the binding asked for ahead), `acr` (`amrSources`), `issuer`, `rate-limit`, `promises` (its stance), `sdk-core-wire`; `zod`.
 
 ## Vocabulary
 - start: ②, a login's first request from the screen. JAR: the client's signed request (RFC 9101). reservation: a JAR's one use. source: where a start's JAR comes from.

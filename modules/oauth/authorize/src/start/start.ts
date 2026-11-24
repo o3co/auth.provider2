@@ -1,13 +1,14 @@
 import type { Approvals } from "@mod/approvals";
 import { clientAllowance } from "@mod/client-allowance";
 import type { Clients } from "@mod/clients";
-import { challengeShape, codeGrantType } from "@mod/code-grant";
+import { challengeShape, codeGrantType, codes, openid } from "@mod/code-grant";
 import { type HttpRequest, type HttpResponse, jsonAnswer, use } from "@mod/http";
 import type { BuildContext } from "@mod/kernel";
 import { requestsPerSource, sourceKey, type Window } from "@mod/rate-limit";
 import { matches, redirects } from "@mod/redirect-uris";
 import { itemsFromJar, jarClaims, type SigningKey } from "@mod/sdk-core-wire";
 import { type SenderBindings, senderBinding } from "@mod/sender-binding";
+import { claimsRefusal } from "../claims/claims.ts";
 import type { RequestSource, StartFields, WithoutPasskey } from "../contract.ts";
 import {
 	type Jar,
@@ -31,6 +32,8 @@ export interface StartParts {
 	readonly approvals: Pick<Approvals, "issue">;
 	readonly withoutPasskey: WithoutPasskey | undefined;
 	readonly bindings: Pick<SenderBindings, "requestedOf">;
+	/** Whether an ID token is made (`code-grant`'s `issuesIdTokens`): without, an OpenID request is refused. */
+	readonly idTokens: boolean;
 }
 
 /** The statuses `front-core-wire` answers these refusals with; any other is 400. */
@@ -107,16 +110,16 @@ export function starting(p: StartParts) {
 		const prompted = withoutPrompt(jar.claims);
 		if ("refused" in prompted) return answerOf(400, prompted.refused as Refusal);
 		const made = itemsFromJar(prompted.claims, sha256(jar.jar));
-		// No ID token is issued yet: an OpenID request, or one asking claims, is refused before T is made.
-		if (!("error" in made) && made.items.scope.split(" ").includes("openid"))
-			return answerOf(400, { error: "invalid_scope", description: "openid is not taken" });
-		if (!("error" in made) && made.items.claims !== undefined)
-			return answerOf(400, {
-				error: "invalid_request_object",
-				description: "claims are not taken",
-			});
 		if ("error" in made)
 			return answerOf(400, { error: "invalid_request_object", description: made.error });
+		const asksOpenid = made.items.scope.split(" ").includes(openid);
+		// Where no ID token is made, an OpenID request is refused before T, never once the person tapped.
+		if (asksOpenid && !p.idTokens)
+			return answerOf(400, { error: "invalid_scope", description: "no ID token is issued" });
+		// Its claims, read before T is made: one asked malformed, or without openid, is refused.
+		const claimsRefused = claimsRefusal(made.items.claims, asksOpenid);
+		if (claimsRefused)
+			return answerOf(400, { error: "invalid_request_object", description: claimsRefused });
 		// What a code needs is checked here, before T, so the finish fails on none of it once the person tapped.
 		if (!clientAllowance.allowsGrant(client, codeGrantType))
 			return answerOf(400, {
@@ -164,6 +167,9 @@ export const unfilled = (
 
 /** The binding kinds' reading of what a request asks for ahead, taken from the composition. */
 export const bindingsIn = (c: Pick<BuildContext<unknown>, "get">) => c.get(senderBinding);
+/** Whether `code-grant` makes an ID token, for the start to refuse an OpenID request without. */
+export const idTokensIn = async (c: Pick<BuildContext<unknown>, "get">) =>
+	(await c.get(codes)).issuesIdTokens();
 
 /** The JAR sent by value, in the start's `request`: `authorize`'s own source. */
 export const byValue: RequestSource = {

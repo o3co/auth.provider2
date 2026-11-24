@@ -3,6 +3,7 @@ import type { Client } from "@mod/clients";
 import type { CodeFacts } from "@mod/code-grant";
 import type { HttpRequest } from "@mod/http";
 import { describe, expect, it } from "vitest";
+import type { Picked } from "../src/claims/claims.ts";
 import { type FinishParts, finishing } from "../src/finish/finish.ts";
 
 const now = 1_800_000_000_000;
@@ -42,6 +43,12 @@ function harness(
 		grants?: string[];
 		/** Runs just before the code is rooted, as a resend arriving then would. */
 		beforeRoot?: () => Promise<void>;
+		/** T's scope and claims, and the scopes the client is allowed, for an OpenID request. */
+		scope?: string;
+		claims?: unknown;
+		scopes?: string[];
+		/** What the claims' selection answers. */
+		picked?: Picked;
 	} = {},
 ) {
 	const log: string[] = [];
@@ -49,6 +56,7 @@ function harness(
 	let kept: Extract<Completed, { kind: "completed" }> | undefined;
 	let published = false;
 	const closed: string[] = [];
+	const rooted: unknown[] = [];
 	let approval: Approval = {
 		hash: "t-hash",
 		purpose: "authorization",
@@ -61,8 +69,14 @@ function harness(
 	};
 	approval = {
 		...approval,
-		items: { ...items, code_challenge: p.code_challenge ?? items.code_challenge },
+		items: {
+			...items,
+			code_challenge: p.code_challenge ?? items.code_challenge,
+			scope: p.scope ?? items.scope,
+			...(p.claims === undefined ? {} : { claims: p.claims }),
+		},
 	};
+	const scopes = p.scopes ?? ["read"];
 	const parts: FinishParts = {
 		approvals: {
 			use: async () => {
@@ -95,11 +109,10 @@ function harness(
 		clients: {
 			find: async (id) => {
 				if (id !== "c1") return undefined;
-				if (!p.grants) return client;
-				const grants = p.grants;
+				const grants = p.grants ?? ["authorization_code"];
 				return {
 					...client,
-					section: <T>() => ({ grants, scopes: ["read"], audiences: ["https://api"] }) as T,
+					section: <T>() => ({ grants, scopes, audiences: ["https://api"] }) as T,
 				} as Client;
 			},
 		},
@@ -129,11 +142,23 @@ function harness(
 				log.push("issue");
 				return `code-${issued.length}`;
 			},
-			root: async (code, root) => {
+			root: async (code, root, named) => {
 				await p.beforeRoot?.();
 				log.push(`root ${code} ${root}`);
+				rooted.push(named);
 				if (p.rootCrash) throw new Error("crash");
 				return "set";
+			},
+			digestOf: (code) => `digest-of-${code}`,
+			lifetimeMs: () => 60_000,
+		},
+		claims: {
+			select: async (_client, subject, scope, claims) => {
+				log.push(`select ${subject} ${scope.join(" ")} ${JSON.stringify(claims)}`);
+				return p.picked ?? { kind: "none" };
+			},
+			keep: async (redemption, _selection, lifetimeMs, subject) => {
+				log.push(`keep ${redemption} ${lifetimeMs} ${subject}`);
 			},
 		},
 		bindings: {
@@ -152,7 +177,7 @@ function harness(
 		const r = await finish({ json } as unknown as HttpRequest);
 		return { status: r.status, json: (r.body as { json: Record<string, unknown> }).json };
 	};
-	return { send, log, issued, closed };
+	return { send, log, issued, closed, rooted };
 }
 
 describe("a login's finish (⑤⑥)", () => {
@@ -178,6 +203,57 @@ describe("a login's finish (⑤⑥)", () => {
 			binding: { member: "jkt", confirmation: "jkt-1", tokenType: "DPoP" },
 		});
 		expect(h.closed).toEqual([]);
+	});
+
+	it("roots the code with what the approval gives an ID token: its E_sig's thumbprint, its record's reference and acceptance", async () => {
+		const h = harness();
+		await h.send();
+		expect(h.rooted).toEqual([
+			{ esig: "e-sig-thumbprint", apr: { shard: "s1", n: 9 }, approvedAt: now },
+		]);
+	});
+
+	it("selects an OpenID request's claims before the session opens, and pins them to the code before its approval is placed", async () => {
+		const selection = {
+			idToken: { names: [], constraints: [] },
+			userinfo: { names: [], constraints: [] },
+		};
+		const claims = { id_token: { email: null } };
+		const h = harness({
+			scope: "openid read",
+			scopes: ["openid", "read"],
+			claims,
+			picked: { kind: "selected", selection },
+		});
+		expect((await h.send()).status).toBe(200);
+		expect(h.log).toEqual([
+			"use",
+			"admits alice openid read",
+			`select alice openid read ${JSON.stringify(claims)}`,
+			`open alice ${iat * 1000} ${iat * 1000 + 3_600_000}`,
+			"issue",
+			"keep digest-of-code-1 60000 alice",
+			"complete code-1",
+			"root code-1 r9",
+			"publish",
+		]);
+		expect(h.issued[0]).toMatchObject({ scope: ["openid", "read"], nonce: "n" });
+	});
+
+	it("opens no session where a sub the claims ask is not the subject's, and selects nothing for a request not OpenID's", async () => {
+		const other = harness({
+			scope: "openid read",
+			scopes: ["openid", "read"],
+			claims: {},
+			picked: { kind: "otherSubject" },
+		});
+		expect(await other.send()).toMatchObject({ status: 400, json: { error: "access_denied" } });
+		expect(other.log.some((line) => line.startsWith("open"))).toBe(false);
+		const plain = harness();
+		await plain.send();
+		expect(plain.log.some((line) => line.startsWith("select") || line.startsWith("keep"))).toBe(
+			false,
+		);
 	});
 
 	it("answers a resent finish the completion kept, making no second code", async () => {
