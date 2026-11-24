@@ -62,8 +62,10 @@ export function grantInputOf(parts: {
 	readonly bundle?: IssuedBundle;
 	/** What the grant's own `identify` answered with the client; none for a client that authenticated. */
 	readonly identified?: unknown;
+	readonly proof?: unknown;
 }): GrantInput {
-	const { request, client, grantType, binding, targets, issuing, told, bundle, identified } = parts;
+	const { request, client, grantType, binding, targets, issuing, told, bundle, identified, proof } =
+		parts;
 	const { param, value } = readerOf(request);
 	return {
 		request,
@@ -73,6 +75,7 @@ export function grantInputOf(parts: {
 		target: (audience, within) => targets.target({ param, audience, within }),
 		...(binding ? { binding } : {}),
 		...(identified === undefined ? {} : { identified }),
+		...(proof === undefined ? {} : { proof }),
 		...issuanceFor(issuing, grantType, binding, told, bundle),
 	};
 }
@@ -284,6 +287,7 @@ export function tokenEndpoint(parts: EndpointParts): Pick<Route, "handle" | "una
 		const input = grantInputOf({
 			...{ request, client, grantType, binding, targets, told, bundle },
 			issuing: issuing(request),
+			proof: authenticated.kind === "authenticated" ? authenticated.proof : undefined,
 			identified: identifiedBy,
 		});
 		const outcome = await grant.handle(input);

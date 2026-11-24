@@ -40,6 +40,8 @@ export interface GrantCalls {
 			readonly request?: HttpRequest;
 			/** What the grant's own `identify` answered with the client, as the endpoint hands it back. */
 			readonly identified?: unknown;
+			/** What the client's authentication verified, as the endpoint hands it on. */
+			readonly proof?: unknown;
 		},
 	): Promise<GrantOutcome>;
 }
@@ -104,6 +106,7 @@ export function grantInput(
 		readonly request?: HttpRequest;
 		readonly targets?: TargetRule;
 		readonly identified?: unknown;
+		readonly proof?: unknown;
 	} = {},
 	told: readonly SessionIssuance[] = [],
 ): GrantInput {
@@ -113,6 +116,7 @@ export function grantInput(
 		grantType: grant.grantType,
 		binding: options.binding,
 		identified: options.identified,
+		proof: options.proof,
 		targets: options.targets ?? unread,
 		issuing: signedAtOnce(issuing),
 		told,

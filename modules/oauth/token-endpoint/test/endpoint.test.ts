@@ -436,13 +436,37 @@ describe("token endpoint", () => {
 		expect(events.slice(before).filter((e) => e.kind.startsWith("token."))).toEqual([]);
 	});
 
+	it("hands a grant what its client's authentication verified, unread, and none for another method", async () => {
+		const proof = { key: "verified" };
+		const proving = defineModule({ name: "proving", replicaSafe: true, takes: [] }, (m) => [
+			m.contribute(authMethods).by(() => ({
+				name: "proving",
+				claimed: (r) => r.form.get("proving_id")?.[0],
+				verify: async () => ({ proof }),
+			})),
+			m.contribute(grants).by(() => ({
+				grantType: "urn:test:echo",
+				readsAmbient: "none",
+				handle: async (input) =>
+					answered(input, { proof: input.proof === proof ? "same" : String(input.proof) }),
+			})),
+		]);
+		const proved = client("proved", "proving", { grants: ["urn:test:echo"] });
+		const post = await serve([proving], { clients: [proved, echoClients.echo()] });
+		const by = await post({ grant_type: "urn:test:echo", proving_id: "proved" });
+		expect(by.body).toEqual({ proof: "same" });
+		expect((await post({ grant_type: "urn:test:echo" }, "echo")).body).toEqual({
+			proof: "undefined",
+		});
+	});
+
 	it("answers credentials a method finds malformed as a malformed request", async () => {
 		const half = defineModule({ name: "half", replicaSafe: true, takes: [] }, (m) => [
 			m.contribute(authMethods).by(() => ({
 				name: "half",
 				claimed: (r) => r.form.get("half_id")?.[0],
 				malformed: (r) => r.form.has("half_id") !== r.form.has("half_proof"),
-				verify: async () => false,
+				verify: async () => undefined,
 			})),
 		]);
 		const post = await serve([half]);

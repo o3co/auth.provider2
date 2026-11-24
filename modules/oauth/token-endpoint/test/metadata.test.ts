@@ -27,7 +27,7 @@ const signed = defineModule({ name: "signed-method", replicaSafe: true, takes: [
 		assertion: true,
 		signingAlgorithms: ["ES256"],
 		claimed: () => undefined,
-		verify: async () => false,
+		verify: async () => undefined,
 	})),
 ]);
 

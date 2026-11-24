@@ -131,7 +131,7 @@ describe("a request naming no client", () => {
 		m.contribute(authMethods).by(() => ({
 			name: "test-key",
 			claimed: (r) => r.headers.get("x-test-key") ?? undefined,
-			verify: async () => true,
+			verify: async () => ({}),
 		})),
 	]);
 	/** A source naming a public client with no credentials: one the operator did not register. */

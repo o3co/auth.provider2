@@ -3,6 +3,7 @@
 Internal module of `token-endpoint`: the handler of `POST /oauth/token`, from the request to the answer, and what a grant issues through.
 
 ## Responsibilities
+- Hands a grant what its client's authentication verified (`proof`), unread; none for a client a grant identified.
 - Reads a request's grant type and parameters, authenticates the client, or has a grant identify the client of a request naming none, checks the grant is allowed it and the binding, hands the grant its input, and answers what it gives, as the package's card says.
 - Builds a grant's `admits` and `issue` over an `Issuing` (the endpoint's runs bundles, the test caller's signs at once), with the request's binding, telling the session issuances of a token issued from a session.
 
