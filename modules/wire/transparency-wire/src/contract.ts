@@ -334,6 +334,8 @@ const tokenDigests = z
 	.refine((list) => unique(list, (t) => t.frame), { message: "a frame is named twice" });
 /** What an approval's receipt binds: the digests of the statement, its assertion and the code. */
 const approvalDigests = z.object({ statement: digest, assertion: digest, code: digest }).strict();
+/** What a key change's receipt binds: its statement's digest (the possession, or the passkey-manage statement) and its evidence's (the new key's assertion, or the continuation's body). */
+const keyChangeDigests = z.object({ statement: digest, evidence: digest }).strict();
 /** An abandonment record's: the op it abandons, its attempt, and that op's plaintext digest. */
 const abandons = z.object({ op: id, attempt: ordinal, digest }).strict();
 
@@ -358,6 +360,7 @@ const named = {
 	signed: z.string().min(1).optional(),
 	tokens: tokenDigests.optional(),
 	approval: approvalDigests.optional(),
+	keyChange: keyChangeDigests.optional(),
 	abandons: abandons.optional(),
 	/** A client's start: the SHA-256 of each evidence element's JWS signing input, the log's use-once index. */
 	elements: z
@@ -374,6 +377,7 @@ type Named = {
 	elements?: unknown;
 	tokens?: unknown;
 	approval?: unknown;
+	keyChange?: unknown;
 	abandons?: z.infer<typeof abandons> | undefined;
 };
 /** The rules a request and a record share, on the kind and the fields it holds. */
@@ -383,6 +387,8 @@ const kindRules = (r: Named, ctx: z.RefinementCtx) => {
 		fail("token digests go with a bundle alone");
 	if (r.approval !== undefined && r.kind !== "approval")
 		fail("approval digests go with an approval");
+	if (r.keyChange !== undefined && r.kind !== "keyChange")
+		fail("key change digests go with a key change");
 	if ((r.abandons !== undefined) !== (r.kind === "abandonment"))
 		fail("abandons goes with an abandonment");
 	if (r.elements !== undefined && !(r.kind === "start" && r.flow.of === "client"))
@@ -524,14 +530,17 @@ const receipt = z
 			.strict()
 			.optional(),
 		approval: approvalDigests.optional(),
+		keyChange: keyChangeDigests.optional(),
 	})
 	.strict()
 	.refine(
 		(r) =>
 			(r.token !== undefined) === (r.kind === "bundle") &&
-			(r.approval === undefined || r.kind === "approval"),
+			(r.approval === undefined || r.kind === "approval") &&
+			(r.keyChange === undefined || r.kind === "keyChange"),
 		{
-			message: "a token goes with a bundle's receipt, approval digests with an approval's",
+			message:
+				"a token goes with a bundle's receipt, approval digests with an approval's, key change digests with a key change's",
 		},
 	);
 
@@ -776,7 +785,6 @@ export type Receipt = z.infer<typeof receipt>;
 export type Judgment = z.infer<typeof judgment>;
 export type Checkpoint = z.infer<typeof checkpoint>;
 export type Status = z.infer<typeof status>;
-export type StatusReasons = z.infer<typeof statusReasons>;
 export type StateOf = z.infer<typeof stateOf>;
 export type Preimage = z.infer<typeof preimage>;
 export type RecordRef = z.infer<typeof recordRef>;

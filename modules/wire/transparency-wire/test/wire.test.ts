@@ -156,6 +156,27 @@ describe("the conditional append a writer sends", () => {
 		no(schemas.appendRequest, { ...noTokens, kind: "start", abandons });
 	});
 
+	it("holds key change digests to a key change, and approval digests to an approval, each kind its own", () => {
+		const { tokens: _, ...noTokens } = bundleRequest;
+		const keyChange = { statement: d("p"), evidence: d("a") };
+		const approval = { statement: d("t"), assertion: d("s"), code: d("c") };
+		ok(schemas.appendRequest, { ...noTokens, kind: "keyChange", keyChange });
+		ok(schemas.appendRequest, { ...noTokens, kind: "keyChange" });
+		ok(schemas.appendRequest, { ...noTokens, kind: "approval", approval });
+		no(schemas.appendRequest, { ...noTokens, kind: "approval", keyChange });
+		no(schemas.appendRequest, { ...noTokens, kind: "keyChange", approval });
+		no(schemas.appendRequest, { ...noTokens, kind: "keyChange", keyChange, approval });
+		no(schemas.appendRequest, { ...noTokens, kind: "approval", keyChange, approval });
+		no(schemas.appendRequest, { ...bundleRequest, keyChange });
+		no(schemas.appendRequest, { ...noTokens, kind: "start", stage: 1, last: false, keyChange });
+		no(schemas.appendRequest, {
+			...noTokens,
+			kind: "keyChange",
+			keyChange: { ...keyChange, code: d("c") },
+		});
+		no(schemas.appendRequest, { ...noTokens, kind: "keyChange", keyChange: { statement: d("p") } });
+	});
+
 	it("holds evidence elements to a client's start, each a digest named once", () => {
 		const { prev: _, tokens: _t, ...noPrev } = bundleRequest;
 		const start = {
@@ -283,6 +304,16 @@ describe("a committed record", () => {
 		no(schemas.record, { ...bundleRecord, writer: { role: "monitor", key: "mon-1" } });
 		no(schemas.record, { ...bundleRecord, extra: true });
 		no(schemas.record, { ...tick, op: "x" });
+		const { tokens: _tk, ...noTokens } = bundleRecord;
+		const keyChange = { statement: d("p"), evidence: d("a") };
+		const approval = { statement: d("t"), assertion: d("s"), code: d("c") };
+		ok(schemas.record, { ...noTokens, kind: "keyChange", keyChange });
+		no(schemas.record, { ...noTokens, kind: "approval", keyChange });
+		no(schemas.record, { ...noTokens, kind: "keyChange", approval });
+		no(schemas.record, { ...noTokens, kind: "keyChange", keyChange, approval });
+		no(schemas.record, { ...noTokens, kind: "approval", keyChange, approval });
+		no(schemas.record, { ...bundleRecord, keyChange });
+		no(schemas.record, { ...tick, keyChange });
 		const keySetRecord = { ...denialRecord, kind: "keySet", flow: { of: "monitor", id: "s1" } };
 		ok(schemas.record, keySetRecord);
 		no(schemas.record, { ...keySetRecord, flow: { of: "monitor", id: "s2" } });
@@ -299,6 +330,21 @@ describe("receipts, judgments, checkpoints, status and stateOf", () => {
 			approval: { statement: d("t"), assertion: d("s"), code: d("c") },
 		});
 		no(schemas.receipt, { ...approval, token: receipt.token });
+		const keyChange = { statement: d("p"), evidence: d("a") };
+		ok(schemas.receipt, { ...approval, kind: "keyChange", keyChange });
+		no(schemas.receipt, { ...approval, keyChange });
+		no(schemas.receipt, { ...receipt, keyChange });
+		no(schemas.receipt, {
+			...approval,
+			kind: "approval",
+			keyChange,
+			approval: { statement: d("t"), assertion: d("s"), code: d("c") },
+		});
+		no(schemas.receipt, {
+			...approval,
+			kind: "keyChange",
+			approval: { statement: d("t"), assertion: d("s"), code: d("c") },
+		});
 		const { token: _t, ...bare } = receipt;
 		no(schemas.receipt, bare);
 		no(schemas.receipt, { ...receipt, token: { frame: "refreshToken", digest: d("r") } });
