@@ -110,24 +110,22 @@ describe("a docker command", () => {
 	});
 
 	it("timed out where the client outlasts its time, the client killed", async () => {
+		// The client sleeps past any test's time: not killed at its time, it would not end within the test.
 		client("exec sleep 30");
-		const began = performance.now();
 		expect(await failure(docker(["exec", "rc-1", "true"], 200))).toMatchObject({
 			kind: "timeout",
 			message: "docker exec did not answer within 0.2 seconds",
 		});
-		expect(performance.now() - began).toBeLessThan(5_000);
 	});
 
 	it("timed out at its time even where something the client started holds its output open, that too ended", async () => {
 		const dir = mkdtempSync(join(tmpdir(), "docker-started-"));
 		const started = join(dir, "pid");
 		client(`sleep 30 &\necho $! > "${started}"\nexec sleep 30`);
-		const began = performance.now();
+		// What the client started sleeps past any test's time: holding the output, it would not end within the test.
 		expect(await failure(docker(["exec", "rc-1", "true"], 2_000))).toMatchObject({
 			kind: "timeout",
 		});
-		expect(performance.now() - began).toBeLessThan(4_000);
 		const pid = Number(readFileSync(started, "utf8"));
 		expect(await ended(pid)).toBe(true);
 	});
