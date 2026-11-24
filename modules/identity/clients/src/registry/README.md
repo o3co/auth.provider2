@@ -14,7 +14,7 @@ Internal module of `clients`: the registry every taker shares, reading records, 
 ## Invariants
 - A registered client wins over the same id from another source.
 - An id that is empty, over 256 UTF-16 code units (a fixed bound: an id is also a store key, and every reader of an id holds it to this one), with a lone surrogate, or with a C0, DEL, C1, U+2028, U+2029 or BOM character is unknown, and no source is asked; registered, it refuses boot.
-- `listed` reads each record a source lists (`ClientSource.listed`) as `find` reads it: a record that fails is left out, and an id is listed once, by the first source that lists it, and a registered client's never.
+- `listed` takes the id of each record a source lists (`ClientSource.listed`), none where it cannot be read, and answers each id once as `find` does, from the first source that names it: one `find` answers none for, or a record that fails, is left out, and a registered client's id never.
 - A source's client is `signed` only where that source declares `signed`, a declaration that puts the source in the trust it declares; a registered client, and a record `checkRecord` reads, never is.
 - A record failing any section check is refused as a whole; a source's record is also refused unless it passes the registered rule, names a known method and carries the id asked, and when reading it throws.
 - A source's record may name the registry version it came from, a positive whole number; the client says it. Any other value refuses the record; a registered record names none.

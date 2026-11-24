@@ -137,6 +137,16 @@ function claimedBy(request: HttpRequest, methods: readonly AuthMethod[]) {
 	};
 }
 
+/** A listed record's id, none where it has no string id or reading it throws. */
+const idOf = (record: unknown): string | undefined => {
+	try {
+		const id = (record as { readonly id?: unknown } | null)?.id;
+		return typeof id === "string" ? id : undefined;
+	} catch {
+		return undefined;
+	}
+};
+
 export function registry(
 	registered: ReadonlyMap<string, Client>,
 	sources: readonly ClientSource[],
@@ -202,16 +212,18 @@ export function registry(
 		signingAlgorithms: () => [...new Set(methods.flatMap((m) => m.signingAlgorithms ?? []))],
 		registered: () => [...registered.values()],
 		listed: async () => {
-			const seen = new Set(registered.keys());
-			const all: Client[] = [];
+			const ids = new Set<string>();
 			for (const source of sources) {
 				for (const record of (await source.listed?.()) ?? []) {
-					const id = (record as { readonly id?: unknown }).id;
-					if (typeof id !== "string" || seen.has(id)) continue;
-					seen.add(id);
-					const client = await sourced(record, id, source.signed === true);
-					if (client !== "invalid") all.push(client);
+					const id = idOf(record);
+					if (id !== undefined && !registered.has(id)) ids.add(id);
 				}
+			}
+			// Each id as `find` answers it, so a boot check reads the record a request would.
+			const all: Client[] = [];
+			for (const id of ids) {
+				const found = await lookup(id);
+				if (found !== undefined && found !== "invalid") all.push(found);
 			}
 			return all;
 		},

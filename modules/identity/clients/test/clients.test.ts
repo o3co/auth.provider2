@@ -807,7 +807,8 @@ describe("clients", () => {
 			defineModule({ name, replicaSafe: true, takes: [] }, (m) => [
 				m.contribute(clientSources).by(() => ({
 					signed: true,
-					find: async () => undefined,
+					find: async (id: string) =>
+						(records as { id: string }[]).find((record) => record.id === id) as never,
 					listed: async () => records as never,
 				})),
 			]);
@@ -831,6 +832,30 @@ describe("clients", () => {
 		]);
 		// With no source that lists, none.
 		expect(await (await boot()).listed()).toEqual([]);
+	});
+
+	it("lists a client as find answers it: an earlier source that names the id wins, and an unreadable record is left out", async () => {
+		const remote = { kind: "public" as const, method: "none", sections: {} };
+		const unreadable = {
+			get id(): string {
+				throw new Error("unreadable");
+			},
+		};
+		const listing = defineModule({ name: "listing", replicaSafe: true, takes: [] }, (m) => [
+			m.contribute(clientSources).by(() => ({
+				signed: true,
+				find: async (id: string) => (id === "both" ? { id, ...remote } : undefined),
+				listed: async () => [{ id: "both", ...remote }, null, unreadable, { id: "" }] as never,
+			})),
+		]);
+		// The earlier source lists nothing but names `both`: find answers its record, unsigned.
+		const c = await boot([
+			source((id) => (id === "both" ? { id, ...remote } : undefined)),
+			listing,
+		]);
+		const listed = await c.listed();
+		expect(listed.map((client) => [client.id, client.signed])).toEqual([["both", undefined]]);
+		expect((await c.find("both"))?.signed).toBeUndefined();
 	});
 
 	it("throws unavailable when a source is unavailable, from find and authenticate", async () => {

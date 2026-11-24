@@ -148,8 +148,8 @@ export interface Clients {
 	 */
 	registered(): readonly Client[];
 	/**
-	 * The clients of the sources that list theirs (`ClientSource.listed`), each read as `find` reads
-	 * it: one that fails is left out, and an id is listed once, never a registered one's. For a
+	 * The clients of the ids the sources list (`ClientSource.listed`), each answered as `find`
+	 * answers it: one it answers none for is left out, and a registered id never. For a
 	 * boot check, which names none by its id.
 	 */
 	listed(): Promise<readonly Client[]>;
