@@ -94,13 +94,9 @@ it("builds each subject's listing at the cap session-lifecycle gives", async () 
 	await subjects.add("alice", "h2", 120_000);
 	expect(await subjects.add("alice", "h3", 180_000)).toEqual({ pushedOut: ["h1"] });
 	// What it pushed out awaits in the listing until it is settled.
-	const ports = subjects as unknown as {
-		awaiting(subject: string): Promise<readonly string[]>;
-		settled(subject: string, handle: string): Promise<void>;
-	};
-	expect(await ports.awaiting("alice")).toEqual(["h1"]);
-	await ports.settled("alice", "h1");
-	expect(await ports.awaiting("alice")).toEqual([]);
+	expect(await subjects.awaiting("alice")).toEqual(["h1"]);
+	await subjects.settled("alice", "h1");
+	expect(await subjects.awaiting("alice")).toEqual([]);
 });
 
 it("erases a subject's sessions and listing, telling each record removed, and fences both for the subject alone", async () => {
