@@ -1,19 +1,17 @@
 import { randomBytes } from "node:crypto";
-import { assemble, BootRefused, defineModule, isUnavailable, kernelConfig } from "@mod/kernel";
+import { assemble, BootRefused, isUnavailable, kernelConfig } from "@mod/kernel";
 import { switchedModule, unavailableSwitch } from "@mod/kernel/testing";
 import secretHashModule from "@mod/secret-hash/module";
 import { recordingChecker, testBcryptHash } from "@mod/secret-hash/testing";
 import { describe, expect, it } from "vitest";
 import {
 	type Contact,
-	type LinkStore,
-	linkStore,
+	type ContactStore,
+	contactStore,
 	type StoredContacts,
-	upstreamNames,
 	users,
 } from "../src/contract.ts";
 import { ledgerUsers } from "../src/ledger.ts";
-import { keptLinks } from "../src/links/kept.ts";
 import usersModule from "../src/module.ts";
 import { record, registeredUsers } from "../src/registered.ts";
 import {
@@ -25,20 +23,9 @@ import {
 	usersContract,
 } from "../src/testing.ts";
 
-/** The IdP names the registered users below link through, as a federation would declare them. */
-const named = defineModule({ name: "test-idps", replicaSafe: true, takes: [] }, (m) => [
-	m.contribute(upstreamNames).by(() => ({
-		declaredBy: "test-idps",
-		names: ["example", "corp:eu", "idp", "i"].map((name) => ({
-			name,
-			issuer: `https://${name.replace(":", "-")}.example`,
-		})),
-	})),
-]);
-
 const boot = (registered: unknown[]) =>
 	assemble({
-		modules: [usersModule, secretHashModule, memoryUsersStores().module, named],
+		modules: [usersModule, secretHashModule, memoryUsersStores().module],
 		config: { ...kernelConfig(), users: { registered } },
 	});
 
@@ -47,7 +34,6 @@ const aliceEntry = {
 	subject: "s-alice",
 	"password-hash": testPasswordHash("correct horse"),
 	attributes: { name: "Alice", email: "Alice@example.com" },
-	upstream: [{ idp: "example", subject: "u-alice" }],
 };
 
 /** Users from the settings holding alice, with the work of every password check recorded in order. */
@@ -59,7 +45,7 @@ function counting() {
 		checks = recording.works;
 		return recording.checker;
 	});
-	const counted = ledgerUsers(source, keptLinks(source, stores.links.store), stores.contacts.store);
+	const counted = ledgerUsers(source, stores.contacts.store);
 	return { source, users: counted, checks };
 }
 
@@ -77,7 +63,6 @@ ledgerContract("settings", {
 		const { source, checks } = counting();
 		return { ledger: source, checks };
 	},
-	upstreamOfAlice: { idp: "example", subject: "u-alice" },
 });
 
 it("matches a password of exactly 1024 bytes", async () => {
@@ -227,48 +212,22 @@ it("refuses to start on an email's verification without the email, as a ledger's
 	await expect(boot([testUser("a", "p", { attributes: beside })])).resolves.toBeDefined();
 });
 
-it("links an upstream identity as its IdP's name and upstream subject, matched exactly, and once", async () => {
-	const hash = testPasswordHash("p");
-	const app = await boot([
-		{ identifier: "a", "password-hash": hash, upstream: [{ idp: "corp:eu", subject: "s:1" }] },
-	]);
-	expect((await app.get(users).byUpstream("corp:eu", "s:1")).kind).toBe("user");
-	expect((await app.get(users).byUpstream("corp", "eu:s:1")).kind).toBe("none");
-	await expect(
-		boot([
-			{ identifier: "a", "password-hash": hash, upstream: [{ idp: "idp", subject: "same" }] },
-			{ identifier: "b", "password-hash": hash, upstream: [{ idp: "idp", subject: "same" }] },
-		]),
-	).rejects.toBeInstanceOf(BootRefused);
-	// One string is no pair: it is refused, never split.
-	for (const bad of [
-		{ idp: "", subject: "s" },
-		{ idp: "i", subject: "" },
-		{ idp: "i" },
-		"idp:sub",
-	]) {
-		await expect(
-			boot([{ identifier: "a", "password-hash": hash, upstream: [bad] }]),
-			JSON.stringify(bad),
-		).rejects.toBeInstanceOf(BootRefused);
-	}
-});
-
-it("answers unavailable, never none, when written links cannot be read", async () => {
-	const down = unavailableSwitch<LinkStore>("link store");
+it("answers unavailable, never none, when verified contacts cannot be read or written", async () => {
+	const down = unavailableSwitch<ContactStore>("contact store");
 	down.unavailable("save", "read", "update");
 	const u = (
 		await assemble({
 			modules: [
 				usersModule,
 				secretHashModule,
-				switchedModule(memoryUsersStores().module, linkStore, down),
+				switchedModule(memoryUsersStores().module, contactStore, down),
 			],
 			config: { ...kernelConfig(), users: { registered: [testUser("a", "p")] } },
 		})
 	).get(users);
-	await expect(u.byUpstream("idp", "s")).rejects.toSatisfy(isUnavailable);
-	await expect(u.link("a", { idp: "idp", subject: "s" })).rejects.toSatisfy(isUnavailable);
+	await expect(u.contactsOf("a")).rejects.toSatisfy(isUnavailable);
+	const email = { kind: "email", value: "a@example.com" } as const;
+	await expect(u.verifiedContact("a", email)).rejects.toSatisfy(isUnavailable);
 });
 
 it("checks passwords within its own assembly's secret-hash limit, whatever another assembly sets", async () => {
@@ -295,7 +254,7 @@ describe("records", () => {
 	const open = () => {
 		const stores = memoryUsersStores();
 		const source = empty();
-		const u = ledgerUsers(source, keptLinks(source, stores.links.store), stores.contacts.store);
+		const u = ledgerUsers(source, stores.contacts.store);
 		return { u, stores };
 	};
 
@@ -325,26 +284,24 @@ describe("records", () => {
 	});
 
 	it("answers unavailable when a record the store said it held is gone on the next change", async () => {
-		const { stores } = open();
-		const vanishing: LinkStore = {
+		const vanishing: ContactStore = {
 			save: async () => "exists",
 			read: async () => undefined,
 			update: async () => undefined,
 		};
-		const source = empty();
-		const u = ledgerUsers(source, keptLinks(source, vanishing), stores.contacts.store);
-		await expect(u.link("s", { idp: "i", subject: "u" })).rejects.toSatisfy(isUnavailable);
+		const u = ledgerUsers(empty(), vanishing);
+		const email = { kind: "email", value: "a@example.com" } as const;
+		await expect(u.verifiedContact("s", email)).rejects.toSatisfy(isUnavailable);
 	});
 });
 
-it("registers no users, and a user no attributes or upstream identities, that the operator leaves out", () => {
+it("registers no users, and a user no attributes, that the operator leaves out", () => {
 	expect(usersModule.section?.parse({})).toEqual({
 		registered: [],
-		"issuer-moved": [],
 		waits: { after: 3, first: 1000, longest: 30_000, forget: 900_000 },
 	});
 	const written = { identifier: "bob", "password-hash": aliceEntry["password-hash"] };
-	expect(record.parse(written)).toEqual({ ...written, attributes: {}, upstream: [] });
+	expect(record.parse(written)).toEqual({ ...written, attributes: {} });
 });
 
 it("refuses waits whose first is longer than the longest, or written without a unit", () => {

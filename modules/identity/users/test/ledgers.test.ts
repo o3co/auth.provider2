@@ -109,11 +109,7 @@ const answering = (answer: unknown): Ledger => ({
 	create: async () => answer as Verified as never,
 });
 
-async function openWith(ledger: Ledger): Promise<Users> {
-	const u = await usersOf(ledger);
-	await u.link("s-alice", { idp: "example", subject: "u-alice" });
-	return u;
-}
+const openWith = (ledger: Ledger): Promise<Users> => usersOf(ledger);
 
 usersContract("a contributed user ledger", {
 	open: () => openWith(fakeLedger()),
@@ -121,7 +117,6 @@ usersContract("a contributed user ledger", {
 		const checks: string[] = [];
 		return { users: await openWith(fakeLedger(checks)), checks };
 	},
-	writtenLinksOnly: true,
 });
 
 usersContract("a contributed user ledger that makes subjects", {
@@ -130,7 +125,6 @@ usersContract("a contributed user ledger that makes subjects", {
 		const checks: string[] = [];
 		return { users: await openWith(creatingLedger(checks)), checks };
 	},
-	writtenLinksOnly: true,
 	creates: true,
 });
 
@@ -145,7 +139,6 @@ usersContract("a contributed user ledger that cannot look users up by subject", 
 		const checks: string[] = [];
 		return { users: await openWith(verifyOnly(checks)), checks };
 	},
-	writtenLinksOnly: true,
 	unanswerableBySubject: true,
 });
 
@@ -165,10 +158,9 @@ describe("users ledgers", () => {
 		await expect(boot([one])).resolves.toBeDefined();
 	});
 
-	it("answers from the ledger, not the settings, and finds the user of a written link there", async () => {
+	it("answers from the ledger, not the settings", async () => {
 		const u = await openWith(fakeLedger());
 		expect(await u.verify("alice", "correct horse")).toEqual({ kind: "user", user: alice });
-		expect(await u.byUpstream("example", "u-alice")).toEqual({ kind: "user", user: alice });
 	});
 
 	it("answers none for an empty identifier, a password past 1024 bytes and an empty subject without asking", async () => {
@@ -202,14 +194,12 @@ describe("users ledgers", () => {
 				byIdentifier: fail,
 				create: fail as never,
 			});
-			await u.link("s-alice", { idp: "example", subject: "u-alice" });
 			for (const call of [
 				() => u.byIdentifier("alice"),
 				async () => u.create?.("carol"),
 				() => u.verify("alice", "correct horse"),
 				() => u.bySubject("s-alice"),
 				() => u.claimedContacts("s-alice"),
-				() => u.byUpstream("example", "u-alice"),
 			]) {
 				await expect(call(), name).rejects.toSatisfy(isUnavailable);
 			}
@@ -322,15 +312,6 @@ describe("users ledgers", () => {
 		expect(await u.bySubject("")).toEqual(none);
 		expect(await u.claimedContacts("s-alice")).toEqual({ kind: "unanswerable" });
 		expect(await u.claimedContacts("")).toEqual([]);
-		await u.link("s-alice", { idp: "example", subject: "u-alice" });
-		// The link stands for no one the ledger can name: neither none nor a user.
-		await expect(u.byUpstream("example", "u-alice")).rejects.toSatisfy(isUnavailable);
-	});
-
-	it("answers none for a written link to a subject the ledger answers none for: the ledger's none outweighs the link", async () => {
-		const u = await usersOf({ ...fakeLedger(), bySubject: async () => none });
-		expect(await u.link("s-gone", { idp: "example", subject: "u-gone" })).toBe("linked");
-		expect(await u.byUpstream("example", "u-gone")).toEqual(none);
 	});
 
 	it("claims only a non-empty email attribute, exactly as given", async () => {

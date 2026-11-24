@@ -1,7 +1,7 @@
 import type { SubjectOf } from "@mod/erasure-extensions";
 import { deepFreeze } from "@mod/kernel";
 import { canonicalAddress } from "@mod/mail-address";
-import { type Contact, isWellFormedSubject, type Users, userAttribute } from "./contract.ts";
+import { type Contact, type Users, userAttribute } from "./contract.ts";
 import { none, type UserSource, unanswerable } from "./registered.ts";
 import type { ContactStore, StoredContacts } from "./store.ts";
 import { keptFor } from "./stores/kept-for.ts";
@@ -27,11 +27,8 @@ function required(...parts: string[]) {
 	if (parts.some((part) => part === "")) throw new TypeError("users: an empty part names no one");
 }
 
-/** Who answers by upstream identity and keeps links: users through its link store, or the ledger. */
-export type Linking = Pick<Users, "byUpstream" | "link" | "unlink">;
-
-/** The source's users, linked as `linking` links them, with the contacts written through the store interface. */
-export function ledgerUsers(source: UserSource, linking: Linking, contacts: ContactStore): Users {
+/** The source's users, with the contacts written through the store interface. */
+export function ledgerUsers(source: UserSource, contacts: ContactStore): Users {
 	return {
 		verify: async (identifier, password) =>
 			// The length is the sender's choice, so answering early tells nothing about users.
@@ -39,14 +36,6 @@ export function ledgerUsers(source: UserSource, linking: Linking, contacts: Cont
 		bySubject: source.bySubject,
 		byIdentifier: source.byIdentifier,
 		...(source.create ? { create: source.create } : {}),
-		byUpstream: linking.byUpstream,
-		link: async (subject, upstream) => {
-			required(subject, upstream.idp, upstream.subject);
-			if (!isWellFormedSubject(subject))
-				throw new TypeError("users: a subject is 1 to 255 ASCII characters");
-			return linking.link(subject, upstream);
-		},
-		unlink: linking.unlink,
 		verifiedContact: async (subject, contact) => {
 			required(subject, contact.value);
 			if (contact.kind !== "email") throw new TypeError("users: an unknown kind of contact");

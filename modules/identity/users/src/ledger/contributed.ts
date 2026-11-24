@@ -75,7 +75,7 @@ function readCreated(answer: unknown, log: Log): Created {
 }
 
 export function contributedSource(ledger: Ledger, log: Log): UserSource {
-	const { byUpstream, create, keep } = ledger;
+	const { create, keep } = ledger;
 	const keeping = keep
 		? {
 				keep: async (subject: string, identifier: string) => {
@@ -93,17 +93,6 @@ export function contributedSource(ledger: Ledger, log: Log): UserSource {
 				},
 			}
 		: {};
-	const upstream = byUpstream
-		? {
-				byUpstream: async (idp: string, upstreamSubject: string) => {
-					if (idp === "" || upstreamSubject === "") return none;
-					const answer = copyOf(
-						await fromLedger(() => byUpstream.call(ledger, idp, upstreamSubject)),
-					);
-					return readAnswer(answer, log);
-				},
-			}
-		: { byUpstream: async () => none };
 	return {
 		verify: async (identifier, password) =>
 			identifier === ""
@@ -120,7 +109,6 @@ export function contributedSource(ledger: Ledger, log: Log): UserSource {
 				? unanswerable
 				: readAnswer(answer, log, subject);
 		},
-		...upstream,
 		...creating,
 		...keeping,
 	};

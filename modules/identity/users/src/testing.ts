@@ -3,7 +3,6 @@ import { defineModule, isUnavailable } from "@mod/kernel";
 import { describe, expect, it } from "vitest";
 import type { Contact, Ledger, Users } from "./contract.ts";
 import {
-	type ContactStore,
 	contactStore,
 	type LinkStore,
 	linkStore,
@@ -13,7 +12,6 @@ import {
 	type StoredName,
 	type SubjectRecordStore,
 } from "./store.ts";
-import { portsRefused } from "./stores/ports.ts";
 
 const toUnpaddedBase64 = (bytes: Buffer) => bytes.toString("base64").replace(/=+$/, "");
 
@@ -30,12 +28,9 @@ export const seventyTwoBytes = "\u3042".repeat(24);
 export interface UsersHarness {
 	/**
 	 * Users holding "alice" with the password "correct horse", whose subject is "s-alice" and whose
-	 * attributes are `{ name: "Alice", email: "Alice@example.com" }`, linked to the upstream identity
-	 * "u-alice" at the IdP "example", and nothing else written.
+	 * attributes are `{ name: "Alice", email: "Alice@example.com" }`, and nothing else written.
 	 */
 	open(): Promise<Users>;
-	/** Set where the settings fix no links (users answer from a user ledger): `open` writes the link to "u-alice". */
-	readonly writtenLinksOnly?: boolean;
 	/** Set where the user ledger cannot look users up by subject: every subject is unanswerable. */
 	readonly unanswerableBySubject?: boolean;
 	/** Set where the users make subjects (`create`); else they offer no `create`. */
@@ -214,8 +209,6 @@ export interface LedgerHarness {
 	 */
 	open(): Promise<{ readonly ledger: Ledger; readonly checks: readonly string[] }>;
 	readonly unanswerableBySubject?: boolean;
-	/** Set where the ledger looks users up by upstream identity: the one it ties to alice. */
-	readonly upstreamOfAlice?: { readonly idp: string; readonly subject: string };
 	/** Set where the ledger makes subjects (`create`). */
 	readonly creates?: boolean;
 }
@@ -262,17 +255,6 @@ export function ledgerContract(name: string, harness: LedgerHarness): void {
 				}
 				expect(await ledger.create?.("carol")).toEqual({ kind: "exists" });
 				expect(await ledger.create?.("alice")).toEqual({ kind: "exists" });
-			},
-		);
-
-		it.runIf(harness.upstreamOfAlice !== undefined)(
-			"finds alice by the upstream identity it ties to her, and none for one it does not know",
-			async () => {
-				const { ledger } = await harness.open();
-				const { idp, subject } = harness.upstreamOfAlice ?? { idp: "", subject: "" };
-				const found = await ledger.byUpstream?.(idp, subject);
-				expect(found?.kind === "user" && found.user.subject).toBe("s-alice");
-				expect(await ledger.byUpstream?.(idp, `${subject}-nobody`)).toEqual({ kind: "none" });
 			},
 		);
 
@@ -460,11 +442,6 @@ export function linkStoreContract(
 ): void {
 	describe(`users' link store: ${name}`, () => {
 		recordTests(open);
-
-		it("offers its ports as whole sets: issuers and unowned together or neither; remove, erase and migrate together or none, and only with issuers", async () => {
-			const links = (await open()).records as LinkStore;
-			expect(portsRefused(links, {} as ContactStore)).toBeUndefined();
-		});
 
 		it("removes a record only where the check holds, in the write that removes it", async (context) => {
 			const links = (await open()).records as LinkStore;

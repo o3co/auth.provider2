@@ -102,12 +102,6 @@ export type Created =
 	| { readonly kind: "created"; readonly user: User }
 	| { readonly kind: "exists" };
 
-/** An IdP's name and the upstream subject there. */
-export interface UpstreamIdentity {
-	readonly idp: string;
-	readonly subject: string;
-}
-
 export interface Contact {
 	readonly kind: "email";
 	readonly value: string;
@@ -124,12 +118,6 @@ export interface Users {
 	 * the composition's fact. Throws TypeError on an empty identifier, Unavailable if the ledger fails.
 	 */
 	create?(identifier: string): Promise<Created>;
-	/** The user an upstream identity is linked to, by the IdP's name and the upstream subject, exactly. */
-	byUpstream(idp: string, upstreamSubject: string): Promise<Verified>;
-	/** Links the upstream identity to the subject; conflict when it is linked to another. Throws TypeError on an empty part. */
-	link(subject: string, upstream: UpstreamIdentity): Promise<"linked" | "already" | "conflict">;
-	/** Removes a link written here; fixed when the settings hold it for the subject. */
-	unlink(subject: string, upstream: UpstreamIdentity): Promise<"unlinked" | "none" | "fixed">;
 	/** Keeps a contact the subject has shown is theirs, up to 20. Throws TypeError on an empty part, RangeError past 20. */
 	verifiedContact(subject: string, contact: Contact): Promise<void>;
 	/** The subject's verified contacts, in the order first kept, frozen. */
@@ -160,7 +148,6 @@ export interface Ledger {
 	bySubject(subject: string): Promise<BySubject>;
 	/** None when no user holds the identifier; throws Unavailable when the ledger fails or refuses. */
 	byIdentifier(identifier: string): Promise<Verified>;
-	byUpstream?(idp: string, upstreamSubject: string): Promise<Verified>;
 	/** Makes a new subject for an identifier no user holds, else `exists`; a ledger that makes no subjects leaves it out. */
 	create?(identifier: string): Promise<Created>;
 	/**
@@ -170,16 +157,7 @@ export interface Ledger {
 	keep?(subject: string, identifier: string): Promise<"kept" | "conflict">;
 }
 
-/** The IdP names one module passes to `byUpstream`, each with the issuer it stands for (compared as written). */
-export interface UpstreamNames {
-	readonly declaredBy: string;
-	readonly names: readonly { readonly name: string; readonly issuer: string }[];
-}
-
 export const users = contract<Users>("users");
 export const usersImport = contract<UsersImport>("users.import");
 export const ledgers = extensionPoint<Ledger>("users.ledgers", { multiplicity: "many" });
-export const upstreamNames = extensionPoint<UpstreamNames>("users.upstream-names", {
-	multiplicity: "many",
-});
 export * from "./store.ts";

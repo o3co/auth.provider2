@@ -1,32 +1,29 @@
 # users
 
 ## Responsibilities
-- Owns who a user is and how they are known to be the same person: verification, links with upstream identities, and verified contacts.
-- Answers from the settings' users or one contributed user ledger, and keeps links and verified contacts through its Store interfaces.
+- Owns who a user is and how they are known to be the same person: verification and verified contacts.
+- Answers from the settings' users or one contributed user ledger, and keeps verified contacts through its Store interface.
 
 ## Not here
-- Steps after verification, how much of the attributes to expose, registration, password reset, when to link or verify a contact, and the proofs each feature keeps.
+- Steps after verification, how much of the attributes to expose, registration, password reset, when to verify a contact, and the proofs each feature keeps.
 
 ## Offers
-- `verify` (identifier, password), `bySubject`, `byIdentifier` and `byUpstream` (IdP name, upstream subject), each answering a user or none; `bySubject` and `claimedContacts` may answer unanswerable. `create` (identifier): a new subject the ledger makes, or `exists`; offered only where the composed ledger makes subjects, its absence the composition's fact.
-- `claimedContacts`, `verifiedContact` (subject, `{ kind: "email", value }`), `contactsOf`, `link` (linked, already or conflict) and `unlink` (unlinked, none or fixed).
-- Extension point `ledgers`: a user ledger (verification, user by subject or unanswerable, by identifier, and optionally by upstream identity, a create and an import, `keep`), which takes the same work for an unknown identifier as for a known one; one looking users up by upstream identity has the last word there (internal module `links`): `link` answers already or conflict, and `unlink` fixed or none.
-- Extension point `upstreamNames`: the IdP names a module passes to `byUpstream`, each with the issuer it stands for, one list per module; what refuses boot: internal module `names`. Operator section `issuer-moved` (each `{ idp, from, to }`, default none): a name's stated move to another issuer, its links going with it (internal module `names`).
-- Operator section `registered`: `identifier`, `subject` (default the identifier), `password-hash`, `attributes`, `upstream` (each `{ idp, subject }`).
+- `verify` (identifier, password), `bySubject` and `byIdentifier`, each answering a user or none; `bySubject` and `claimedContacts` may answer unanswerable. `create` (identifier): a new subject the ledger makes, or `exists`; offered only where the composed ledger makes subjects, its absence the composition's fact.
+- `claimedContacts`, `verifiedContact` (subject, `{ kind: "email", value }`) and `contactsOf`.
+- Extension point `ledgers`: a user ledger (verification, user by subject or unanswerable, by identifier, and optionally a create and an import, `keep`), which takes the same work for an unknown identifier as for a known one.
+- Operator section `registered`: `identifier`, `subject` (default the identifier), `password-hash`, `attributes`.
 - Operator section `waits`: how a password check of an identifier failing in a row waits; its keys: internal module `waits`.
-- Store interfaces for links, with each declared IdP name's issuer, and verified contacts; what they need, their `issuers` (required in 0.22), `unowned` (deprecated) and erasure ports, and the eraser `users`: internal module `stores`.
+- Store interface for verified contacts; what it needs, its erasure ports, and the eraser `users`: internal module `stores`.
 - `userAttribute`, typed by `UserAttributes`: the attributes users names, by OIDC claim name `email`, `email_verified`, `name`, `picture` and `groups`; a user may hold others. `isAttributeValue` (name, value): whether users takes the value. `acceptedAttributes` (values of any shape): the named ones users takes, frozen; an email's verification only beside the email. `isWellFormedSubject`: a subject's shape.
 - `usersImport`, called by the app entry `users-import` (`settle-records`): a record brought from another IdP, kept through the ledger's `keep` and as a verified contact; its shape and answers: internal module `imports`. No passkey is brought.
-- `./testing`: contract tests for users, user ledgers and both Store interfaces, configuration builders, and both Store interfaces in memory.
+- `./testing`: contract tests for users, user ledgers and the Store interface, configuration builders, and the Store interface in memory.
 
 ## Invariants
-- A subject is 1 to 255 ASCII characters: one outside that refuses boot in the settings (the identifier's, where `subject` is left out), is unavailable in a ledger's answer, is none when looked up without asking the ledger, and throws TypeError on `link`.
+- A subject is 1 to 255 ASCII characters: one outside that refuses boot in the settings (the identifier's, where `subject` is left out), is unavailable in a ledger's answer, and is none when looked up without asking the ledger.
 - Identifiers match exactly, never folded or trimmed, and a password as typed, with no Unicode normalization; an empty identifier or subject is none, and the ledger is not asked; `create` throws TypeError on an empty identifier. A password check waits as its identifier's failures in a row say, an unknown identifier as a known one; the caller knows nothing of it (internal module `waits`).
-- Boot is refused on identifiers that differ only in case, Unicode normal form or surrounding whitespace, on two identifiers with one subject, on an upstream identity linked to two users, on one whose IdP name no module declares (at its `idp`), and on more than one ledger or a ledger beside `registered` users.
-- Unanswerable is never read as none: a written link then is unavailable, as nothing can say who it stands for, and claimed contacts are unanswerable. `link` and `verifiedContact` for an erased subject: internal module `stores`.
-- An upstream identity matches exactly, by IdP name and whole upstream subject, never by email, is never created on the fly, and links to one subject at most, also when two ask at once.
-- Only an explicit link links; unlinking removes only the subject's own link, leaving nothing where the store removes, and a written link finds its subject's user, or none where the ledger answers none for the subject.
-- A contact is kept once per subject by its `canonicalAddress` form, as first given, up to 20 (a fixed capacity guard: no subject needs more), and another past them throws RangeError; an empty subject, upstream part or contact value throws TypeError.
+- Boot is refused on identifiers that differ only in case, Unicode normal form or surrounding whitespace, on two identifiers with one subject, and on more than one ledger or a ledger beside `registered` users.
+- Unanswerable is never read as none: claimed contacts are then unanswerable. `verifiedContact` for an erased subject: internal module `stores`.
+- A contact is kept once per subject by its `canonicalAddress` form, as first given, up to 20 (a fixed capacity guard: no subject needs more), and another past them throws RangeError; an empty subject or contact value throws TypeError.
 - Attribute values: `email` one `isAddress` takes that is also RFC 5322's addr-spec in ASCII (a dot-atom local part, LDH labels), `picture` an https URL that reads back as given, `email_verified` a boolean, `name` text holding more than blanks, `groups` a list of text, no text with a control or format character; another refuses boot in the settings, and from a ledger is left out, its name logged.
 - `email_verified` holds only beside `email`: without it, boot is refused in the settings, and a ledger's is left out, as it is with an email left out.
 - A password hash is one `secret-hash` reads (bcrypt or scrypt), else boot is refused; a password over 1024 bytes is none before any computation or ledger call (fixed, to guard hashing, far past NIST SP 800-63B's 64-character floor), and `secret-hash` decides the rest, within its assembly's `max-concurrent`. Each verification does the work of every kind of hash in use, so timing does not tell whether a user exists.
@@ -36,5 +33,4 @@
 
 ## Vocabulary
 - user: a subject and frozen attributes. user ledger: the outside system that holds users.
-- upstream subject: who an upstream IdP says a user is. upstream identity: an IdP's name and an upstream subject there. link: an upstream identity tied to a subject, by the settings (fixed) or written.
 - verified contact: a way to reach a user that the user has shown is theirs. claimed contact: the user's `email` attribute, as the settings or a ledger state it, apart from verified contacts.

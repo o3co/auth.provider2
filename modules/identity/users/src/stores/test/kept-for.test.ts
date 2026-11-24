@@ -8,9 +8,8 @@ import type { SubjectRecordStore } from "../../store.ts";
 import { memoryUsersStores, testUser, usersConfig } from "../../testing.ts";
 import { keptFor } from "../kept-for.ts";
 
-it("saves a link and a verified contact with the subject they are kept for", async () => {
+it("saves a verified contact with the subject it is kept for", async () => {
 	const stores = memoryUsersStores();
-	const linkSave = vi.spyOn(stores.links.store, "save");
 	const contactSave = vi.spyOn(stores.contacts.store, "save");
 	const app = await assemble({
 		modules: [usersModule, secretHashModule, stores.module],
@@ -18,14 +17,7 @@ it("saves a link and a verified contact with the subject they are kept for", asy
 		runtime: quietRuntime(),
 	});
 	const people = app.get(users);
-	expect(await people.link("s-alice", { idp: "corp", subject: "u-1" })).toBe("linked");
 	await people.verifiedContact("s-alice", { kind: "email", value: "a@example.com" });
-	expect(linkSave).toHaveBeenCalledWith(
-		expect.any(String),
-		expect.anything(),
-		"endless",
-		"s-alice",
-	);
 	expect(contactSave).toHaveBeenCalledWith("s-alice", expect.anything(), "endless", "s-alice");
 });
 
