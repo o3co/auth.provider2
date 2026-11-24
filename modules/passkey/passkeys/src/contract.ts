@@ -1,0 +1,164 @@
+import { contract, extensionPoint } from "@mod/kernel";
+import { stances } from "@mod/promises";
+import type { Deciding, Refused } from "@mod/transparency";
+import type { CeremonyRefusal, Credential } from "@mod/webauthn";
+import { keyChanges, part } from "./records.ts";
+
+/**
+ * Passkeys: each subject's keys as its flow's state holds them, the reservation of a key being
+ * registered, and each credential's record. Every call throws Unavailable when a store cannot tell.
+ */
+
+/** The part its records are in: the subject flow's keys and its one reservation. */
+export const passkeyPart = part;
+
+/**
+ * The key change's kind of operation, but for its `bundle` and `resend`: its name, its part, its
+ * records (the reservation) and its end, which confirms the reservation (`took`) or releases it. The
+ * key change's writer registers it on `transparency`'s `operationKinds`, with its own two.
+ */
+export const passkeyChanges = keyChanges;
+
+export type AssertRefusal = CeremonyRefusal | "unknown-credential" | "not-named" | "raced";
+
+/** What the approval path and the judgment ask of the keys kept. */
+export interface Passkeys {
+	/**
+	 * An assertion by an active key, over the challenge and the credentials its request named
+	 * (`allow`, none for any discoverable one), both as the caller kept them with its request.
+	 */
+	assert(
+		response: unknown,
+		asked: { readonly challenge: string; readonly allow: readonly string[] },
+	): Promise<
+		| {
+				readonly kind: "asserted";
+				readonly subject: string;
+				readonly credential: string;
+				readonly userVerified: boolean;
+				readonly backupEligible: boolean;
+		  }
+		| { readonly kind: "refused"; readonly reason: AssertRefusal }
+	>;
+	/** An active key's public key and subject; none for any other credential. */
+	publicKeyOf(
+		credential: string,
+	): Promise<{ readonly subject: string; readonly publicKey: string } | undefined>;
+	/**
+	 * After a key change ended: tells `passkeyRemovals` of each `gone` credential the subject holds no
+	 * more, then brings the witness's mark in line. Whether the subject holds a key, as the mark agreed.
+	 */
+	settle(subject: string, gone?: readonly string[]): Promise<boolean>;
+}
+
+export const passkeys = contract<Passkeys>("passkeys");
+
+export type ReserveRefusal = "pending" | "held" | "taken" | "unknown" | "state" | "open";
+export type VerifyRefusal = CeremonyRefusal | "unknown" | "state" | "expired" | "open" | "raced";
+
+/** A key change of a subject's flow, decided as its writer's op (`transparency`'s KE-C01). */
+export interface KeyChange {
+	readonly subject: string;
+	/** The writer's part of KE-C01; its changes name the key the change is of. */
+	readonly decide: Deciding;
+}
+export type Decided = { readonly prev: number } | Refused<string>;
+
+/** Registering keys, in the order reserve, verifyPending, commit; and removing one. */
+export interface Registrations {
+	/**
+	 * Reserves `credential` for the subject, pending until its possession is shown: refused while
+	 * another is pending, unless `retrying` it (whose key generation it keeps). `first`: only where the
+	 * subject holds no key, as the witness agrees.
+	 */
+	reserve(p: {
+		readonly subject: string;
+		readonly credential: Credential;
+		readonly first?: boolean;
+		readonly retrying?: string;
+	}): Promise<{ readonly reservation: string } | { readonly refused: ReserveRefusal }>;
+	/** Checks an assertion by the reserved key, over a request naming it alone; the key stays pending. */
+	verifyPending(p: {
+		readonly subject: string;
+		readonly reservation: string;
+		readonly response: unknown;
+		readonly challenge: string;
+	}): Promise<
+		| { readonly verification: string; readonly userVerified: boolean }
+		| { readonly refused: VerifyRefusal }
+	>;
+	/** KE-C01 of the reservation's key change, its op the reservation: only a verified one, verified so. */
+	commit(
+		p: KeyChange & { readonly reservation: string; readonly verification: string },
+	): Promise<Decided>;
+	/** Releases a reservation no op is putting on the log. */
+	cancel(p: {
+		readonly subject: string;
+		readonly reservation: string;
+	}): Promise<{ readonly cancelled: true } | { readonly refused: "unknown" | "state" | "open" }>;
+	/** KE-C01 of a removal: refused for the subject's last key (`last`), which only clearing removes. */
+	remove(p: KeyChange & { readonly credential: string; readonly op: string }): Promise<Decided>;
+}
+
+/** Taken only by a module that declares where it stands on the promises. */
+export const registrations = contract<Registrations>("passkeys.registrations", {
+	takersContribute: stances,
+});
+
+/** Removing any key of a subject, its last too: the recovery's. */
+export interface PasskeyClearing {
+	clear(p: KeyChange & { readonly credential: string; readonly op: string }): Promise<Decided>;
+}
+
+/** Taken only by a module that declares where it stands on the promises. */
+export const passkeyClearing = contract<PasskeyClearing>("passkeys.clearing", {
+	takersContribute: stances,
+});
+
+/** Who keeps the witness's mark in line with the keys; contributed where a witness is composed. */
+export interface PasskeyWitnessing {
+	/** Brings the mark in line with `holds`, read anew; whether the subject holds a key, as the mark agreed. */
+	settle(subject: string, holds: () => Promise<boolean>): Promise<boolean>;
+}
+
+/** At most one; with none, the keys alone tell, and a passkey witness composed refuses boot. */
+export const passkeyWitnessing = extensionPoint<PasskeyWitnessing>("passkeys.witnessing", {
+	multiplicity: "many",
+});
+
+/** Told of a credential a subject holds no more; `emptied`: the subject holds no key after. */
+export interface PasskeyRemoval {
+	removed(subject: string, credential: string, emptied: boolean): Promise<void>;
+}
+
+export const passkeyRemovals = extensionPoint<PasskeyRemoval>("passkeys.removals", {
+	multiplicity: "many",
+});
+
+declare const storedCredential: unique symbol;
+/** A credential's record as the store keeps it: only passkeys opens it. */
+export type StoredCredential = { readonly [storedCredential]: true };
+
+/** Each credential's record, by its id, kept without end. */
+export interface PasskeyStore {
+	/** Keeps the credential's first record, unless it holds one. */
+	create(credential: string, record: StoredCredential): Promise<"created" | "exists">;
+	read(credential: string): Promise<StoredCredential | undefined>;
+	/** Changes the record from what it holds; `change` runs again on a race, so it is pure; none leaves it. */
+	change(
+		credential: string,
+		change: (record: StoredCredential) => { readonly value: StoredCredential } | undefined,
+	): Promise<{ readonly before: StoredCredential; readonly after: StoredCredential } | undefined>;
+}
+
+export const passkeyStore = contract<PasskeyStore>("passkeys.store");
+
+/** A record lost or come back would point a key at another subject or move its count back. */
+export const passkeyStoreNeeds = {
+	neverEvicted: true,
+	survivesCrash: true,
+	survivesFailover: true,
+	confirmedReads: true,
+	/** A record written outside the provider would name another subject's key. */
+	authenticated: true,
+} as const;

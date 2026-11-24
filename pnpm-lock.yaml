@@ -1321,6 +1321,37 @@ importers:
         specifier: 5.0.5
         version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(vite@8.3.3(@types/node@26.6.5)(yaml@2.9.1))
 
+  modules/passkey/passkeys:
+    dependencies:
+      '@mod/authority-rules':
+        specifier: workspace:*
+        version: link:../../foundation/authority-rules
+      '@mod/kernel':
+        specifier: workspace:*
+        version: link:../../foundation/kernel
+      '@mod/passkey-witness':
+        specifier: workspace:*
+        version: link:../passkey-witness
+      '@mod/promises':
+        specifier: workspace:*
+        version: link:../../foundation/promises
+      '@mod/transparency':
+        specifier: workspace:*
+        version: link:../../foundation/transparency
+      '@mod/transparency-wire':
+        specifier: workspace:*
+        version: link:../../wire/transparency-wire
+      '@mod/webauthn':
+        specifier: workspace:*
+        version: link:../webauthn
+      zod:
+        specifier: 4.6.7
+        version: 4.6.7
+    devDependencies:
+      vitest:
+        specifier: 5.0.5
+        version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(vite@8.3.3(@types/node@26.6.5)(yaml@2.9.1))
+
   modules/passkey/webauthn:
     dependencies:
       '@mod/kernel':

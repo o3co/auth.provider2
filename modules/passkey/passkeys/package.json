@@ -1,0 +1,34 @@
+{
+	"name": "@mod/passkeys",
+	"private": true,
+	"license": "Apache-2.0",
+	"type": "module",
+	"kind": "feature",
+	"optIn": true,
+	"exports": {
+		".": "./src/contract.ts",
+		"./testing": "./src/testing.ts",
+		"./module": "./src/module.ts"
+	},
+	"dependencies": {
+		"@mod/authority-rules": "workspace:*",
+		"@mod/kernel": "workspace:*",
+		"@mod/passkey-witness": "workspace:*",
+		"@mod/promises": "workspace:*",
+		"@mod/transparency": "workspace:*",
+		"@mod/transparency-wire": "workspace:*",
+		"@mod/webauthn": "workspace:*",
+		"zod": "4.6.7"
+	},
+	"peerDependencies": {
+		"vitest": "5.0.5"
+	},
+	"peerDependenciesMeta": {
+		"vitest": {
+			"optional": true
+		}
+	},
+	"devDependencies": {
+		"vitest": "5.0.5"
+	}
+}
