@@ -1,7 +1,15 @@
 import type { Stage } from "@mod/transparency";
 import { type AppendAnswer, logTyps, schemas } from "@mod/transparency-wire";
 import { describe, expect, it } from "vitest";
-import { abandonment, boot, subjectFlow, testClock } from "./fixtures/world.ts";
+import {
+	abandonment,
+	boot,
+	clientEvidence,
+	clientKey,
+	clientStart,
+	subjectFlow,
+	testClock,
+} from "./fixtures/world.ts";
 
 const accepted = (answer: AppendAnswer) => {
 	if (answer.result !== "accepted") throw new Error(`refused: ${answer.refusal}`);
@@ -128,6 +136,73 @@ describe("transparency-local's log (t0)", () => {
 			log.append(abandonment(flow)),
 		]);
 		expect(answers.map((a) => accepted(a).position).sort()).toEqual([1, 2]);
+	});
+
+	it("refuses, on a client's flow, a stage of an op whose abandonment it placed, after an id placed already", async () => {
+		const { log } = await boot();
+		const flow = { of: "client", id: "c1" } as const;
+		const tokens = [{ frame: "accessToken" as const, digest: "a".repeat(43) }];
+		const bundle: Stage = {
+			kind: "bundle",
+			flow,
+			op: "o1",
+			stage: 2,
+			last: true,
+			tokens,
+			preimage: { v: 1, evidence: [], content: {} },
+		};
+		const first = accepted(await log.append(bundle));
+		accepted(await log.append(abandonment(flow, "o1")));
+		// The same id and content: its first answer; other content: sameIdOther, before abandoned.
+		expect(await log.append(bundle)).toEqual(first);
+		const other = {
+			...bundle,
+			tokens: [{ frame: "accessToken" as const, digest: "b".repeat(43) }],
+		};
+		expect(await log.append(other)).toMatchObject({ refusal: "sameIdOther" });
+		const refused = { v: 1, result: "refused", refusal: "abandoned" };
+		expect(await log.append({ ...bundle, op: "o1", stage: 3 })).toEqual(refused);
+		const start = clientStart(flow, clientEvidence(flow.id, clientKey(), Date.now()), 3);
+		accepted(await log.append(abandonment(flow, start.op)));
+		expect(await log.append(start)).toEqual(refused);
+		expect(await log.head(flow)).toBe(3);
+		// An abandonment of it again is placed, and another op's stage too.
+		accepted(await log.append(abandonment(flow, "o1", 2)));
+		accepted(await log.append({ ...bundle, op: "o2" }));
+	});
+
+	it("refuses a client's start naming an evidence element a start of its flow named, a resend of that start answered as first", async () => {
+		const { log } = await boot();
+		const flow = { of: "client", id: "c1" } as const;
+		const key = clientKey();
+		const [a1, p1] = clientEvidence(flow.id, key, Date.now());
+		const [a2, p2] = clientEvidence(flow.id, key, Date.now());
+		if (!a1 || !p1 || !a2 || !p2) throw new Error("no evidence");
+		const first = clientStart(flow, [a1, p1], 3);
+		const placed = accepted(await log.append(first));
+		accepted(await log.append(clientStart(flow, [a2, p2], 3)));
+		expect(await log.append(first)).toEqual(placed);
+		const refused = { v: 1, result: "refused", refusal: "evidenceUsed" };
+		expect(await log.append(clientStart(flow, [a1, p2], 3))).toEqual(refused);
+		expect(await log.append(clientStart(flow, [a2, p1], 3))).toEqual(refused);
+		// Another client's flow keeps its own index.
+		const elsewhere = { of: "client", id: "c2" } as const;
+		accepted(await log.append({ ...clientStart(elsewhere, [a1, p2], 3) }));
+		expect(await log.head(flow)).toBe(2);
+	});
+
+	it("takes evidence elements and a registry version on a client's start alone", async () => {
+		const { log } = await boot();
+		const flow = { of: "client", id: "c1" } as const;
+		const start = clientStart(flow, clientEvidence(flow.id, clientKey(), Date.now()), 3);
+		const { elements: _none, ...bare } = start;
+		await expect(log.append(bare)).rejects.toThrow(TypeError);
+		const subject = subjectFlow();
+		await expect(log.append({ ...start, flow: subject }, 0)).rejects.toThrow(TypeError);
+		const { elements: _e, ...noElements } = start;
+		await expect(
+			log.append({ ...noElements, kind: "noEffect", stage: 2, last: true }),
+		).rejects.toThrow(TypeError);
 	});
 
 	it("takes a previous position on a conditional flow alone, as the wire does", async () => {

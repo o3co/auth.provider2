@@ -26,6 +26,13 @@ export const section = z.strictObject({
 		"1m",
 		"How long after its start a bundle is on time: longer than a Core request's deadline.",
 	),
+	"evidence-window": setting
+		.duration("ms")
+		.pipe(z.number().int().min(360_000))
+		.prefault("10m")
+		.describe(
+			"How far a client's evidence's times may lie from its start's acceptance: at least 6m, longer than client-assertion's clock-skew and dpop's proof-window (5m at most each) by a Core request's deadline.",
+		),
 });
 
 export type Settings = z.output<typeof section>;

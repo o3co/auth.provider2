@@ -19,6 +19,13 @@ export type Judging = (
 	prior: readonly FlowEntry[],
 ) => Promise<FlowEntry>;
 
+/** A client at a registry version, as the Core's registry holds it now: the keys written in its record and its own ceiling. */
+export interface ClientReading {
+	readonly keys: readonly unknown[];
+	/** Whether its own ceiling holds the audience and the scope (space-separated), the issuer never among them. */
+	ceiling(audience: string, scope: string): boolean;
+}
+
 const own = <T>(items: Readonly<Record<string, T>>, id: string) =>
 	Object.hasOwn(items, id) ? items[id] : undefined;
 
@@ -38,22 +45,44 @@ export function localJudging(p: {
 	readonly checks: Checks;
 	readonly context: Context;
 	readonly holds: (credential: string, subject: string) => Promise<boolean>;
+	/** A client at a registry version, where the registry holds it at that version now; none otherwise. */
+	readonly clientAt: (client: string, version: number) => Promise<ClientReading | undefined>;
 }): Judging {
+	/** A client's record's client, at its start's registry version: read now, so one at another version is unchecked. */
+	async function clientOf(record: Parameters<Judging>[0], prior: readonly FlowEntry[]) {
+		if (record.flow.of !== "client") return undefined;
+		const start = prior.find((e) => e.envelope.op === record.op && e.envelope.kind === "start");
+		const version = record.kind === "start" ? record.registryVersion : start?.client?.version;
+		const read = version === undefined ? undefined : await p.clientAt(record.flow.id, version);
+		return read && version !== undefined ? { ...read, version } : undefined;
+	}
 	return async (record, preimage, prior) => {
 		const state = prior.reduce(
 			(s, e) => fold(s, e.envelope, e.changes, e.judgment),
 			emptyState as FlowState,
 		);
+		const client = await clientOf(record, prior);
 		const ruling = judge({
 			record,
 			opening: { opened: preimage },
 			keySets: { ever: [localKey], atRecord: [localKey] },
+			// No publisher's flow is here: a client's start's registry version is given no bounds.
+			...(record.registryVersion === undefined ? {} : { versions: { registry: { at: 0 } } }),
+			...(client ? { client: { keys: client.keys } } : {}),
 			state,
 			prior,
-			checks: p.checks,
+			checks: client
+				? {
+						...p.checks,
+						selfCeiling: (id, version, audience, scope) =>
+							id === record.flow.id &&
+							version === client.version &&
+							client.ceiling(audience, scope),
+					}
+				: p.checks,
 			context: p.context,
 		});
-		// No version is named and every preimage opens here, so the rules never wait.
+		// No version but a client's is named, given no bounds, and every preimage opens here, so the rules never wait.
 		if ("wait" in ruling)
 			throw new TypeError(`transparency-local: the rules wait (${ruling.wait})`);
 		const { entry } = ruling;

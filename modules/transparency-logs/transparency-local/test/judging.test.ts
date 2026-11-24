@@ -3,6 +3,10 @@ import { describe, expect, it } from "vitest";
 import {
 	approval,
 	boot,
+	clientBundle,
+	clientEvidence,
+	clientKey,
+	clientStart,
 	firstKey,
 	passkey,
 	subjectFlow,
@@ -111,7 +115,71 @@ describe("transparency-local's judgment (j0)", () => {
 		expect((await placed(world, elsewhere))?.finding?.verdict).toBe("forged");
 	});
 
-	it("judges forged a client's start and bundle, as the rules hold no op of a client's flow yet (KG-07)", async () => {
+	it("judges a client's start and bundle verified: its evidence by a key its registry version writes, its token within its own ceiling", async () => {
+		const clock = testClock();
+		const world = await boot({ clock });
+		const flow = { of: "client", id: "svc" } as const;
+		const key = clientKey();
+		world.clients.hold({
+			id: flow.id,
+			version: 3,
+			keys: [key.jwk],
+			self: [{ audience: "https://api.example", scopes: ["read"] }],
+		});
+		const start = clientStart(flow, clientEvidence(flow.id, key, clock.now()), 3);
+		const started = await world.log.append(start);
+		if (started.result !== "accepted") throw new Error(started.refusal);
+		expect((await world.log.at(flow, started.position))?.finding).toEqual({
+			verdict: "verified",
+			outcome: "took",
+		});
+		const bundle = await world.log.append(clientBundle(start, started, key));
+		if (bundle.result !== "accepted") throw new Error(bundle.refusal);
+		expect((await world.log.at(flow, bundle.position))?.finding?.verdict).toBe("verified");
+		// Outside its own ceiling: forged.
+		const other = clientStart(flow, clientEvidence(flow.id, key, clock.now()), 3);
+		const second = await world.log.append(other);
+		if (second.result !== "accepted") throw new Error(second.refusal);
+		const wide = await world.log.append(clientBundle(other, second, key, { scope: "admin" }));
+		if (wide.result !== "accepted") throw new Error(wide.refusal);
+		expect((await world.log.at(flow, wide.position))?.finding?.verdict).toBe("forged");
+	});
+
+	it("takes a client's start whose evidence the Core took at the edge of its own windows, a request's time later", async () => {
+		const clock = testClock();
+		const world = await boot({ clock });
+		const flow = { of: "client", id: "svc" } as const;
+		const key = clientKey();
+		world.clients.hold({ id: flow.id, version: 3, keys: [key.jwk], self: [] });
+		const evidence = clientEvidence(flow.id, key, clock.now());
+		clock.move(5 * 60_000 + 10_000);
+		const started = await world.log.append(clientStart(flow, evidence, 3));
+		if (started.result !== "accepted") throw new Error(started.refusal);
+		expect((await world.log.at(flow, started.position))?.finding).toEqual({
+			verdict: "verified",
+			outcome: "took",
+		});
+	});
+
+	it("holds a client's start of a registry version the registry does not hold now, and forges one by another key", async () => {
+		const clock = testClock();
+		const world = await boot({ clock });
+		const flow = { of: "client", id: "svc" } as const;
+		const key = clientKey();
+		world.clients.hold({ id: flow.id, version: 3, keys: [key.jwk], self: [] });
+		const elsewhere = await world.log.append(
+			clientStart(flow, clientEvidence(flow.id, key, clock.now()), 2),
+		);
+		if (elsewhere.result !== "accepted") throw new Error(elsewhere.refusal);
+		expect((await world.log.at(flow, elsewhere.position))?.finding?.verdict).toBe("held");
+		const forged = await world.log.append(
+			clientStart(flow, clientEvidence(flow.id, clientKey(key.kid), clock.now()), 3),
+		);
+		if (forged.result !== "accepted") throw new Error(forged.refusal);
+		expect((await world.log.at(flow, forged.position))?.finding?.verdict).toBe("forged");
+	});
+
+	it("judges forged a code's start and bundle on a client's flow", async () => {
 		const world = await boot();
 		const flow = { of: "client", id: "c1" } as const;
 		const start = await world.log.append({
@@ -120,6 +188,7 @@ describe("transparency-local's judgment (j0)", () => {
 			op: "cc1",
 			stage: 1,
 			last: false,
+			elements: ["e".repeat(43)],
 			preimage: { v: 1, parent: "a1", evidence: [], content: { via: "code" } },
 		});
 		if (start.result !== "accepted") throw new Error(start.refusal);

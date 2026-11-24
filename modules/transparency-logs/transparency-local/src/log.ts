@@ -51,7 +51,15 @@ const entry = z
 		changes: ruleSchemas.changes,
 		judgment: finding,
 		parent: z.string().optional(),
-		via: z.enum(["code", "refresh"]).optional(),
+		via: z.enum(["code", "refresh", "client"]).optional(),
+		client: z
+			.object({
+				elements: z.array(z.string()),
+				version: count.optional(),
+				key: z.string().optional(),
+			})
+			.strict()
+			.optional(),
 	})
 	.strict();
 /** What each key holds: the flow's head, its judged prefix, a position's record, an op's stages. */
@@ -69,6 +77,8 @@ const shapes = {
 			abandonments: count,
 		})
 		.strict(),
+	/** An evidence element a client's start of the flow named: the op of that start. */
+	element: z.object({ op: z.string() }).strict(),
 };
 type Shape<K extends keyof typeof shapes> = z.output<(typeof shapes)[K]>;
 /** A stored value read to its shape; another shape is unavailable, never none. */
@@ -87,6 +97,7 @@ const keysOf = (flow: Flow) => {
 		prefix: key("prefix"),
 		at: (position: number) => key("at", position),
 		op: (op: string) => key("op", op),
+		element: (digest: string) => key("element", digest),
 	};
 };
 const placedOf = (at: Shape<"at">): Placed => {
@@ -113,7 +124,9 @@ const acceptedOf = (r: Placed["record"]): AppendAnswer => ({
 	acceptedAt: r.acceptedAt,
 	receipts: receiptsOf(r),
 });
-const refused = (refusal: "prevMismatch" | "sameIdOther" | "temporary"): AppendAnswer => ({
+const refused = (
+	refusal: "prevMismatch" | "sameIdOther" | "temporary" | "abandoned" | "evidenceUsed",
+): AppendAnswer => ({
 	v: 1,
 	result: "refused",
 	refusal,
@@ -145,11 +158,21 @@ export function localLog(p: {
 				throw new TypeError(
 					"transparency-local: a conditional flow's append names its previous position, an unconditional one's none",
 				);
-			if (stage.registryVersion !== undefined || stage.configVersion !== undefined)
+			// A client's start names its client's registry version, judged with no window; no other stage names one.
+			const clientStart = stage.kind === "start" && flow.of === "client";
+			if (
+				(stage.registryVersion !== undefined && !clientStart) ||
+				stage.configVersion !== undefined
+			)
 				throw new TypeError(
 					"transparency-local: a stage names a version, which no flow here holds the window of",
 				);
+			if (clientStart !== (stage.elements !== undefined))
+				throw new TypeError(
+					"transparency-local: a client's start names its evidence's elements, and no other stage does",
+				);
 			const keys = keysOf(flow);
+			const elements = (stage.elements ?? []).map((e) => keys.element(e));
 			const plaintextDigest = digest(stage.preimage);
 			const { preimage, ...named } = stage;
 			// The stage as named, its preimage by its digest: a resend differing in any field is another.
@@ -163,8 +186,11 @@ export function localLog(p: {
 					keys.op(stage.op),
 					keys.at(head + 1),
 					...abandoned,
+					...elements,
 				]);
-				const [heldHead, heldPrefix, heldOp, , heldAbandoned] = read.values;
+				const [heldHead, heldPrefix, heldOp, , ...more] = read.values;
+				const heldAbandoned = stage.abandons ? more[0] : undefined;
+				const used = more.slice(abandoned.length).map((value) => readAs("element", value));
 				if ((readAs("head", heldHead)?.head ?? 0) !== head) continue;
 				const op = readAs("op", heldOp) ?? { stages: [], abandonments: 0 };
 				const same = op.stages.find((s) => s.stage === stage.stage);
@@ -175,6 +201,10 @@ export function localLog(p: {
 					return acceptedOf(placedOf(at).record);
 				}
 				if (!unconditional && prev !== head) return refused("prevMismatch");
+				// Never placed after its op's abandonment, nor naming an element a start used: kept without end.
+				if (unconditional && stage.kind !== "abandonment" && op.abandonments > 0)
+					return refused("abandoned");
+				if (used.some((u) => u !== undefined)) return refused("evidenceUsed");
 				const position = head + 1;
 				const made = schemas.record.safeParse(
 					plain({
@@ -216,6 +246,7 @@ export function localLog(p: {
 					},
 					{ record, finding: judged.judgment } as unknown as Json,
 					...(stage.abandons ? [{ ...left, abandonments: left.abandonments + 1 }] : []),
+					...elements.map(() => ({ op: stage.op })),
 				];
 				const written = await store.write(read, next, read.now + writeWindowMs);
 				if (written === "written") return acceptedOf(record);

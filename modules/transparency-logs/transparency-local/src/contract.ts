@@ -31,6 +31,27 @@ export interface LogStore {
 
 export const logStore = contract<LogStore>("transparency-local.store");
 
+/**
+ * The registry the log's judgment reads a client by, as it holds it now: a client, and what the
+ * judgment reads of it. A wiring provides it; without one, a client's start and bundle are judged
+ * unchecked, held.
+ */
+export interface ClientRecords {
+	find(id: string): Promise<object | undefined>;
+	/** The registry version it comes from, where its source names one. */
+	version(client: object): number | undefined;
+	/** Whether its version is one its publisher signed. */
+	signed(client: object): boolean;
+	/** The public keys (JWKs) written in it. */
+	keys(client: object): readonly unknown[];
+	/** Whether its own ceiling holds the audience and the scope (space-separated), never the issuer. */
+	ceiling(client: object, audience: string, scope: string): boolean;
+}
+
+export const clientRecords = contract<ClientRecords>("transparency-local.client-records", {
+	optional: true,
+});
+
 /** What the log's place must be, each need a guarantee its wiring declares. */
 export const logStoreNeeds = Object.freeze({
 	/** A record dropped for room would free its position for another, and lose the flow's state. */

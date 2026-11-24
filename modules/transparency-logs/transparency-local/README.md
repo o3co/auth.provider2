@@ -2,7 +2,7 @@
 
 ## Responsibilities
 - Provides `transparency`'s log axis inside the Core (t0): each flow's records in its own store interface, positions counted by the store, acceptance times from the appending replica's kernel clock.
-- Judges each record as it is placed (j0), running `authority-rules` with the Core ring's verification (`keys`), passkey assertions and keys' thumbprints (`webauthn`, every algorithm a passkey may be of) and SHA-256.
+- Judges each record as it is placed (j0), running `authority-rules` with the Core ring's verification (`keys`), passkey assertions and keys' thumbprints (`webauthn`, every algorithm a passkey may be of) and SHA-256; a client's record with the client's keys and its own ceiling as `clientRecords` gives them.
 - Declares where that leaves the promise a log and a monitor outside the Core would hold.
 
 ## Not here
@@ -13,14 +13,16 @@
 ## Offers
 - Composition definition: the log axis (`transparencyLog`) and a stance (`promises`' `stances`).
 - It is never the axis's default (`neverDefault`): a composition names it for `transparency`'s axis to compose it.
+- `clientRecords` (optional; a wiring provides it, `ClientRecords`): a client as the registry holds it now, and its version, whether signed, the keys written in it and its own ceiling, as the judgment reads them.
 - `logStore`, its store interface (records by key, read, then written as one held to every version read), `logStoreNeeds` (never evicted, survives a crash and a failover, reads confirmed, authenticated) and `logStoreOver` (a store, a space, randomness, `where`, `refuse`), over `records`' records held across.
-- Operator section `transparency-local`: `origin` (required), the one origin an assertion is judged for: where `webauthn.origins` lists several, an assertion made at another is judged forged; `code-lifetime` (default `10m`), `refresh-lifetime` (default `365d`) and `issue-window` (default `1m`), the rules' times. Each no shorter than the lifetime its issuer holds, so the rules never cut an issuance short.
+- Operator section `transparency-local`: `origin` (required), the one origin an assertion is judged for: where `webauthn.origins` lists several, an assertion made at another is judged forged; `code-lifetime` (default `10m`), `refresh-lifetime` (default `365d`), `issue-window` (default `1m`) and `evidence-window` (`6m` at least, default `10m`), the rules' times, each longer than its issuer's, so the rules never cut an issuance short.
 
 ## Invariants
 - A conditional flow's append places after its head alone (`prevMismatch` else); an unconditional one's names none and places at the head. A previous position given otherwise is the writer's TypeError.
 - An op's stage placed already is answered as first placed where the stage as named (each field, and its preimage's digest) is the same, `sameIdOther` where not, before the previous position is read.
 - A record is placed in one write with the flow's head, its judged prefix and its op's stages, held to all it read: two appends after one position place one. After 8 lost races an append is `temporary`.
-- A stage naming a version is the writer's TypeError: no publisher's flow is here to give its window.
+- On a client's flow, a stage of an op whose abandonment is placed is refused `abandoned`, and a client's start naming an evidence element a start of the flow named is refused `evidenceUsed`, each after the same id's answer, in one write with the head, kept without end.
+- A client's start names its evidence's elements and its client's registry version, judged with no window (no publisher's flow is here): the client's record is read at that version alone, so one the registry holds at another now is unchecked, held. Any other stage naming a version or elements is the writer's TypeError.
 - A record's shard is its flow, its `n` its position. It names the local key alone, `local`, its hash the plaintext digest; its writer names its replica, the image `transparency-local` and the Core generation `keys` signs as. The preimage is judged, then dropped.
 - A record's acceptance time is the appending replica's clock, and the rules take no skew (ε is 0): a replica's clock must stay well under a second from the others' and the screen's, or an honest record is judged off its statement's times.
 - Each record is judged once, as placed, on its flow's judged prefix, by the settings and keys of then; one changed later judges no record again. One the rules take is forged still where the credential of a root it names is no key passkeys holds for the flow's subject.
@@ -30,10 +32,11 @@
 - A stored record of another shape is unavailable, never none. It holds nothing in process, so it is safe on many instances.
 
 ## Data
-- Per flow, in its wiring's space, kept without end: the head, the judged prefix, each position's record with its finding, and each op's stages (each with its digest as named) and abandonments.
+- Per flow, in its wiring's space, kept without end: the head, the judged prefix, each position's record with its finding, each op's stages (each with its digest as named) and abandonments, and each evidence element a client's start named.
 
 ## Depends on
 - `kernel`, `transparency`, `transparency-wire`, `authority-rules`, `keys`, `webauthn`, `passkeys` (`publicKeyOf`), `promises`, `records`, `store`; `zod`. `passkeys` and `webauthn` must be composed beside it: it takes both.
+- A JWS naming no `kid` (a DPoP proof) is verified here by the one key given (`verify.ts`), as `keys` verifies one by the key its `kid` names alone: it moves to `keys` once that reads one.
 
 ## Vocabulary
 - head: how many records a flow has. prefix: a flow's judged entries from position 1.
