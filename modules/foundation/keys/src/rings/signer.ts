@@ -67,13 +67,22 @@ const curveSignature: Readonly<Record<string, number>> = {
 };
 const edwardsSignature: Readonly<Record<string, number>> = { ed25519: 64, ed448: 114 };
 
-/** How many bytes a key's signature takes: an RSA key's modulus, a curve's coordinates, an Edwards key's. */
+/**
+ * How many bytes a key's signature takes: an RSA key's modulus, a curve's coordinates, an Edwards
+ * key's. A key of another kind is a TypeError: a length guessed short would let a token past its size.
+ */
 function signatureLengthOf(key: KeyObject): number {
 	const type = key.asymmetricKeyType ?? "";
 	const details = key.asymmetricKeyDetails;
-	if (type === "rsa" || type === "rsa-pss") return Math.ceil((details?.modulusLength ?? 0) / 8);
-	if (type === "ec") return curveSignature[details?.namedCurve ?? ""] ?? 0;
-	return edwardsSignature[type] ?? 0;
+	const modulus = details?.modulusLength;
+	const length =
+		type === "rsa" || type === "rsa-pss"
+			? modulus && Math.ceil(modulus / 8)
+			: type === "ec"
+				? curveSignature[details?.namedCurve ?? ""]
+				: edwardsSignature[type];
+	if (!length) throw new TypeError(`keys: no signature length is known for a ${type} key`);
+	return length;
 }
 
 /** Signing and verifying under a `typ`, with one ring's keys, through the holder. */
