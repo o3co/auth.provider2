@@ -25,6 +25,8 @@ export const purposes = Object.freeze({
 	authorization: "authorization",
 	creation: "creation",
 	possession: "possession",
+	passkeyAdd: "passkey-add",
+	passkeyManage: "passkey-manage",
 });
 
 /** The HPKE suite both sides seal with, as RFC 9180 names it, and the info that tells each sealing apart. */
@@ -189,10 +191,12 @@ const creation = z
 			.object({
 				/** The identifier, masked, for display alone. */
 				account: z.string(),
-				/** The evidence's value the screen computes for itself: the mail token's hash on the first key's path. */
+				/** What the evidence is: the first key's mail, an approved `passkey-add`, or a T read before signing up. */
+				basis: z.enum(["first-key", "passkey-add", "sign-up"]).optional(),
+				/** The evidence's value the screen computes for itself, by its basis. */
 				evidence: z.string().min(1),
-				/** The sealed mail request's ciphertext hash, as the Core opened it. */
-				ct_hash: z.string().min(1),
+				/** The sealed mail request's ciphertext hash, as the Core opened it: the first key's path's alone. */
+				ct_hash: z.string().min(1).optional(),
 				subject: z.string().min(1),
 				/** The key generation of the subject this creation is signed for (reset and erasure boundaries count it), bound in the signed bytes. */
 				kg: z.number().int().nonnegative(),
@@ -209,9 +213,18 @@ const creation = z
 					})
 					.strict(),
 			})
-			.strict(),
+			.strict()
+			.refine(
+				(c) => (c.basis === undefined || c.basis === "first-key") === (c.ct_hash !== undefined),
+				{
+					message: "a ciphertext hash is the first key's path's alone",
+				},
+			),
 	})
 	.strict();
+
+const management = (purpose: typeof purposes.passkeyAdd | typeof purposes.passkeyManage) =>
+	z.object({ ...common, nonce: z.string().min(1), purpose: z.literal(purpose) }).strict();
 
 /** A statement of the new key's possession: what the key's first `get()` proves. */
 const possession = z
@@ -269,6 +282,8 @@ export const payloads = Object.freeze({
 	completion,
 	creation,
 	possession,
+	passkeyAdd: management(purposes.passkeyAdd),
+	passkeyManage: management(purposes.passkeyManage),
 	startPlain,
 	mailPlain,
 	codePlain,

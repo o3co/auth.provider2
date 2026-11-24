@@ -8,11 +8,11 @@
 - How a request crosses the Front: `front-core-wire`.
 
 ## Offers
-- `typs`: the `typ` of a JAR, every statement (T and the first key's creation and possession: `approval+jwt`), the completion's answer (`completion+jwt`, apart from them), a client assertion and a DPoP proof. `purposes`: `authorization`, `creation` and `possession`.
+- `typs`: the `typ` of a JAR, every statement (T and the first key's creation and possession: `approval+jwt`), the completion's answer (`completion+jwt`, apart from them), a client assertion and a DPoP proof. `purposes`: `authorization`, `creation`, `possession`, `passkey-add` and `passkey-manage`.
 - `hpke`: the suite (`DHKEM(P-256, HKDF-SHA256)`, `HKDF-SHA256`, `AES-128-GCM`), the info of each sealing (the completion, the first key's request and its code), and `completionAad` (purpose, statement's hash): what a completion is sealed under.
 - `jarClaims`: an authorization's closed set of `items`, those a JAR must carry (`required`), and its `envelope`, the claims that are no item (`prompt` among them, which the Core reads before T is made).
 - `itemsFromJar` (payload, the JAR's hash): T's items, or an error naming the claim unknown or missing, or the value not allowed.
-- `payloads`: the schemas of T, the completion's answer, the `creation` and `possession` statements, what the Core opens of the first key's start and mail's side and the screen of the start's answer. Their types: `StatementPayload`, `CompletionPayload`, `CreationPayload`, `PossessionPayload`, `AuthorizationAnswer`, `AuthorizationItems`, `SigningKey`, `FirstKeyStage`.
+- `payloads`: the schemas of T, the completion's answer, the `creation`, `possession`, `passkeyAdd` and `passkeyManage` statements, what the Core opens of the first key's start and mail's side and the screen of the start's answer. Their types: `StatementPayload`, `CompletionPayload`, `CreationPayload`, `PossessionPayload`, `AuthorizationAnswer`, `AuthorizationItems`, `SigningKey`, `FirstKeyStage`.
 - `payloads.answers`: the answers' forms the Front carries unread, whose names `front-core-wire` gives each operation: `authorization` (②'s), `statement`, `sealed` and `nonce`.
 - `versions`: the wire versions a reader speaks (1); every statement and completion names its own as `v`. A creation's `options` name the `algorithms` the ceremony offered, as COSE numbers them, each once.
 - `keyThumbprintInput` (a JWK): what a passkey's thumbprint (RFC 7638, RFC 8037) is the SHA-256 of, the JWK's required members sorted; none for a JWK that is not a passkey's (`PasskeyJwk`).
@@ -22,6 +22,7 @@
 - A protocol (G33): types, frozen constants, fixed schemas and the functions that build by them; no I/O, clock, randomness or state.
 - Every payload refuses a field it does not know; T's items are a closed set, and a JAR with any other claim beside its envelope yields no items.
 - The identifier never goes into a statement but masked, for display alone.
+- A creation names its `basis`, which fixes what its evidence is the hash of: the mail token (`first-key`), the `passkey-add` statement the screen approved, or the T it read before signing up (`sign-up`). Only the first key's path carries `ct_hash`. A creation with no basis is the first key's, until its writer names one.
 - ②'s answer carries T, its get challenge (the base64url SHA-256 of `challengeInput(T, "get")`) and whether the screen may offer to make a passkey first (F1). The screen asks `get()` with the challenge it computes itself, comparing the answer's only to find a mismatch; `create` is unsigned, a hint the Front could rewrite, and grants nothing by itself.
 - A sealed value is `{ enc, ct }`, the words of the requests' fields: `enc` HPKE's 65-byte uncompressed point, `ct` the ciphertext with its 16-byte tag, each in its one unpadded base64url spelling. A nonce answered is 32 bytes.
 - `prompt` is the envelope's and its value is not checked here: the Core that makes T checks it first (OIDC's `none` refused), so `itemsFromJar` is never the Core's only reading of a JAR.

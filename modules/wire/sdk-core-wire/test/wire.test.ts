@@ -235,6 +235,37 @@ describe("the first key's statements", () => {
 		).toBe(false);
 	});
 
+	it("carries a ciphertext hash on the first key's path alone, by the creation's basis", () => {
+		const { ct_hash: _, ...bare } = creation.creation;
+		const with_ = (change: Record<string, unknown>, from: object = creation.creation) =>
+			payloads.creation.safeParse({ ...creation, creation: { ...from, ...change } }).success;
+		expect(with_({ basis: "first-key" })).toBe(true);
+		expect(with_({ basis: "first-key" }, bare)).toBe(false);
+		expect(with_({}, bare)).toBe(false);
+		for (const basis of ["passkey-add", "sign-up"]) {
+			expect(with_({ basis }, bare), basis).toBe(true);
+			expect(with_({ basis }), basis).toBe(false);
+		}
+		expect(with_({ basis: "other" })).toBe(false);
+	});
+
+	it("reads a passkey-add and a passkey-manage statement as the common fields, a nonce and their purpose alone", () => {
+		for (const [schema, purpose] of [
+			[payloads.passkeyAdd, purposes.passkeyAdd],
+			[payloads.passkeyManage, purposes.passkeyManage],
+		] as const) {
+			expect(schema.safeParse({ ...common, purpose }).success, purpose).toBe(true);
+			expect(schema.safeParse({ ...common, purpose: purposes.creation }).success).toBe(false);
+			expect(schema.safeParse({ ...common, purpose, extra: 1 }).success).toBe(false);
+			const { nonce: _, ...without } = common;
+			expect(schema.safeParse({ ...without, purpose }).success).toBe(false);
+		}
+		expect([purposes.passkeyAdd, purposes.passkeyManage]).toEqual([
+			"passkey-add",
+			"passkey-manage",
+		]);
+	});
+
 	it("signs every statement, T and the first key's alike, under one typ", () => {
 		expect(typs.statement).toBe("approval+jwt");
 	});
