@@ -1,3 +1,4 @@
+import { createHash, createPublicKey, verify } from "node:crypto";
 import { verifyAuthenticationResponse, verifyRegistrationResponse } from "@simplewebauthn/server";
 import {
 	cose,
@@ -6,6 +7,7 @@ import {
 	decodeCredentialPublicKey,
 	isoBase64URL,
 	isoCBOR,
+	parseAuthenticatorData,
 } from "@simplewebauthn/server/helpers";
 import type {
 	Asserted,
@@ -70,13 +72,83 @@ const refusalOf = (error: unknown): CeremonyRefusal =>
 
 const refused = (reason: CeremonyRefusal) => ({ kind: "refused" as const, reason });
 
+/** Whether a challenge is 32 bytes in their one unpadded base64url spelling. */
+const isChallenge = (challenge: unknown): challenge is string =>
+	typeof challenge === "string" &&
+	/^[A-Za-z0-9_-]{43}$/.test(challenge) &&
+	Buffer.from(challenge, "base64url").toString("base64url") === challenge;
+
 /** The challenge given, which is 32 bytes in their one unpadded base64url spelling; throws on any other value. */
 function given(challenge: unknown): string {
-	const spelt = typeof challenge === "string" && /^[A-Za-z0-9_-]{43}$/.test(challenge);
-	if (spelt && Buffer.from(challenge, "base64url").toString("base64url") === challenge) {
-		return challenge;
-	}
+	if (isChallenge(challenge)) return challenge;
 	throw new TypeError("a challenge is 32 bytes, unpadded base64url");
+}
+
+/** Why client data's frame is refused, by the pages that may frame a ceremony; none where it is not. */
+function frameRefusal(
+	data: Readonly<Record<string, unknown>>,
+	topOrigins: readonly string[],
+): CeremonyRefusal | undefined {
+	// With no page listed, a frame is refused even when the browser names no page.
+	if (data.crossOrigin === true && topOrigins.length === 0) return "top-origin";
+	if (data.topOrigin === undefined) return undefined;
+	const listed = typeof data.topOrigin === "string" && topOrigins.includes(data.topOrigin);
+	return data.crossOrigin === true && listed ? undefined : "top-origin";
+}
+
+/** A P-256 key from its uncompressed point in base64url (0x04, x, y); throws for any other value. */
+function pointKey(point: string) {
+	if (!/^[A-Za-z0-9_-]+$/.test(point)) throw new TypeError("no point");
+	const bytes = Buffer.from(point, "base64url");
+	if (bytes.length !== 65 || bytes[0] !== 4) throw new TypeError("no uncompressed point");
+	const x = bytes.subarray(1, 33).toString("base64url");
+	const y = bytes.subarray(33).toString("base64url");
+	return createPublicKey({ key: { kty: "EC", crv: "P-256", x, y }, format: "jwk" });
+}
+
+const statuses: readonly unknown[] = ["present", "supported", "notSupported"];
+
+/**
+ * The evidence check: an ES256 assertion's credential where it verifies by the point given, for the
+ * challenge and origin, at the relying party, with the user present and verified; none otherwise.
+ * It reads what the library reads, as `assert` does, and no count, backup state or handle.
+ */
+function evidenceCheck(rp: RelyingParty): Ceremonies["verifyAssertion"] {
+	const rpIdHash = createHash("sha256").update(rp.id).digest();
+	const taken = rp.algorithms.includes("ES256");
+	const verified = (assertion: string, point: string, challenge: string, origin: string) => {
+		if (!taken || !isChallenge(challenge)) return undefined;
+		const key = pointKey(point);
+		const sent = JSON.parse(assertion);
+		const { id, rawId, type, response } = sent ?? {};
+		if (typeof id !== "string" || id === "" || id !== rawId || type !== "public-key")
+			return undefined;
+		const data = clientDataOf(sent);
+		if (data?.type !== "webauthn.get" || data.challenge !== challenge) return undefined;
+		if (data.origin !== origin || frameRefusal(data, rp.topOrigins)) return undefined;
+		const binding = data.tokenBinding as { status?: unknown } | undefined;
+		if (binding !== undefined && !statuses.includes(binding?.status)) return undefined;
+		const { authenticatorData, signature, clientDataJSON } = response;
+		if (![authenticatorData, signature].every((s) => isoBase64URL.isBase64URL(s))) return undefined;
+		const authData = isoBase64URL.toBuffer(authenticatorData);
+		const { rpIdHash: named, flags } = parseAuthenticatorData(authData);
+		if (!Buffer.from(named).equals(rpIdHash) || !flags.up || !flags.uv) return undefined;
+		const clientDataHash = createHash("sha256")
+			.update(isoBase64URL.toBuffer(clientDataJSON))
+			.digest();
+		const signed = Buffer.concat([authData, clientDataHash]);
+		return verify("sha256", signed, key, isoBase64URL.toBuffer(signature))
+			? { credential: id }
+			: undefined;
+	};
+	return (assertion, point, challenge, origin) => {
+		// Anything it cannot read, the key included, is evidence that does not verify.
+		try {
+			return verified(assertion, point, challenge, origin);
+		} catch {
+			return undefined;
+		}
+	};
 }
 
 /** The verification asked: weakened only where `preferred` or `discouraged` is, `required` for any other value. */
@@ -142,11 +214,7 @@ export function ceremoniesFor(rp: RelyingParty): Ceremonies {
 		const data = clientDataOf(response);
 		if (!data) return "malformed";
 		if (data.challenge !== challenge) return "challenge";
-		// With no page listed, a frame is refused even when the browser names no page.
-		if (data.crossOrigin === true && rp.topOrigins.length === 0) return "top-origin";
-		if (data.topOrigin === undefined) return undefined;
-		const listed = typeof data.topOrigin === "string" && rp.topOrigins.includes(data.topOrigin);
-		return data.crossOrigin === true && listed ? undefined : "top-origin";
+		return frameRefusal(data, rp.topOrigins);
 	};
 	const expected = (challenge: string, v: Verification | undefined) => ({
 		expectedChallenge: challenge,
@@ -155,6 +223,7 @@ export function ceremoniesFor(rp: RelyingParty): Ceremonies {
 		requireUserVerification: verificationOf(v) === "required",
 	});
 	return {
+		verifyAssertion: evidenceCheck(rp),
 		creation: (challenge, user, exclude, v, asked = {}) => {
 			const discoverable = asked.discoverable ?? true;
 			return {

@@ -64,6 +64,18 @@ export interface Ceremonies {
 		credential: Credential,
 		v?: Verification,
 	): Promise<Asserted>;
+	/**
+	 * Evidence checked at once and against no credential state (authority-rules' `Checks.verifyAssertion`):
+	 * `assertion` the JSON of an assertion response, `publicKey` an uncompressed P-256 point in base64url.
+	 * The assertion's credential id where it verifies, as `assert` requiring verification would, for
+	 * `challenge` and `origin`; none otherwise, never a throw.
+	 */
+	verifyAssertion(
+		assertion: string,
+		publicKey: string,
+		challenge: string,
+		origin: string,
+	): { readonly credential: string } | undefined;
 }
 
 export const ceremonies = contract<Ceremonies>("webauthn.ceremonies");
