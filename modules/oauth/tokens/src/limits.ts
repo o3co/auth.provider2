@@ -20,6 +20,31 @@ export function lifetimeOf(asked: number | undefined, configured: number): numbe
 	throw new RangeError("tokens: a lifetime asked is 2 to 86400 whole seconds");
 }
 
+/** When a token is issued, in epoch ms: the time its issuance was accepted where given, else now. */
+export function issuedAtOf(acceptedAt: number | undefined, now: () => number): number {
+	if (acceptedAt === undefined) return now();
+	if (Number.isSafeInteger(acceptedAt) && acceptedAt >= 0) return acceptedAt;
+	throw new RangeError("tokens: an acceptance time is whole epoch milliseconds");
+}
+
+/** The most bytes a signature of each algorithm takes; RS256's at a 4096-bit modulus, the widest a KMS holds. */
+const signatureBytes: Readonly<Record<string, number>> = { ES256: 64, EdDSA: 114, RS256: 512 };
+
+/**
+ * The length of the compact token the texts make once signed under `alg`, at most: each part's
+ * base64url without padding, the signature's at its widest; an algorithm not known counts 1 KiB.
+ */
+export function compactLength(headerText: string, claimsText: string, alg: string): number {
+	const encoded = (bytes: number) => Math.ceil((bytes * 4) / 3);
+	const signature = Object.hasOwn(signatureBytes, alg) ? (signatureBytes[alg] ?? 1024) : 1024;
+	return (
+		encoded(Buffer.byteLength(headerText)) +
+		encoded(Buffer.byteLength(claimsText)) +
+		encoded(signature) +
+		2
+	);
+}
+
 /** iat and exp in epoch seconds: the lifetime from now, capped at `notAfter` (epoch ms), never before iat. */
 export function expiryOf(nowMs: number, lifetimeSeconds: number, notAfter?: number) {
 	const iat = Math.floor(nowMs / 1000);

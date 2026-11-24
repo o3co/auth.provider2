@@ -22,7 +22,7 @@
   - `keys-publish` adds no path itself, unlike `discovery-publish`: given the directory alone, `jwks_uri` answers 404.
 - Two handles. `accessTokenIssuance` (`AccessTokenIssuance`: `admits`, `prepare`, `sign`, `issue` and `accessTokenLifetimeSeconds`, `issuance`' card's) is taken only by a module that declares where it stands on the promises (`takersContribute`, `promises`' `stances`); one declaring nothing refuses boot. `accessTokens` (`Tokens`: checking and revoking) is taken by any.
 - Its own stance, as `accessTokenSigning` asks of its taker: it breaks `core-compromise-contained`, as an access token carries no receipt of the transparency log.
-- Operator section: `access-token-lifetime` (written with its unit, `2s` to `1d` in whole seconds, default `5m`, counted from when `issue` is asked, the policies' wait included; a token it leaves less than a second once signed is refused, as `issuance`' card says).
+- Operator section: `access-token-lifetime` (written with its unit, `2s` to `1d` in whole seconds, default `5m`, counted from its `iat`, the policies' wait included; a token it leaves less than a second once signed is refused, as `issuance`' card says).
 - Operator section, beside it: `revocation` (`denylist` or `unsupported`), `issuance-timeout` (written with its unit, `1s` to `1m`, default `10s`), `subject-check` (`none` states that no module checks subjects), `added-claims` (`added-claims`' limits, each raised only).
 - `./testing`: the contract test every implementation passes, configuration builders, and a stand-in: in memory, unsigned, ending and reading bindings as `tokens` does.
 
@@ -32,7 +32,7 @@
 - Unavailable keys, store or checks answer unavailable, never a negative verdict.
 - Added claims are the grant's statement: signed with the rest, a resource cannot tell them from the provider's, so composing a grant trusts it with its tokens' content.
 - An added claim follows `added-claims`' rules, its shape, reserved names and limits, and `claims`'; one outside them is the grant's maker's mistake (TypeError at `issue`, `prepare` and `admits`, a 500 with no audit).
-- An access token's `iat`, its end, what is left of it, and its refusal and warning past 16 KiB once signed are `issuance`' card's; its standing time, `standing`'s.
+- An access token's `iat`, its end, what is left of it, and its refusal at `prepare` and warning past 16 KiB once signed are `issuance`' card's; its standing time, `standing`'s.
 
 ## Depends on
 - `kernel`, `keys`, `issuer`, `sender-binding`, `added-claims`, `token-denylist`, `promises`

@@ -132,7 +132,7 @@ describe("the subject's kind and the names tokens writes, as issuing reads them"
 	const made = { headerText: "{}", claimsText: "{}" };
 	const { admits, prepare } = issuing(
 		allowed,
-		() => ({ ...made, signed: async () => ({ kind: "too-large" }) }),
+		() => ({ kind: "too-large" }),
 		() => 0,
 		addedClaimsWith(addedClaimsLimits.parse({})).of,
 	);

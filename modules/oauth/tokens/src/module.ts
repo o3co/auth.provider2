@@ -24,7 +24,7 @@ import {
 	judging,
 	type MakeAccess,
 } from "./issuance/issuance.ts";
-import { expiryOf, keptGrant, lifetimeOf, tokenId } from "./limits.ts";
+import { compactLength, expiryOf, keptGrant, lifetimeOf, tokenId } from "./limits.ts";
 import { namedBy } from "./reference.ts";
 import { section } from "./section.ts";
 import { standingOf } from "./standing/standing.ts";
@@ -137,6 +137,20 @@ export default defineModule(
 				};
 				const prepared = signing.prepare();
 				const claimsText = JSON.stringify(claims);
+				// Its standard claims have no cap of their own: one that would pass what tokens reads once
+				// signed is never made, but refused, the operator told its size and the names of the claims
+				// a grant added.
+				const length = compactLength(prepared.headerText, claimsText, prepared.header.alg);
+				if (length > compactLimit) {
+					c.log.warn("tokens.token_too_large", {
+						length,
+						limit: compactLimit,
+						claims: Object.keys(grant.claims ?? {})
+							.sort()
+							.join(","),
+					});
+					return { kind: "too-large" as const };
+				}
 				return {
 					headerText: prepared.headerText,
 					claimsText,
@@ -145,19 +159,6 @@ export default defineModule(
 						// The keys' holder no longer lets this Core sign: nothing can be issued.
 						if (signed.kind === "withdrawn") throw new Unavailable("tokens");
 						const token = signed.jws;
-						// Its standard claims have no cap of their own: one past what tokens reads is never
-						// handed out, but refused, the operator told its size and the names of the claims a
-						// grant added.
-						if (token.length > compactLimit) {
-							c.log.warn("tokens.token_too_large", {
-								length: token.length,
-								limit: compactLimit,
-								claims: Object.keys(grant.claims ?? {})
-									.sort()
-									.join(","),
-							});
-							return { kind: "too-large" as const };
-						}
 						// Nothing kept: a token is signed and handed back, no store or record written.
 						return {
 							access: {

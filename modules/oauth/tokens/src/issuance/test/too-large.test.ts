@@ -24,7 +24,7 @@ const grant: AccessGrant = {
 };
 
 describe("a token past 16 KiB once signed", () => {
-	it("refuses an issuance whose token would pass 16 KiB once signed, warning its size and the added claims' names, never a value", async () => {
+	it("refuses at prepare an issuance whose token would pass 16 KiB once signed, warning its size and the added claims' names, never a value", async () => {
 		const logged = recordingLog();
 		const app = await assemble({
 			modules: [...composedModules, revokedInMemory(() => runtime.clock.now()).module],
@@ -42,14 +42,20 @@ describe("a token past 16 KiB once signed", () => {
 			scope: Array.from({ length: 2000 }, (_, i) => `scope-${i}`),
 			claims: { x_secret_kept: "s3cr3t" },
 		};
-		expect(await bothOf(app).issue({ grant: wide, grantType: "test" })).toEqual({
+		const refused = {
 			kind: "refused",
 			policy: "tokens",
 			reason: "token_too_large",
 			description: "too large",
-		});
+		};
+		// Refused at prepare, before anything is recorded or signed.
+		expect(await bothOf(app).prepare({ grant: wide, grantType: "test" })).toEqual(refused);
+		expect(await bothOf(app).issue({ grant: wide, grantType: "test" })).toEqual(refused);
 		const warned = logged.lines().filter((l) => l.event === "tokens.token_too_large");
-		expect(warned).toMatchObject([{ fields: { limit: 16_384, claims: "x_secret_kept" } }]);
+		expect(warned).toMatchObject([
+			{ fields: { limit: 16_384, claims: "x_secret_kept" } },
+			{ fields: { limit: 16_384, claims: "x_secret_kept" } },
+		]);
 		expect(Number(warned[0]?.fields.length)).toBeGreaterThan(16_384);
 		expect(JSON.stringify(logged.lines())).not.toContain("s3cr3t");
 	});

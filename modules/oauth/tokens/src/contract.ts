@@ -141,6 +141,11 @@ export interface IssueLimits {
 	readonly notAfter?: number;
 	readonly binding?: Binding;
 	readonly lifetimeSeconds?: number;
+	/**
+	 * Whole epoch ms: when the issuance was accepted, as the record it is issued under says. The
+	 * token's `iat`, its lifetime running from it; none: when `prepare` is asked. Any other is a RangeError.
+	 */
+	readonly acceptedAt?: number;
 }
 
 /**
@@ -181,18 +186,19 @@ export interface AccessTokenIssuance {
 	admits(request: IssuanceRequest): Promise<Admitted>;
 	/**
 	 * Issues once every policy, its own first, allows it; throws Unavailable when one cannot tell.
-	 * The token's `iat` is when `issue` was asked, before the policies are, and its lifetime runs
-	 * from there, their wait included; what it answers is left runs from signing. Refuses, as its
-	 * own rule, a token with less than a second left once signed, its cap passed, its lifetime spent
-	 * in the policies' wait or its signing slow: policy `tokens`, reason `no_lifetime_left`, the
-	 * client's word `expired`; and one past 16 KiB once signed, which it does not read: reason
-	 * `token_too_large`, the client's word `too large`. Such a token is handed to no one, and nothing
-	 * of it is kept.
+	 * The token's `iat` is the limits' `acceptedAt`, else when `issue` was asked, before the policies
+	 * are, and its lifetime runs from there, their wait included; what it answers is left runs from
+	 * signing. Refuses, as its own rule, one that would pass 16 KiB once signed, which it does not
+	 * read: reason `token_too_large`, the client's word `too large`; and a token with less than a
+	 * second left once signed, its cap passed, its lifetime spent in the policies' wait or its signing
+	 * slow: policy `tokens`, reason `no_lifetime_left`, the client's word `expired`. Such a token is
+	 * handed to no one, and nothing of it is kept.
 	 */
 	issue(request: IssuanceRequest, limits?: IssueLimits): Promise<Issued>;
 	/**
 	 * `issue`'s first half: judged as `issue` judges, the header and claims fixed and nothing signed,
-	 * so a caller can record their texts before the token exists.
+	 * so a caller can record their texts before the token exists. A token that would pass 16 KiB once
+	 * signed is refused here.
 	 */
 	prepare(
 		request: IssuanceRequest,
@@ -200,7 +206,8 @@ export interface AccessTokenIssuance {
 	): Promise<PreparedAccess | IssuanceRefused>;
 	/**
 	 * `issue`'s second half: signs what this `tokens` prepared, as prepared, and answers as `issue`
-	 * does. A value it did not prepare is the caller's TypeError. It may sign one again.
+	 * does, refusing only a token with less than a second left; a signing withdrawn is unavailable.
+	 * A value it did not prepare is the caller's TypeError. It may sign one again.
 	 */
 	sign(prepared: PreparedAccess): Promise<Issued>;
 }

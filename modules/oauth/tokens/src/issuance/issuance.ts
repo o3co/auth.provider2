@@ -11,7 +11,7 @@ import type {
 	PreparedAccess,
 	Tokens,
 } from "../contract.ts";
-import { actorSnapshot } from "../limits.ts";
+import { actorSnapshot, issuedAtOf } from "../limits.ts";
 
 /** How far ahead of the clock an authentication time may be, as 0.17 allowed. */
 export const authenticatedAheadMs = 300_000;
@@ -74,19 +74,17 @@ export function judging(
 export interface MadeAccess {
 	readonly headerText: string;
 	readonly claimsText: string;
-	signed(): Promise<
-		{ readonly access: IssuedAccess; readonly keep?: () => void } | { readonly kind: "too-large" }
-	>;
+	signed(): Promise<{ readonly access: IssuedAccess; readonly keep?: () => void }>;
 }
 
-/** The making once the judgment allows it; `askedAt`, before the policies, is the token's `iat`. */
+/** The making once the judgment allows it, `askedAt` the token's `iat`; none for a token past what tokens reads once signed. */
 export type MakeAccess = (
 	grant: IssuanceRequest["grant"],
 	askedAt: number,
 	limits?: IssueLimits,
-) => MadeAccess;
+) => MadeAccess | { readonly kind: "too-large" };
 
-/** tokens' own refusal of a token past what it reads once signed: handed to no one. */
+/** tokens' own refusal of a token past what it reads once signed: made into none. */
 const tooLarge = {
 	kind: "refused",
 	policy: "tokens",
@@ -145,11 +143,12 @@ export function issuing(
 		const taken = deepFreeze(
 			structuredClone({ request: checkedRequest(request, addedOf), limits }),
 		);
-		// When it was asked, with that copy: the token's iat, so the policies' wait cannot move it past a boundary.
-		const askedAt = now();
+		// Accepted, or asked, with that copy: the token's iat, so the policies' wait moves it past no boundary.
+		const askedAt = issuedAtOf(taken.limits?.acceptedAt, now);
 		const judged = await judge(taken.request);
 		if (judged.kind === "refused") return judged;
 		const access = make(taken.request.grant, askedAt, taken.limits);
+		if ("kind" in access) return tooLarge;
 		const { headerText, claimsText } = access;
 		const prepared = Object.freeze({ kind: "prepared" as const, headerText, claimsText });
 		made.set(prepared, access);
@@ -158,9 +157,7 @@ export function issuing(
 	const sign: AccessTokenIssuance["sign"] = async (prepared) => {
 		const access = made.get(prepared);
 		if (!access) throw new TypeError("tokens: only an access token this prepared is signed");
-		const signed = await access.signed();
-		if ("kind" in signed) return tooLarge;
-		const { access: issued, keep } = signed;
+		const { access: issued, keep } = await access.signed();
 		// Less than a second left once signed, its end come, its cap passed or its signing slow: handed
 		// to no one, and nothing of it kept.
 		const leftMs = issued.expiresAt - now();
