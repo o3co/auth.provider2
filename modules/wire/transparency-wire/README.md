@@ -11,16 +11,16 @@
 - How people's keys sign a stop instruction, a restart approval or a change of their signer set: not yet decided; their `typ` claims no JWS.
 
 ## Offers
-- `speaks`: the wire versions, each object's `v`. `logTyps`: the `typ` of each signed object: receipt, judgment, checkpoint, status, status reasons, stateOf, and each signed record body.
+- `speaks`: the wire versions, each object's `v`. `logTyps`: the `typ` of each signed object: receipt, judgment, checkpoint, status, status reasons, stateOf, each signed record body, and the callback's proof.
 - `recordKinds`: the record kinds by writer role (`core`, `monitor`, `publisher`, `human`, `log`). `flows`: a flow's `units` and the `unconditional` one (`client`).
 - `appendRefusals`: the log's refusals. `judgments`: `verdicts` and `outcomes`. `statusWords`: `shardStates` and `denyReasons`.
-- `tokens`: the receipt claim `txr`, the `frames`, `parse` (text), the one JSON reading, and `digestInput` (header text, claims text): what a token's digest covers. `sealing`: the HPKE suite, `info` and `aad` (flow, op, stage) of a preimage.
+- `tokens`: the receipt claim `txr`, the `frames`, `parse` (text), the one JSON reading, `digestInput` (header text, claims text): what a token's digest covers, `ecThumbprintInput` (a P-256 JWK): `esig`'s RFC 7638 input, and `checks`: the frames a receipt check reads and the faults of R16–R18. `sealing`: the HPKE suite, `info` and `aad` (flow, op, stage) of a preimage.
 - `signers`: the generation flow's counts. `opIds`: `stop` (generation) and `abandonment` (op, attempt).
-- `schemas`: `appendRequest`, `appendAnswer`, `record`, `receipt`, `judgment`, `checkpoint`, `status`, `statusReasons`, `stateOf`, `preimage`, `recordRef`, `signerSet`, `bodies`, each record body no Core writer writes, and `signedRecord`, such a record read with its verified body.
-- Types: `AppendRequest`, `AppendAnswer`, `LogRecord`, `Receipt`, `Judgment`, `Checkpoint`, `Status`, `StatusReasons`, `StateOf`, `Preimage`, `RecordRef`, `SignerSet`, `Writer`, `Flow`, `Verdict`, `StageOutcome`.
+- `schemas`: `appendRequest`, `appendAnswer`, `record`, `receipt`, `judgment`, `checkpoint`, `status`, `statusReasons`, `stateOf`, `preimage`, `recordRef`, `signerSet`, `bodies`, each record body no Core writer writes, `signedRecord`, such a record read with its verified body, and the callback's `callbackHeader` and `callbackProof` (A38) and an ID token's `idTokenEvidence` (`esig`, `apr`).
+- Types: `AppendRequest`, `AppendAnswer`, `LogRecord`, `Receipt`, `Judgment`, `Checkpoint`, `Status`, `StatusReasons`, `StateOf`, `Preimage`, `RecordRef`, `SignerSet`, `Writer`, `Flow`, `Verdict`, `StageOutcome`, `ReceiverKey`, `ReceiptFault`, `CallbackFault`, and the receivers' inputs `ReceiptCheck` (R16, R17) and `CallbackCheck` (R18).
 
 ## Invariants
-- A protocol (G33): types, frozen constants, fixed schemas and the functions that build by them; no I/O, clock, randomness or state. Every schema refuses an object whose `v` is not one `speaks` names, and a field it does not know, but in the `ext` of a status and a checkpoint: there the later stages add their fields without a new version, and a reader ignores a name it does not know.
+- A protocol (G33): types, frozen constants, fixed schemas and the functions that build by them; no I/O, clock, randomness or state. Every schema refuses an object whose `v` (where it has one) is not one `speaks` names, and a field it does not know, but in the `ext` of a status and a checkpoint: there the later stages add their fields without a new version, and a reader ignores a name it does not know.
 - A record names its writer role's kinds alone. A Core writer's record carries its preimage sealed to each key of the monitors' set and, once committed, each ciphertext's hash and the key set's version the log checked; any other writer's carries its signed body. A `monitor` flow's id is its shard's.
 - A conditional flow's append names the previous position, the record's position being one past it; an unconditional flow's names none.
 - For an id already accepted with the same content, the log answers the original receipt before it checks the previous position, so `prevMismatch` says the record is not on the log and never will be; the same id with other content is `sameIdOther`.
@@ -30,7 +30,8 @@
 - A signer set's version only grows per purpose; a reader takes none older than the one it holds. A stop instruction is signed by one key, a restart approval by two of three or more. The install approval names no previous position, generation nor evidence.
 - A token's digest is made from its texts, read by `parse`, which refuses a key named twice at any depth and a number past a double; no reader digests a token another way.
 - A stateOf gives every position's result, from 1 to its position.
-- Digests are SHA-256, base64url; times are milliseconds since the epoch.
+- A callback's proof is ES256 under E_sig, its header carrying the key; its `code_hash` is the code's whole UTF-8 SHA-256 (not OIDC's `c_hash`), its `iat` the device's clock, which no freshness rests on. `esig`'s input takes a P-256 key of exactly `crv`, `kty`, `x`, `y`, each coordinate 32 bytes in 43 canonical characters and the two a point of the curve.
+- Digests are SHA-256, base64url; times are milliseconds since the epoch, but a proof's `iat`, in seconds.
 
 ## Depends on
 - Nothing in the workspace; `zod` (a peer).

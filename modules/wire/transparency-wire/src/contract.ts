@@ -29,6 +29,8 @@ export const logTyps = Object.freeze({
 	/** Signed by people's keys, in an encoding not yet decided: no `+jwt`, as it may be no JWS. */
 	stopInstruction: "stop-instruction",
 	restartApproval: "restart-approval",
+	/** The callback's proof the login screen signs with E_sig (A38). */
+	callback: "callback+jwt",
 });
 
 /** The record kinds, by the writer role that may write each; a role writes no other kind. */
@@ -181,7 +183,34 @@ export const opIds = Object.freeze({
 const isObject = (x: unknown): x is Record<string, unknown> =>
 	x !== null && typeof x === "object" && !Array.isArray(x);
 
-/** The token receipt gate: the claim a token carries its receipt in, the frames, the one JSON reading, and what a token's digest covers. */
+/** P-256's field prime and its curve's b (a = -3). */
+const p256 = Object.freeze({
+	p: 0xffffffff00000001000000000000000000000000ffffffffffffffffffffffffn,
+	b: 0x5ac635d8aa3a93e7b3ebbd55769886bc651d06b0cc53b0f63bce3c3e27d2604bn,
+});
+const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+/** A 32-byte value from its 43 base64url characters, the last one's two spare bits zero; none for any other. */
+function coordinate(text: unknown): bigint | undefined {
+	if (typeof text !== "string" || text.length !== 43) return undefined;
+	let value = 0n;
+	for (const char of text) {
+		const at = alphabet.indexOf(char);
+		if (at < 0) return undefined;
+		value <<= 6n;
+		for (let bit = 32, big = 32n; bit >= 1; bit >>= 1, big >>= 1n) if (at & bit) value |= big;
+	}
+	return (value & 3n) === 0n ? value >> 2n : undefined;
+}
+const modP = (n: bigint) => ((n % p256.p) + p256.p) % p256.p;
+/** Whether the coordinates name a point of P-256: each below the prime, y² = x³ − 3x + b. */
+const onP256 = (x: bigint, y: bigint) =>
+	x < p256.p && y < p256.p && modP(y * y) === modP(x * x * x - 3n * x + p256.b);
+
+/**
+ * The token receipt gate: the claim a token carries its receipt in, the frames, the one JSON
+ * reading, what a token's digest covers, the input of an ID token's `esig`, and the words of the
+ * receivers' checks (R16–R18).
+ */
 export const tokens = Object.freeze({
 	claim: "txr",
 	frames: Object.freeze(["accessToken", "idToken", "family"] as const),
@@ -202,6 +231,47 @@ export const tokens = Object.freeze({
 		if (!isObject(h.value) || !isObject(c.value)) return { error: "not_object" };
 		return { input: canonicalJson({ header: h.value, claims: { ...c.value, txr: undefined } }) };
 	},
+	/**
+	 * A P-256 key's RFC 7638 thumbprint input (its members sorted, no whitespace), the thumbprint
+	 * being this text's SHA-256: `esig`'s. None for a key of other members, kind or curve, or whose x
+	 * or y is not 32 bytes in canonical base64url, or is no point of the curve: a key exported with
+	 * more members (`kid`, `alg`, `ext`, `key_ops`) is trimmed to these four first.
+	 */
+	ecThumbprintInput: (jwk: unknown): string | undefined => {
+		if (!isObject(jwk) || Object.keys(jwk).sort().join() !== "crv,kty,x,y") return undefined;
+		if (jwk.kty !== "EC" || jwk.crv !== "P-256") return undefined;
+		const x = coordinate(jwk.x);
+		const y = coordinate(jwk.y);
+		if (x === undefined || y === undefined || !onP256(x, y)) return undefined;
+		return `{"crv":"P-256","kty":"EC","x":"${jwk.x}","y":"${jwk.y}"}`;
+	},
+	/**
+	 * The receivers' checks: the frames a receipt check (R16, R17) reads, and each check's faults,
+	 * the first that holds named. A receipt: none in the token (`noReceipt`); one not signed by the
+	 * log or of another shape (`receipt`); its digest not the token's (`digest`); not a bundle's of
+	 * the frame (`kind`); another flow (`flow`); older than `maxAge` allows (`tooOld`); its `n` past
+	 * the status's W_s (`notYetChecked`: fetch the status again and take nothing until it covers
+	 * it); in the not-accepted ids (`denied`); a status not signed by enough of its set
+	 * (`status`). A callback: the proof unreadable or unsigned (`proof`); its key's thumbprint not
+	 * the ID token's `esig` (`key`); its `apr` not the ID token's (`apr`); `iss`, `client_id`,
+	 * `state` or `code_hash` not the expected (`field`). Fetching the status every τ_sdk and keeping
+	 * each signer set's newest version are the SDK's.
+	 */
+	checks: Object.freeze({
+		frames: Object.freeze(["idToken", "accessToken"] as const),
+		receiptFaults: Object.freeze([
+			"noReceipt",
+			"receipt",
+			"digest",
+			"kind",
+			"flow",
+			"tooOld",
+			"notYetChecked",
+			"denied",
+			"status",
+		] as const),
+		callbackFaults: Object.freeze(["proof", "key", "apr", "field"] as const),
+	}),
 });
 
 const v = z.literal(speaks[0]);
@@ -226,6 +296,10 @@ const publicKey = z
 	})
 	.strict();
 const keyed = <K extends z.ZodType>(key: K) => z.object({ kid: id, key }).strict();
+/** A P-256 key held to the thumbprint's form: x and y 32 bytes in canonical base64url, a point of the curve. */
+const p256Key = ecKey.refine((key) => tokens.ecThumbprintInput(key) !== undefined, {
+	message: "x and y are no point of P-256 in canonical base64url",
+});
 
 /** The suite a Core writer seals a preimage to a monitor key with, as RFC 9180 names it, its info and additional data. */
 export const sealing = Object.freeze({
@@ -563,7 +637,13 @@ const signerSet = z
 		v,
 		/** Only grows, per purpose: a reader takes no set older than the one it holds. */
 		version: ordinal,
-		purpose: z.enum(Object.keys(logTyps) as [keyof typeof logTyps, ...(keyof typeof logTyps)[]]),
+		// Every signed object's typ but the callback's proof, which E_sig signs and no set.
+		purpose: z.enum(
+			Object.keys(logTyps).filter((name) => name !== "callback") as [
+				Exclude<keyof typeof logTyps, "callback">,
+				...Exclude<keyof typeof logTyps, "callback">[],
+			],
+		),
 		keys: z
 			.array(keyed(publicKey))
 			.min(1)
@@ -619,6 +699,17 @@ const signedRecord = z
 			fail("a restart's body names its previous position; the install approval sits at 1");
 	});
 
+/** The callback's proof (A38): its header, E_sig's public key in it. */
+const callbackHeader = z
+	.object({ alg: z.literal("ES256"), typ: z.literal(logTyps.callback), jwk: p256Key })
+	.strict();
+/** Its body: the issuer, the client, the state, the code's whole UTF-8 SHA-256, ⑤'s record, and the device's time in seconds (no freshness rests on it). */
+const callbackProof = z
+	.object({ iss: id, client_id: id, state: id, code_hash: digest, apr: recordRef, iat: count })
+	.strict();
+/** An ID token's evidence claims, the two taken out of its claims and read alone: the thumbprint of the approved T's E_sig, and the approval's record. */
+const idTokenEvidence = z.object({ esig: digest, apr: recordRef }).strict();
+
 /** The schemas, as each side reads what it received or verified to them. */
 export const schemas = Object.freeze({
 	appendRequest,
@@ -636,6 +727,9 @@ export const schemas = Object.freeze({
 	/** The signed bodies of the records no Core writer writes, each with its `typ`. */
 	bodies,
 	signedRecord,
+	callbackHeader,
+	callbackProof,
+	idTokenEvidence,
 });
 
 export type AppendRequest = z.infer<typeof appendRequest>;
@@ -654,3 +748,45 @@ export type Writer = z.infer<typeof writer>;
 export type Flow = z.infer<typeof flow>;
 export type Verdict = z.infer<typeof verdict>;
 export type StageOutcome = z.infer<typeof outcome>;
+/** A public key a receiver holds, as a key set carries it. */
+export type ReceiverKey = z.infer<typeof publicKey>;
+export type ReceiptFault = (typeof tokens.checks.receiptFaults)[number];
+export type CallbackFault = (typeof tokens.checks.callbackFaults)[number];
+
+/** R16 (an ID token) and R17 (an access token): what a receiver reads to take a token by its receipt. */
+export interface ReceiptCheck {
+	/** A token already verified the standard way: its issuer's JWKS signature, `iss`, `aud`, `exp`. */
+	readonly token: string;
+	readonly frame: (typeof tokens.checks.frames)[number];
+	/** The flow the token must be of: a person's token its `sub`'s subject flow, a client's its client flow. */
+	readonly flow: Flow;
+	/** The newest status the receiver holds. */
+	readonly status: string;
+	/** The log's keys, fixed from C1's source. */
+	readonly logKeys: readonly ReceiverKey[];
+	/** The status's signer set and how many of it must sign. */
+	readonly statusSigners: { readonly keys: readonly ReceiverKey[]; readonly required: number };
+	/** The receiver's clock, ms. */
+	readonly now: number;
+	/** σ: the most the receiver's clock and the log's differ by, ms. */
+	readonly skew: number;
+	/** R17: a token's life counted from its receipt's time; R16: the oldest a receipt may be. ms. */
+	readonly maxAge: number;
+}
+
+/** R18 (an `openid` client): the callback's proof, read against the ID token that passed R16. */
+export interface CallbackCheck {
+	readonly proof: string;
+	readonly idToken: {
+		readonly esig: string;
+		readonly apr: RecordRef;
+		readonly iss: string;
+		readonly aud: string;
+	};
+	readonly expected: {
+		readonly iss: string;
+		readonly client_id: string;
+		readonly state: string;
+		readonly code: string;
+	};
+}
