@@ -30,7 +30,7 @@
 
 ## Data
 - Its part of each subject's flow, in the frames' store: the keys and the notices of keys gone (written by the Step), the reservation, and what the last settle told of; an erasure boundary empties the keys.
-- Credential records by credential id, kept without end through the passkey store. After a subject's erasure, the binding to its subject and the count remain, as the log keeps the key on the subject's flow; the details (handle, transports, backup state) go at the settle that finds the key gone.
+- Credential records by credential id, kept without end through the passkey store. After a subject's erasure, the binding to its subject and the count remain, as the log keeps the key on the subject's flow; the details (handle, transports, backup state) go at the settle that tells of the key gone, so of the latest 64 keys taken off between two settles alone: an older one keeps its details.
 
 ## Depends on
 - `kernel`, `promises` (the stances its takers declare), `transparency` and `transparency-wire` (the frame, the kinds, the owners, flows), `authority-rules` (the state's schema, `withoutRooted`), `webauthn` (the ceremonies, the credential's form), `passkey-witness` (whether a witness is composed).

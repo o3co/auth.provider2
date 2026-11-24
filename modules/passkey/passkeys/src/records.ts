@@ -69,8 +69,9 @@ export const asJson = (r: Reservation) => r as unknown as Json;
 const credentialShape = z
 	.object({
 		subject: id.optional(),
-		/** The reservation that bound it last: only its own release unbinds it. */
+		/** The reservation that bound it last, and its lapse: only its own release unbinds it. */
 		version: id.optional(),
+		until: z.number().optional(),
 		/** Set once a settle found the key active: such a binding is never released. */
 		active: z.literal(true).optional(),
 		signCount: z.number().int().nonnegative(),

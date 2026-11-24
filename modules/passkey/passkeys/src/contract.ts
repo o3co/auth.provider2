@@ -136,7 +136,10 @@ export const passkeyWitnessing = extensionPoint<PasskeyWitnessing>("passkeys.wit
 	multiplicity: "many",
 });
 
-/** Told of a credential a subject holds no more, at least once; `emptied`: the subject holds no key after. */
+/**
+ * Told of a credential a subject holds no more, at least once for the latest 64 taken off between two
+ * settles (an older one goes untold); `emptied`: the subject holds no key after.
+ */
 export interface PasskeyRemoval {
 	removed(subject: string, credential: string, emptied: boolean): Promise<void>;
 }

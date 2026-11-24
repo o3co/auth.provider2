@@ -310,6 +310,61 @@ describe("registrations", () => {
 		});
 	});
 
+	it("lets no reserve racing for the same credential take the binding its winner holds", async () => {
+		const w = await world();
+		const credential = await w.created();
+		const raced = await Promise.all([
+			w.reserve({ subject: "s1", credential, first: true }),
+			w.reserve({ subject: "s1", credential, first: true }),
+		]);
+		const won = raced.find((r) => "reservation" in r);
+		if (!won || !("reservation" in won)) throw new Error("none reserved");
+		expect(raced.filter((r) => "refused" in r)).toHaveLength(1);
+		const verified = await w.regs.verifyPending({
+			subject: "s1",
+			...won,
+			...w.asserting([credential]),
+		});
+		if (!("verification" in verified)) throw new Error(verified.refused);
+		const stage = keyStage(flow, won.reservation, keyOf(credential));
+		const committed = await w.regs.commit({
+			subject: "s1",
+			...won,
+			...verified,
+			decide: deciding({ key: keyOf(credential) }, stage),
+		});
+		if (!("prev" in committed)) throw new Error(committed.refused);
+		await w.land("s1", won.reservation, stage, committed.prev);
+		const login = w.asserting();
+		expect(await w.keys.assert(login.response, { ...login, allow: [] })).toMatchObject({
+			kind: "asserted",
+		});
+	});
+
+	it("hands back the binding a retry took over where its reservation is not written", async () => {
+		const w = await world();
+		const r = await verifiedIn(w);
+		const stage = keyStage(flow, r.reservation, keyOf(r.credential));
+		await w.regs.commit({
+			subject: "s1",
+			...r,
+			decide: deciding({ key: keyOf(r.credential) }, stage),
+		});
+		const retried = await w.reserve({
+			subject: "s1",
+			credential: r.credential,
+			first: true,
+			retrying: r.reservation,
+		});
+		expect(retried).toEqual({ refused: "open" });
+		expect(w.credentials.value(r.credential.id)).toMatchObject({ version: r.reservation });
+		await w.land("s1", r.reservation, stage, 0);
+		const login = w.asserting();
+		expect(await w.keys.assert(login.response, { ...login, allow: [] })).toMatchObject({
+			kind: "asserted",
+		});
+	});
+
 	it("never releases the binding of a credential once active", async () => {
 		const w = await world();
 		await w.register();

@@ -7,6 +7,7 @@ import { credentialOf, credentialRecord, type KeptParts, keysHeld, stored } from
 import {
 	activeKey,
 	asJson,
+	type CredentialRecord,
 	committing,
 	credentialRecordOf,
 	flowOf,
@@ -74,38 +75,54 @@ export function registeringOver(p: RegisteringParts): Registrations {
 	};
 	/**
 	 * Binds the credential to the subject under the reservation `version`, unless another subject's
-	 * binding or other details name it. Never lowers a count nor overwrites the details kept.
+	 * binding or other details name it, or another reservation of the subject's, unfinished, holds it
+	 * (any but the one `replacing`, before its lapse). Never lowers a count nor overwrites the details
+	 * kept. Answers the binding it took over, to hand back where the reservation is not written.
 	 */
-	const bound = async (subject: string, c: Credential, version: string) => {
+	const bound = async (subject: string, c: Credential, version: string, replacing?: string) => {
 		const details = {
 			userHandle: c.userHandle,
 			backupEligible: c.backupEligible,
 			backedUp: c.backedUp,
 			...(c.transports ? { transports: [...c.transports] } : {}),
 		};
-		const created = await p.store.create(
-			c.id,
-			stored({ subject, version, signCount: c.signCount, details }),
-		);
-		if (created === "created") return true;
-		const same = (r: ReturnType<typeof credentialRecordOf>) =>
+		const until = p.now() + p.lifetimeMs;
+		const made = { subject, version, until, signCount: c.signCount, details };
+		if ((await p.store.create(c.id, stored(made))) === "created") return { previous: undefined };
+		const same = (r: CredentialRecord) =>
 			(r.subject === undefined || r.subject === subject) &&
 			(!r.details ||
 				(r.details.userHandle === c.userHandle && r.details.backupEligible === c.backupEligible));
+		const heldByAnother = (r: CredentialRecord) =>
+			r.subject === subject &&
+			r.version !== undefined &&
+			r.version !== replacing &&
+			(r.until ?? 0) >= p.now();
+		let previous: CredentialRecord | undefined;
 		const changed = await p.store.change(c.id, (current) => {
 			const now = credentialRecordOf(current);
-			if (!same(now)) return undefined;
+			if (!same(now) || heldByAnother(now)) return undefined;
+			previous = now;
 			const signCount = Math.max(now.signCount, c.signCount);
 			return {
-				value: stored({ ...now, subject, version, signCount, details: now.details ?? details }),
+				value: stored({
+					...now,
+					subject,
+					version,
+					until,
+					signCount,
+					details: now.details ?? details,
+				}),
 			};
 		});
 		const after = changed && credentialRecordOf(changed.after);
-		return after?.subject === subject && after.version === version && same(after);
+		return after?.subject === subject && after.version === version && same(after)
+			? { previous }
+			: undefined;
 	};
 	/**
-	 * Releases the binding `version` made, so another subject may register the credential: only while
-	 * it still carries that version, and never for a key active now or once.
+	 * Releases the binding `version` made, so another subject may register the credential; never a
+	 * key active now or once.
 	 */
 	const release = async (subject: string, credential: string, version: string) => {
 		if (activeKey(await keysHeld(p.frames, subject), credential)) return;
@@ -113,6 +130,27 @@ export function registeringOver(p: RegisteringParts): Registrations {
 			const now = credentialRecordOf(current);
 			if (now.subject !== subject || now.version !== version || now.active) return undefined;
 			return { value: stored({ signCount: now.signCount }) };
+		});
+	};
+	/** A reservation not written hands back the binding it took over, or unbinds the one it made. */
+	const handBack = async (
+		subject: string,
+		credential: string,
+		version: string,
+		previous: CredentialRecord | undefined,
+	) => {
+		if (previous?.subject !== subject) return release(subject, credential, version);
+		await p.store.change(credential, (current) => {
+			const now = credentialRecordOf(current);
+			if (now.subject !== subject || now.version !== version) return undefined;
+			const { version: _v, until: _u, ...kept } = now;
+			return {
+				value: stored({
+					...kept,
+					...(previous.version ? { version: previous.version } : {}),
+					...(previous.until !== undefined ? { until: previous.until } : {}),
+				}),
+			};
 		});
 	};
 	/** Saves the count a pending key's assertion showed, never lowering it. */
@@ -130,7 +168,7 @@ export function registeringOver(p: RegisteringParts): Registrations {
 			// The mark settled first: a first key only where the keys and the witness both say none.
 			if (q.first && ((await p.settle(subject)) || (await p.witnessing?.marked(subject))))
 				return { refused: "held" };
-			let binding: string | undefined;
+			let binding: { version: string; previous: CredentialRecord | undefined } | undefined;
 			const reserved = await held<
 				{ reservation: string; replaced?: Reservation } | { refused: ReserveRefusal }
 			>(async () => {
@@ -147,8 +185,9 @@ export function registeringOver(p: RegisteringParts): Registrations {
 				const generation = q.retrying !== undefined && r ? r.generation : keys.keyGeneration;
 				if (q.generation !== generation) return { refused: "fenced" };
 				const version = p.token();
-				if (!(await bound(subject, credential, version))) return { refused: "taken" };
-				binding = version;
+				const took = await bound(subject, credential, version, r?.version);
+				if (!took) return { refused: "taken" };
+				binding = { version, previous: took.previous };
 				const next: Reservation = {
 					version,
 					state: "reserved",
@@ -164,8 +203,8 @@ export function registeringOver(p: RegisteringParts): Registrations {
 				return { reservation: next.version, ...(r ? { replaced: r } : {}) };
 			});
 			if (!("reservation" in reserved)) {
-				// A reserve that bound and then lost leaves no binding behind.
-				if (binding) await release(subject, credential.id, binding);
+				// A reserve that bound and then lost leaves the binding as it found it.
+				if (binding) await handBack(subject, credential.id, binding.version, binding.previous);
 				return reserved;
 			}
 			const { replaced } = reserved;
