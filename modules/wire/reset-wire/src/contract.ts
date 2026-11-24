@@ -9,7 +9,27 @@ import { z } from "zod";
 
 const v = z.literal(1);
 const count = z.number().int().nonnegative();
-const id = z.string().min(1);
+/** A text's UTF-8 length in bytes, counted by code point. */
+const utf8Length = (text: string) => {
+	let bytes = 0;
+	for (const char of text) {
+		const point = char.codePointAt(0) ?? 0;
+		bytes += point < 0x80 ? 1 : point < 0x800 ? 2 : point < 0x10000 ? 3 : 4;
+	}
+	return bytes;
+};
+/** A name an instruction carries: 1 to 255 UTF-8 bytes, so a whole instruction stays well under 8 KiB. */
+const id = z
+	.string()
+	.min(1)
+	.refine((text) => utf8Length(text) <= 255);
+
+/**
+ * The longest a signed instruction is, its compact JWS in bytes: a placer refuses a longer one as
+ * `shape`, and a CLI that reads one a line reads no longer line, so every instruction one takes the
+ * other does too.
+ */
+export const instructionLimit = 8192;
 
 /** The longest an instruction lives, `exp` past `iat`, in seconds. */
 export const resetLifetime = 600;

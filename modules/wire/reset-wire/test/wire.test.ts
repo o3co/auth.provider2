@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+	instructionLimit,
 	instructionSkew,
 	resetFaults,
 	resetInstruction,
@@ -25,7 +26,7 @@ describe("a reset instruction", () => {
 	});
 
 	it("lives no longer than its lifetime, and is issued before it expires", () => {
-		expect([resetLifetime, instructionSkew]).toEqual([600, 60]);
+		expect([resetLifetime, instructionSkew, instructionLimit]).toEqual([600, 60, 8192]);
 		expect(reads({ ...instruction, exp: instruction.iat + 1 })).toBe(true);
 		expect(reads({ ...instruction, exp: instruction.iat + 601 })).toBe(false);
 		expect(reads({ ...instruction, exp: instruction.iat })).toBe(false);
@@ -45,6 +46,11 @@ describe("a reset instruction", () => {
 			expect(reads({ ...instruction, id }), id).toBe(false);
 	});
 
+	it("takes an installation and a subject of 255 UTF-8 bytes at most", () => {
+		expect(reads({ ...instruction, subject: "x".repeat(255) })).toBe(true);
+		expect(reads({ ...instruction, installation: "あ".repeat(85) })).toBe(true);
+	});
+
 	it("refuses another action, another version, a field it does not know, and a time or generation that is no whole number", () => {
 		for (const change of [
 			{ action: "clear" },
@@ -55,6 +61,8 @@ describe("a reset instruction", () => {
 			{ iat: 1.5 },
 			{ installation: "" },
 			{ subject: "" },
+			{ subject: "x".repeat(256) },
+			{ installation: "あ".repeat(86) },
 		])
 			expect(reads({ ...instruction, ...change }), JSON.stringify(change)).toBe(false);
 		const { installation: _, ...without } = instruction;
