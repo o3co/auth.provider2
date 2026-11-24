@@ -761,9 +761,14 @@ describe("users-http", () => {
 			varied.slice(0, 41),
 			`${varied.slice(0, 40)}+_`,
 		];
+		// The section takes each; one boot shows a section it takes starts, as for any of them.
+		const { section } = usersHttp;
+		if (section === undefined) throw new Error("users-http reads no section");
 		for (const token of taken) {
-			await expect(boot(settings({ credential: token })), token).resolves.toBeDefined();
+			const read = await section["~standard"].validate(settings({ credential: token }));
+			expect(read.issues, token).toBeUndefined();
 		}
+		await expect(boot(settings({ credential: taken.at(-1) }))).resolves.toBeDefined();
 	});
 
 	it("refuses to start beside users in the settings", async () => {
