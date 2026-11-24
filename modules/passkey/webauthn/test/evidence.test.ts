@@ -233,13 +233,17 @@ describe("the evidence check, state-free and at once", () => {
 				...(flagged ? { flags: (f: number) => f | 0x80 } : {}),
 			};
 			const response = softwareAuthenticator().create(options as never, at, twist);
-			return (await ceremonies.attest(response, challenge, handle, "preferred")).kind;
+			const answer = await ceremonies.attest(response, challenge, handle, "preferred");
+			return answer.kind === "refused" ? answer.reason : answer.kind;
 		};
 		expect(await attested([0xa0], true)).toBe("attested");
+		// A map whose text is not ASCII, its length in bytes: read as sent, never re-encoded.
+		expect(await attested([0xa1, 0x61, 0x78, 0x62, 0xc3, 0xa9], true)).toBe("attested");
 		// An empty list where the extensions' map stands, which the library reads as none.
-		expect(await attested([0x80], true)).toBe("refused");
-		expect(await attested([0xa0], false)).toBe("refused");
-		expect(await attested([0xa0, 0x00], true)).toBe("refused");
+		expect(await attested([0x80], true)).toBe("malformed");
+		expect(await attested([0xa0], false)).toBe("malformed");
+		expect(await attested([0xa0, 0x00], true)).toBe("malformed");
+		expect(await attested([0xbf, 0xff], true)).toBe("malformed");
 	});
 
 	it("refuses at attestation a key not in its one COSE_Key form, as malformed", async () => {

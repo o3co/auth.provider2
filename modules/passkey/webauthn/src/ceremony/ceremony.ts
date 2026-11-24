@@ -192,8 +192,30 @@ function keyReadWhole(attestationObject: Uint8Array, publicKey: Uint8Array): boo
 	if (!authData.subarray(at, at + key.length).equals(key)) return false;
 	// After the key: nothing, or where the extension flag is set, one map of extensions, read whole.
 	if (((authData[32] ?? 0) & 0x80) === 0) return rest.length === 0;
-	const extensions: unknown = isoCBOR.decodeFirst(rest);
-	return extensions instanceof Map && Buffer.from(isoCBOR.encode(extensions)).equals(rest);
+	return (rest[0] ?? 0) >> 5 === 5 && itemEnd(rest, 0) === rest.length;
+}
+
+/** Where one CBOR item of definite lengths at `at` ends, on the bytes as sent; none for any other. */
+function itemEnd(bytes: Buffer, at: number, depth = 0): number | undefined {
+	const head = bytes[at];
+	if (head === undefined || depth > 16 || (head & 31) > 27) return undefined;
+	const size = (head & 31) < 24 ? 0 : 1 << ((head & 31) - 24);
+	if (at + 1 + size > bytes.length) return undefined;
+	const n =
+		size === 0
+			? head & 31
+			: size === 8
+				? Number(bytes.readBigUInt64BE(at + 1))
+				: bytes.readUIntBE(at + 1, size);
+	const next = at + 1 + size;
+	const major = head >> 5;
+	if (major <= 1 || major === 7) return next;
+	if (major <= 3) return next + n <= bytes.length ? next + n : undefined;
+	if (major === 6) return itemEnd(bytes, next, depth + 1);
+	let end: number | undefined = next;
+	for (let i = 0; i < (major === 5 ? 2 * n : n) && end !== undefined; i++)
+		end = itemEnd(bytes, end, depth + 1);
+	return end;
 }
 
 // The client's transports, which the library passes on unchecked: a short list of short strings.
@@ -206,7 +228,6 @@ const hintOf = (value: unknown): string[] | undefined =>
 
 export function ceremoniesFor(rp: RelyingParty): Ceremonies {
 	const algorithms = rp.algorithms.map((name) => coseIds[name]);
-	/** Whether a kept credential's key is of an algorithm taken; one that cannot be read is not. */
 	/** Before the library: a challenge other than the one given, and a frame not listed. */
 	const precheck = (response: unknown, challenge: string): CeremonyRefusal | undefined => {
 		const data = clientDataOf(response);
@@ -283,7 +304,7 @@ export function ceremoniesFor(rp: RelyingParty): Ceremonies {
 			if (early) return refused(early);
 			const answered = response as Parameters<typeof verifyAuthenticationResponse>[0]["response"];
 			if (answered.id !== credential.id) return refused("malformed");
-			// The library checks no algorithm at assertion: a key of one no longer taken is refused here.
+			// The library reads a kept key loosely: one not in its one COSE_Key form is refused here.
 			if (!passkeyKey(credential.publicKey)) return refused("algorithm");
 			const verified = await libraryAnswer(() =>
 				verifyAuthenticationResponse({
