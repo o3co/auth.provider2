@@ -79,11 +79,13 @@ describe("headers and keys", () => {
 		const inherited = verifierOf(
 			{ inline: [signer.jwk] },
 			// An untyped caller can still name one outside the list; it never verifies.
-			{ ...policy, algorithms: [...policy.algorithms, "toString" as Algorithm] },
+			{ ...policy, algorithms: [...policy.algorithms, "toString", "constructor"] as Algorithm[] },
 		);
-		expect(await inherited.verify(await signer.sign(fresh(), { alg: "toString" }))).toEqual(
-			invalid("algorithm"),
-		);
+		for (const alg of ["toString", "constructor"]) {
+			expect(await inherited.verify(await signer.sign(fresh(), { alg })), alg).toEqual(
+				invalid("algorithm"),
+			);
+		}
 		// Even named by the caller, none and a shared secret never verify, whatever the token says.
 		const loose = verifierOf(
 			{ inline: [signer.jwk] },
@@ -93,7 +95,8 @@ describe("headers and keys", () => {
 		const body = encoded(fresh());
 		const hs = `${encoded({ alg: "HS256" })}.${body}`;
 		const mac = createHmac("sha256", signer.pem).update(hs).digest("base64url");
-		for (const token of [`${hs}.${mac}`, `${encoded({ alg: "none" })}.${body}.`]) {
+		const numbered = `${encoded({ alg: 256 })}.${body}.`;
+		for (const token of [`${hs}.${mac}`, `${encoded({ alg: "none" })}.${body}.`, numbered]) {
 			expect(await loose.verify(token), token.split(".")[0]).toEqual(invalid("algorithm"));
 		}
 	});
