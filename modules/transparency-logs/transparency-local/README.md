@@ -15,7 +15,7 @@
 - It is never the axis's default (`neverDefault`): a composition names it for `transparency`'s axis to compose it.
 - `clientRecords` (optional; a wiring provides it, `ClientRecords`): a client as the registry holds it now, and its version, whether signed, the keys written in it and its own ceiling, as the judgment reads them.
 - `logStore`, its store interface (records by key, read, then written as one held to every version read), `logStoreNeeds` (never evicted, survives a crash and a failover, reads confirmed, authenticated) and `logStoreOver` (a store, a space, randomness, `where`, `refuse`), over `records`' records held across.
-- `reset` (L0, where `installation` is set): an embedder's signed reset instruction placed as the monitor places it, answering a `ResetAnswer`.
+- `reset` (L0): an embedder's signed reset instruction placed as the monitor places it, answering a `ResetAnswer`.
 - Operator section `transparency-local`, the reset's: `installation` and `reset-keys` (the reset instruction's sets by version, a replaced one kept).
 - Operator section `transparency-local`: `origin` (required), the one origin an assertion is judged for: where `webauthn.origins` lists several, an assertion made at another is judged forged; `code-lifetime` (default `10m`), `refresh-lifetime` (default `365d`), `issue-window` (default `1m`) and `evidence-window` (`6m` at least, default `10m`), the rules' times, each longer than its issuer's, so the rules never cut an issuance short.
 
@@ -30,7 +30,7 @@
 - Each record is judged once, as placed, on its flow's judged prefix, by the settings and keys of then; one changed later judges no record again. One the rules take is forged still where the credential of a root it names is no key passkeys holds for the flow's subject.
 - A receipt, one per token or one, holds the wire's receipt, its issuer `transparency-local`, under `alg` `none`: unsigned.
 - A digest is SHA-256 of the preimage's canonical JSON.
-- A reset (§B.4): its shape read first, its op looked up on its subject's flow (the same payload its set verifies as an instruction answered as placed, before the head is read again; else `conflict`); else `resetFinding` on the head with the newest set, a fault `invalid`, the boundary placed at the head as the monitor's (body unsigned) and judged. No `installation`, no reset.
+- A reset (§B.4): its shape read first, its op looked up on its subject's flow (the same payload its set verifies as an instruction answered as placed, before the head is read again; else `conflict`); else `resetFinding` on the head with the newest set, a fault `invalid`, the boundary placed at the head as the monitor's (body unsigned) and judged. No `installation`: every reset `invalid` (`installation`).
 - Boot refuses a reset key that is no public key as `keys` reads one, of no kid of its own, named twice in a version, or the Core ring's of any generation (by SPKI, kept apart as §B.2 aims). V18's sets (stop and restart keys), past and present, join once L0 holds them.
 - It stands breaking `core-compromise-contained`, its reason naming it not recommended: the log and its judgment run in the Core, so a compromised Core places and judges its own records and nothing stops its generation.
 - A stored record of another shape is unavailable, never none. It holds nothing in process, so it is safe on many instances.

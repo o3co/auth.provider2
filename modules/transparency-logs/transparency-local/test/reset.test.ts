@@ -116,9 +116,14 @@ describe("a reset placed by the log in the Core (L0)", () => {
 		});
 	});
 
-	it("offers no reset where no installation is set", async () => {
+	it("answers every reset invalid, its installation, where no installation is set", async () => {
 		const w = await boot();
-		expect(w.log.reset).toBeUndefined();
+		const key = recoveryKey();
+		expect(await w.log.reset?.(key.signed(instructionFor("sub-1", Date.now())))).toEqual({
+			v: 1,
+			result: "invalid",
+			fault: "installation",
+		});
 	});
 
 	it("refuses to boot with a reset key that is no public key, one named twice in a version, or one of the Core ring", async () => {

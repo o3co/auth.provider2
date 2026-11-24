@@ -46,6 +46,15 @@ async function over(
 				return `${instance}-${n}`;
 			},
 			judging,
+			// No reset is placed here: no installation, so each is `invalid` before any of these is read.
+			resetting: {
+				newest: undefined,
+				checks: undefined as never,
+				context: {} as never,
+				judging: () => {
+					throw new TypeError("no reset here");
+				},
+			},
 		});
 	return { logAs };
 }

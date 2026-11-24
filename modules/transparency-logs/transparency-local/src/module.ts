@@ -98,16 +98,12 @@ export default defineModule(
 				writer: { instance: fresh(), generation },
 				now: c.clock.now,
 				id: fresh,
-				...(s.installation === undefined
-					? {}
-					: {
-							resetting: {
-								newest,
-								checks,
-								context,
-								judging: localSignedJudging({ checks, context }),
-							},
-						}),
+				resetting: {
+					newest,
+					checks,
+					context,
+					judging: localSignedJudging({ checks, context }),
+				},
 				judging: localJudging({
 					checks,
 					context,

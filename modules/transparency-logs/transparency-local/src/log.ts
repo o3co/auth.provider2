@@ -171,7 +171,7 @@ export function localLog(p: {
 	readonly id: () => string;
 	readonly judging: Judging;
 	/** Placing a reset as the monitor does (§B.4): the newest set's version, the checks and context the rule reads, its judgment. */
-	readonly resetting?: {
+	readonly resetting: {
 		readonly newest: number | undefined;
 		readonly checks: Checks;
 		readonly context: Context;
@@ -191,10 +191,11 @@ export function localLog(p: {
 	 */
 	async function reset(instruction: string): Promise<ResetAnswer> {
 		const r = p.resetting;
-		if (!r) throw new TypeError("transparency-local: no reset is set up");
 		const payload = payloadOf(instruction);
 		const read = resetInstruction.safeParse(payload);
 		if (!read.success) return resetRefusal.invalid("shape");
+		// No installation set: no instruction names this one.
+		if (r.context.reset === undefined) return resetRefusal.invalid("installation");
 		const flow = { of: "subject", id: read.data.subject } as const;
 		const op = opIds.reset(read.data.id);
 		const keys = keysOf(flow);
@@ -377,7 +378,7 @@ export function localLog(p: {
 			}
 			return refused("temporary");
 		},
-		...(p.resetting ? { reset: (instruction: string) => reset(instruction) } : {}),
+		reset,
 		head: headOf,
 		async at(flow, position) {
 			const at = readAs("at", await read1(keysOf(flow).at(position)));
