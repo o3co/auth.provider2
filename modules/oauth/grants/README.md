@@ -18,7 +18,7 @@
 - A grant's refusal is an OAuth error code (`OAuthError`) or one the grant owns, answered `400`, or `401` for `invalid_client` or when the grant names it; any other status is ignored.
 - A grant's `401` carries the `WWW-Authenticate` challenge of the client's authentication method, or every method's when it declares none; a grant sets no header.
 - Other members of a grant's refusal pass through unread, but a member named as in the error or a success answer is dropped, and so is an `error_uri` that is not a URI of printable characters.
-- A grant is given the request sender's binding, and what its client's authentication verified (`proof`, the method's owner reading it), unread.
+- A grant is given the request sender's binding, and what its client's authentication verified (`authenticated`, the method's owner reading it; `proof` the same, while its readers move), unread.
 - A grant says whom it issues for in what it gives `admits` and `issue`: the subject, and the subject's kind (`tokens`' `subjectKind`), `user` for a person, or `client` where the client gets a token for itself, as the client credentials grant does, its subject then the client.
 - `admits`: whether `tokens`' issuance policies allow a grant now, under the grant type, the session it comes from and `tokens`' `continuing`.
 - `issue`: asks again, then issues one bundle (`BundleRequest`, an access token today) with the binding, and the expiry cap and lifetime the grant gives. A grant may add claims (`AccessGrant.claims`, under `added-claims`' rules).

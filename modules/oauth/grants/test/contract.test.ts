@@ -119,7 +119,7 @@ it("has a grant issue one bundle, naming its root's reference where it has one, 
 });
 
 it("hands a grant what its client's authentication verified, unread", () => {
-	expectTypeOf<GrantInput["proof"]>().toEqualTypeOf<unknown>();
-	const input: Pick<GrantInput, "proof"> = { proof: { key: "k" } };
-	expect(input.proof).toEqual({ key: "k" });
+	expectTypeOf<GrantInput["authenticated"]>().toEqualTypeOf<unknown>();
+	const input: Pick<GrantInput, "authenticated"> = { authenticated: { key: "k" } };
+	expect(input.authenticated).toEqual({ key: "k" });
 });
