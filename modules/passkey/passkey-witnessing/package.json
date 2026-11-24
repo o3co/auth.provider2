@@ -1,0 +1,22 @@
+{
+	"name": "@mod/passkey-witnessing",
+	"private": true,
+	"license": "Apache-2.0",
+	"type": "module",
+	"kind": "feature",
+	"optIn": true,
+	"joins": [
+		"@mod/passkeys"
+	],
+	"exports": {
+		"./module": "./src/module.ts"
+	},
+	"dependencies": {
+		"@mod/kernel": "workspace:*",
+		"@mod/passkey-witness": "workspace:*",
+		"@mod/passkeys": "workspace:*"
+	},
+	"devDependencies": {
+		"vitest": "5.0.5"
+	}
+}
