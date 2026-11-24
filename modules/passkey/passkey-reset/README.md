@@ -7,12 +7,12 @@
 ## Not here
 - Whether a subject may be reset, waiting, telling and undoing: the embedder's recovery procedure (O13). Signing an instruction: its recovery service.
 - Placing the boundary and finding its fault: the log's axis (`transparency-local` on L0, the monitor's endpoint on L1) and `authority-rules`. Taking it in and the keys it drops: `transparency` and `passkeys`.
-- The CLI entry an operator runs it by: once `app-entries`' `reset` shape is there.
 - L1's path: its proper way goes to the monitor directly, the embedder reading the key generation in the monitor's signed `stateOf`, checking the receipt, and seeing in `stateOf` that the position took and the generation moved on (procedures §11). This contract is the convenient way while a Core runs; with no answer, the embedder sends directly.
 - Showing a holding stance's condition beside the promises' judgment (proposal 544's Operator's): `promises`', which today prints only breaking stances' reasons; the condition is this card's and the stance's reason.
 
 ## Offers
 - `passkeyReset`, taken only by a module standing on the promises (O1): `reset` (instruction) → the log's `ResetAnswer`, the wire's own form (an append's answer, or reset-wire's refusal), told by `result`; `generation` (subject) → its key generation in the Core's applied state, its flow tended first.
+- App entries (`answer-lines`), for an app composing it, run by the embedder's recovery procedure: `passkey-reset` (one instruction a line, 8192 bytes at most, one `ResetAnswer` a line) and `passkey-generation` (one subject a line, 255 bytes at most, its key generation a line). Their standard output carries subjects: read it through a pipe, never a terminal's or a CI's log.
 - Composition definition: the contract and its stance (`promises`' `stances`). An opt-in feature: composed only where a composition names it, bringing `transparency` and `passkeys`; never with passkeys alone.
 
 ## Invariants

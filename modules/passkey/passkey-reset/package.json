@@ -5,6 +5,22 @@
 	"type": "module",
 	"kind": "feature",
 	"optIn": true,
+	"appEntries": [
+		{
+			"script": "passkey-reset",
+			"shape": "answer-lines",
+			"contract": "passkeyReset",
+			"member": "reset",
+			"longest": 8192
+		},
+		{
+			"script": "passkey-generation",
+			"shape": "answer-lines",
+			"contract": "passkeyReset",
+			"member": "generation",
+			"longest": 255
+		}
+	],
 	"exports": {
 		".": "./src/contract.ts",
 		"./module": "./src/module.ts"
