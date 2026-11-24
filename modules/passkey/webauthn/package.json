@@ -1,0 +1,24 @@
+{
+	"name": "@mod/webauthn",
+	"private": true,
+	"license": "Apache-2.0",
+	"type": "module",
+	"kind": "feature",
+	"optIn": true,
+	"asks": [
+		"`webauthn.origins`: the origins a ceremony is taken from, each matched exactly: https, or plain http only on the host `localhost` (refused in production), never an IP address. An Android app origin is `android:apk-key-hash:` and the unpadded base64url SHA-256 of its signing certificate."
+	],
+	"exports": {
+		".": "./src/contract.ts",
+		"./testing": "./src/testing.ts",
+		"./module": "./src/module.ts"
+	},
+	"dependencies": {
+		"@mod/kernel": "workspace:*",
+		"@simplewebauthn/server": "14.0.1",
+		"zod": "4.6.7"
+	},
+	"devDependencies": {
+		"vitest": "5.0.5"
+	}
+}
