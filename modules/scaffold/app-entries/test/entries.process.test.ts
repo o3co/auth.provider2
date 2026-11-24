@@ -43,10 +43,10 @@ export async function assemble({ runtime }) {
 	if (process.env.REFUSE_MANY) throw new BootRefused(Array.from({ length: Number(process.env.REFUSE_MANY) }, (_, i) => ({ where: \`at.\${i}\`, reason: "r".repeat(100) })));
 	// Without the script's own runtime, the composed sink would write this line.
 	(runtime?.log ?? { warn: (event) => process.stdout.write(\`LOG \${event}\\n\`) }).warn("fake.assembled");
-	const { settler, namer, tool, recorder } = await import("fake-package");
+	const { settler, namer, tool, recorder, answerer } = await import("fake-package");
 	const many = Array.from({ length: Number(process.env.LINES ?? 1) }, (_, i) => \`line-\${i}-\${"h".repeat(100)}\`);
 	const caller = { run: async () => ({ lines: [...many, "all done"], code: 0 }) };
-	const asked = { naming: namer, callRun: caller, toolRun: tool, lines: tool, tell: tool, recording: recorder };
+	const asked = { naming: namer, callRun: caller, toolRun: tool, lines: tool, tell: tool, recording: recorder, answering: answerer };
 	// Where a test signals the app: kept alive once started, each stop told and slow.
 	const signalled = process.env.SIGNALLED !== undefined;
 	let alive;
@@ -79,6 +79,7 @@ export const settling = "settling";
 export const resettling = "resettling";
 export const naming = "naming";
 export const recording = "recording";
+export const answering = "answering";
 export const callRun = "callRun";
 export const toolRun = "toolRun";
 // Contracts named as the scripts' own names are: each script takes its contract under a name of its own.
@@ -114,6 +115,18 @@ export const recorder = {
 		if (record.subject === "down") throw Object.assign(new Error("down for alice"), { name: "Unavailable" });
 		if (record.subject === "boom") throw new Error("secret of alice");
 		return record.subject === "s-held" ? "held" : "kept";
+	},
+};
+export const answerer = {
+	answer: async (line) => {
+		appendFileSync(process.env.SEEN, \`\${JSON.stringify(line)}\\n\`);
+		if (line === "down") throw Object.assign(new Error("down for alice"), { name: "Unavailable" });
+		if (line === "boom") throw new Error("secret of alice");
+		if (line === "none") return undefined;
+		if (line === "nan") return { n: Number.NaN };
+		if (line === "boxed") return { n: new Number(Number.POSITIVE_INFINITY) };
+		if (line === "refused") return { v: 1, result: "invalid", fault: "shape" };
+		return { v: 1, result: "accepted", line };
 	},
 };
 export const settler = {
@@ -192,6 +205,18 @@ const declaredByFakes: readonly Declaring[] = [
 		],
 	},
 	{
+		name: "@mod/answerer",
+		appEntries: [
+			{
+				script: "answered",
+				shape: "answer-lines",
+				contract: "answering",
+				member: "answer",
+				longest: 64,
+			},
+		],
+	},
+	{
 		name: "@mod/namer",
 		appEntries: [
 			{
@@ -259,7 +284,11 @@ async function script(
 			child[held].on("end", () => child.on("close", () => resolve({ stdout, stderr, status })));
 			child.stdin.end(input);
 		});
-	const run = (input: string, env: Record<string, string> = {}, args: readonly string[] = []) => {
+	const run = (
+		input: string | Buffer,
+		env: Record<string, string> = {},
+		args: readonly string[] = [],
+	) => {
 		const seen = join(target, `seen-${Math.random()}`);
 		const run = spawnSync(process.execPath, [file, ...args], {
 			cwd: target,
@@ -705,3 +734,73 @@ it("takes the declared contract under a name of its own, so one named as a scrip
 	expect(found.stdout).toBe("flagged-1\n");
 	expect(found.status).toBe(0);
 }, 60_000);
+
+{
+	it("answers each line in order as one line of JSON, the member's answer, and exits 0 where every line was answered", async () => {
+		const run = await script("@mod/answerer", "src/answered.ts");
+		const done = await run("s1\nrefused\r\ns2\n");
+		expect(done.stdout).toBe(
+			[
+				'{"v":1,"result":"accepted","line":"s1"}',
+				'{"v":1,"result":"invalid","fault":"shape"}',
+				'{"v":1,"result":"accepted","line":"s2"}',
+				"",
+			].join("\n"),
+		);
+		expect([done.status, done.stderr, done.seen]).toEqual([0, "", ["s1", "refused", "s2"]]);
+	});
+
+	it("answers unread an empty line, one past its limit and one not UTF-8, calling no member, and exits 1", async () => {
+		const run = await script("@mod/answerer", "src/answered.ts");
+		const bad = Buffer.from([0xc3, 0x28]);
+		const done = await run(
+			Buffer.concat([Buffer.from(`a\n\n${"x".repeat(65)}\n`), bad, Buffer.from("\nb\n")]),
+		);
+		const out = done.stdout.split("\n");
+		expect(out.slice(1, 4)).toEqual(["unread", "unread", "unread"]);
+		expect(out).toHaveLength(6);
+		expect([done.status, done.seen]).toEqual([1, ["a", "b"]]);
+	});
+
+	it("answers failed where the member is unavailable and reads on; stopped at any other failure or an answer no line holds, reading no further", async () => {
+		const run = await script("@mod/answerer", "src/answered.ts");
+		const down = await run("down\na\n");
+		expect([down.stdout, down.status]).toEqual([
+			'failed\n{"v":1,"result":"accepted","line":"a"}\n',
+			1,
+		]);
+		for (const stop of ["boom", "none", "nan", "boxed"]) {
+			const done = await run(`a\n${stop}\nb\n`);
+			expect(done.stdout, stop).toBe('{"v":1,"result":"accepted","line":"a"}\nstopped\n');
+			expect(done.status, stop).toBe(1);
+			expect(done.stderr, stop).toBe(
+				"stopped: a line could not be answered; the lines after it were not read\n",
+			);
+			expect(done.seen, stop).toEqual(["a", stop]);
+		}
+	});
+
+	it("takes no argument, telling none of it, and calls no member", async () => {
+		const run = await script("@mod/answerer", "src/answered.ts");
+		const done = await run("a\n", {}, ["secret-of-alice"]);
+		expect(done.status).toBe(64);
+		expect(done.stdout).toBe("");
+		expect(done.stderr).toBe("usage: answered < lines (one a line, nothing as an argument)\n");
+		expect(done.seen).toEqual([]);
+	});
+
+	it("stops where standard output closed, writing nothing more, and exits 1", async () => {
+		const run = await script("@mod/answerer", "src/answered.ts");
+		const done = await run.shut("a\nb\n");
+		expect(done.status).toBe(1);
+		expect(done.stderr).toBe("stopped: standard output could not take an answer\n");
+	});
+
+	it("reads a last line with no line feed, one of its limit before a CRLF, and hands a byte order mark on as sent", async () => {
+		const run = await script("@mod/answerer", "src/answered.ts");
+		const full = "x".repeat(64);
+		const done = await run(`${full}\r\n\uFEFFa\nlast`);
+		expect(done.stdout.split("\n")).toHaveLength(4);
+		expect([done.status, done.seen]).toEqual([0, [full, "\uFEFFa", "last"]]);
+	});
+}

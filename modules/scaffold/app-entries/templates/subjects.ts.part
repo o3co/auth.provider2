@@ -1,5 +1,6 @@
 {{guard}}
 import { randomBytes } from "node:crypto";
+{{before}}
 
 // The app and every module it composes are read only now, past the guard: one that throws as it is
 // read ends the run as a boot that failed.
@@ -22,10 +23,11 @@ const notBuilt = (error: unknown): never => {
 const longest = {{longest}};
 
 /**
- * Each line of standard input as it was sent, without its line ending, or undefined for a line
- * longer than `longest`. No more of a line than that is ever held.
+ * Each line of standard input as the bytes sent, without its line ending (a carriage return before
+ * the line feed too), or undefined for a line longer than `longest`. No more of a line than that is
+ * ever held.
  */
-async function* lines(input: AsyncIterable<Buffer>): AsyncGenerator<string | undefined> {
+async function* byteLines(input: AsyncIterable<Buffer>): AsyncGenerator<Buffer | undefined> {
 	let held: Buffer[] = [];
 	let size = 0;
 	// One byte more, for a carriage return before the line feed.
@@ -34,10 +36,11 @@ async function* lines(input: AsyncIterable<Buffer>): AsyncGenerator<string | und
 		held = size > longest + 1 ? [] : [...held, part];
 	};
 	const line = () => {
-		const text = size > longest + 1 ? undefined : Buffer.concat(held).toString("utf8").replace(/\r$/, "");
+		const all = size > longest + 1 ? undefined : Buffer.concat(held);
 		held = [];
 		size = 0;
-		return text === undefined || Buffer.byteLength(text) > longest ? undefined : text;
+		const bytes = all !== undefined && all.at(-1) === 13 ? all.subarray(0, -1) : all;
+		return bytes === undefined || bytes.length > longest ? undefined : bytes;
 	};
 	for await (const chunk of input) {
 		let from = 0;
@@ -49,6 +52,17 @@ async function* lines(input: AsyncIterable<Buffer>): AsyncGenerator<string | und
 		hold(chunk.subarray(from));
 	}
 	if (size > 0) yield line();
+}
+
+/**
+ * Each line of standard input as it was sent, read as UTF-8, without its line ending, or undefined
+ * for a line longer than `longest`.
+ */
+async function* lines(input: AsyncIterable<Buffer>): AsyncGenerator<string | undefined> {
+	for await (const bytes of byteLines(input)) {
+		const text = bytes?.toString("utf8");
+		yield text === undefined || Buffer.byteLength(text) > longest ? undefined : text;
+	}
 }
 
 // The script writes no log line, which could carry a subject.

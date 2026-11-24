@@ -8,6 +8,7 @@ interface Row {
 	readonly shape: Shape;
 	readonly template: string;
 	readonly fill: Readonly<Record<string, string>>;
+	readonly longest: number;
 }
 
 const templates: Readonly<Record<Shape, string>> = {
@@ -15,6 +16,7 @@ const templates: Readonly<Record<Shape, string>> = {
 	"settle-subjects": "settle-subjects.ts.template",
 	"settle-records": "settle-records.ts.template",
 	"name-subjects": "name-subjects.ts.template",
+	"answer-lines": "answer-lines.ts.template",
 };
 
 /** The longest line a reading script holds, in bytes: a subject's (255), or a record's. */
@@ -23,6 +25,8 @@ const longestOf: Readonly<Record<Shape, number>> = {
 	"settle-subjects": 255,
 	"settle-records": 4096,
 	"name-subjects": 255,
+	// Its own, declared with it.
+	"answer-lines": 0,
 };
 
 /** A declared entry as its shape's template fills it: each answer written as JSON data, never spliced in raw. */
@@ -31,6 +35,7 @@ const rowOf = (entry: Declared): Row => ({
 	script: entry.script,
 	shape: entry.shape,
 	template: templates[entry.shape],
+	longest: entry.longest ?? longestOf[entry.shape],
 	fill: {
 		contract: entry.contract,
 		member: entry.member,
@@ -72,7 +77,12 @@ export async function entriesOf(
 		};
 		const shared = {
 			...fill,
-			longest: String(longestOf[row.shape]),
+			longest: String(row.longest),
+			// Before the app is read: an `answer-lines` entry refuses any argument, holding none of it.
+			before:
+				row.shape === "answer-lines"
+					? `if (process.argv.length > 2) end("usage: ${row.script} < lines (one a line, nothing as an argument)", 64);`
+					: "",
 			refused: await refusedPart(keys),
 			guard: await filled("guard.ts.part", {}),
 			reads: modules.map((name) => `import("${importOf(name)}/module")`).join(", "),

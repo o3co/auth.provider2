@@ -16,6 +16,7 @@ const shapes = {
 	"settle-subjects": ["answers"],
 	"settle-records": ["answers"],
 	"name-subjects": [],
+	"answer-lines": ["longest"],
 } as const satisfies Record<string, readonly string[]>;
 
 export type Shape = keyof typeof shapes;
@@ -28,6 +29,8 @@ export interface Declared {
 	readonly contract: string;
 	readonly member: string;
 	readonly answers?: readonly string[];
+	/** The longest line an `answer-lines` entry reads, in bytes. */
+	readonly longest?: number;
 }
 
 const scriptName = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
@@ -73,6 +76,12 @@ function checked(name: string, item: unknown): Declared {
 		contract: contract as string,
 		member: member as string,
 	};
+	if (shape === "answer-lines") {
+		const { longest } = given;
+		if (!Number.isSafeInteger(longest) || (longest as number) < 1 || (longest as number) > 65536)
+			return refused(name, `${script}'s longest is not a whole number of bytes from 1 to 65536`);
+		return { ...entry, longest: longest as number };
+	}
 	if (!shapes[shape as Shape].some((key) => key === "answers")) return entry;
 	const { answers } = given;
 	if (!Array.isArray(answers) || answers.length === 0) {

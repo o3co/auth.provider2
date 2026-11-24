@@ -1,0 +1,65 @@
+{{subjects}}
+const answering = app.get(declaredContract);
+const strict = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
+/** A line's bytes as strict UTF-8, or undefined for any other bytes. */
+const textOf = (bytes: Buffer): string | undefined => {
+	try {
+		return strict.decode(bytes);
+	} catch {
+		return undefined;
+	}
+};
+/**
+ * An answer as one line of JSON data, or undefined for one no line holds as data: none, a function,
+ * a symbol, a number not finite (boxed too), a bigint or a cycle.
+ */
+const lineOf = (answer: unknown): string | undefined => {
+	try {
+		const text = JSON.stringify(answer, (_, value: unknown) => {
+			if (typeof value === "function" || typeof value === "symbol") throw new TypeError("no data");
+			const number = value instanceof Number ? value.valueOf() : value;
+			if (typeof number === "number" && !Number.isFinite(number)) throw new TypeError("no data");
+			return value;
+		});
+		return typeof text === "string" ? text : undefined;
+	} catch {
+		return undefined;
+	}
+};
+// One line out for each line in, in order, written as it is answered: the member's answer as JSON, or
+// a fixed word. `unread`: empty, longer than its limit, or not UTF-8; the member is not called.
+// `failed`: the member was unavailable, and the next line is read. `stopped`: any other failure, or an
+// answer no line holds; nothing more is read. The words are no JSON, so no answer is taken for one.
+let unanswered = false;
+let stopped = false;
+for await (const bytes of byteLines(process.stdin)) {
+	const text = bytes === undefined ? undefined : textOf(bytes);
+	let out: string;
+	if (text === undefined || text === "") {
+		out = "unread";
+		unanswered = true;
+	} else {
+		try {
+			const read = lineOf(await answering.{{member}}(text));
+			out = read ?? "stopped";
+			stopped = read === undefined;
+		} catch (error) {
+			unanswered = true;
+			stopped = !isUnavailable(error);
+			out = stopped ? "stopped" : "failed";
+		}
+	}
+	try {
+		tell(1, `${out}\n`);
+	} catch {
+		// Standard output closed: nothing more is written, its partial line the reader's to drop.
+		await app.stop().catch(() => undefined);
+		end("stopped: standard output could not take an answer", 1);
+	}
+	if (stopped) break;
+}
+// Stopped, though never started, so its stop hooks run; a stop that fails keeps the code.
+await app.stop().catch(() => undefined);
+// 0 says every line was answered, whatever the answer; any line not answered, or a stop, is 1.
+if (stopped) end("stopped: a line could not be answered; the lines after it were not read", 1);
+end(undefined, unanswered ? 1 : 0);

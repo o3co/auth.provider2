@@ -68,6 +68,36 @@ it.each([
 		"tool's answers are not a list of at least one",
 	],
 	[
+		"a limit of none",
+		declaring({ shape: "answer-lines" }),
+		"tool's longest is not a whole number of bytes from 1 to 65536",
+	],
+	[
+		"a limit of 0",
+		declaring({ shape: "answer-lines", longest: 0 }),
+		"tool's longest is not a whole number of bytes from 1 to 65536",
+	],
+	[
+		"a limit of 65537",
+		declaring({ shape: "answer-lines", longest: 65537 }),
+		"tool's longest is not a whole number of bytes from 1 to 65536",
+	],
+	[
+		"a limit of 1.5",
+		declaring({ shape: "answer-lines", longest: 1.5 }),
+		"tool's longest is not a whole number of bytes from 1 to 65536",
+	],
+	[
+		"a limit of text",
+		declaring({ shape: "answer-lines", longest: "64" }),
+		"tool's longest is not a whole number of bytes from 1 to 65536",
+	],
+	[
+		"answers on answer lines",
+		declaring({ shape: "answer-lines", longest: 64, answers: ["done"] }),
+		"keys its shape does not take: answers",
+	],
+	[
 		"a script declared twice",
 		[...declaring({}), ...declaring({}, "@mod/other")],
 		"@mod/other declares appEntries that cannot be read: tool is declared by @mod/tool too",
@@ -112,6 +142,7 @@ it("assembles every tool shape never to start, and the app's entry to start", as
 		"settle-subjects": { answers: ["marked"] },
 		"settle-records": { answers: ["kept"] },
 		"name-subjects": {},
+		"answer-lines": { longest: 64 },
 	} satisfies Record<Shape, Record<string, unknown>>;
 	for (const [shape, extra] of Object.entries(fields)) {
 		const { files } = await entriesOf(
