@@ -23,6 +23,8 @@ export interface Client {
 	readonly method: string;
 	/** True when the operator registered the client in the settings, rather than a source naming it. */
 	readonly registered: boolean;
+	/** The registry version the client's record came from, where its source names one. */
+	readonly version?: number;
 	/** The client's value of a contributed section; throws for a section no module contributed. */
 	section<T>(section: Section<T>): T;
 }
@@ -33,6 +35,8 @@ export interface ClientRecord {
 	readonly kind: "public" | "confidential";
 	readonly method: string;
 	readonly sections: Readonly<Record<string, unknown>>;
+	/** The registry version it came from, a positive whole number, where the source keeps versions. */
+	readonly version?: number;
 }
 
 /** Where a record fails, from its root (`method`, `sections.consent.uri`); never a value. */
@@ -63,15 +67,26 @@ export interface AuthMethod {
 	claimed(request: HttpRequest): string | undefined;
 	/** Whether the request carries this method's credentials only in part, or in a form it does not take. */
 	malformed?(request: HttpRequest): boolean;
-	verify(request: HttpRequest, client: Client): Promise<boolean>;
+	/**
+	 * What it verified of the request's credentials for the client, none where they do not hold.
+	 * `true` is the same as a verification carrying nothing; `false` as none.
+	 */
+	verify(request: HttpRequest, client: Client): Promise<Verified | boolean | undefined>;
 	/** The work a verify would cost, done for a request refused before it (no such client, say), so the time tells nothing. */
 	decoy?(request: HttpRequest): Promise<void>;
+}
+
+/** What a method verified: its `proof` (a key, for one verifying a signature), unread here; none for a secret. */
+export interface Verified {
+	readonly proof?: unknown;
 }
 
 export type Authentication =
 	| {
 			readonly kind: "authenticated";
 			readonly client: Client;
+			/** What its method verified, handed on unread; none where the method verified none. */
+			readonly proof?: unknown;
 			/** Challenges for a later 401 to this client: its method's, or every method's when its method has none. */
 			readonly challenges: readonly string[];
 	  }

@@ -19,7 +19,7 @@ import {
 	type Section,
 } from "../src/contract.ts";
 import clientsModule from "../src/module.ts";
-import { clientRecord } from "../src/registry.ts";
+import { clientRecord } from "../src/registry/registry.ts";
 import { basic, refusalsOf } from "./parts.ts";
 
 const grants: Section<{ allowed: string[] }> = {

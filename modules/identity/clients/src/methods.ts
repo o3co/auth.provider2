@@ -95,14 +95,14 @@ export const secretBasic = (checker: SecretChecker): AuthMethod => ({
 	malformed: (request) => usesBasic(request) && basic(request) === undefined,
 	verify: async (request, client) => {
 		const credentials = basic(request);
-		if (credentials === undefined) return false;
+		if (credentials === undefined) return undefined;
 		// A client_id in the body must name the same client, so one request never names two. The secret
 		// is checked either way: refused without the work, a known id would answer sooner than an
 		// unknown one, whose refusal waits for the decoy's.
 		const named =
 			!sends(request, "client_id") || request.fields.single("client_id") === credentials.id;
 		const matches = await secretMatches(checker, client, credentials.secret);
-		return named && matches;
+		return named && matches ? {} : undefined;
 	},
 	decoy: async (request) => {
 		await checker.check(undefined, basic(request)?.secret ?? "");
@@ -119,7 +119,7 @@ export const secretPost = (checker: SecretChecker): AuthMethod => ({
 		(!request.fields.single("client_id") || request.fields.single("client_secret") === undefined),
 	verify: async (request, client) => {
 		const secret = request.fields.single("client_secret");
-		return secret !== undefined && secretMatches(checker, client, secret);
+		return secret !== undefined && (await secretMatches(checker, client, secret)) ? {} : undefined;
 	},
 	decoy: async (request) => {
 		await checker.check(undefined, request.fields.single("client_secret") ?? "");
@@ -133,5 +133,5 @@ export const none: AuthMethod = {
 	// A client_id sent twice, or not as a string, names no one client.
 	malformed: (request) =>
 		sends(request, "client_id") && request.fields.single("client_id") === undefined,
-	verify: async (_request, client) => client.kind === "public",
+	verify: async (_request, client) => (client.kind === "public" ? {} : undefined),
 };

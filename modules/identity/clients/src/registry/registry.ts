@@ -11,8 +11,8 @@ import type {
 	Clients,
 	RecordRefusal,
 	Section,
-} from "./contract.ts";
-import { none, sends } from "./methods.ts";
+} from "../contract.ts";
+import { none, sends } from "../methods.ts";
 
 /**
  * The parameters a client authenticates with (RFC 6749 §2.3.1, RFC 7521 §4.2), sent at all,
@@ -52,6 +52,9 @@ export const clientRecord = z.strictObject({
 	sections: z.record(z.string(), z.unknown()).prefault({}),
 });
 
+/** A source's record: as the operator registers one, and the registry version it came from where it names one. */
+const sourceRecord = clientRecord.extend({ version: z.number().int().positive().optional() });
+
 const pathOf = (issue: StandardSchemaV1.Issue) =>
 	(issue.path ?? []).map((s) => String(typeof s === "object" ? s.key : s)).join(".");
 
@@ -81,6 +84,7 @@ export async function readRecord(
 		kind: record.kind,
 		method: record.method,
 		registered: origin === "registered",
+		...(record.version === undefined ? {} : { version: record.version }),
 		section: <T>(section: Section<T>) => {
 			if (!values.has(section.name))
 				throw new Error(`no module contributes the section ${section.name}`);
@@ -142,7 +146,7 @@ export function registry(
 	const checked = async (
 		record: unknown,
 	): Promise<{ client: Client } | { refusals: RecordRefusal[] }> => {
-		const parsed = clientRecord.safeParse(record);
+		const parsed = sourceRecord.safeParse(record);
 		if (!parsed.success) {
 			const paths = parsed.error.issues.flatMap((issue) =>
 				issue.code === "unrecognized_keys"
@@ -151,9 +155,13 @@ export function registry(
 			);
 			return { refusals: paths.map((path) => ({ path: path.map(String).join(".") })) };
 		}
-		const { data } = parsed;
+		const { version, ...data } = parsed.data;
 		if (!methods.some((m) => m.name === data.method)) return { refusals: [{ path: "method" }] };
-		const read = await readRecord(data, known, "source");
+		const read = await readRecord(
+			{ ...data, ...(version === undefined ? {} : { version }) },
+			known,
+			"source",
+		);
 		if ("client" in read) return read;
 		return { refusals: read.issues.map((issue) => ({ path: `sections.${issue.path}` })) };
 	};
@@ -226,11 +234,15 @@ export function registry(
 			if (found === undefined) return refusedAfterWork("unknown_client");
 			if (found === "invalid") return refusedAfterWork("invalid_record");
 			if (found.method !== only.method.name) return refusedAfterWork("wrong_method");
-			if (!(await only.method.verify(request, found))) return refused("bad_credentials");
+			const verified = await only.method.verify(request, found);
+			if (verified === undefined || verified === false) return refused("bad_credentials");
+			const proof =
+				verified === true || verified.proof === undefined ? {} : { proof: verified.proof };
 			return {
 				kind: "authenticated",
 				client: found,
 				challenges: challenges.length > 0 ? challenges : every,
+				...proof,
 			};
 		},
 	});

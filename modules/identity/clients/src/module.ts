@@ -18,7 +18,7 @@ import {
 	secretPost,
 	secretSection,
 } from "./methods.ts";
-import { clientRecord, methodIssues, readRecord, registry } from "./registry.ts";
+import { clientRecord, methodIssues, readRecord, registry } from "./registry/registry.ts";
 
 const section = z
 	.strictObject({
