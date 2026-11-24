@@ -57,13 +57,16 @@ describe("prepare and sign", () => {
 	});
 
 	it("is unavailable where the keys' holder no longer lets this Core sign, handing nothing out", async () => {
+		// What its holder signs with: an Ed25519 key, its signature 64 bytes.
+		const ready = {
+			ring: "authority" as const,
+			header: { alg: "EdDSA", typ: "at+jwt", kid: "k" },
+			headerText: '{"alg":"EdDSA","typ":"at+jwt","kid":"k"}',
+			signatureLength: 64,
+		};
 		const withdrawn = defineModule({ name: "keys", replicaSafe: true, takes: [] }, (m) => [
 			m.provide(accessTokenSigning).by(async () => ({
-				prepare: () => ({
-					ring: "authority",
-					header: { alg: "EdDSA", typ: "at+jwt", kid: "k" },
-					headerText: '{"alg":"EdDSA","typ":"at+jwt","kid":"k"}',
-				}),
+				prepare: () => ready,
 				sign: async () => ({ kind: "withdrawn" }),
 				verify: async () => ({ kind: "invalid", reason: "signature" }),
 			})),
