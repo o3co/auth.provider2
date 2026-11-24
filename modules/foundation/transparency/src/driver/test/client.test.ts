@@ -5,7 +5,7 @@ import { memoryFrames } from "../../../test/fixtures/frames.ts";
 import { logBook } from "../../../test/fixtures/log.ts";
 import { allParts, issue, keyChange, owners } from "../../../test/fixtures/registrations.ts";
 import type { Stage, TransparencyLog } from "../../contract.ts";
-import { transparencyOver } from "../driver.ts";
+import { clientTending, transparencyOver } from "../driver.ts";
 
 const flow = { of: "client", id: "c1" } as const;
 const leaseMs = 5000;
@@ -122,19 +122,23 @@ describe("a client's flow: one frame per op, unconditional appends (KG-07)", () 
 		expect([world.frame("o1"), await world.listed()]).toEqual([undefined, []]);
 	});
 
-	it("closes its op without a record on a refusal for good; a temporary one leaves it open", async () => {
-		const refusing = (refusal: "temporary" | "lateBundle") =>
+	it("closes its op without a record on `abandoned` alone; any other refusal leaves it to its lease's end", async () => {
+		type Refusal = "temporary" | "lateBundle" | "sameIdOther" | "evidenceUsed" | "abandoned";
+		const refusing = (refusal: Refusal) =>
 			world.replica("w1", (l) => ({
 				...l,
 				append: async () => ({ v: 1, result: "refused", refusal }),
 			}));
 		await decide("o1");
+		for (const refusal of ["temporary", "lateBundle", "sameIdOther", "evidenceUsed"] as const) {
+			expect(await refusing(refusal).send({ flow, op: "o1", stage: start("o1"), prev: 0 })).toEqual(
+				{ answer: { v: 1, result: "refused", refusal } },
+			);
+			expect(world.frame("o1")).toMatchObject({ intent: { state: "pending" } });
+		}
+		expect(await world.listed()).toEqual(["o1"]);
 		expect(
-			await refusing("temporary").send({ flow, op: "o1", stage: start("o1"), prev: 0 }),
-		).toEqual({ answer: { v: 1, result: "refused", refusal: "temporary" } });
-		expect(world.frame("o1")).toMatchObject({ intent: { state: "pending" } });
-		expect(
-			await refusing("lateBundle").send({ flow, op: "o1", stage: bundle("o1"), prev: 0 }),
+			await refusing("abandoned").send({ flow, op: "o1", stage: bundle("o1"), prev: 0 }),
 		).toMatchObject({ end: { op: "o1", ending: "refused", owner: true } });
 		expect([world.frame("o1"), await world.listed()]).toEqual([undefined, []]);
 	});
@@ -142,7 +146,7 @@ describe("a client's flow: one frame per op, unconditional appends (KG-07)", () 
 	it("never decides again an op closed with no record, though its frame is dropped", async () => {
 		const refusing = world.replica("w1", (l) => ({
 			...l,
-			append: async () => ({ v: 1, result: "refused", refusal: "lateBundle" }),
+			append: async () => ({ v: 1, result: "refused", refusal: "abandoned" }),
 		}));
 		await decide("o1");
 		expect(await refusing.send({ flow, op: "o1", stage: start("o1"), prev: 0 })).toMatchObject({
@@ -207,6 +211,25 @@ describe("tending a client's flow: each op its record lists, its own unit", () =
 			opIds.abandonment("o1", 1),
 			opIds.abandonment("o1", 2),
 		]);
+	});
+
+	it("closes, by rounds of tending the client flows, an op whose owner fell with no writer asking", async () => {
+		const other = { of: "client", id: "c2" } as const;
+		await decide("o1");
+		await world.w1.send({ flow, op: "o1", stage: start("o1"), prev: 0 });
+		await world.w1.decide({
+			kind: "issue",
+			flow: other,
+			op: "o2",
+			decide: () => ({ digest: "d".repeat(43), eff: {}, records: [] }),
+		});
+		world.log.judgeOnAppend(verified);
+		world.log.judge(flow, 1, verified);
+		world.store.clock.set(leaseMs);
+		for (let round = 0; round < 3; round++) await clientTending(world.w2, world.store.frames);
+		expect([world.frame("o1"), await world.listed()]).toEqual([undefined, []]);
+		expect(world.log.records(other).map((p) => p.record.op)).toEqual([opIds.abandonment("o2", 1)]);
+		expect(await world.store.frames.flowRecord(other)).toMatchObject({ open: [] });
 	});
 
 	it("claims nothing of an op whose own record is unjudged, nor of a live owner's", async () => {

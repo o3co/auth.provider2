@@ -61,6 +61,15 @@ export interface FrameStore {
 	/** A client's flow's record, as a confirmed read; none where it holds none. */
 	flowRecord(flow: IntentUnit["flow"]): Promise<Json | undefined>;
 	/**
+	 * A page of the client flows it holds a record of, and the cursor on; none when done. A flow
+	 * whose record lives through the walk is listed. Where a frame store gives none, a client's flow
+	 * is tended only as its writers ask.
+	 */
+	clientFlows?(cursor?: string): Promise<{
+		readonly flows: readonly { readonly of: "client"; readonly id: string }[];
+		readonly cursor?: string;
+	}>;
+	/**
 	 * Writes the frame (none keeps it; `drop` removes it), on a client's op its flow's record (none
 	 * keeps it), and the records as one, held to every version the read saw, refused past `deadline`
 	 * on the store clock; nothing expires. Writing nothing is held to the read all the same.
@@ -219,7 +228,8 @@ export interface Transparency {
 	>;
 	/**
 	 * KE-C02: the owner's stage, after `prev`; its first stage's prevMismatch closes the op. On a
-	 * client's flow, appended with no previous position, any refusal but a temporary one closes it.
+	 * client's flow, appended with no previous position, `abandoned` alone closes it; any other
+	 * refusal leaves it to its lease's end.
 	 */
 	send(p: {
 		readonly flow: Flow;

@@ -128,5 +128,27 @@ export function frameStoreContract(name: string, harness: FrameStoreHarness): vo
 			expect(await frames.flowRecord(c1)).toEqual(["b"]);
 			expect(await frames.flowRecord({ of: "client", id: "c2" })).toBeUndefined();
 		});
+
+		it("lists, page by page, the client flows it holds a record of, where it lists them", async () => {
+			const { frames } = await harness.open();
+			if (!frames.clientFlows) return;
+			for (const [id, op] of [
+				["c1", "a"],
+				["c2", "b"],
+			] as const) {
+				const read = await frames.read({ flow: { of: "client", id }, op }, []);
+				await frames.write(read, { frame: frame(1), flow: [op], records: [] }, read.now + 10_000);
+			}
+			const subject = await frames.read(flow, []);
+			await frames.write(subject, { frame: frame(1), records: [] }, subject.now + 10_000);
+			const listed: string[] = [];
+			let cursor: string | undefined;
+			do {
+				const page = await frames.clientFlows(cursor);
+				listed.push(...page.flows.map((f) => `${f.of}:${f.id}`));
+				cursor = page.cursor;
+			} while (cursor !== undefined);
+			expect([...new Set(listed)].sort()).toEqual(["client:c1", "client:c2"]);
+		});
 	});
 }

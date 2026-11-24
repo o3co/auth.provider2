@@ -9,7 +9,7 @@ import {
 	transparency,
 	transparencyLog,
 } from "./contract.ts";
-import { transparencyOver } from "./driver/driver.ts";
+import { clientTending, transparencyOver } from "./driver/driver.ts";
 import { section } from "./section.ts";
 
 /** What the registrations leave undone: a field of the state with no owner or two, a part with no place. */
@@ -64,7 +64,10 @@ export default defineModule(
 			const refused = registrationRefusals(frames.parts, kinds, owners);
 			if (refused.length > 0) c.refuseAll(refused);
 			const log = await c.get(transparencyLog);
-			return transparencyOver({ frames, log, kinds, owners, leaseMs: c.section.lease });
+			const t = transparencyOver({ frames, log, kinds, owners, leaseMs: c.section.lease });
+			// Every replica goes round the client flows: an op whose owner fell is closed by any.
+			c.every(c.section.tending, () => clientTending(t, frames));
+			return t;
 		}),
 	],
 );

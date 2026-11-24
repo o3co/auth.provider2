@@ -1,5 +1,5 @@
 import { type Envelope, emptyState, type FlowState, fold, ruleSchemas } from "@mod/authority-rules";
-import { Unavailable } from "@mod/kernel";
+import { isUnavailable, Unavailable } from "@mod/kernel";
 import type { Flow } from "@mod/transparency-wire";
 import type {
 	FrameRead,
@@ -54,6 +54,25 @@ const flowRecordOf = (value: Json | undefined): FlowRecord => {
 };
 /** How many reads find the intent's kind before contention is unavailable. */
 const kindReads = 3;
+
+/** One round of tending each client flow the frame store lists; one unavailable now waits for the next. */
+export async function clientTending(
+	t: Pick<Transparency, "tend">,
+	frames: Pick<FrameStore, "clientFlows">,
+): Promise<void> {
+	if (!frames.clientFlows) return;
+	let cursor: string | undefined;
+	do {
+		const page: Awaited<ReturnType<NonNullable<FrameStore["clientFlows"]>>> =
+			await frames.clientFlows(cursor);
+		for (const flow of page.flows) {
+			await t.tend(flow).catch((error: unknown) => {
+				if (!isUnavailable(error)) throw error;
+			});
+		}
+		cursor = page.cursor;
+	} while (cursor !== undefined);
+}
 
 /**
  * The driver: the frame's I/O around its pure core. Every event reads the frame with the owners'
@@ -308,10 +327,10 @@ export function transparencyOver(p: {
 		const unconditional = perOp(unit);
 		const answer = await (unconditional ? log.append(q.stage) : log.append(q.stage, q.prev));
 		if (answer.result !== "refused") return { answer };
-		// Refused for good: a subject flow's first stage after another record, or any stage of a
-		// client's op but a temporary refusal. The owner closes the op without a record.
+		// Never to be placed: a subject's first stage after another record, a client's after its abandonment.
+		// The owner closes the op without a record; on any other refusal the lease's end leaves it.
 		const first = q.stage.stage === 1 && q.prev === it.prev && answer.refusal === "prevMismatch";
-		if (!(unconditional ? answer.refusal !== "temporary" : first)) return { answer };
+		if (!(unconditional ? answer.refusal === "abandoned" : first)) return { answer };
 		const closed = closedByOwner(snap.frame, snap.at, q.op);
 		if ("refused" in closed) return { answer };
 		const placed = unconditional ? await log.of(q.flow, q.op) : undefined;

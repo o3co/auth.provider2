@@ -34,6 +34,12 @@ export function memoryFrames(parts: readonly string[]) {
 				basis: [...entries, ...("op" in unit ? [flow] : [])].map((e) => e?.version ?? null),
 			};
 		},
+		async clientFlows() {
+			const flows = [...kept.keys()]
+				.filter((k) => k.startsWith("client:") && k.endsWith("/flow"))
+				.map((k) => ({ of: "client" as const, id: k.slice("client:".length, -"/flow".length) }));
+			return { flows };
+		},
 		flowRecord: async (flow) => {
 			const value = kept.get(flowKey(flow))?.value;
 			return value === undefined ? undefined : structuredClone(value);
