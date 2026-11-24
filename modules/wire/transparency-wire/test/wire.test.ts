@@ -156,6 +156,14 @@ describe("the conditional append a writer sends", () => {
 		no(schemas.appendRequest, { ...noTokens, kind: "start", abandons });
 	});
 
+	it("keeps a Core writer off a reset's and a stop's op ids, and an abandonment's op id to an abandonment", () => {
+		for (const op of ["reset:A", "stop:1", opIds.reset("A".repeat(22)), opIds.stop(2)])
+			no(schemas.appendRequest, { ...bundleRequest, op });
+		no(schemas.appendRequest, { ...bundleRequest, op: "abandonment:1:o1" });
+		ok(schemas.appendRequest, { ...bundleRequest, op: "resets:1" });
+		expect(opIds.reset("abc")).toBe("reset:abc");
+	});
+
 	it("holds key change digests to a key change, and approval digests to an approval, each kind its own", () => {
 		const { tokens: _, ...noTokens } = bundleRequest;
 		const keyChange = { statement: d("p"), evidence: d("a") };
@@ -504,6 +512,21 @@ describe("the generation flow and the publisher's records", () => {
 			required: 1,
 		});
 		expect(signers.restartApproval).toEqual({ required: 2, least: 3 });
+		expect(signers.resetInstruction).toEqual({ required: 1, least: 1 });
+		ok(schemas.signerSet, {
+			v: 1,
+			version: 1,
+			purpose: "resetInstruction",
+			keys: [key("a")],
+			required: 1,
+		});
+		no(schemas.signerSet, {
+			v: 1,
+			version: 1,
+			purpose: "resetInstruction",
+			keys: [key("a"), key("b")],
+			required: 2,
+		});
 	});
 
 	it("reads a preimage: the root it names, its parent and the evidence bundle", () => {
@@ -518,6 +541,11 @@ describe("the generation flow and the publisher's records", () => {
 		for (const form of ["continuation", "completion"]) {
 			ok(schemas.preimage, { v: 1, evidence: [{ form, value: "eyJ" }], content: {} });
 		}
+		no(schemas.preimage, {
+			v: 1,
+			evidence: [{ form: "resetInstruction", value: "eyJ" }],
+			content: {},
+		});
 	});
 });
 
@@ -539,6 +567,40 @@ describe("a record no Core writer writes, read with its verified body", () => {
 		no(schemas.signedRecord, { record: boundary, body: { ...body, op: "erase-2" } });
 		no(schemas.signedRecord, { record: boundary, body: { ...body, prev: 4 } });
 		no(schemas.signedRecord, { record: boundary, body: { v: 1 } });
+	});
+
+	it("binds a reset boundary's body to the envelope, its op derived from its instruction's id", () => {
+		const b64 = (text: string) => Buffer.from(text).toString("base64url");
+		const jws = (payload: string) => `${b64('{"alg":"ES256"}')}.${b64(payload)}.c2ln`;
+		const instruction = jws(JSON.stringify({ subject: "sub-1", id: "A".repeat(22) }));
+		const reset = { ...denialRecord, kind: "resetBoundary", op: opIds.reset("A".repeat(22)) };
+		const resetBody = { v: 1, flow: subject, op: reset.op, prev: 5, set: 1, instruction };
+		ok(schemas.signedRecord, { record: reset, body: resetBody });
+		no(schemas.signedRecord, {
+			record: { ...reset, op: "reset:B" },
+			body: { ...resetBody, op: "reset:B" },
+		});
+		no(schemas.signedRecord, { record: reset, body: { ...resetBody, prev: 4 } });
+		for (const envelope of [{ stage: 2 }, { last: false }, { flow: { of: "client", id: "sub-1" } }])
+			no(schemas.signedRecord, { record: { ...reset, ...envelope }, body: resetBody });
+		no(schemas.signedRecord, { record: reset, body: { ...resetBody, set: 0 } });
+		no(schemas.signedRecord, { record: reset, body: { ...resetBody, instruction: "a.b" } });
+		const { set: _, ...noSet } = resetBody;
+		no(schemas.signedRecord, { record: reset, body: noSet });
+		for (const payload of ['{"id":1}', "{}", "[]", "not json", '{"id":"A","id":"B"}'])
+			no(schemas.signedRecord, {
+				record: { ...reset, op: "reset:A" },
+				body: { ...resetBody, op: "reset:A", instruction: jws(payload) },
+			});
+		const bad = `${b64("{}")}.${Buffer.from([0x7b, 0x22, 0xc0, 0x80, 0x22, 0x7d]).toString("base64url")}.c2ln`;
+		no(schemas.signedRecord, { record: reset, body: { ...resetBody, instruction: bad } });
+		const multi = jws(JSON.stringify({ subject: "主体", id: "A".repeat(22) }));
+		ok(schemas.signedRecord, { record: reset, body: { ...resetBody, instruction: multi } });
+		expect(recordKinds.monitor).toContain("resetBoundary");
+		expect([logTyps.resetBoundary, logTyps.resetInstruction]).toEqual([
+			"reset-boundary+jwt",
+			"reset-instruction+jwt",
+		]);
 	});
 
 	it("holds every other body to its kind's schema, a stop to its derived op id and a restart to its position", () => {

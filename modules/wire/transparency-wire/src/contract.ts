@@ -23,12 +23,15 @@ export const logTyps = Object.freeze({
 	confirmation: "confirmation+jwt",
 	denial: "denial+jwt",
 	erasureBoundary: "erasure-boundary+jwt",
+	resetBoundary: "reset-boundary+jwt",
 	tombstone: "tombstone+jwt",
 	coreRingKey: "core-ring-key+jwt",
 	signerSet: "signer-set+jwt",
 	/** Signed by people's keys, in an encoding not yet decided: no `+jwt`, as it may be no JWS. */
 	stopInstruction: "stop-instruction",
 	restartApproval: "restart-approval",
+	/** An embedder's reset instruction (reset-wire's payload), which a reset boundary carries. */
+	resetInstruction: "reset-instruction+jwt",
 	/** The callback's proof the login screen signs with E_sig (A38). */
 	callback: "callback+jwt",
 });
@@ -48,6 +51,7 @@ export const recordKinds = Object.freeze({
 		"confirmation",
 		"denial",
 		"erasureBoundary",
+		"resetBoundary",
 		"tombstone",
 	] as const),
 	publisher: Object.freeze([
@@ -108,10 +112,11 @@ export const statusWords = Object.freeze({
 	] as const),
 });
 
-/** The signer sets the generation flow's kinds are held to: how many sign, of at least how many keys. */
+/** The signer sets held to a count, the generation flow's and the reset instruction's: how many sign, of at least how many keys. */
 export const signers = Object.freeze({
 	stopInstruction: Object.freeze({ required: 1, least: 1 }),
 	restartApproval: Object.freeze({ required: 2, least: 3 }),
+	resetInstruction: Object.freeze({ required: 1, least: 1 }),
 });
 
 /** A canonical JSON text: object keys sorted, undefined members left out, so both sides build the same bytes. */
@@ -186,6 +191,8 @@ export const opIds = Object.freeze({
 	stop: (generation: number) => `stop:${generation}`,
 	/** An abandonment record's: by the op it abandons and its attempt, from 1. */
 	abandonment: (op: string, attempt: number) => `abandonment:${attempt}:${op}`,
+	/** A reset boundary's: by its instruction's id, so the same instruction sent again is not a new op. */
+	reset: (id: string) => `reset:${id}`,
 });
 
 const isObject = (x: unknown): x is Record<string, unknown> =>
@@ -355,6 +362,7 @@ const named = {
 	last: z.boolean(),
 	registryVersion: ordinal.optional(),
 	configVersion: ordinal.optional(),
+	/** A Core writer's: its preimage's digest. Another writer's signed JWS: its payload bytes' SHA-256 (people's keys' encoding is not yet decided). */
 	plaintextDigest: digest,
 	/** The signed body of a record no Core writer writes: a JWS, compact or JSON; people's keys' encoding is not yet decided. */
 	signed: z.string().min(1).optional(),
@@ -374,6 +382,8 @@ type Named = {
 	kind: string;
 	flow: { of: string };
 	op: string;
+	stage: number;
+	last: boolean;
 	elements?: unknown;
 	tokens?: unknown;
 	approval?: unknown;
@@ -393,6 +403,14 @@ const kindRules = (r: Named, ctx: z.RefinementCtx) => {
 		fail("abandons goes with an abandonment");
 	if (r.elements !== undefined && !(r.kind === "start" && r.flow.of === "client"))
 		fail("evidence elements go with a client's start alone");
+	// The ops a Core writer may not take: a reset's and a stop's (its op held first would block them),
+	// and an abandonment's but for an abandonment.
+	if (coreKinds.includes(r.kind) && /^(reset|stop):/.test(r.op))
+		fail("a Core writer's op id is never a reset's or a stop's");
+	if (r.op.startsWith("abandonment:") && r.kind !== "abandonment")
+		fail("an abandonment's op id goes with an abandonment alone");
+	if (r.kind === "resetBoundary" && !(r.flow.of === "subject" && r.stage === 1 && r.last === true))
+		fail("a reset boundary is a subject's flow's, in one last stage");
 	if (r.abandons && r.op !== opIds.abandonment(r.abandons.op, r.abandons.attempt)) {
 		fail("an abandonment's op id is derived from the op it abandons and its attempt");
 	}
@@ -564,7 +582,7 @@ const checkpoint = z
 		deny: ids,
 		/** The ids marked to count toward a writer's hold limit (A46). */
 		counted: ids,
-		/** The forged ids, each with its writer's generation: the generations the log stops on accepting this. */
+		/** The forged ids (each one the monitor's signed judgment says `forged`), each with its writer's generation: the generations the log stops on accepting this. */
 		forged: z
 			.array(z.object({ id, generation: ordinal }).strict())
 			.refine((list) => unique(list, (f) => f.id), { message: "an id is named twice" }),
@@ -625,7 +643,6 @@ const preimage = z
 						"dpopProof",
 						"clientAssertion",
 						"token",
-						"resetInstruction",
 						"continuation",
 						"completion",
 					]),
@@ -639,8 +656,69 @@ const preimage = z
 	.strict();
 
 const registration = z.object({ v, registration: id }).strict();
+const compactJws = z.string().regex(/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/);
+/** Bytes from their one unpadded base64url spelling; none for any other. */
+function bytesOf(text: string): number[] | undefined {
+	const rest = text.length % 4;
+	if (rest === 1) return undefined;
+	const bits: number[] = [];
+	for (const char of text) {
+		const at = alphabet.indexOf(char);
+		if (at < 0) return undefined;
+		for (let bit = 32; bit >= 1; bit >>= 1) bits.push(at & bit ? 1 : 0);
+	}
+	const spare = bits.length % 8;
+	if (bits.slice(bits.length - spare).some((b) => b === 1)) return undefined;
+	const bytes: number[] = [];
+	for (let at = 0; at + 8 <= bits.length; at += 8)
+		bytes.push(bits.slice(at, at + 8).reduce((n, b) => n * 2 + b, 0));
+	return bytes;
+}
+/** Text from strict UTF-8 (shortest forms, no surrogates); none for any other bytes. */
+function textOf(bytes: readonly number[]): string | undefined {
+	let text = "";
+	for (let at = 0; at < bytes.length; ) {
+		const first = bytes[at] ?? 0;
+		const size =
+			first < 0x80
+				? 1
+				: first >= 0xc2 && first < 0xe0
+					? 2
+					: first >= 0xe0 && first < 0xf0
+						? 3
+						: first >= 0xf0 && first < 0xf5
+							? 4
+							: 0;
+		if (size === 0 || at + size > bytes.length) return undefined;
+		let point = size === 1 ? first : first & (0xff >> (size + 1));
+		for (let k = 1; k < size; k++) {
+			const next = bytes[at + k] ?? 0;
+			if ((next & 0xc0) !== 0x80) return undefined;
+			point = point * 64 + (next & 0x3f);
+		}
+		const least = [0, 0, 0x80, 0x800, 0x10000][size] ?? 0;
+		if (point < least || point > 0x10ffff || (point >= 0xd800 && point <= 0xdfff)) return undefined;
+		text += String.fromCodePoint(point);
+		at += size;
+	}
+	return text;
+}
+/** A reset boundary's op from its instruction: `opIds.reset` of the payload's string `id`; none where it has none. */
+function resetOpOf(jws: string): string | undefined {
+	const bytes = bytesOf(jws.split(".")[1] ?? "");
+	const text = bytes && textOf(bytes);
+	const read = text === undefined ? undefined : readJson(text);
+	const value = read && "value" in read ? read.value : undefined;
+	const instructionId = isObject(value) ? value.id : undefined;
+	return typeof instructionId === "string" ? opIds.reset(instructionId) : undefined;
+}
+
 /** A body that acts on a flow binds it: the flow, the op and the previous position its envelope names. */
 const bound = z.object({ v, flow, op: id, prev: count }).strict();
+/** A reset boundary's: as `bound`, with the instruction it places (compact) and the version of the set its signature was checked against (`set`). */
+const resetBoundary = z
+	.object({ v, flow, op: id, prev: count, set: ordinal, instruction: compactJws })
+	.strict();
 const stopInstruction = z.object({ v, installation: id, generation: ordinal }).strict();
 const restartApproval = z
 	.object({
@@ -681,13 +759,12 @@ const signerSet = z
 	.refine((s) => s.required <= s.keys.length, { message: "more required than keys" })
 	.refine(
 		(s) => {
-			const held =
-				s.purpose === "stopInstruction" || s.purpose === "restartApproval"
-					? signers[s.purpose]
-					: undefined;
+			const held = Object.hasOwn(signers, s.purpose)
+				? signers[s.purpose as keyof typeof signers]
+				: undefined;
 			return !held || (s.required === held.required && s.keys.length >= held.least);
 		},
-		{ message: "a generation flow's signer set is held to its count" },
+		{ message: "a signer set of a counted purpose is held to its count" },
 	);
 
 const bodies = Object.freeze({
@@ -695,6 +772,7 @@ const bodies = Object.freeze({
 	confirmation: registration,
 	denial: registration,
 	erasureBoundary: bound,
+	resetBoundary,
 	tombstone: bound,
 	coreRingKey: z.object({ v, kid: id, key: publicKey }).strict(),
 	signerSet,
@@ -715,11 +793,13 @@ const signedRecord = z
 		if (!read.success) return fail("the body does not read as its kind's");
 		const b = read.data as Record<string, unknown>;
 		const prev = r.position - 1;
-		if (r.kind === "erasureBoundary" || r.kind === "tombstone") {
+		if (r.kind === "erasureBoundary" || r.kind === "resetBoundary" || r.kind === "tombstone") {
 			const f = b.flow as z.infer<typeof flow>;
 			if (f.of !== r.flow.of || f.id !== r.flow.id || b.op !== r.op || b.prev !== prev)
 				fail("the body names another flow, op or previous position than its envelope");
 		}
+		if (r.kind === "resetBoundary" && r.op !== resetOpOf(b.instruction as string))
+			fail("a reset boundary's op id is derived from its instruction's id");
 		if (r.kind === "stopInstruction" && r.op !== opIds.stop(b.generation as number))
 			fail("a stop's op id is derived from the generation it names");
 		if (r.kind === "restartApproval" && (b.from === undefined ? r.position !== 1 : b.prev !== prev))
