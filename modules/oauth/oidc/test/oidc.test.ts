@@ -17,6 +17,9 @@ import { subjectAttributes } from "@mod/subject-attributes";
 import { afterEach, expect, it } from "vitest";
 import oidcModule from "../src/module.ts";
 
+/** The bundle's record, as the endpoint hands it on. */
+const placed = { id: "r-bundle", acceptedAt: 1_800_000_001_500 };
+
 let stop = async () => {};
 afterEach(() => stop());
 
@@ -88,7 +91,7 @@ it("makes an ID token the authority's ring verifies under JWT, of the issuer, fo
 		approvedAt: Date.now(),
 	});
 	const ready = await part.prepare(Date.now());
-	const jws = await part.sign(ready.prepared, "h.p1.s");
+	const jws = await part.sign(ready.prepared, "h.p1.s", placed);
 	const checked = await app.get(keys).verify("authority", jws, "JWT");
 	expect(checked).toMatchObject({
 		kind: "valid",

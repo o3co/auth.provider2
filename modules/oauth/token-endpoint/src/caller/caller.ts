@@ -96,9 +96,10 @@ const signedAtOnce = (t: CallerTokens): Issuing => ({
 		const readied = await Promise.all(parts.map((part) => part.prepare(issuedAt)));
 		const signed = await t.sign(prepared);
 		if (signed.kind === "refused" || parts.length === 0) return signed;
-		// Each part signed at once too, with a receipt that names no log.
+		// Each part signed at once too, with a receipt and a record that name no log.
+		const placed = { id: "test-bundle", acceptedAt: issuedAt };
 		const made = await Promise.all(
-			parts.map((part, i) => part.sign(readied[i]?.prepared, "test-receipt")),
+			parts.map((part, i) => part.sign(readied[i]?.prepared, "test-receipt", placed)),
 		);
 		return { ...signed, parts: made };
 	},

@@ -77,27 +77,37 @@ export const targets = contract<TargetRule>("grants.targets");
 export interface BundleRequest {
 	/** Its root's reference: the record its chain roots in, where that record is on the log; none where it is not. */
 	readonly root?: string;
-	/** How a person's bundle roots there: by an approval's code, or by a family's refresh at its rotation. */
+	/** How a person's bundle roots there: by an approval's code, or by a family's refresh. */
 	readonly via?: Rooting;
 	readonly access: AccessGrant;
 	/** The tokens it carries beside its access token, each its owner's, recorded in the same bundle. */
 	readonly parts?: readonly BundlePart[];
 }
 
-/** How a person's bundle roots: by an approval's code, or by a family's refresh at its rotation. */
-export type Rooting =
-	| { readonly via: "code" }
-	| { readonly via: "refresh"; readonly rotation: number };
+/**
+ * How a person's bundle roots: by an approval's code, or by a family's refresh, the rotation its
+ * start names read by the token endpoint from the flow's applied state.
+ */
+export type Rooting = { readonly via: "code" } | { readonly via: "refresh" };
 
 /**
  * A token a bundle carries beside its access token (A40), made by its owner: prepared with the
  * start's acceptance time before the bundle is recorded, its digest recorded with the access
- * token's, and signed only after the bundle's receipts, with its own receipt.
+ * token's, and signed only after the bundle's receipts, with its own receipt and the bundle's
+ * record. Its `commit`, where it has one, runs once the bundle is taken in as its owner's `took`
+ * (V12), before any token is answered: a failure answers none, the bundle on the log all the same.
  */
 export interface BundlePart {
 	readonly frame: "idToken" | "family";
 	prepare(acceptedAt: number): Promise<{ readonly prepared: unknown; readonly digest: string }>;
-	sign(prepared: unknown, receipt: string): Promise<string>;
+	sign(prepared: unknown, receipt: string, placed: BundlePlaced): Promise<string>;
+	commit?(prepared: unknown, placed: BundlePlaced): Promise<void>;
+}
+
+/** The bundle's record on the log: its id (a family it makes is named by it) and its acceptance time. */
+export interface BundlePlaced {
+	readonly id: string;
+	readonly acceptedAt: number;
 }
 
 export interface GrantInput {

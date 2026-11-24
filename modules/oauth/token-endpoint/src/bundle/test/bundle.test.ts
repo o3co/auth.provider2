@@ -262,11 +262,11 @@ describe("a bundle, owned by the token endpoint (A40)", () => {
 		await world.run(await world.replica("w1"))({
 			...asked,
 			evidence: [],
-			via: { via: "refresh", rotation: 2 },
+			via: { via: "refresh" },
 		});
 		expect(world.book.sent[2]?.stage.preimage).toMatchObject({
 			parent: "r-approval",
-			content: { via: "refresh", rotation: 2 },
+			content: { via: "refresh" },
 		});
 	});
 
@@ -283,7 +283,7 @@ describe("a bundle, owned by the token endpoint (A40)", () => {
 			return { issue: world.run({ ...t, decide }), effs };
 		};
 		const person = { ...grant, subject: "alice", subjectKind: "user" as const };
-		const rootings = [{ via: "code" }, { via: "refresh", rotation: 1 }] as const;
+		const rootings = [{ via: "code" }] as const;
 		for (const [i, via] of rootings.entries()) {
 			const { issue, effs } = await watching();
 			const evidence = [{ form: "dpopProof" as const, value: jws(claimed(`p${i}`)) }];

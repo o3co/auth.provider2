@@ -244,17 +244,18 @@ export function bundling(deps: BundleParts) {
 				// One receipt per token, in its order, the access token's first: else none is signed.
 				if (sent.answer.receipts.length !== bundle.tokens?.length)
 					throw new Unavailable("token-endpoint");
-				return sent.answer.receipts;
+				const { receipts, id: placedId, acceptedAt: placedAt } = sent.answer;
+				return { receipts, placed: { id: placedId, acceptedAt: placedAt } };
 			}
 			// A client's op, refused, is its lease's end's to leave, unless the refusal closed it.
 			if (!client && !sent.end) await close();
 			throw new Unavailable("token-endpoint");
 		};
-		const signAll = async (received: readonly string[]) => {
+		const signAll = async ({ receipts: received, placed }: Awaited<ReturnType<typeof append>>) => {
 			const signed = await deps.issuance.sign(prepared);
 			if (signed.kind === "refused") return { signed, made: [] };
 			const settled = await Promise.allSettled(
-				parts.map((part, i) => part.sign(readied[i]?.prepared, received[i + 1] as string)),
+				parts.map((part, i) => part.sign(readied[i]?.prepared, received[i + 1] as string, placed)),
 			);
 			const failed = settled.find((one) => one.status === "rejected");
 			if (failed) throw failed.reason;

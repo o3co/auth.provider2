@@ -7,6 +7,9 @@ import { tokens } from "@mod/transparency-wire";
 import { describe, expect, it } from "vitest";
 import { type IdTokenParts, idTokenMaker } from "../id-token.ts";
 
+/** The bundle's record, as the endpoint hands it on. */
+const placed = { id: "r-bundle", acceptedAt: 1_800_000_001_500 };
+
 const sha256 = (text: string) => createHash("sha256").update(text).digest("base64url");
 const code = sha256("the-code");
 const request: IdTokenRequest = {
@@ -53,7 +56,7 @@ const made = async (over: Partial<IdTokenParts> = {}, asked: IdTokenRequest = re
 	const { parts, signed } = partsOf(over);
 	const part = await idTokenMaker(parts).part(asked);
 	const ready = await part.prepare(1_800_000_001_500);
-	const jws = await part.sign(ready.prepared, "h.p1.s");
+	const jws = await part.sign(ready.prepared, "h.p1.s", placed);
 	return { part, ready, jws, signed, claims: JSON.parse(signed[0] ?? "{}") };
 };
 
@@ -138,7 +141,7 @@ describe("a redemption's ID token", () => {
 		});
 		const part = await idTokenMaker(parts).part(request);
 		const ready = await part.prepare(1_800_000_001_500);
-		await expect(part.sign(ready.prepared, "r")).rejects.toSatisfy(isUnavailable);
+		await expect(part.sign(ready.prepared, "r", placed)).rejects.toSatisfy(isUnavailable);
 	});
 
 	it("is prepared by the authority's ring under JWT", async () => {
