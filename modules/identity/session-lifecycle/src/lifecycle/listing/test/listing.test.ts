@@ -43,11 +43,7 @@ async function boot(log = recordingLog()) {
 	const s = app.get(sessions);
 	const login = async (given: Partial<LoginFacts> = {}) =>
 		openedOf(await s.open({ ...facts(), ...given })).session.id;
-	const logged = (event: string) => log.lines().filter((line) => line.event === event);
-	/** The time a listed handle has left, if listed. */
-	const leftOf = async (handle: string) =>
-		(await stores.members("alice")).find(({ member }) => member === handle)?.remainingMs;
-	return { app, s, stores, closed, login, logged, leftOf };
+	return { app, s, stores, closed, login };
 }
 
 /** Fills alice's listing behind its first session, then fails the login that pushes it out, as the closings refuse. */
@@ -62,91 +58,67 @@ async function pushOutRefused({ s, stores, login }: Awaited<ReturnType<typeof bo
 	return handles;
 }
 
-it("puts a pushed-out session back for what it has left until the end its login gave, so the next login pushes out that one again", async () => {
+it("keeps a pushed-out session awaiting, with its end, when the closings refuse it, and closes it at the next push-out", async () => {
 	const booted = await boot();
-	const { s, closed, login, leftOf } = booted;
-	const endsAt = now + 1_800_000;
-	const first = await login({ endsAt });
+	const { s, stores, closed, login } = booted;
+	const first = await login();
 	const [second] = await pushOutRefused(booted);
-	expect(await leftOf(first)).toBe(endsAt - now);
+	expect(await stores.awaiting("alice")).toEqual([first]);
+	// The refused login's session was taken off, so the listing is full again only one login on.
 	now += 1000;
 	await login();
-	expect(closed).toEqual(["alice"]);
+	expect(closed).toEqual([]);
+	now += 1000;
+	await login();
+	expect(closed).toEqual(["alice", "alice"]);
+	expect(await stores.awaiting("alice")).toEqual([]);
 	expect((await s.entryOf(first)).kind).toBe("absent");
-	expect((await s.entryOf(second as string)).kind).toBe("entered");
+	expect((await s.entryOf(second as string)).kind).toBe("absent");
 });
 
-it("lists a put-back session again, so revoking the subject closes it too", async () => {
+it("keeps a pushed-out session awaiting without reading its record, and hands it to the closings at the next push-out though its record cannot be read", async () => {
 	const booted = await boot();
-	const { app, s, closed, login, leftOf } = booted;
-	const first = await login();
-	await pushOutRefused(booted);
-	expect(await leftOf(first)).toBeGreaterThan(0);
-	await app.get(subjectRevocation).revoke("alice");
-	expect((await s.entryOf(first)).kind).toBe("absent");
-	expect(closed).toHaveLength(listingCap);
-});
-
-it("puts back no pushed-out session whose record it cannot read, counting it as neither put back nor ended", async () => {
-	const booted = await boot();
-	const { stores, login, leftOf, logged } = booted;
+	const { stores, login } = booted;
 	const first = await login();
 	await stores.kept.records.change(first, (r) => ({
 		value: { ...(r as object), format: 2 } as unknown as StoredSession,
 	}));
 	await pushOutRefused(booted);
-	expect(await leftOf(first)).toBeUndefined();
-	expect(logged("session-lifecycle.listing_put_back_failed")).toEqual([
-		expect.objectContaining({ fields: { count: 1 } }),
-	]);
-});
-
-it("does not put back a pushed-out session already closed", async () => {
-	const booted = await boot();
-	const { s, stores, login, leftOf } = booted;
-	const first = await login();
-	stores.down.listed.failNext("remove");
-	expect((await s.close(first)).kind).toBe("closed");
-	await pushOutRefused(booted);
-	expect(await leftOf(first)).toBeUndefined();
-});
-
-it("ends a pushed-out session it cannot put back, so none stays open and unlisted", async () => {
-	const booted = await boot();
-	const { s, stores, login, leftOf } = booted;
-	const first = await login();
-	stores.down.sessions.failNext("read");
-	await pushOutRefused(booted);
-	expect(await leftOf(first)).toBeUndefined();
-	expect((await s.entryOf(first)).kind).toBe("absent");
-});
-
-it("puts a pushed-out session back though the opened one cannot be taken off", async () => {
-	const booted = await boot();
-	const { stores, login, leftOf } = booted;
-	const first = await login();
-	stores.down.listed.failNext("remove");
-	await pushOutRefused(booted);
-	expect(await leftOf(first)).toBeDefined();
-});
-
-it("ends a session the put-back pushes out, so none is left open off the listing, and logs how many it ended", async () => {
-	const { s, stores, login, logged, leftOf } = await boot();
-	const first = await login();
-	const handles: string[] = [];
-	for (let n = 0; n < listingCap - 1; n++) {
+	expect(await stores.awaiting("alice")).toEqual([first]);
+	for (const _ of [1, 2]) {
 		now += 1000;
-		handles.push(await login());
+		await login();
 	}
-	// The opened session stays listed, so the listing is full again when the first is put back.
-	stores.down.closing.failNext("add");
+	expect(await stores.awaiting("alice")).toEqual([]);
+	// Its close cannot read it, so it stays among the closings, for the sweep.
+	expect(stores.kept.pending()).toContain(first);
+});
+
+it("lets a revocation close a session left awaiting", async () => {
+	const booted = await boot();
+	const { app, s, closed, login } = booted;
+	const first = await login();
+	await pushOutRefused(booted);
+	await app.get(subjectRevocation).revoke("alice");
+	expect((await s.entryOf(first)).kind).toBe("absent");
+	expect(closed).toHaveLength(listingCap);
+});
+
+it("takes the opened session off the listing when the closings refuse what it pushed out, the rest left as they were", async () => {
+	const booted = await boot();
+	const { stores, login } = booted;
+	const first = await login();
+	const handles = await pushOutRefused(booted);
+	const listed = (await stores.members("alice")).map(({ member }) => member).sort();
+	expect(listed).toEqual([...handles].sort());
+	expect(await stores.awaiting("alice")).toEqual([first]);
+});
+
+it("leaves a pushed-out session awaiting though the opened one cannot be taken off", async () => {
+	const booted = await boot();
+	const { stores, login } = booted;
+	const first = await login();
 	stores.down.listed.failNext("remove");
-	await expect(s.open(facts())).rejects.toSatisfy(isUnavailable);
-	expect(await leftOf(first)).toBeDefined();
-	// The second login's session, the one ending first after the first's, was pushed out and ended.
-	expect((await s.entryOf(handles[0] as string)).kind).toBe("absent");
-	expect((await s.entryOf(handles[1] as string)).kind).toBe("entered");
-	expect(logged("session-lifecycle.listing_ended")).toEqual([
-		expect.objectContaining({ fields: { count: 1 } }),
-	]);
+	await pushOutRefused(booted);
+	expect(await stores.awaiting("alice")).toEqual([first]);
 });

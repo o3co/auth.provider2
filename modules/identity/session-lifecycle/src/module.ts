@@ -6,6 +6,7 @@ import { attributesUnder } from "./attributes.ts";
 import { sessionEraser } from "./erasure/eraser.ts";
 import { portsRefused } from "./erasure/ports.ts";
 import { lifecycleOver } from "./lifecycle/lifecycle.ts";
+import { membersOf } from "./lifecycle/listing/listing.ts";
 import { section } from "./section.ts";
 import { closingList, sessionStore, sessionsPerSubject, subjectSessions } from "./store.ts";
 
@@ -52,7 +53,7 @@ export default defineModule(
 				sessionEraser(await c.get(sessionStore), await c.get(subjectSessions), c.clock),
 			),
 		m.contribute(revocationFollowers).by(async (c) => {
-			const listed = await c.get(subjectSessions);
+			const listed = { members: membersOf(await c.get(subjectSessions)) };
 			const lateSessions = c.late(sessions);
 			return {
 				name: "session-lifecycle",

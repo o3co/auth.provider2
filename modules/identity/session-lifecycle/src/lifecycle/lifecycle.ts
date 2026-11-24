@@ -47,14 +47,7 @@ const freshHandle = (random: Random) => Buffer.from(random.bytes(32)).toString("
 export function lifecycleOver(parts: LifecycleParts): Lifecycle {
 	const { kept, closings, listed, revocation, clock, log, sweepMs } = parts;
 	const { putOffUnread, putOff, dueOf, keepOnly } = retryingWith({ kept, clock, log, sweepMs });
-	const listing = listingOver({
-		listed,
-		closings,
-		log,
-		leftOf: (handle) => leftOf(handle),
-		endOpen: (handle) => endOpen(handle),
-		close: (handle) => close(handle),
-	});
+	const listing = listingOver({ listed, closings, log, close: (handle) => close(handle) });
 	const contextOf = (record: AuthContext): AuthContext => {
 		const attributes = parts.attributes.read(record.attributes);
 		return Object.freeze({
@@ -126,22 +119,6 @@ export function lifecycleOver(parts: LifecycleParts): Lifecycle {
 		await closings.done(handle);
 		return { kind: "closed", ...named };
 	};
-	/** What a session has left until its end: none once closed or gone; a record it cannot read is Unavailable. */
-	const leftOf = async (handle: string) => {
-		const stored = await kept.read(handle);
-		const record = fromStored(stored);
-		if (stored !== undefined && !record) throw new Unavailable("session");
-		if (!record || record.state === "closed") return 0;
-		return record.endsAt - clock.now();
-	};
-	/** Ends an open record there, calling no participants; a record it cannot read is Unavailable. */
-	const endOpen = async (handle: string) => {
-		const written = await kept.update(handle, (stored) => {
-			const was = fromStored(stored);
-			return was?.state === "open" ? closedOf(was) : undefined;
-		});
-		if (written && !fromStored(written.after)) throw new Unavailable("session");
-	};
 	/** Goes on with every pending closing that is due; one that fails does not hold up the rest. */
 	const sweep = async (stopping: AbortSignal) => {
 		const seen = new Set<string>();
@@ -191,18 +168,21 @@ export function lifecycleOver(parts: LifecycleParts): Lifecycle {
 		};
 		const { endsAt } = facts;
 		const record: SessionRecord = { format: 1, state: "open", ...context, openedAt, endsAt };
-		const lengthMs = lengthOf(record);
-		await created(kept.save(handle, toStored(record), lengthMs, facts.subject));
+		await created(kept.save(handle, toStored(record), lengthOf(record), facts.subject));
 		// Once saved: a boundary landing after this read is later than the opening, which entry compares.
 		if ((await revocation.check(facts.subject, facts.provenSince)) === "revoked") {
 			await close(handle);
 			return { kind: "revoked" };
 		}
-		// Listed before its handle is handed out, so a revocation finds every session anyone can enter.
-		const listedAs = await listed.add(facts.subject, handle, lengthMs);
-		if (typeof listedAs === "string") throw new Unavailable("session");
-		const { pushedOut } = listedAs;
-		if (pushedOut.length > 0) await listing.closePushedOut(facts.subject, handle, pushedOut);
+		// Listed before its handle is handed out, so a revocation finds every session anyone can enter,
+		// for what it has left now; one already past its end lets nobody in, so it takes no place.
+		const leftMs = endsAt - clock.now();
+		if (leftMs > 0) {
+			const listedAs = await listed.add(facts.subject, handle, leftMs);
+			if (typeof listedAs === "string") throw new Unavailable("session");
+			const { pushedOut } = listedAs;
+			if (pushedOut.length > 0) await listing.closePushedOut(facts.subject, handle, pushedOut);
+		}
 		return { kind: "opened", session: sessionOf(handle, context), endsAt };
 	};
 	return { open, close, entryOf, subjectOf, sweep };

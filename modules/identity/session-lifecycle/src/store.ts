@@ -65,9 +65,10 @@ export interface ClosingList {
 export interface SubjectSessions {
 	/**
 	 * Lists the handle for its lifetime; answers the others pushed out over the cap
-	 * (`sessionsPerSubject`), the ones ending first, never the handle being added. Where the Store
-	 * fences saves past a subject's erasure, `erased` for an erased subject; a Store keying listings
-	 * otherwise may answer `another-subject`. Either is a refusal.
+	 * (`sessionsPerSubject`), the ones ending first, never the handle being added, and keeps them
+	 * awaiting until each is settled or its end passes. Where the Store fences saves past a subject's
+	 * erasure, `erased` for an erased subject; a Store keying listings otherwise may answer
+	 * `another-subject`. Either is a refusal.
 	 */
 	add(
 		subject: string,
@@ -76,6 +77,10 @@ export interface SubjectSessions {
 	): Promise<{ readonly pushedOut: readonly string[] } | "erased" | "another-subject">;
 	members(subject: string): Promise<readonly { readonly member: string }[]>;
 	remove(subject: string, handle: string): Promise<void>;
+	/** The handles pushed out of the subject's listing and not settled yet, before their end. */
+	awaiting(subject: string): Promise<readonly string[]>;
+	/** Takes a pushed-out handle off those awaiting. */
+	settled(subject: string, handle: string): Promise<void>;
 	/** Erases a subject's listing, where the Store can; with the session store's ports, or none. */
 	erase?(subject: string, signal: AbortSignal): Promise<SpaceReport>;
 	/** Once, under the maintenance key: raw listings of a space keyed by subject stay raw (0/0). */

@@ -379,11 +379,8 @@ describe("session closing", () => {
 		expect((await s.close(handle)).kind).toBe("pending");
 		expect((await s.entryOf(handle)).kind).toBe("absent");
 		closer.failing = false;
-		expect(await s.close(handle)).toEqual({
-			kind: "closed",
-			session: { id: handle, subject: "alice" },
-			from: "closing",
-		});
+		expect((await s.close(handle)).kind).toBe("closed");
+		expect(closer.done).toEqual(["alice"]);
 	});
 
 	it("lets nobody in while a close's participants are still running", async () => {
@@ -474,11 +471,11 @@ describe("session closing", () => {
 		await stores.kept.records.change(handle, (r) => ({ value: r, lifetimeMs: hourMs }));
 		now += 60_000;
 		expect((await s.entryOf(handle)).kind).toBe("absent");
-		expect(await s.close(handle)).toMatchObject({ kind: "closed", from: "open" });
+		expect((await s.close(handle)).kind).toBe("closed");
 		expect(closer.calls).toBe(1);
-		// Closed already, or no record at all: the close says so, and calls no one again.
-		expect((await s.close(handle)).from).toBe("closed");
-		expect((await s.close("x".repeat(43))).from).toBeUndefined();
+		// Closed already, or no record at all: the close calls no one again.
+		expect((await s.close(handle)).kind).toBe("closed");
+		expect((await s.close("x".repeat(43))).kind).toBe("closed");
 		expect(closer.calls).toBe(1);
 		expect(stores.kept.peek(handle)).toMatchObject({ state: "closed" });
 		expect(stores.kept.pending()).toEqual([]);
@@ -562,14 +559,15 @@ describe("session closing", () => {
 	});
 
 	it("reads the subject of a record kept past its end, ending nothing", async () => {
-		const { s, stores, login } = await boot();
+		const { s, stores, closer, login } = await boot();
 		const handle = await login("alice", { endsAt: now + 120_000 });
 		await stores.kept.records.change(handle, (r) => ({ value: r, lifetimeMs: hourMs }));
 		now += 120_001;
 		expect(await s.subjectOf(handle)).toBe("alice");
-		// Nothing was written: the record is still open, and a close finds it so.
+		// Nothing was written: the record is still open, and a close finds it so, calling the participants.
 		expect(stores.kept.peek(handle)).toMatchObject({ state: "open" });
-		expect((await s.close(handle)).from).toBe("open");
+		await s.close(handle);
+		expect(closer.calls).toBe(1);
 	});
 
 	it("reads a record's subject without entering it, in any state: none for no record, unavailable for one it cannot read", async () => {
@@ -870,17 +868,52 @@ describe("revoking a subject", () => {
 		await app.stop(1000);
 	});
 
-	it("fails the login and puts the pushed-out session back when it cannot be kept for closing", async () => {
+	it("fails the login and keeps the pushed-out session awaiting in the listing when it cannot be kept for closing", async () => {
 		const { app, s, stores, closer, login, listingCap } = await boot();
 		const first = await login();
-		await fill(login, listingCap - 1);
-		const before = await listed(stores, "alice");
+		const rest = await fill(login, listingCap - 1);
 		stores.down.closing.failNext("add");
 		await expect(s.open(facts())).rejects.toSatisfy(isUnavailable);
-		expect(await listed(stores, "alice")).toEqual(before);
-		expect(before).toContain(first);
+		expect(await listed(stores, "alice")).toEqual([...rest].sort());
+		expect(await stores.awaiting("alice")).toEqual([first]);
+		expect((await s.entryOf(first)).kind).toBe("entered");
 		await app.get(subjectRevocation).revoke("alice");
 		expect(closer.done).toHaveLength(listingCap);
+		expect((await s.entryOf(first)).kind).toBe("absent");
+	});
+
+	it("takes no place in a full listing for a session whose end has passed, pushing nothing out", async () => {
+		const { s, stores, closer, login, listingCap } = await boot();
+		const handles = await fill(login, listingCap);
+		const passed = openedOf(await s.open({ ...facts(), endsAt: now }));
+		expect((await s.entryOf(passed.session.id)).kind).toBe("absent");
+		expect(closer.calls).toBe(0);
+		expect(await listed(stores, "alice")).toEqual([...handles].sort());
+	});
+
+	it("lists a session for what it has left when it is listed, past the save and the boundary's read", async () => {
+		const slow = defineModule({ name: "subject-revocation", replicaSafe: true, takes: [] }, (m) => [
+			m.provide(subjectRevocation).by(() => ({
+				revoke: async () => {},
+				check: async () => {
+					now += 10_000;
+					return "valid" as const;
+				},
+			})),
+		]);
+		const stores = memoryStores();
+		const closer = defineModule({ name: "closer", replicaSafe: false, takes: [] }, (m) => [
+			m.contribute(closingParticipants).by(() => ({ closing: async () => [] })),
+		]);
+		const app = await assemble({
+			modules: [sessionLifecycle, slow, stores.module, closer],
+			config: configWith(),
+			runtime,
+		});
+		const { endsAt } = openedOf(await app.get(sessions).open({ ...facts(), endsAt: now + 60_000 }));
+		expect((await stores.members("alice")).map(({ remainingMs }) => remainingMs)).toEqual([
+			endsAt - now,
+		]);
 	});
 
 	it("never pushes out the session being opened, even when it ends before every one listed", async () => {

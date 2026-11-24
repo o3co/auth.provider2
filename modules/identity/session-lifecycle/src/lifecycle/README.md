@@ -33,7 +33,7 @@ Internal module of `session-lifecycle`: a session's record, and its way from ope
 - A closed record keeps its subject, its opening and its end; a login's attributes, amr and authentication time are dropped at close.
 - Every read checks the record: one of another format or shape lets nobody in, and closing it is unavailable.
 - A record lives from login to its end, without end while closing, and for its own length again once closed.
-- Each subject's listing: the handle, from login to its end.
+- Each subject's listing: the handle, for what it has left when listed, until its end; a session whose end has passed is not listed, and pushes nothing out.
 - A session is listed after its record and before its handle is handed out; a login that cannot list it, or whose save or listing answers `erased` (or the listing `another-subject`), is unavailable, never tried again.
 - The listing never pushes out the session being opened.
 

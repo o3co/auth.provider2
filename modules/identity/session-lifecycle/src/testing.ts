@@ -130,6 +130,28 @@ export function sessionStoreContract(name: string, open: () => Promise<SessionSt
 			throw new Error("the listing pushed none out");
 		});
 
+		it("keeps what an add pushes out awaiting, with its end, until it is settled", async () => {
+			const { subjects, advance } = await open();
+			const subject = fresh();
+			const [first, second, ...others] = Array.from({ length: 10_000 }, fresh);
+			await subjects.add(subject, first as string, 1000);
+			await subjects.add(subject, second as string, 2000);
+			for (const handle of others) {
+				const { pushedOut } = listedOf(await subjects.add(subject, handle, 60_000));
+				if (pushedOut.length === 0) continue;
+				expect(pushedOut).toEqual([first]);
+				expect(await subjects.awaiting(subject)).toEqual([first]);
+				await subjects.settled(subject, first as string);
+				expect(await subjects.awaiting(subject)).toEqual([]);
+				const { pushedOut: next } = listedOf(await subjects.add(subject, fresh(), 60_000));
+				expect(next).toEqual([second]);
+				advance(2000);
+				expect(await subjects.awaiting(subject)).toEqual([]);
+				return;
+			}
+			throw new Error("the listing pushed none out");
+		});
+
 		it("refuses, where the stores erase, every session saved and every listing added for a subject they erased, and only for that subject", async (context) => {
 			const { sessions, subjects } = await open();
 			if (!sessions.erase || !subjects.erase) return context.skip();

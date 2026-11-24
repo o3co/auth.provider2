@@ -65,5 +65,7 @@ export function memoryStores() {
 	);
 	/** The members listed under a subject, each with its time left, read past the switch. */
 	const members = (subject: string) => kept.keyedSets(1).members(subject);
-	return { module, kept, down, lost, erased, members };
+	/** The handles pushed out of a subject's listing and not settled yet, read past the switch. */
+	const awaiting = (subject: string) => kept.keyedSets(1).awaiting(subject);
+	return { module, kept, down, lost, erased, members, awaiting };
 }
