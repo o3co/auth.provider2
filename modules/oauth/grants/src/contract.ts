@@ -154,7 +154,9 @@ export const composedGrants = contract<ReadonlySet<string>>("grants.composed");
  * `__proto__`) is a type it does not list.
  */
 export const grantServers: Readonly<Record<string, string>> = Object.freeze(
-	Object.create(null) as Record<string, string>,
+	Object.assign(Object.create(null) as Record<string, string>, {
+		client_credentials: "client-credentials",
+	}),
 );
 
 /** Told of each access token `issue` makes from a session, before the grant answers it. */

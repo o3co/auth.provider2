@@ -1171,6 +1171,31 @@ importers:
         specifier: 5.0.5
         version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(vite@8.3.3(@types/node@26.6.5)(yaml@2.9.1))
 
+  modules/oauth/client-credentials:
+    dependencies:
+      '@mod/client-allowance':
+        specifier: workspace:*
+        version: link:../client-allowance
+      '@mod/client-assertion':
+        specifier: workspace:*
+        version: link:../client-assertion
+      '@mod/grants':
+        specifier: workspace:*
+        version: link:../grants
+      '@mod/issuer':
+        specifier: workspace:*
+        version: link:../issuer
+      '@mod/kernel':
+        specifier: workspace:*
+        version: link:../../foundation/kernel
+    devDependencies:
+      '@mod/clients':
+        specifier: workspace:*
+        version: link:../../identity/clients
+      vitest:
+        specifier: 5.0.5
+        version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(vite@8.3.3(@types/node@26.6.5)(yaml@2.9.1))
+
   modules/oauth/discovery:
     dependencies:
       '@mod/issuer':
