@@ -173,9 +173,14 @@ describe("users ledgers", () => {
 		expect(await u.bySubject("s".repeat(256))).toEqual(none);
 		expect(await u.claimedContacts("")).toEqual([]);
 		expect(await u.byIdentifier("")).toEqual(none);
+		// Past 255 bytes, as one 3-byte character too many: none, asking nothing.
+		const long = `${"a".repeat(253)}\u3042`;
+		expect(await u.verify(long, "correct horse")).toEqual(none);
+		expect(await u.byIdentifier(long)).toEqual(none);
 		expect(calls).toEqual([]);
 		const creating = await openWith(creatingLedger(calls));
 		await expect(creating.create?.("")).rejects.toThrow(TypeError);
+		await expect(creating.create?.("a".repeat(256))).rejects.toThrow(TypeError);
 		expect(calls).toEqual([]);
 	});
 

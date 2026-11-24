@@ -2,7 +2,7 @@ import type { SubjectOf } from "@mod/erasure-extensions";
 import { deepFreeze } from "@mod/kernel";
 import { canonicalAddress } from "@mod/mail-address";
 import { type Contact, type Users, userAttribute } from "./contract.ts";
-import { none, type UserSource, unanswerable } from "./registered.ts";
+import { identifierFits, none, type UserSource, unanswerable } from "./registered.ts";
 import type { ContactStore, StoredContacts } from "./store.ts";
 import { keptFor } from "./stores/kept-for.ts";
 
@@ -27,15 +27,26 @@ function required(...parts: string[]) {
 	if (parts.some((part) => part === "")) throw new TypeError("users: an empty part names no one");
 }
 
+/** `create` refusing an identifier past the bound with a TypeError, unasked. */
+const fitting =
+	(create: NonNullable<UserSource["create"]>): NonNullable<UserSource["create"]> =>
+	async (identifier) => {
+		if (!identifierFits(identifier)) throw new TypeError("users: an identifier past its bound");
+		return create(identifier);
+	};
+
 /** The source's users, with the contacts written through the store interface. */
 export function ledgerUsers(source: UserSource, contacts: ContactStore): Users {
 	return {
 		verify: async (identifier, password) =>
 			// The length is the sender's choice, so answering early tells nothing about users.
-			Buffer.byteLength(password) > maxPasswordBytes ? none : source.verify(identifier, password),
+			Buffer.byteLength(password) > maxPasswordBytes || !identifierFits(identifier)
+				? none
+				: source.verify(identifier, password),
 		bySubject: source.bySubject,
-		byIdentifier: source.byIdentifier,
-		...(source.create ? { create: source.create } : {}),
+		byIdentifier: async (identifier) =>
+			identifierFits(identifier) ? source.byIdentifier(identifier) : none,
+		...(source.create ? { create: fitting(source.create) } : {}),
 		verifiedContact: async (subject, contact) => {
 			required(subject, contact.value);
 			if (contact.kind !== "email") throw new TypeError("users: an unknown kind of contact");

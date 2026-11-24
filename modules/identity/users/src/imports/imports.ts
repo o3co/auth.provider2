@@ -5,7 +5,7 @@ import {
 	type Users,
 	type UsersImport,
 } from "../contract.ts";
-import type { UserSource } from "../registered.ts";
+import { identifierFits, type UserSource } from "../registered.ts";
 
 /** A record's keys: any other refuses it, so nothing brought is dropped unseen. */
 const keys = new Set(["subject", "identifier", "verifiedEmail"]);
@@ -23,8 +23,8 @@ function readOf(given: unknown): Read | undefined {
 	if (Object.keys(record).some((key) => !keys.has(key))) return undefined;
 	const { subject, identifier, verifiedEmail } = record;
 	if (!isWellFormedSubject(subject)) return undefined;
-	if (identifier !== undefined && (typeof identifier !== "string" || identifier === ""))
-		return undefined;
+	const named = typeof identifier === "string" && identifier !== "" && identifierFits(identifier);
+	if (identifier !== undefined && !named) return undefined;
 	if (verifiedEmail !== undefined && !isAddress(verifiedEmail)) return undefined;
 	return {
 		subject,

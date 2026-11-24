@@ -132,6 +132,9 @@ it("refuses to start on an empty identifier or subject, or a plain password, nam
 	const where = async (registered: unknown[]) =>
 		((await boot(registered).catch((error) => error)) as BootRefused).refusals.map((r) => r.where);
 	expect(await where([testUser("", "p")])).toEqual(["users.registered.0.identifier"]);
+	expect(await where([testUser("a".repeat(256), "p", { subject: "s-long" })])).toEqual([
+		"users.registered.0.identifier",
+	]);
 	expect(await where([testUser("a", "p", { subject: "" })])).toEqual([
 		"users.registered.0.subject",
 	]);

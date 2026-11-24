@@ -96,6 +96,7 @@ describe("users' import", () => {
 			{ subject: "s-é" },
 			{ subject: "s-alice", identifier: "" },
 			{ subject: "s-alice", identifier: 7 },
+			{ subject: "s-alice", identifier: "a".repeat(256) },
 			{ subject: "s-alice", verifiedEmail: "not an address" },
 			{ subject: "s-alice", passkey: { id: "x" } },
 		]) {
