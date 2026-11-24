@@ -60,7 +60,7 @@ describe("an approval's KE-C01", () => {
 		let stage: Stage | undefined;
 		const decided = deciding(r, "code-1", digest, (made) => {
 			stage = made;
-		})(state, [undefined]);
+		})(state, []);
 		if ("refused" in decided || !stage) throw new Error("refused");
 		const cer = await w.app.get(ceremonies);
 		const signer = w.keys;
@@ -97,8 +97,8 @@ describe("an approval's KE-C01", () => {
 		expect(decided.eff).toMatchObject({
 			approval: { key: "r0", code: sha256("code-1"), client: "c1" },
 		});
-		expect(decided.records).toEqual([{ value: stage }]);
-		expect(approvalKind.resend?.(stage.flow, stage.op, [stage as never])).toEqual(stage);
+		expect(decided.records).toEqual([]);
+		expect(approvalKind.resend).toBeUndefined();
 	});
 
 	it("refuses a statement whose mark is set, and a key no longer live", async () => {

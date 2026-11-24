@@ -1,7 +1,10 @@
 import { defineModule } from "@mod/kernel";
 import { challengeInput, continuationInput, hpke, typs } from "@mod/sdk-core-wire";
+import { type Stage, transparency, transparencyLog } from "@mod/transparency";
 import { describe, expect, it } from "vitest";
+import { approvalKind, deciding } from "../src/completion/completion.ts";
 import { type IssueAsk, statementItems } from "../src/contract.ts";
+import { recordOf } from "../src/statement/statement.ts";
 import { openSealed, screenKeys, sha256, world } from "./fixtures/world.ts";
 
 const items = {
@@ -409,6 +412,80 @@ describe("completing an authorization", () => {
 		w.book.judgeOnAppend({ verdict: "held", outcome: "didNotTake" });
 		const done = await w.approvals.complete({ hash: t.hash, code: "code-1" });
 		expect(done).toEqual({ kind: "refused", reason: "ended" });
+	});
+
+	it("lets an orphan, left before its stage was sent, be abandoned, and completes it again after", async () => {
+		const { w, keys, t } = await approved();
+		const flow = { of: "subject", id: "s1" } as const;
+		const tr = await w.app.get(transparency);
+		const r = recordOf(await w.statements.store.read(t.hash));
+		if (!r) throw new Error("no record");
+		const decide = deciding(
+			r,
+			"code-1",
+			(pre) => sha256(JSON.stringify(pre)),
+			() => {},
+		);
+		const op = `approval:${t.hash}`;
+		expect(await tr.decide({ kind: approvalKind.name, flow, op, decide })).toHaveProperty("prev");
+		w.frames.clock.set(w.frames.clock.now() + 6000);
+		const turns = [await tr.tend(flow), await tr.tend(flow), await tr.tend(flow)];
+		expect(turns.map((turn) => "did" in turn && turn.did)).toContain("marked");
+		expect(turns.map((turn) => "did" in turn && turn.did)).toContain("abandonment");
+		expect(w.book.records(flow).map((p) => p.record.kind)).toEqual(["abandonment"]);
+		const done = await w.approvals.complete({ hash: t.hash, code: "code-1" });
+		if (done.kind !== "completed") throw new Error(done.reason);
+		expect(openSealed(keys.encKey, done, hpke.info.completion, t.hash)).toBeDefined();
+		expect(w.book.records(flow).map((p) => p.record.kind)).toEqual(["abandonment", "approval"]);
+	});
+
+	it("takes in an orphan's stage once placed, and answers no completion for it", async () => {
+		const { w, t } = await approved();
+		const flow = { of: "subject", id: "s1" } as const;
+		const tr = await w.app.get(transparency);
+		const r = recordOf(await w.statements.store.read(t.hash));
+		if (!r) throw new Error("no record");
+		let stage: Stage | undefined;
+		const digest = (await w.app.get(transparencyLog)).digest;
+		const decide = deciding(r, "code-1", digest, (made) => {
+			stage = made;
+		});
+		const op = `approval:${t.hash}`;
+		const decided = await tr.decide({ kind: approvalKind.name, flow, op, decide });
+		if (!("prev" in decided) || !stage) throw new Error("not decided");
+		expect(await tr.send({ flow, op, stage, prev: decided.prev })).toHaveProperty(
+			"answer.result",
+			"accepted",
+		);
+		w.frames.clock.set(w.frames.clock.now() + 6000);
+		await tr.tend(flow);
+		expect(w.book.records(flow).map((p) => p.record.kind)).toEqual(["approval"]);
+		expect(await w.approvals.complete({ hash: t.hash, code: "code-1" })).toEqual({
+			kind: "refused",
+			reason: "ended",
+		});
+	});
+
+	it("refuses an orphan's late stage once its abandonment is placed", async () => {
+		const { w, t } = await approved();
+		const flow = { of: "subject", id: "s1" } as const;
+		const tr = await w.app.get(transparency);
+		const r = recordOf(await w.statements.store.read(t.hash));
+		if (!r) throw new Error("no record");
+		let stage: Stage | undefined;
+		const digest = (await w.app.get(transparencyLog)).digest;
+		const decide = deciding(r, "code-1", digest, (made) => {
+			stage = made;
+		});
+		const op = `approval:${t.hash}`;
+		const decided = await tr.decide({ kind: approvalKind.name, flow, op, decide });
+		if (!("prev" in decided) || !stage) throw new Error("not decided");
+		w.frames.clock.set(w.frames.clock.now() + 6000);
+		await tr.tend(flow);
+		await tr.tend(flow);
+		const late = await w.book.as("w1").append(stage, decided.prev);
+		expect(late).toMatchObject({ result: "refused", refusal: "prevMismatch" });
+		expect(w.book.records(flow).map((p) => p.record.kind)).toEqual(["abandonment"]);
 	});
 
 	it("puts nothing on the flow for a statement past its expiry", async () => {

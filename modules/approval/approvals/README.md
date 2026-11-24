@@ -26,13 +26,14 @@
 - Purposes and items are closed: a purpose is one `sdk-core-wire` names a schema for, an item one its schema names and one module declared it fills. Boot refuses a name no schema holds, or one two modules fill; `issue` refuses an item no module declared, or one the schema refuses.
 - A statement is used once, by one write from issued (internal module `statement`), and only while the Core's ring of this generation verifies it. An authorization's is used only by an assertion over its challenge that verified its user, whatever `passkeys`' section lets through; the same evidence again answers the same approval. A possession's verification is taken as given: that it showed a verified user is its caller's to check, from `verifyPending`.
 - A purpose's owner takes the items from the used record (`usedOf`, or `use`'s answer), never from a later request.
-- An authorization's completion is signed only after its approval is taken in on the subject's flow as its owner's `took` (internal module `completion`). Any other end, a lost answer or a fault before the completion is kept gives none, ever: the person approves again.
+- An authorization's completion is signed only after its approval is taken in on the subject's flow as its owner's `took` (internal module `completion`).
+- Its op is never taken over, as only its owner holds the code: an orphan is marked and abandoned. Only one abandoned before its stage was placed can be completed again, by a later `complete`; one whose stage was placed is taken in as done, its statement used, and gives no completion. Any other end, a lost answer or a fault before the completion is kept gives none, ever: the person approves again.
 - A continuation's step is run by the one call that took its sequence number, and its answer kept with it before the next number is taken; it is run again only where that call's hold lapsed with none kept (internal module `continuation`).
 - Statements and completions are signed by the Core's ring, apart from the authority's: under `approval+jwt` and `completion+jwt`, their items under one member, never as a token's claims.
 
 ## Data
 - Each statement's record, by its hash, from its issuing to a minute past its expiry: its purpose, bytes, the screen's keys, how far it went, the subject, credential and assertion that used it, the last continuation and the completion.
-- Its part of each subject's flow, in the frames' store: the approval being put on the flow, and the state's approvals and use-once marks.
+- Its part of each subject's flow, in the frames' store: the state's approvals and use-once marks.
 
 ## Depends on
 - `kernel`, `keys` (the Core's ring, sealing), `passkeys` (the assertion), `promises` (its stance), `rate-limit` (issuing counted), `issuer` (the statements' issuer), `sdk-core-wire` (the schemas and inputs), `transparency` and `transparency-wire` (the kind, the owner, the flow, the log's digest); `zod`.

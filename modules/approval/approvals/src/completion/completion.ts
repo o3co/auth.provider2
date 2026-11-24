@@ -21,9 +21,8 @@ import {
 	wireVersion,
 } from "../statement/statement.ts";
 
-/** approvals' part of a subject's flow: the approval being put on it, and the state's fields it holds. */
+/** approvals' part of a subject's flow: the state's fields it holds. */
 export const part = "approvals";
-const pendingRecord = { part, name: "pending" } as const;
 const stateRecord = { part, name: "state" } as const;
 
 type FlowState = Parameters<StateOwner["write"]>[0];
@@ -50,17 +49,16 @@ export const approvalsOwner: StateOwner = {
 	},
 };
 
-/** An approval's kind: one stage, no bundle; a taker resends the stage its record keeps. */
+/**
+ * An approval's kind: one stage, no bundle, no records of its own, and no resend: only its owner holds
+ * the code its completion carries, so an orphan is marked and abandoned, never taken over.
+ */
 export const approvalKind: OperationKind = {
 	name: "approval",
 	bundle: false,
-	parts: [part],
-	records: () => [pendingRecord],
-	end: (_end, [held]) => [held === undefined ? undefined : { remove: true }],
-	resend: (_flow, op, [held]) => {
-		const stage = held as unknown as Stage | undefined;
-		return stage?.op === op ? stage : undefined;
-	},
+	parts: [],
+	records: () => [],
+	end: () => [],
 };
 
 /** The use-once mark of a statement, as `authority-rules`' fold names it. */
@@ -101,7 +99,7 @@ export function deciding(
 		return {
 			digest: digest(stage.preimage),
 			eff: { approval: { key, code: sha256(code), client }, consume: [statementMark(r.sid)] },
-			records: [{ value: stage as unknown as Json }],
+			records: [],
 		};
 	};
 }
@@ -117,7 +115,8 @@ export interface CompletionParts {
 	readonly looks: number;
 }
 
-const decideTries = 3;
+/** Tries to decide while the flow is open: an orphan takes its mark, its abandonment sent, then taken in. */
+const decideTries = 4;
 
 /** An authorization's completion: its approval decided, sent, taken in as its owner's `took`, then signed and sealed. */
 export function completionsOver(p: CompletionParts) {
