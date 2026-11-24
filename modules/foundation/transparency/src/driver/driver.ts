@@ -40,12 +40,17 @@ const writeWindowMs = 10_000;
 /** The records a tending takes in at most before it yields the flow, and the client's ops one turn tends. */
 const tendSteps = 64;
 
-/** The open ops a client's flow's record lists, in the order its tending goes round them; none where it holds none. */
-const openOps = (value: Json | undefined): readonly string[] => {
-	if (value === undefined) return [];
-	if (!Array.isArray(value) || !value.every((op) => typeof op === "string"))
+/** A client's flow's record: its open ops, in the order its tending goes round them; its ops closed with nothing on the log. */
+type FlowRecord = { readonly open: readonly string[]; readonly closed: readonly string[] };
+const ops = (value: Json | undefined): value is readonly string[] =>
+	Array.isArray(value) && value.every((op) => typeof op === "string");
+/** A client's flow's record as stored; an empty one where it holds none. */
+const flowRecordOf = (value: Json | undefined): FlowRecord => {
+	if (value === undefined) return { open: [], closed: [] };
+	const record = value as { readonly [key: string]: Json };
+	if (typeof value !== "object" || value === null || !ops(record.open) || !ops(record.closed))
 		throw new TypeError("a stored flow record of another shape");
-	return value as readonly string[];
+	return { open: record.open, closed: record.closed };
 };
 /** How many reads find the intent's kind before contention is unavailable. */
 const kindReads = 3;
@@ -145,6 +150,8 @@ export function transparencyOver(p: {
 			readonly frame?: Frame;
 			readonly owned?: readonly PartNext[];
 			readonly extra?: readonly PartNext[];
+			/** On a client's op it ends: nothing of it is on the log. */
+			readonly unrecorded?: true;
 		},
 		until?: number,
 	) {
@@ -158,29 +165,41 @@ export function transparencyOver(p: {
 			snap.read,
 			{
 				...(next.frame ? { frame: next.frame as unknown as Json } : {}),
-				...(next.frame ? flowNext(snap.read, next.frame) : {}),
+				...(next.frame ? flowNext(snap.read, next.frame, next.unrecorded === true) : {}),
 				records: [...owned, ...extra],
 			},
 			deadline,
 		);
 	}
 	/**
-	 * On a client's op, its flow's record follows its frame in the same write: the op is listed while
-	 * its intent is open, and once it ends it leaves the list and its frame is dropped.
+	 * On a client's op, its flow's record follows its frame in the same write: the op is listed while its
+	 * intent is open; ended, it leaves the list, its frame is dropped, and it is closed if `unrecorded`.
 	 */
-	function flowNext(read: FrameRead, frame: Frame): { readonly drop?: true; readonly flow?: Json } {
+	function flowNext(
+		read: FrameRead,
+		frame: Frame,
+		unrecorded: boolean,
+	): { readonly drop?: true; readonly flow?: Json } {
 		if (!("op" in read.unit)) return {};
 		const { op } = read.unit;
-		const listed = openOps(read.flow);
-		if (isOpen(frame.intent)) return listed.includes(op) ? {} : { flow: [...listed, op] };
-		return { drop: true, flow: listed.filter((o) => o !== op) };
+		const { open, closed } = flowRecordOf(read.flow);
+		if (isOpen(frame.intent))
+			return open.includes(op) ? {} : { flow: { open: [...open, op], closed } };
+		const ended = unrecorded && !closed.includes(op) ? [...closed, op] : closed;
+		return { drop: true, flow: { open: open.filter((o) => o !== op), closed: ended } };
 	}
 	const settled = (answer: "written" | "moved" | "late") =>
 		answer === "written" ? undefined : { refused: answer };
 	/** A core write of the frame alone, with the end's records of its kind where it ends an op. */
-	async function frameWrite(snap: Snapshot, kind: OperationKind | undefined, w: Written) {
+	async function frameWrite(
+		snap: Snapshot,
+		kind: OperationKind | undefined,
+		w: Written,
+		unrecorded = false,
+	) {
 		const extra = w.end && kind ? kind.end(w.end, snap.extra) : undefined;
-		return write(snap, { frame: w.frame, ...(extra ? { extra } : {}) }, w.ownerUntil);
+		const mark = unrecorded ? { unrecorded: true as const } : {};
+		return write(snap, { frame: w.frame, ...(extra ? { extra } : {}), ...mark }, w.ownerUntil);
 	}
 	const takenOf = (placed: Placed): Taken => {
 		const r = placed.record;
@@ -294,8 +313,10 @@ export function transparencyOver(p: {
 		const first = q.stage.stage === 1 && q.prev === it.prev && answer.refusal === "prevMismatch";
 		if (!(unconditional ? answer.refusal !== "temporary" : first)) return { answer };
 		const closed = closedByOwner(snap.frame, snap.at, q.op);
-		if ("refused" in closed || (await frameWrite(snap, kind, closed)) !== "written")
-			return { answer };
+		if ("refused" in closed) return { answer };
+		const placed = unconditional ? await log.of(q.flow, q.op) : undefined;
+		const unrecorded = placed?.stages === 0 && placed.abandonments === 0;
+		if ((await frameWrite(snap, kind, closed, unrecorded)) !== "written") return { answer };
 		return { answer, end: closed.end };
 	}
 
@@ -367,16 +388,17 @@ export function transparencyOver(p: {
 		readonly of: "client";
 		readonly id: string;
 	}): Promise<readonly string[]> {
-		let listed = openOps(await frames.flowRecord(flow));
-		for (let read = 0; read < kindReads && listed.length > tendSteps; read++) {
-			const at = await frames.read({ flow, op: listed[0] as string }, []);
-			listed = openOps(at.flow);
-			const turn = listed.slice(0, tendSteps);
-			const next = [...listed.slice(tendSteps), ...turn];
+		let { open } = flowRecordOf(await frames.flowRecord(flow));
+		for (let read = 0; read < kindReads && open.length > tendSteps; read++) {
+			const at = await frames.read({ flow, op: open[0] as string }, []);
+			const record = flowRecordOf(at.flow);
+			open = record.open;
+			const turn = open.slice(0, tendSteps);
+			const next = { ...record, open: [...open.slice(tendSteps), ...turn] };
 			const answer = await frames.write(at, { flow: next, records: [] }, at.now + writeWindowMs);
 			if (answer === "written") return turn;
 		}
-		return listed.slice(0, tendSteps);
+		return open.slice(0, tendSteps);
 	}
 
 	return {
@@ -388,8 +410,14 @@ export function transparencyOver(p: {
 			const snap = await snapshot(unit, named(kind, kind.records(q.flow)));
 			const head = await log.head(q.flow);
 			const placed = await log.of(q.flow, q.op);
-			// A client's op is decided once, whatever its end; its flow needs no taking in, so it looks on from the head.
-			if (perOp(unit) && snap.frame.intent !== null) return { refused: "ended" as const };
+			// A client's op is decided once, whatever its end: its frame, its stages or abandonments on the
+			// log, or its flow's record where it ended with none, show it; it looks on from the head.
+			const ended =
+				snap.frame.intent !== null ||
+				placed.stages > 0 ||
+				placed.abandonments > 0 ||
+				flowRecordOf(snap.read.flow).closed.includes(q.op);
+			if (perOp(unit) && ended) return { refused: "ended" as const };
 			const frame = perOp(unit) ? { ...snap.frame, applied: head } : snap.frame;
 			const guard = decided(frame, snap.at, {
 				op: q.op,

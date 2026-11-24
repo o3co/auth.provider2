@@ -22,7 +22,7 @@
 ## Invariants
 - An intent unit (V17: a subject's flow, or one op of a client's) has one frame: its applied position, the generation that sealed it, and its one intent. Every event writes once, held to all it read: the frame, every state owner's records, and the intent's kind's records.
 - The driver runs a subject's flow, and a client's ops each alone; an event on any other flow, or naming no op of a client's, is refused (`notSubject`).
-- A client's op holds no state: nothing is folded, its own records are taken in past other ops' unjudged, it is decided once whatever its end, and a refusal of its append but a temporary one closes it without a record.
+- A client's op holds no state: nothing is folded, its own records are taken in past other ops' unjudged, and a refusal of its append but a temporary one closes it without a record. It is decided once, whatever its end: its frame, its stages or abandonments on the log, or its flow's record where it ended with none of them, refuse it (`ended`).
 - Whether an op's last stage is on the flow, and how many abandonments of it are, is read from the log (`of`), never kept in the frame: the answer holds whatever ops came between.
 - The owner rule (kernel-spec §5.1): owner ≜ pending ∧ by this replica ∧ its lease holds, judged on the store clock; an owner's write is refused past its lease's end. A lease's end writes nothing: the intent and its changes stay.
 - A Step takes in the next record alone, once judged, applying `fold` once on the state the owners' records hold, whoever wrote the record; only the intent's end depends on its kind (the end-of-intent table). A replica with no registration of an open intent's kind takes in, claims and ends nothing of it.
@@ -32,7 +32,7 @@
 
 ## Data
 - Each intent unit's frame, in its wiring's space with no expiry; it holds an op's changes (`eff`) until the op ends. A client's op's frame is dropped once its op ends, deliberately, in the end's write: no store evicts it.
-- Each client's flow's record: the ops decided on it and not yet ended, in the order its tending goes round them, written in the same write as each op's frame, and by a turn of `tend`.
+- Each client's flow's record: the ops decided on it and not yet ended, in the order its tending goes round them, and the ops closed with nothing of them on the log; written in the same write as each op's frame, and by a turn of `tend`.
 
 ## Depends on
 - `kernel`, `transparency-wire`, `authority-rules`; `zod`.

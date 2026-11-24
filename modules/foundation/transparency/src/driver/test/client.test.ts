@@ -46,7 +46,8 @@ function makeWorld() {
 		store.value(unit(op) as never) as
 			| { applied: number; intent: Record<string, unknown> | null }
 			| undefined;
-	const listed = () => store.frames.flowRecord(flow).then((v) => v ?? []);
+	const listed = () =>
+		store.frames.flowRecord(flow).then((v) => (v as { open?: string[] } | undefined)?.open ?? []);
 	return { store, log, replica, w1: replica("w1"), w2: replica("w2"), frame, listed };
 }
 beforeEach(() => {
@@ -72,7 +73,7 @@ describe("a client's flow: one frame per op, unconditional appends (KG-07)", () 
 		expect(await decide("o2", world.w2)).toEqual({ prev: 0 });
 		expect(world.frame("o1")).toMatchObject({ intent: { op: "o1", state: "pending", by: "w1" } });
 		expect(world.frame("o2")).toMatchObject({ intent: { op: "o2", state: "pending", by: "w2" } });
-		// An op is decided once, whatever its end; each open one is listed in its flow's record.
+		// An op is never decided twice, open or ended; each open one is listed in its flow's record.
 		expect(await decide("o1", world.w2)).toEqual({ refused: "ended" });
 		expect(await world.listed()).toEqual(["o1", "o2"]);
 	});
@@ -136,6 +137,20 @@ describe("a client's flow: one frame per op, unconditional appends (KG-07)", () 
 			await refusing("lateBundle").send({ flow, op: "o1", stage: bundle("o1"), prev: 0 }),
 		).toMatchObject({ end: { op: "o1", ending: "refused", owner: true } });
 		expect([world.frame("o1"), await world.listed()]).toEqual([undefined, []]);
+	});
+
+	it("never decides again an op closed with no record, though its frame is dropped", async () => {
+		const refusing = world.replica("w1", (l) => ({
+			...l,
+			append: async () => ({ v: 1, result: "refused", refusal: "lateBundle" }),
+		}));
+		await decide("o1");
+		expect(await refusing.send({ flow, op: "o1", stage: start("o1"), prev: 0 })).toMatchObject({
+			end: { op: "o1", ending: "refused" },
+		});
+		expect([world.frame("o1"), world.log.records(flow)]).toEqual([undefined, []]);
+		expect(await decide("o1", world.w2)).toEqual({ refused: "ended" });
+		expect(world.frame("o1")).toBeUndefined();
 	});
 
 	it("rebases with no position to move, or closes its op once a stage is placed", async () => {
@@ -248,6 +263,9 @@ describe("tending a client's flow by the ops its record lists, however far back"
 		expect([world.frame("old"), world.frame("silent")]).toEqual([undefined, undefined]);
 		expect(await world.listed()).not.toContain("old");
 		expect(await world.listed()).not.toContain("silent");
+		// Closed by their abandonments, frames dropped, neither is decided again.
+		expect(await decide("silent")).toEqual({ refused: "ended" });
+		expect(await decide("old")).toEqual({ refused: "ended" });
 	});
 
 	it("goes round the list, so 64 ops it cannot close at its head never keep it from the one behind", async () => {

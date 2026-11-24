@@ -205,7 +205,8 @@ export interface Transparency {
 	/**
 	 * KE-C01: decides the op on the applied state, in one write with its kind's records; never an op
 	 * with a stage on the flow (again only after an empty abandonment). A writer refused `open` or `notReady` tends the flow and decides again.
-	 * A client's op, holding no state, is decided once, on the empty state, answering the flow's head.
+	 * A client's op, holding no state, is decided on the empty state, answering the flow's head, and
+	 * once, whatever its end: one with a stage or an abandonment on the flow, or closed with neither, is `ended`.
 	 */
 	decide(p: {
 		readonly kind: string;
