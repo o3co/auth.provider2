@@ -94,8 +94,19 @@ export interface FlowEntry {
 	readonly judgment: Finding;
 	/** What the record names as its parent (a Core record's preimage, a confirmation's or denial's registration). */
 	readonly parent?: string | undefined;
-	/** How a start or a bundle roots: an approval's code or a family's refresh, where its preimage was read. */
-	readonly via?: "code" | "refresh" | undefined;
+	/** How a start or a bundle roots: an approval's code, a family's refresh or a client, where its preimage was read. */
+	readonly via?: "code" | "refresh" | "client" | undefined;
+	/**
+	 * A client's start: the evidence elements it names, the registry version it names, and the
+	 * thumbprint of the key its evidence was read by, where read.
+	 */
+	readonly client?:
+		| {
+				readonly elements: readonly string[];
+				readonly version?: number | undefined;
+				readonly key?: string | undefined;
+		  }
+		| undefined;
 }
 
 /** The state before a flow's first record. */

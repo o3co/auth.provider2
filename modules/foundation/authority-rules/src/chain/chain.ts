@@ -1,5 +1,12 @@
 import type { AppendRequest } from "@mod/transparency-wire";
 import {
+	type ClientAt,
+	evidenceRead,
+	evidenceTimely,
+	startOf,
+	tokenRefusal,
+} from "../client/client.ts";
+import {
 	assertedBy,
 	type Checks,
 	type Context,
@@ -24,7 +31,16 @@ import {
 /** The fields a Core writer names, in its request and its record alike. */
 export type Named = Pick<
 	AppendRequest,
-	"kind" | "flow" | "op" | "stage" | "last" | "approval" | "tokens" | "abandons"
+	| "kind"
+	| "flow"
+	| "op"
+	| "stage"
+	| "last"
+	| "approval"
+	| "tokens"
+	| "abandons"
+	| "registryVersion"
+	| "elements"
 >;
 
 /** A Core writer's record as the rules read it, before its append or after: against its flow's judged prefix. */
@@ -38,6 +54,11 @@ export interface Ask {
 	readonly prior: readonly FlowEntry[];
 	readonly checks: Checks;
 	readonly context: Context;
+	/**
+	 * On a client's start: its client's record at the registry version it names, null where that
+	 * version names no such client. Where none is given, the start is unchecked, so held.
+	 */
+	readonly client?: ClientAt | null | undefined;
 }
 
 /** Whether a record is allowed, and why not. */
@@ -50,6 +71,11 @@ type Refusal = string | undefined;
 
 const onSubject = (ask: Ask): Refusal =>
 	ask.record.flow.of === "subject" ? undefined : "a person's op is on a subject flow";
+/** A start's or a bundle's flow, by how it roots: a client's on its own flow, a person's on a subject's. */
+const onRootsFlow = (read: Read<"start"> | Read<"bundle">): Refusal => {
+	if (read.content.via !== "client") return onSubject(read.ask);
+	return read.ask.record.flow.of === "client" ? undefined : "a client's op is on its own flow";
+};
 const oneStage = (ask: Ask): Refusal =>
 	ask.record.stage === 1 && ask.record.last ? undefined : "the op is one stage";
 const stageBefore = (ask: Ask) =>
@@ -144,10 +170,33 @@ function firstKeyRefusal(read: Read<"keyChange">): Refusal {
 	return undefined;
 }
 
+/** A client's start (V23): its op id and elements its evidence's, unused on the flow, its evidence its client's. */
+function clientStartRefusal(read: Read<"start">): Refusal {
+	const { ask, preimage } = read;
+	const { record } = ask;
+	if (preimage.parent !== undefined || preimage.root !== undefined)
+		return "a client's start names no parent or root: it roots in its flow's client";
+	const start = startOf(preimage.evidence, ask.checks.digest);
+	if ("refused" in start) return start.refused;
+	if (record.op !== start.op) return "the op id is not its evidence's digest";
+	const named = record.elements ?? [];
+	if (named.length !== start.elements.length || start.elements.some((e) => !named.includes(e)))
+		return "the elements named are not its evidence's";
+	// The elements named, as the log indexes them, against every client's start before it.
+	if (ask.prior.some((e) => e.client?.elements.some((x) => named.includes(x))))
+		return "an evidence element is used on the flow";
+	if (record.registryVersion === undefined) return "a client's start names its registry version";
+	if (ask.client === null) return "its registry version names no such client";
+	if (ask.client === undefined) return undefined;
+	const evidence = evidenceRead(record.flow.id, ask.client, start.evidence, ask.checks);
+	return "refused" in evidence ? evidence.refused : undefined;
+}
+
 function startRefusal(read: Read<"start">): Refusal {
 	const { ask, preimage, content } = read;
 	if (ask.record.stage !== 1 || ask.record.last)
 		return "a start is an op's first stage, not its last";
+	if (content.via === "client") return clientStartRefusal(read);
 	const parent = preimage.parent;
 	if (parent === undefined) return "the start names no parent";
 	if (content.via === "code") {
@@ -172,6 +221,7 @@ function bundleRefusal(read: Read<"bundle">): Refusal {
 	const start = stageBefore(ask);
 	if (start?.envelope.kind !== "start") return "no start of the op before its bundle";
 	if (preimage.parent !== start.envelope.id) return "the bundle names another start than its op's";
+	if (content.via === "client") return clientBundleRefusal(read, content.token, start);
 	const root = preimage.root;
 	if (root === undefined) return "the bundle names no root";
 	// A forged parent's descendant is forged (J7), the start's verdict read before its own root.
@@ -195,6 +245,35 @@ function bundleRefusal(read: Read<"bundle">): Refusal {
 	return undefined;
 }
 
+/** A client's bundle (V23, V21): after its client's start, one access token of its client. */
+function clientBundleRefusal(
+	read: Read<"bundle">,
+	texts: { readonly header: string; readonly claims: string },
+	start: FlowEntry,
+): Refusal {
+	const { ask, preimage } = read;
+	if (start.judgment.verdict === "forged") return "the bundle's start is forged";
+	if (preimage.root !== undefined)
+		return "a client's bundle names no root: it roots in its flow's client";
+	if (start.via !== undefined && start.via !== "client")
+		return "the bundle roots elsewhere than its start";
+	const refusal = tokenRefusal({
+		client: ask.record.flow.id,
+		digests: ask.record.tokens,
+		texts,
+		start: {
+			acceptedAt: start.envelope.acceptedAt,
+			version: start.client?.version,
+			key: start.client?.key,
+		},
+		checks: ask.checks,
+	});
+	if (refusal !== undefined) return refusal;
+	if (acceptable(start.judgment.verdict) && start.judgment.outcome === "didNotTake")
+		return "a stage after one that did not take";
+	return undefined;
+}
+
 function noEffectRefusal(read: Read<"noEffect">): Refusal {
 	const before = stageBefore(read.ask);
 	if (!before) return "the record reports no stage of its op";
@@ -207,8 +286,8 @@ type Rule<K extends CoreKind> = (read: Read<K>) => Refusal;
 const rules: { readonly [K in CoreKind]: Rule<K> } = {
 	approval: (read) => onSubject(read.ask) ?? oneStage(read.ask) ?? approvalRefusal(read),
 	keyChange: (read) => onSubject(read.ask) ?? oneStage(read.ask) ?? firstKeyRefusal(read),
-	start: (read) => onSubject(read.ask) ?? startRefusal(read),
-	bundle: (read) => onSubject(read.ask) ?? bundleRefusal(read),
+	start: (read) => onRootsFlow(read) ?? startRefusal(read),
+	bundle: (read) => onRootsFlow(read) ?? bundleRefusal(read),
 	noEffect: noEffectRefusal,
 	// Allowed with no record of the op, and after its family is gone (§6.3; Step023 Allowed).
 	abandonment: () => undefined,
@@ -226,6 +305,41 @@ export function refusalOf(ask: Ask): Refusal {
 	const read = readOf(kind, ask);
 	if (!read) return "the preimage's content does not read as its kind's";
 	return (rules[kind] as Rule<typeof kind>)(read);
+}
+
+/**
+ * Why a client's start or bundle is unchecked, so held: a check its rules need the caller did not
+ * give (the client's record, the evidence window, the self ceiling) or its start's key is not known.
+ */
+export function uncheckedOf(ask: Ask): string | undefined {
+	const kind = ask.record.kind;
+	if (kind !== "start" && kind !== "bundle") return undefined;
+	if (readOf(kind, ask)?.content.via !== "client") return undefined;
+	if (kind === "start") {
+		if (ask.client === undefined) return "the client's record at its version is not given";
+		if (ask.context.limits.evidenceWindow === undefined) return "no evidence window is given";
+		return undefined;
+	}
+	if (!ask.checks.selfCeiling) return "no self ceiling is given";
+	if (stageBefore(ask)?.client?.key === undefined) return "its start's key is not known";
+	return undefined;
+}
+
+/** A client's start's entry fields: the elements and version it names, its evidence's key where read. */
+export function clientOf(ask: Ask): FlowEntry["client"] {
+	const { record } = ask;
+	if (record.kind !== "start" || record.flow.of !== "client" || !record.elements) return undefined;
+	const read = readOf("start", ask);
+	const start = read && startOf(read.preimage.evidence, ask.checks.digest);
+	const evidence =
+		read?.content.via === "client" && ask.client && start && !("refused" in start)
+			? evidenceRead(record.flow.id, ask.client, start.evidence, ask.checks)
+			: undefined;
+	return {
+		elements: record.elements,
+		...(record.registryVersion === undefined ? {} : { version: record.registryVersion }),
+		...(evidence && !("refused" in evidence) ? { key: evidence.key } : {}),
+	};
 }
 
 /**
@@ -265,6 +379,13 @@ export function timely(ask: Ask, acceptedAt: number): boolean {
 		case "start": {
 			const read = readOf("start", ask);
 			if (!read) return false;
+			if (read.content.via === "client") {
+				const window = limits.evidenceWindow;
+				const start = startOf(read.preimage.evidence, ask.checks.digest);
+				if (window === undefined || !ask.client || "refused" in start) return false;
+				const evidence = evidenceRead(ask.record.flow.id, ask.client, start.evidence, ask.checks);
+				return !("refused" in evidence) && evidenceTimely(evidence, acceptedAt, window);
+			}
 			if (read.content.via === "code") {
 				const approval = own(ask.state.approvals, parent(read));
 				return approval !== undefined && acceptedAt <= approval.acceptedAt + limits.codeLifetime;
@@ -303,7 +424,8 @@ export function rootOf(ask: Ask): Root | undefined {
 	if (kind === "start" || kind === "bundle") {
 		const read = readOf(kind, ask);
 		const at = kind === "start" ? read?.preimage.parent : read?.preimage.root;
-		if (!read || at === undefined) return undefined;
+		// A client's chain rests on its client in the registry, no first-trust key (J12 not asked).
+		if (!read || at === undefined || read.content.via === "client") return undefined;
 		return rootOfChain(
 			read.content.via === "code" ? own(state.approvals, at) : own(state.families, at),
 		);
@@ -336,7 +458,7 @@ export function effectOf(ask: Ask): Changes {
 		case "bundle": {
 			const read = readOf("bundle", ask);
 			const root = read?.preimage.root;
-			if (!read || root === undefined) return {};
+			if (!read || root === undefined || read.content.via === "client") return {};
 			return read.content.via === "code"
 				? { family: { approval: root }, consume: [marks.code(root)] }
 				: { rotate: root };

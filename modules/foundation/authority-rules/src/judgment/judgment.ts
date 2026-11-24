@@ -5,7 +5,16 @@ import {
 	schemas,
 	type Verdict,
 } from "@mod/transparency-wire";
-import { type Ask, effectOf, refusalOf, rootOf, timely } from "../chain/chain.ts";
+import {
+	type Ask,
+	clientOf,
+	effectOf,
+	refusalOf,
+	rootOf,
+	timely,
+	uncheckedOf,
+} from "../chain/chain.ts";
+import type { ClientAt } from "../client/client.ts";
 import { type Checks, type Context, isCoreKind, readPreimage } from "../evidence/evidence.ts";
 import { acceptable, type Changes, type FlowEntry, type FlowState } from "../fold/fold.ts";
 
@@ -42,6 +51,8 @@ export interface Reading {
 		| undefined;
 	/** The windows of the versions the record names. */
 	readonly versions?: { readonly registry?: Window; readonly config?: Window } | undefined;
+	/** A client's start: its client's record at the registry version it names, null where it names none (`Ask`). */
+	readonly client?: ClientAt | null | undefined;
 	readonly state: FlowState;
 	readonly prior: readonly FlowEntry[];
 	readonly checks: Checks;
@@ -69,6 +80,7 @@ const askOf = (reading: Reading, preimage: unknown): Ask => ({
 	prior: reading.prior,
 	checks: reading.checks,
 	context: reading.context,
+	client: reading.client,
 });
 const openedOf = (reading: Reading) =>
 	reading.opening && "opened" in reading.opening ? reading.opening.opened : undefined;
@@ -161,6 +173,9 @@ function coreRows(reading: Reading, bounds: Bounds): Found {
 			e.judgment.verdict === "held",
 	);
 	if (inherited) return heldAt("J9");
+	// A client's record whose check the caller did not give: J7 needs what it lacks, so held.
+	const unchecked = uncheckedOf(askOf(reading, opened));
+	if (unchecked !== undefined) return { row: "J9", verdict: "held", reason: unchecked };
 	if (bounds.upper) return heldAt("J10", true);
 	if (!sealed.some((key) => reading.keySets?.atRecord.includes(key))) return heldAt("J11");
 	const root = rootOf(askOf(reading, opened));
@@ -195,7 +210,8 @@ export function judge(reading: Reading): Ruling {
 	let found: Found;
 	let changes: Changes = {};
 	let parent: string | undefined;
-	let via: "code" | "refresh" | undefined;
+	let via: "code" | "refresh" | "client" | undefined;
+	let client: FlowEntry["client"];
 	const role = record.writer.role;
 	if (role !== "core") {
 		const kinds: readonly string[] = recordKinds[role];
@@ -228,9 +244,17 @@ export function judge(reading: Reading): Ruling {
 				via = "error" in read ? undefined : read.content.via;
 			}
 		}
+		if (record.kind === "start") client = clientOf(askOf(reading, opened));
 	}
 	const judgment = { verdict: found.verdict, outcome: outcomeOf(reading, found.verdict) };
-	const entry: FlowEntry = { envelope, changes, judgment, parent, ...(via ? { via } : {}) };
+	const entry: FlowEntry = {
+		envelope,
+		changes,
+		judgment,
+		parent,
+		...(via ? { via } : {}),
+		...(client ? { client } : {}),
+	};
 	const ruling = { entry, row: found.row, counted: found.counted ?? false };
 	return found.reason === undefined ? ruling : { ...ruling, reason: found.reason };
 }

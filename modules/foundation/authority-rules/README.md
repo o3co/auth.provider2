@@ -16,7 +16,8 @@
 - `judge` (a `Reading`: the placed record, what opening its preimage gave or another writer's verified body, the key sets, the versions' windows, the prefix) → `Ruling`: the flow entry with its verdict and outcome, the row J0–J13, whether counted; or a wait (internal module `judgment`). `outcomeOf` (a `Reading`, a verdict).
 - `fold` (state, `Envelope`, `Changes`, `Finding`) → the state; `foldFlow` (flow, entries) → transparency-wire's stateOf; `emptyState`; `abandonedFamily` (a bundle's envelope and changes) → the family an abandonment of its op drops, for the Core's intent and `effectOf` alike; `withoutRooted` (state, an item's id) → what a removal or a denial of it leaves (internal module `fold`).
 - `ruleSchemas`: `flowState`, `changes`, and `contents`, each Core kind's preimage content (internal module `evidence`).
-- Types: `Ask`, `Named`, `Allowance`, `Checks`, `Context`, `RuleTimes`, `Reading`, `Opening`, `Window`, `Ruling`, `Row`, `FlowRecord`, `FlowEntry`, `FlowState`, `Changes`, `Envelope`, `Finding`, `RecordKind`.
+- `clientRules` (internal module `client`): `start` (a client's start's evidence, a digest) → its op id (OpIdOf) and evidence elements (Elems), or why not, for the Core to derive them as the rules check them; `within`, whether its evidence's times hold an acceptance time, as TimeOK reads them; `lifetimeMs`, the longest a client's own token lives from its start: 15 minutes, a constant the Core narrows within.
+- Types: `Ask`, `Named`, `Allowance`, `Checks`, `Context`, `RuleTimes`, `ClientAt`, `ClientEvidence`, `StartOf`, `Reading`, `Opening`, `Window`, `Ruling`, `Row`, `FlowRecord`, `FlowEntry`, `FlowState`, `Changes`, `Envelope`, `Finding`, `RecordKind`.
 
 ## Invariants
 - Pure: no I/O, clock, randomness, crypto or state. A record's fields, its flow's judged prefix (the entries from position 1 and the state they fold to) and the caller's functions in; a value out. A caller's error of shape (entries out of order, a Core record without its opening) is a TypeError.
@@ -24,7 +25,8 @@
 - The verdict is the first row of the table it meets, in the table's order; the chain (J7) is checked before the time, and a forged row before an inherited hold (J9).
 - A Core record is held to the ring of its writer's Core generation, the context's: a statement of another generation's ring is forged. A first key's key generation is the signed creation's.
 - Another writer's record is judged with the body its signature verified (`signedRecord`); a role naming a kind it does not write is forged.
-- What the rules hold no rule for is refused, never passed: a key change other than the first-key path, and a person's op off a subject flow.
+- What the rules hold no rule for is refused, never passed: a key change other than the first-key path, a person's op off a subject flow, and a client's start or bundle off its own flow.
+- A check a client's record needs that the caller does not give (the client's record at its version, the evidence window, the self ceiling) leaves it unchecked: held, never verified nor forged.
 
 ## Depends on
 - `transparency-wire`, `sdk-core-wire` (the protocols); `zod`.

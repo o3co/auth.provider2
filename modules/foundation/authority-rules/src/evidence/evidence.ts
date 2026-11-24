@@ -19,6 +19,12 @@ export interface Checks {
 	/** SHA-256 of the text's UTF-8 bytes, or of the bytes, base64url without padding. */
 	digest(data: string | Uint8Array): string;
 	/**
+	 * Whether a client's own ceiling at a registry version holds the audience and the scope (a
+	 * token's `scope`, space-separated), the issuer never among its audiences: `client-allowance`'s
+	 * `allowedSelfIssuance`. Where none is given, a client's bundle is unchecked, so held.
+	 */
+	selfCeiling?(client: string, version: number, audience: string, scope: string): boolean;
+	/**
 	 * A passkey's key (its COSE_Key, base64url) to its thumbprint (RFC 7638, as `sdk-core-wire`'s
 	 * `keyThumbprintInput` builds it) and its algorithm as COSE numbers it; none for a key the
 	 * protocol does not take.
@@ -40,6 +46,12 @@ export interface RuleTimes {
 	readonly propagation: number;
 	/** T_retry: how long a temporary failure is waited out before the record is held. */
 	readonly retry: number;
+	/**
+	 * How far a client's evidence's times may lie from its start's acceptance: an assertion's `iat`
+	 * ahead and `exp` behind, a DPoP proof's `iat` either side. Where none is given, a client's start
+	 * is unchecked, so held.
+	 */
+	readonly evidenceWindow?: number;
 }
 
 /** What a record is read against beside its flow: the ring of its writer's Core generation, the passkeys' origin, the limits. */
@@ -60,11 +72,19 @@ const canonical = z
 			Buffer.from(text, "base64url").toString("base64url") === text,
 	);
 const empty = z.object({}).strict();
-/** How a start or a bundle roots: an approval's code, or a family's refresh at its rotation. */
-const via = z.discriminatedUnion("via", [
-	z.object({ via: z.literal("code") }).strict(),
-	z.object({ via: z.literal("refresh"), rotation: z.number().int().nonnegative() }).strict(),
-]);
+const code = z.object({ via: z.literal("code") }).strict();
+const refresh = z
+	.object({ via: z.literal("refresh"), rotation: z.number().int().nonnegative() })
+	.strict();
+/** A client's start roots in its flow's client; its bundle carries its access token's texts. */
+const text = z.string().min(1);
+const clientStart = z.object({ via: z.literal("client") }).strict();
+const clientBundle = z
+	.object({
+		via: z.literal("client"),
+		token: z.object({ header: text, claims: text }).strict(),
+	})
+	.strict();
 
 /** A Core writer's preimage `content`, by kind: what transparency-wire leaves to these rules. */
 export const contents = Object.freeze({
@@ -76,8 +96,9 @@ export const contents = Object.freeze({
 	keyChange: z
 		.object({ variant: z.literal("first"), credential: id, publicKey: canonical })
 		.strict(),
-	start: via,
-	bundle: via,
+	/** How a start or a bundle roots: an approval's code, a family's refresh at its rotation, or a client. */
+	start: z.discriminatedUnion("via", [code, refresh, clientStart]),
+	bundle: z.discriminatedUnion("via", [code, refresh, clientBundle]),
 	noEffect: empty,
 	abandonment: empty,
 });
