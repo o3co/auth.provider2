@@ -14,7 +14,7 @@
 - `bare` (request → whether it carries nothing a client authenticates with, whichever methods are composed). `authenticate`'s `no_credentials` says only that no composed method claimed the request.
 - `registered` (→ the clients the operator registered, in the settings' order, the `i`th at `clients.registered.<i>`), for a boot check that names one by its place, never its id.
 - `methods` names the usable authentication methods, built in and contributed; `signingAlgorithms` names the algorithms they take signed credentials in.
-- A client gives its metadata by section, and says whether the operator registered it or another source named it, and the registry version its record came from where its source names one.
+- A client gives its metadata by section, and says whether the operator registered it or another source named it, the registry version its record came from where its source names one, and that the version is one its publisher signed where its source declares all its records are (`signed`).
 - Asking a client for a section no module contributed throws; it never answers undefined.
 - Extension point `authMethods`: a method names its challenge for a refusal and its signing algorithms (at least one where it names any, never the JWS algorithm `none` in any case: boot refuses a method that breaks either), may say a request carries its credentials malformed, and may say it authenticates by an assertion (RFC 7521), when it names at least one signing algorithm (boot refuses one that does not).
 - Extension points `clientSources` and `metadataSections`; a section may give `checkAtBoot`, which takes a registered client's value of that section after the schema, and the client that holds it, and may give a reason to refuse boot.
@@ -28,7 +28,6 @@
 - A Basic header is malformed unless it is canonical base64 of UTF-8 that decodes to a non-empty id and secret; a `client_id` in the body beside it must name the same client, or the credentials are bad.
 - A `client_secret` is malformed unless one non-empty `client_id` is sent once beside it; a `client_id` alone is malformed when sent twice or not as a string, and no credentials when empty.
 - `client_secret_post` and `none` read `client_id` and `client_secret` from a form or JSON body, where a value that is not a string still counts as sent.
-- An id that is empty, over 256 UTF-16 code units (a fixed bound: an id is also a store key, and every reader of an id holds it to this one), with a lone surrogate, or with a C0, DEL, C1, U+2028, U+2029 or BOM character is unknown, and no source is asked; registered, it refuses boot.
 - `checkAtBoot` sees each registered client that carries the section, and never a source's client, which the section's owner checks at request time.
 - A `checkAtBoot` reason refuses boot at `clients.registered.<i>.sections.<name>`, which names the client by its place and the section; the reason is the check's own, unchanged, so it never holds a configuration value, the client's id included.
 - A secret is checked through `secret-hash`, within its assembly's `max-concurrent`, with decoys of the registered hashes' work; boot refuses a registered `hash` it cannot read (plain text included) or a secret method's client with none, and a source's such secret matches nothing.

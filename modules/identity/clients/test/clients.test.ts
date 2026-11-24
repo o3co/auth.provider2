@@ -782,6 +782,25 @@ describe("clients", () => {
 		expect((await c.find("remote"))?.registered).toBe(false);
 	});
 
+	it("says a client came from a version its publisher signed only where its source declares so", async () => {
+		const remote = { kind: "public" as const, method: "none", sections: {}, version: 3 };
+		const signing = defineModule({ name: "signing", replicaSafe: true, takes: [] }, (m) => [
+			m.contribute(clientSources).by(() => ({
+				signed: true,
+				find: async (id: string) =>
+					id === "published" || id === "conf" ? { id, ...remote } : undefined,
+			})),
+		]);
+		const c = await boot([
+			source((id) => (id === "named" ? { id, ...remote } : undefined)),
+			signing,
+		]);
+		expect((await c.find("published"))?.signed).toBe(true);
+		// A version named by a source that declares nothing, and a registered client, are not signed ones.
+		expect((await c.find("named"))?.signed).toBeUndefined();
+		expect((await c.find("conf"))?.signed).toBeUndefined();
+	});
+
 	it("throws unavailable when a source is unavailable, from find and authenticate", async () => {
 		const c = await boot([
 			source(() => {

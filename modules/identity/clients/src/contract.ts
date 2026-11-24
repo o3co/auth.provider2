@@ -25,6 +25,11 @@ export interface Client {
 	readonly registered: boolean;
 	/** The registry version the client's record came from, where its source names one. */
 	readonly version?: number;
+	/**
+	 * Set where the client's source declares that every record it gives comes from a registry version
+	 * its publisher signed (`ClientSource.signed`); never for a registered client.
+	 */
+	readonly signed?: true;
 	/** The client's value of a contributed section; throws for a section no module contributed. */
 	section<T>(section: Section<T>): T;
 }
@@ -45,6 +50,11 @@ export interface RecordRefusal {
 }
 
 export interface ClientSource {
+	/**
+	 * Set by a source whose every record comes from a registry version its publisher signed: its
+	 * clients say so (`Client.signed`). A source that sets it is part of the trust it declares.
+	 */
+	readonly signed?: true;
 	find(id: string): Promise<ClientRecord | undefined>;
 }
 

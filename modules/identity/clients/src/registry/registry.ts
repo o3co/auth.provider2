@@ -62,7 +62,7 @@ const pathOf = (issue: StandardSchemaV1.Issue) =>
 export async function readRecord(
 	record: ClientRecord,
 	known: ReadonlyMap<string, Section<unknown>>,
-	origin: "registered" | "source",
+	origin: "registered" | "source" | "signed source",
 ): Promise<{ client: Client } | { issues: SectionIssue[] }> {
 	const issues: SectionIssue[] = [];
 	const values = new Map<string, unknown>();
@@ -85,6 +85,7 @@ export async function readRecord(
 		method: record.method,
 		registered: origin === "registered",
 		...(record.version === undefined ? {} : { version: record.version }),
+		...(origin === "signed source" ? { signed: true } : {}),
 		section: <T>(section: Section<T>) => {
 			if (!values.has(section.name))
 				throw new Error(`no module contributes the section ${section.name}`);
@@ -145,6 +146,7 @@ export function registry(
 	/** A record held to the registered rule, a known method and its sections, or where it fails. */
 	const checked = async (
 		record: unknown,
+		signed = false,
 	): Promise<{ client: Client } | { refusals: RecordRefusal[] }> => {
 		const parsed = sourceRecord.safeParse(record);
 		if (!parsed.success) {
@@ -160,17 +162,22 @@ export function registry(
 		const read = await readRecord(
 			{ ...data, ...(version === undefined ? {} : { version }) },
 			known,
-			"source",
+			signed ? "signed source" : "source",
 		);
 		if ("client" in read) return read;
 		return { refusals: read.issues.map((issue) => ({ path: `sections.${issue.path}` })) };
 	};
-	const held = async (record: unknown, id: string): Promise<Client | "invalid"> => {
-		const result = await checked(record);
+	const held = async (
+		record: unknown,
+		id: string,
+		signed: boolean,
+	): Promise<Client | "invalid"> => {
+		const result = await checked(record, signed);
 		return "client" in result && result.client.id === id ? result.client : "invalid";
 	};
 	/** A source's record held to the registered rule, a usable method and the id asked; one that throws while read is invalid. */
-	const sourced = (record: unknown, id: string) => held(record, id).catch(() => "invalid" as const);
+	const sourced = (record: unknown, id: string, signed: boolean) =>
+		held(record, id, signed).catch(() => "invalid" as const);
 	/** The client by id: registered first, then the first source that names it; "invalid" if its record fails. */
 	const lookup = async (id: string): Promise<Client | undefined | "invalid"> => {
 		// An id no client can have is looked up nowhere, so no source can fail on it.
@@ -180,7 +187,7 @@ export function registry(
 		for (const source of sources) {
 			const record = await source.find(id);
 			if (!record) continue;
-			return sourced(record, id);
+			return sourced(record, id, source.signed === true);
 		}
 		return undefined;
 	};
