@@ -10,7 +10,7 @@ Internal module of `session`: the rules every implementation of `sessions` keeps
 
 ## Offers
 - `closeListed`: closes each listed session of a subject through the close given, one at a time in the listing's order, past one that fails or is left pending, and then fails.
-- `checkAuthenticatedAt`: a `TypeError`, naming no value, for a login's authentication time neither epoch milliseconds (0 to 8.64e15), `opening` nor `unknown`. `checkProvenSince` and `checkEndsAt`: a `TypeError`, naming no value, for a proof's start or an end missing or not epoch milliseconds.
+- `checkAuthenticatedAt`: a `TypeError`, naming no value, for a login's authentication time neither epoch milliseconds (0 to 8.64e15), `opening` nor `unknown`. `checkProvenSince`: a `TypeError`, naming no value, for a proof's start missing or not epoch milliseconds; `checkEndsAt`, the same for an end missing or not whole epoch milliseconds.
 - `authenticatedAtOf` (the login's facts, the opening, what to do where it caps a later time) → the time the session keeps.
 
 ## Invariants

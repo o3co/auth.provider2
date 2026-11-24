@@ -27,8 +27,8 @@ export interface LoginFacts {
 	 */
 	readonly provenSince: number;
 	/**
-	 * When the session ends (epoch ms, 0 to 8.64e15): the end of the delegation it carries, which the
-	 * caller fixes. The session keeps it as given. None, or anything else, is a TypeError.
+	 * When the session ends (whole epoch ms, 0 to 8.64e15): the end of the delegation it carries, which
+	 * the caller fixes. The session keeps it as given. None, or anything else, is a TypeError.
 	 */
 	readonly endsAt: number;
 }
@@ -50,13 +50,6 @@ export type Entry =
 /** What a close answers: closed, or pending while a participant has not finished. */
 export interface CloseOutcome {
 	readonly kind: "closed" | "pending";
-	/** The session the close moved, by its handle and subject; none when no record was left to read. */
-	readonly session?: { readonly id: string; readonly subject: string };
-	/**
-	 * The state the close found the record in, before it moved it: `open` (even one past its end),
-	 * `closing` (a close left pending), or `closed`; none when no record was left to read.
-	 */
-	readonly from?: "open" | "closing" | "closed";
 }
 
 export interface Sessions {
@@ -72,8 +65,8 @@ export interface Sessions {
 	entryOf(handle: string): Promise<Entry>;
 	/**
 	 * The subject of the session's record under this handle, in any state, from one read: not an
-	 * entry check. It writes nothing and checks no end or revocation. None where no record is, or it
-	 * holds no subject; a record that cannot be read is Unavailable.
+	 * entry check. It writes nothing and checks no end or revocation. None where no record is; a
+	 * record that cannot be read is Unavailable.
 	 */
 	subjectOf(handle: string): Promise<string | undefined>;
 }

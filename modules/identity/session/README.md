@@ -11,11 +11,11 @@
 - A browser's way into a session (a cookie) and the request that carries it: no part of this contract makes or reads one.
 
 ## Offers
-- `open`: login fact → `opened` with the session and its end at `kernel`'s time, or `revoked`; a login fact `rules`' checks refuse (`checkAuthenticatedAt`, `checkProvenSince`, `checkEndsAt`) is a `TypeError`, before anything is opened; the login is unavailable when the new session cannot be listed under its subject.
+- `open`: login fact → `opened` with the session and its end at `kernel`'s time, or `revoked`; a login fact `rules`' checks refuse (`checkAuthenticatedAt`, `checkProvenSince`, `checkEndsAt`, the end in whole milliseconds) is a `TypeError`, before anything is opened; the login is unavailable when the new session cannot be listed under its subject.
   - `provenSince`, when the proof began, is compared with the subject's boundary once the session is saved; revoked, it is closed. A login's authentication time, and what counts from the opening instead, follow `rules`' card.
-- `entryOf`: handle → entered (with its end) or absent. `subjectOf`: handle → its record's subject in any state, from one read that writes and judges nothing; none where no record is, or it names none.
-- `close`: handle → closed, or pending (the session stays closing) until every participant has finished. It names the moved session (handle and subject) while its record is kept, and the state it found it in (`from`: open, even past its end, closing or closed).
-- A revoked subject's listed sessions are each closed through `close`; the revocation answers incomplete while one fails or is left pending (it stays listed). A session pushed out of a full listing (one ending first, never the one being opened) is closed through `close`.
+- `entryOf`: handle → entered (with its end) or absent. `subjectOf`: handle → its record's subject in any state, from one read that writes and judges nothing; none where no record is.
+- `close`: handle → closed, or pending (the session stays closing) until every participant has finished.
+- A revoked subject's listed sessions are each closed through `close`; the revocation answers incomplete while one fails or is left pending (it stays listed). A session pushed out of a full listing (one ending first, never the one being opened) is closed through `close`; a session whose end has passed at its opening takes no place in the listing.
 - Extension point `closingParticipants`: the session (its handle and context) → each participant that failed, by name and the error's kind.
   - None is called for a session that ends at its end alone, while a close calls them for a session whose record it finds, even one past its end.
 - The seam takes at most one contribution, from the module keeping the participants (`session-participants`); its factory takes `sessions` only late. An implementation refuses to boot where it has no contribution; the stand-in takes none as no participant (`sessionStandIn`).

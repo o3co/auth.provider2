@@ -20,9 +20,10 @@ export function checkProvenSince(facts: LoginFacts): void {
 	if (!isEpochMs(facts.provenSince)) throw new TypeError("provenSince must be epoch milliseconds");
 }
 
-/** A `TypeError`, naming no value, for an end that is missing or not epoch milliseconds. */
+/** A `TypeError`, naming no value, for an end that is missing or not whole epoch milliseconds. */
 export function checkEndsAt(facts: LoginFacts): void {
-	if (!isEpochMs(facts.endsAt)) throw new TypeError("endsAt must be epoch milliseconds");
+	if (!isEpochMs(facts.endsAt) || !Number.isInteger(facts.endsAt))
+		throw new TypeError("endsAt must be whole epoch milliseconds");
 }
 
 /** The authentication time a session keeps from its login, telling `capped` where it took the opening for a later one. */

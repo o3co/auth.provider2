@@ -218,10 +218,7 @@ export function sessionsContract(name: string, open: () => Promise<SessionsPlace
 			const place = await open();
 			const done = openedOf(await place.sessions.open(facts(place)));
 			place.advance(hourMs);
-			const closed = await place.sessions.close(done.session.id);
-			// What the close found (`from`) is the implementation's: a record gone, or one it ended.
-			expect(closed.kind).toBe("closed");
-			expect(closed.session).toBeUndefined();
+			expect((await place.sessions.close(done.session.id)).kind).toBe("closed");
 			expect(place.closed).toEqual([]);
 		});
 
@@ -342,53 +339,27 @@ export function sessionsContract(name: string, open: () => Promise<SessionsPlace
 			expect((await place.sessions.entryOf(others.session.id)).kind).toBe("entered");
 		});
 
+		it("gives a session whose end has passed no place in its subject's full listing, pushing none out", async () => {
+			const place = await open();
+			const handles: string[] = [];
+			for (let n = 0; n < place.listingCap; n++) {
+				place.advance(1000);
+				handles.push(openedOf(await place.sessions.open(facts(place))).session.id);
+			}
+			const passed = await place.sessions.open({ ...facts(place), endsAt: place.now() });
+			expect(passed.kind).toBe("opened");
+			expect(place.closed).toEqual([]);
+			for (const handle of handles) {
+				expect((await place.sessions.entryOf(handle)).kind).toBe("entered");
+			}
+		});
+
 		it("fails a login whose session cannot be listed under its subject", async () => {
 			const place = await open();
 			place.failNextListing();
 			await expect(place.sessions.open(facts(place))).rejects.toSatisfy(isUnavailable);
 			const done = openedOf(await place.sessions.open(facts(place)));
 			expect((await place.sessions.entryOf(done.session.id)).kind).toBe("entered");
-		});
-
-		it("names a closed session for its length from its last close", async () => {
-			const place = await open();
-			const done = openedOf(await place.sessions.open(facts(place)));
-			const named = { id: done.session.id, subject: "alice" };
-			for (let n = 0; n < 3; n++) {
-				expect((await place.sessions.close(done.session.id)).session).toEqual(named);
-				place.advance(hourMs - 1);
-			}
-		});
-
-		it("says the state each close found the record in: open, closing while left pending, then closed", async () => {
-			const place = await open();
-			const done = openedOf(await place.sessions.open(facts(place)));
-			const from = async () => (await place.sessions.close(done.session.id)).from;
-			place.failClosing(true);
-			expect(await from()).toBe("open");
-			expect(await from()).toBe("closing");
-			place.failClosing(false);
-			expect(await from()).toBe("closing");
-			expect(await from()).toBe("closed");
-			expect((await place.sessions.close("x".repeat(43))).from).toBeUndefined();
-		});
-
-		it("names the session a close ended or left pending, by its handle and subject", async () => {
-			const place = await open();
-			const named = (done: { session: Session }) => ({ id: done.session.id, subject: "alice" });
-			const ended = openedOf(await place.sessions.open(facts(place)));
-			expect((await place.sessions.close(ended.session.id)).session).toEqual(named(ended));
-			const pending = openedOf(await place.sessions.open(facts(place)));
-			place.failClosing(true);
-			expect(await place.sessions.close(pending.session.id)).toMatchObject({
-				kind: "pending",
-				session: named(pending),
-			});
-			place.failClosing(false);
-			expect(await place.sessions.close(pending.session.id)).toMatchObject({
-				kind: "closed",
-				session: named(pending),
-			});
 		});
 	});
 }
@@ -478,18 +449,16 @@ export const sessionStandIn = defineModule(
 			const close = async (handle: string): Promise<CloseOutcome> => {
 				const record = found(handle);
 				if (!record) return { kind: "closed" };
-				const session = { id: handle, subject: record.context.subject };
-				const from = record.state;
 				if (record.state !== "closed") {
 					record.state = "closing";
 					const failed = closing ? await closing.closing(sessionOf(handle, record)) : [];
 					for (const failure of failed) c.log.warn("session.participant_failed", failure);
-					if (failed.length > 0) return { kind: "pending", session, from };
+					if (failed.length > 0) return { kind: "pending" };
 				}
 				record.state = "closed";
 				record.until = c.clock.now() + Math.max(1, record.endsAt - record.openedAt);
 				listing.get(record.context.subject)?.delete(handle);
-				return { kind: "closed", session, from };
+				return { kind: "closed" };
 			};
 			const open = async (facts: LoginFacts): Promise<Opened> => {
 				sessionRules.checkAuthenticatedAt(facts);
@@ -512,7 +481,10 @@ export const sessionStandIn = defineModule(
 					await close(handle);
 					return { kind: "revoked" };
 				}
-				for (const pushed of list(facts.subject, handle, endsAt)) await close(pushed);
+				// One whose end has passed lets nobody in: it takes no place, and pushes none out.
+				if (endsAt > c.clock.now()) {
+					for (const pushed of list(facts.subject, handle, endsAt)) await close(pushed);
+				}
 				return { kind: "opened", session: sessionOf(handle, kept.get(handle) as Kept), endsAt };
 			};
 			const stand: Sessions = {

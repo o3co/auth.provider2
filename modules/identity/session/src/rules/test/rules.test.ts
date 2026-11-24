@@ -22,10 +22,10 @@ describe("session's rules", () => {
 		}
 	});
 
-	it("takes an end of epoch milliseconds, and throws a TypeError, naming no value, for none or anything else", () => {
+	it("takes an end of whole epoch milliseconds, and throws a TypeError, naming no value, for none or anything else", () => {
 		expect(() => sessionRules.checkEndsAt(facts)).not.toThrow();
 		expect(() => sessionRules.checkEndsAt({ ...facts, endsAt: 0 })).not.toThrow();
-		for (const endsAt of [undefined, -1, 8.64e15 + 1, Number.NaN, "1", null]) {
+		for (const endsAt of [undefined, -1, 8.64e15 + 1, Number.NaN, "1", null, 1.5]) {
 			const checked = () => sessionRules.checkEndsAt({ ...facts, endsAt } as never);
 			expect(checked, String(endsAt)).toThrow(TypeError);
 			expect(checked).not.toThrow(String(endsAt));
