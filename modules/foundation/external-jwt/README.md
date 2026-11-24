@@ -23,6 +23,7 @@
 - A token not written in its one form (`keys`' rule for a JWS) is malformed, so one token has one string.
 - Only asymmetric algorithms the caller allows are taken; none and shared secrets never are.
 - A header with `b64` or `crit`, a `kid` that is no string, or a `typ` other than the caller's is malformed. `typ` compares as a media type, without parameters, space or case and with or without `application/`, by `typOf` alone.
+- A key written in is copied and frozen when its verifier is made, so the key chosen, the key verifying and the key answered stay one, whatever its caller changes after.
 - Keys are read and fit to the algorithm by `keys`' rules for outside keys, and must agree with the header's `kid`; exactly one must, else no key or an ambiguous key.
 - Each key is read under one algorithm (RFC 8725 §3.1), by the caller's whole list and never the header: its own `alg` where allowed, else the one allowed algorithm its kind and curve fit. A key naming none that two allowed algorithms fit is used under neither, an answer of no key that fetching again does not change.
 - The claims are one JSON object in UTF-8 with a numeric `exp`; `nbf` and `iat`, where given, are numeric.

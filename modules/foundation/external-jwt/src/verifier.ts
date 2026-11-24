@@ -176,7 +176,7 @@ function verifierWith(choose: Choose, policy: Policy, clock: Clock): Verifier {
 				kind: "valid",
 				header: deepFreeze({ ...header }),
 				claims: deepFreeze(claims),
-				key: deepFreeze(structuredClone(key.jwk)),
+				key: key.jwk,
 			};
 		},
 	};

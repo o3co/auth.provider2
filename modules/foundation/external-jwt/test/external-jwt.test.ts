@@ -61,6 +61,17 @@ describe("headers and keys", () => {
 		});
 	});
 
+	it("keeps an inline key as it was when the verifier was made, whatever the caller changes after", async () => {
+		const signer = await testSigner("ES256", "k1");
+		const other = await testSigner("ES256", "k2");
+		const given = { ...signer.jwk };
+		const verifier = verifierOf({ inline: [given] }, policy);
+		Object.assign(given, { x: other.jwk.x, y: other.jwk.y, kid: "k2" });
+		const answer = await verifier.verify(await signer.sign(fresh()));
+		expect(answer).toMatchObject({ kind: "valid", key: signer.jwk });
+		expect(await verifier.verify(await other.sign(fresh()))).toEqual(invalid("no-key"));
+	});
+
 	it("takes only the algorithms the caller allows, never none or a shared secret", async () => {
 		const signer = await testSigner("RS256");
 		const strict = verifierOf({ inline: [signer.jwk] }, { ...policy, algorithms: ["ES256"] });

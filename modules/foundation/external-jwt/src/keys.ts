@@ -1,4 +1,5 @@
 import type { KeyObject } from "node:crypto";
+import { deepFreeze } from "@mod/kernel";
 import {
 	isVerifyAlgorithm,
 	publicJwk,
@@ -19,8 +20,9 @@ export const algorithms: readonly Algorithm[] = verifyAlgorithms;
 
 export const isAlgorithm = (alg: unknown): alg is Algorithm => isVerifyAlgorithm(alg);
 
-/** A public key `keys` reads from a JWK; none for anything else. */
-export const fromJwk = (jwk: Jwk): Candidate | undefined => publicJwk(jwk);
+/** A public key `keys` reads from a frozen copy of a JWK, so the key chosen and read stay one; none for anything else. */
+export const fromJwk = (jwk: Jwk): Candidate | undefined =>
+	publicJwk(deepFreeze(structuredClone(jwk)));
 
 /** A PEM public key, taken only for the algorithm it is given for; a private one never is. */
 export function fromPem(given: PemKey): Candidate | undefined {
@@ -31,7 +33,7 @@ export function fromPem(given: PemKey): Candidate | undefined {
 		alg: given.alg,
 		...(given.kid ? { kid: given.kid } : {}),
 	};
-	return { jwk, key };
+	return { jwk: deepFreeze(jwk), key };
 }
 
 /**
