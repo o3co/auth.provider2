@@ -12,6 +12,7 @@ import {
 } from "../../../test/composed.ts";
 import { revokedInMemory } from "../../../test/revoked.ts";
 import type { AccessGrant } from "../../contract.ts";
+import { issueAtOnce } from "../../testing.ts";
 
 let now = 1_800_000_000_400;
 const runtime = quietRuntime({ clock: { now: () => now } });
@@ -47,7 +48,7 @@ async function boot() {
 it("writes a grant's standing time as o3co_standing_at, whole seconds floored and never after iat, and none without one", async () => {
 	const { t } = await boot();
 	const issue = async (given: AccessGrant) => {
-		const issued = await t.issue({ grant: given, grantType: "test" });
+		const issued = await issueAtOnce(t, { grant: given, grantType: "test" });
 		if (issued.kind !== "issued") throw new Error("refused");
 		return payloadOf(issued.access.token);
 	};

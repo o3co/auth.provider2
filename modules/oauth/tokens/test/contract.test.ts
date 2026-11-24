@@ -6,6 +6,7 @@ import { denylistAllowanceMs } from "@mod/token-denylist";
 import { expect, it } from "vitest";
 import { type IssuancePolicy, issuancePolicies, subjectChecks } from "../src/contract.ts";
 import {
+	issueAtOnce,
 	type TokensUnderTest,
 	tokensConfig,
 	tokensContract,
@@ -185,7 +186,7 @@ it("the stand-in keeps nothing of a token it refuses for want of a second left",
 	};
 	const lastName = () => `stand-in.${Buffer.from(drawn.at(-1) ?? []).toString("base64url")}`;
 	expect(
-		await stand.tokens.issue({ grant, grantType: "test" }, { notAfter: stand.now() + 999 }),
+		await issueAtOnce(stand.tokens, { grant, grantType: "test" }, { notAfter: stand.now() + 999 }),
 	).toMatchObject({ kind: "refused", reason: "no_lifetime_left" });
 	expect(await stand.tokens.issuedToOf(lastName())).toEqual({ kind: "invalid" });
 	// One issued is kept by the name its id makes.

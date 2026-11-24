@@ -21,6 +21,7 @@ import {
 	subjectChecks,
 	type Tokens,
 } from "./contract.ts";
+import { issueAtOnce } from "./issuance/at-once.ts";
 import {
 	authenticatedAheadMs,
 	type BuiltTokens,
@@ -94,7 +95,7 @@ export function tokensContract(
 		grant: AccessGrant,
 		limits?: IssueLimits,
 	) => {
-		const issued = await tokens.issue({ grant, grantType: "test" }, limits);
+		const issued = await issueAtOnce(tokens, { grant, grantType: "test" }, limits);
 		if (issued.kind !== "issued") throw new Error(`refused by ${issued.policy}`);
 		return issued.access;
 	};
@@ -195,7 +196,7 @@ export function tokensContract(
 			expect([issued.expiresAt, issued.expiresIn]).toEqual([asked + 60_000, 55]);
 			// A lifetime the wait outlasts leaves none: refused, handed to no one.
 			place = await open({ revocable: true, policies: [waiting(3_000)], lifetimeSeconds: 2 });
-			expect(await place.tokens.issue({ grant, grantType: "test" })).toMatchObject({
+			expect(await issueAtOnce(place.tokens, { grant, grantType: "test" })).toMatchObject({
 				kind: "refused",
 				policy: "tokens",
 				reason: "no_lifetime_left",
@@ -239,16 +240,16 @@ export function tokensContract(
 			const read = await place.tokens.verifyAccess((await issueFor(place.tokens, client)).token);
 			expect(read.kind === "valid" && read.grant.subjectKind).toBe("client");
 			const another = { ...grant, subjectKind: "client" as const };
-			await expect(place.tokens.issue({ grant: another, grantType: "test" })).rejects.toThrow(
-				TypeError,
-			);
+			await expect(
+				issueAtOnce(place.tokens, { grant: another, grantType: "test" }),
+			).rejects.toThrow(TypeError);
 		});
 
 		it("issues where no policy refuses, the same token for any grant type, and admits alike", async () => {
 			const place = await open({ revocable: true, policies: [allowing] });
 			const request = { grant, grantType: "client_credentials" };
 			expect(await place.tokens.admits(request)).toEqual({ kind: "allowed" });
-			const issued = await place.tokens.issue(request);
+			const issued = await issueAtOnce(place.tokens, request);
 			if (issued.kind !== "issued") throw new Error("refused");
 			const other = await issueFor(place.tokens, grant);
 			const { expiresAt, expiresIn } = issued.access;
@@ -284,7 +285,7 @@ export function tokensContract(
 				reason: "b_said_no",
 				description: "b said no",
 			};
-			expect(await place.tokens.issue(request)).toEqual(refused);
+			expect(await issueAtOnce(place.tokens, request)).toEqual(refused);
 			expect(asked).toEqual(["a", "b"]);
 			expect(await place.tokens.admits(request)).toEqual(refused);
 		});
@@ -299,7 +300,7 @@ export function tokensContract(
 				},
 			};
 			const place = await open({ revocable: true, policies: [watching] });
-			await place.tokens.issue({ grant, grantType: "refresh_token", continuing: true });
+			await issueAtOnce(place.tokens, { grant, grantType: "refresh_token", continuing: true });
 			await place.tokens.admits({ grant, grantType: "authorization_code" });
 			expect(seen).toEqual([true, undefined]);
 		});
@@ -324,7 +325,7 @@ export function tokensContract(
 			const place = await open({ revocable: true, policies: [slow] });
 			const own = { ...grant, audience: [...grant.audience], scope: [...grant.scope] };
 			const limits = { lifetimeSeconds: 60 };
-			const issuing = place.tokens.issue({ grant: own, grantType: "test" }, limits);
+			const issuing = issueAtOnce(place.tokens, { grant: own, grantType: "test" }, limits);
 			await judged;
 			// The caller's own objects, changed after the policies were asked and before the signing.
 			Object.assign(own, { subject: "mallory" });
@@ -343,7 +344,10 @@ export function tokensContract(
 		it("carries the claims a grant adds, read back frozen and named in name order, and refuses a reserved one", async () => {
 			const place = await open({ revocable: true });
 			const claims = { b: { c: [1] }, a: "x" };
-			const issued = await place.tokens.issue({ grant: { ...grant, claims }, grantType: "test" });
+			const issued = await issueAtOnce(place.tokens, {
+				grant: { ...grant, claims },
+				grantType: "test",
+			});
 			if (issued.kind !== "issued") throw new Error(issued.policy);
 			expect(issued.access.addedClaims).toEqual(["a", "b"]);
 			const checked = await place.tokens.verifyAccess(issued.access.token);
@@ -353,14 +357,17 @@ export function tokensContract(
 			const plain = await issueFor(place.tokens, grant);
 			expect("addedClaims" in plain).toBe(false);
 			const reserved = { grant: { ...grant, claims: { scope: "x" } }, grantType: "test" };
-			await expect(place.tokens.issue(reserved)).rejects.toThrow(TypeError);
+			await expect(issueAtOnce(place.tokens, reserved)).rejects.toThrow(TypeError);
 			await expect(place.tokens.admits(reserved)).rejects.toThrow(TypeError);
 		});
 
 		it("reads back the added claims frozen at every depth, and their names frozen", async () => {
 			const place = await open({ revocable: true });
 			const claims = { a: { b: [{ c: [1] }] } };
-			const issued = await place.tokens.issue({ grant: { ...grant, claims }, grantType: "test" });
+			const issued = await issueAtOnce(place.tokens, {
+				grant: { ...grant, claims },
+				grantType: "test",
+			});
 			if (issued.kind !== "issued") throw new Error(issued.policy);
 			expect(Object.isFrozen(issued.access.addedClaims)).toBe(true);
 			const checked = await place.tokens.verifyAccess(issued.access.token);
@@ -382,12 +389,12 @@ export function tokensContract(
 			];
 			for (const name of names) {
 				const request = { grant: { ...grant, claims: { [name]: 1 } }, grantType: "test" };
-				await expect(place.tokens.issue(request), name).rejects.toThrow(TypeError);
+				await expect(issueAtOnce(place.tokens, request), name).rejects.toThrow(TypeError);
 				await expect(place.tokens.admits(request), name).rejects.toThrow(TypeError);
 			}
 			const nested = Object.fromEntries(names.map((name) => [name, 1]));
 			const taken = { grant: { ...grant, claims: { nested } }, grantType: "test" };
-			expect((await place.tokens.issue(taken)).kind).toBe("issued");
+			expect((await issueAtOnce(place.tokens, taken)).kind).toBe("issued");
 		});
 
 		it("issues and reads back an actor chain 16 deep, and refuses one of 17 as the caller's mistake", async () => {
@@ -398,7 +405,7 @@ export function tokensContract(
 				grant: { actor: chain(16) },
 			});
 			const over = { grant: { ...grant, actor: chain(17) }, grantType: "test" };
-			await expect(place.tokens.issue(over)).rejects.toThrow(TypeError);
+			await expect(issueAtOnce(place.tokens, over)).rejects.toThrow(TypeError);
 			await expect(place.tokens.admits(over)).rejects.toThrow(TypeError);
 		});
 
@@ -413,7 +420,7 @@ export function tokensContract(
 				return { request: { grant: given as AccessGrant, grantType: "test" }, reads: () => reads };
 			};
 			const none = shifting(undefined);
-			const issued = await place.tokens.issue(none.request);
+			const issued = await issueAtOnce(place.tokens, none.request);
 			if (issued.kind !== "issued") throw new Error(issued.policy);
 			expect(none.reads()).toBe(1);
 			const checked = await place.tokens.verifyAccess(issued.access.token);
@@ -423,7 +430,7 @@ export function tokensContract(
 			expect((await place.tokens.admits(admitted.request)).kind).toBe("allowed");
 			expect(admitted.reads()).toBe(1);
 			const deep = shifting(chain(17));
-			await expect(place.tokens.issue(deep.request)).rejects.toThrow(TypeError);
+			await expect(issueAtOnce(place.tokens, deep.request)).rejects.toThrow(TypeError);
 		});
 
 		it("refuses an authentication time beyond its allowance ahead of the clock", async () => {
@@ -432,12 +439,14 @@ export function tokensContract(
 				grant: { ...grant, authenticatedAt },
 				grantType: "authorization_code",
 			});
-			expect(await place.tokens.issue(at(place.now() + authenticatedAheadMs + 1))).toMatchObject({
+			expect(
+				await issueAtOnce(place.tokens, at(place.now() + authenticatedAheadMs + 1)),
+			).toMatchObject({
 				kind: "refused",
 				policy: "tokens",
 				reason: "authenticated_ahead",
 			});
-			expect((await place.tokens.issue(at(place.now() + authenticatedAheadMs))).kind).toBe(
+			expect((await issueAtOnce(place.tokens, at(place.now() + authenticatedAheadMs))).kind).toBe(
 				"issued",
 			);
 		});
@@ -455,7 +464,7 @@ export function tokensContract(
 				],
 			});
 			await expect(
-				place.tokens.issue({ grant, grantType: "client_credentials" }),
+				issueAtOnce(place.tokens, { grant, grantType: "client_credentials" }),
 			).rejects.toSatisfy(isUnavailable);
 		});
 
@@ -472,7 +481,7 @@ export function tokensContract(
 				],
 			});
 			await expect(
-				throwing.tokens.issue({ grant, grantType: "client_credentials" }),
+				issueAtOnce(throwing.tokens, { grant, grantType: "client_credentials" }),
 			).rejects.toBeInstanceOf(TypeError);
 			const odd = { kind: "denied" } as unknown as IssuanceVerdict;
 			const unreadable = await open({
@@ -480,7 +489,7 @@ export function tokensContract(
 				policies: [{ name: "odd", judge: async () => odd }],
 			});
 			expect(
-				await unreadable.tokens.issue({ grant, grantType: "client_credentials" }),
+				await issueAtOnce(unreadable.tokens, { grant, grantType: "client_credentials" }),
 			).toMatchObject({ kind: "refused", policy: "odd" });
 		});
 
@@ -553,7 +562,11 @@ export function tokensContract(
 			const place = await open({ revocable: true });
 			for (const ahead of [-10_000, 0, 999]) {
 				expect(
-					await place.tokens.issue({ grant, grantType: "test" }, { notAfter: place.now() + ahead }),
+					await issueAtOnce(
+						place.tokens,
+						{ grant, grantType: "test" },
+						{ notAfter: place.now() + ahead },
+					),
 					String(ahead),
 				).toEqual({
 					kind: "refused",
@@ -822,4 +835,4 @@ export function tokensStandIn(
 	);
 }
 
-export { issueAtOnce } from "./issuance/at-once.ts";
+export { issueAtOnce };

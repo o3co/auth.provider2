@@ -13,6 +13,7 @@ import { bothOf, composedHttp, signAccess } from "../../../test/composed.ts";
 import { revokedInMemory } from "../../../test/revoked.ts";
 import type { AccessGrant } from "../../contract.ts";
 import tokensModule from "../../module.ts";
+import { issueAtOnce } from "../../testing.ts";
 
 const now = 1_800_000_000_000;
 const grant: AccessGrant = {
@@ -62,7 +63,7 @@ describe("access tokens, signed through accessTokenSigning", () => {
 			m.provide(accessTokenSigning).by(() => ring.get(accessTokenSigning)),
 		]);
 		const { t } = await boot(standIn);
-		const issued = await t.issue({ grant, grantType: "test" });
+		const issued = await issueAtOnce(t, { grant, grantType: "test" });
 		if (issued.kind !== "issued") throw new Error(issued.policy);
 		const { token, id } = issued.access;
 		expect(await t.verifyAccess(token)).toMatchObject({ kind: "valid", id });

@@ -35,7 +35,7 @@ const within = <T>(answer: Promise<T>, deadline: AbortSignal): Promise<T> => {
 };
 
 /**
- * The judgment `admits` and `issue` share: tokens' own rule first, then each policy in name order,
+ * The judgment `admits` and `prepare` share: tokens' own rule first, then each policy in name order,
  * all of them within one deadline; past it, unavailable, and each policy's signal aborts.
  */
 export function judging(
@@ -125,7 +125,7 @@ function checkedRequest(
 }
 
 /**
- * `admits`, `prepare`, `sign` and `issue` over the judgment and the making, alike for tokens and its
+ * `admits`, `prepare` and `sign` over the judgment and the making, alike for tokens and its
  * stand-in; what the client is told is left of a lifetime runs from when its signing is done.
  */
 export function issuing(
@@ -134,7 +134,7 @@ export function issuing(
 	now: () => number,
 	/** `added-claims`' check of a grant's claims, under the section's limits. */
 	addedOf: (given: unknown) => AddedClaims | undefined,
-): Pick<AccessTokenIssuance, "admits" | "prepare" | "sign" | "issue"> {
+): Pick<AccessTokenIssuance, "admits" | "prepare" | "sign"> {
 	// Only what this prepared is signed, so the texts are the ones fixed, whatever came between.
 	const made = new WeakMap<PreparedAccess, MadeAccess>();
 	const prepare: AccessTokenIssuance["prepare"] = async (request, limits) => {
@@ -170,10 +170,6 @@ export function issuing(
 		admits: async (request) => judge(checkedRequest(request, addedOf)),
 		prepare,
 		sign,
-		issue: async (request, limits) => {
-			const prepared = await prepare(request, limits);
-			return prepared.kind === "refused" ? prepared : sign(prepared);
-		},
 	};
 }
 
@@ -195,6 +191,5 @@ export const issuanceOf = (t: BuiltTokens): AccessTokenIssuance => ({
 	admits: t.admits,
 	prepare: t.prepare,
 	sign: t.sign,
-	issue: t.issue,
 	accessTokenLifetimeSeconds: t.accessTokenLifetimeSeconds,
 });

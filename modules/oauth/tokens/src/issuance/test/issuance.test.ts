@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { checkClaims } from "../../claims/claims.ts";
 import type { IssuancePolicy, IssuanceRequest } from "../../contract.ts";
 import { section } from "../../section.ts";
+import { issueAtOnce } from "../at-once.ts";
 import { issuing, judging, type MadeAccess } from "../issuance.ts";
 
 const request = {
@@ -91,15 +92,12 @@ describe("the claims a grant adds, as issuing reads them", () => {
 	const make = (): MadeAccess => {
 		throw new Error("not issued here");
 	};
-	const { admits, issue } = issuing(
-		judge,
-		make,
-		() => 0,
-		addedClaimsWith(addedClaimsLimits.parse({})).of,
-	);
+	const issuance = issuing(judge, make, () => 0, addedClaimsWith(addedClaimsLimits.parse({})).of);
+	const { admits } = issuance;
+	const issue = (request: IssuanceRequest) => issueAtOnce(issuance, request);
 	const grant = request.grant;
 
-	it("refuses a null as a TypeError naming its path, before any policy runs, at admits as at issue", async () => {
+	it("refuses a null as a TypeError naming its path, before any policy runs, at admits as at prepare", async () => {
 		seen.length = 0;
 		const nulled = { grant: { ...grant, claims: { c: { a: null } } }, grantType: "test" };
 		for (const asked of [() => issue(nulled), () => admits(nulled)]) {
@@ -108,7 +106,7 @@ describe("the claims a grant adds, as issuing reads them", () => {
 		expect(seen).toEqual([]);
 	});
 
-	it("shows the policies the claims as copied, frozen, at admits as at issue, an empty set as none", async () => {
+	it("shows the policies the claims as copied, frozen, at admits as at prepare, an empty set as none", async () => {
 		seen.length = 0;
 		const claims = { a: [1] };
 		expect(await admits({ grant: { ...grant, claims }, grantType: "test" })).toEqual({
@@ -119,7 +117,7 @@ describe("the claims a grant adds, as issuing reads them", () => {
 		expect(Object.isFrozen(seen[0]?.grant.claims?.a)).toBe(true);
 		await admits({ grant: { ...grant, claims: {} }, grantType: "test" });
 		expect("claims" in (seen[1]?.grant ?? {})).toBe(false);
-		// issue shows them the same copy before it issues.
+		// prepare shows them the same copy before it signs.
 		await expect(issue({ grant: { ...grant, claims }, grantType: "test" })).rejects.toThrow();
 		expect(seen[2]?.grant.claims).toEqual(claims);
 		expect(seen[2]?.grant.claims).not.toBe(claims);
@@ -174,7 +172,7 @@ describe("prepare and sign, as issuing makes them", () => {
 		expiresIn: 60,
 		tokenType: "Bearer",
 	};
-	const { prepare, sign, issue } = issuing(
+	const signing = issuing(
 		async (r) =>
 			r.grantType === "refused"
 				? { kind: "refused", policy: "p", reason: "r", description: "d" }
@@ -190,6 +188,8 @@ describe("prepare and sign, as issuing makes them", () => {
 		() => 0,
 		addedClaimsWith(addedClaimsLimits.parse({})).of,
 	);
+	const { prepare, sign } = signing;
+	const issue = (request: IssuanceRequest) => issueAtOnce(signing, request);
 
 	it("prepares the texts as made, signing nothing, then signs them, again where asked", async () => {
 		signings = 0;
@@ -209,7 +209,7 @@ describe("prepare and sign, as issuing makes them", () => {
 		expect(await issue(request)).toEqual({ kind: "issued", access: issuedAccess });
 	});
 
-	it("answers a refusal at prepare as issue does, and signs only what it prepared", async () => {
+	it("answers a refusal at prepare, signing nothing, and signs only what it prepared", async () => {
 		const refused = { kind: "refused", policy: "p", reason: "r", description: "d" };
 		expect(await prepare({ ...request, grantType: "refused" })).toEqual(refused);
 		expect(await issue({ ...request, grantType: "refused" })).toEqual(refused);

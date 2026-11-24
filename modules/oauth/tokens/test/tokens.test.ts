@@ -29,6 +29,7 @@ import {
 import { defaultLifetimeSeconds } from "../src/limits.ts";
 import tokensModule from "../src/module.ts";
 import { section } from "../src/section.ts";
+import { issueAtOnce } from "../src/testing.ts";
 import { bothOf, composedHttp, composedKeys, issueFor, signingKey } from "./composed.ts";
 import { revokedInMemory } from "./revoked.ts";
 
@@ -362,7 +363,7 @@ it("issues access tokens none can make without its signing key, a changed claim 
 
 it("refuses a token whose cap has passed, handing none out", async () => {
 	const t = await boot({ revocation: "unsupported" });
-	expect(await t.issue({ grant, grantType: "test" }, { notAfter: now - 10_000 })).toEqual({
+	expect(await issueAtOnce(t, { grant, grantType: "test" }, { notAfter: now - 10_000 })).toEqual({
 		kind: "refused",
 		policy: "tokens",
 		reason: "no_lifetime_left",
@@ -448,7 +449,7 @@ describe("the lifetime answered, after the signing", () => {
 		for (const ms of [3000, 2000, 1500]) {
 			now = start;
 			signing.ms = ms;
-			expect(await t.issue({ grant, grantType: "test" }, capped), String(ms)).toMatchObject({
+			expect(await issueAtOnce(t, { grant, grantType: "test" }, capped), String(ms)).toMatchObject({
 				kind: "refused",
 				policy: "tokens",
 				reason: "no_lifetime_left",

@@ -13,6 +13,7 @@ import {
 } from "../../../test/composed.ts";
 import { revokedInMemory } from "../../../test/revoked.ts";
 import type { AccessGrant, Actor } from "../../contract.ts";
+import { issueAtOnce } from "../at-once.ts";
 
 const runtime = quietRuntime();
 const grant: AccessGrant = {
@@ -50,7 +51,7 @@ describe("a token past 16 KiB once signed", () => {
 		};
 		// Refused at prepare, before anything is recorded or signed.
 		expect(await bothOf(app).prepare({ grant: wide, grantType: "test" })).toEqual(refused);
-		expect(await bothOf(app).issue({ grant: wide, grantType: "test" })).toEqual(refused);
+		expect(await issueAtOnce(bothOf(app), { grant: wide, grantType: "test" })).toEqual(refused);
 		const warned = logged.lines().filter((l) => l.event === "tokens.token_too_large");
 		expect(warned).toMatchObject([
 			{ fields: { limit: 16_384, claims: "x_secret_kept" } },
@@ -101,7 +102,7 @@ describe("an access token at its largest", () => {
 			acr: long(64),
 			claims,
 		};
-		const issued = await bothOf(app).issue({ grant: largest, grantType: "test" });
+		const issued = await issueAtOnce(bothOf(app), { grant: largest, grantType: "test" });
 		if (issued.kind !== "issued") throw new Error(`refused: ${issued.reason}`);
 		// What a DPoP binding adds, `,"cnf":{"jkt":<43 characters>}`, encoded.
 		expect(issued.access.token.length).toBeLessThanOrEqual(16_384 - 80);

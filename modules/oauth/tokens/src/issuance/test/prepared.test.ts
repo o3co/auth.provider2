@@ -13,6 +13,7 @@ import {
 	type PreparedAccess,
 } from "../../contract.ts";
 import { tokensConfig, tokensStandIn } from "../../testing.ts";
+import { issueAtOnce } from "../at-once.ts";
 
 const now = 1_800_000_000_000;
 const runtime = quietRuntime({ clock: { now: () => now } });
@@ -74,7 +75,7 @@ describe("prepare and sign", () => {
 		const [http, server, , , ...rest] = composedModules;
 		const { keys: _, ...config } = composedConfig();
 		const { t } = await boot([http, server, withdrawn, ...rest] as typeof composedModules, config);
-		await expect(t.issue({ grant, grantType: "test" })).rejects.toSatisfy(isUnavailable);
+		await expect(issueAtOnce(t, { grant, grantType: "test" })).rejects.toSatisfy(isUnavailable);
 	});
 });
 
@@ -129,7 +130,6 @@ it("hands checking and revoking alone through accessTokens, no issuing member at
 		expect(Object.keys(app.get(accessTokenIssuance)).sort()).toEqual([
 			"accessTokenLifetimeSeconds",
 			"admits",
-			"issue",
 			"prepare",
 			"sign",
 		]);

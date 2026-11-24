@@ -18,6 +18,7 @@ import {
 	type IssueLimits,
 } from "../src/contract.ts";
 import tokensModule from "../src/module.ts";
+import { issueAtOnce } from "../src/testing.ts";
 
 /** The authority's signing key every test composition signs with, as kid `k` under EdDSA: one across boots. */
 export const signingKey = generateKeyPairSync("ed25519").privateKey;
@@ -61,7 +62,7 @@ export async function signAccess(signer: AccessTokenSigning, claims: object): Pr
 
 /** Issues through `issue`, which nothing in the tests using it refuses, and answers what it issued. */
 export async function issueFor(t: AccessTokenIssuance, grant: AccessGrant, limits?: IssueLimits) {
-	const issued = await t.issue({ grant, grantType: "test" }, limits);
+	const issued = await issueAtOnce(t, { grant, grantType: "test" }, limits);
 	if (issued.kind !== "issued") throw new Error(`refused by ${issued.policy}`);
 	return issued.access;
 }

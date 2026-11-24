@@ -47,7 +47,7 @@ export interface IssuedAccess {
 	readonly id: string;
 	/** Epoch ms. */
 	readonly expiresAt: number;
-	/** Whole seconds left once signed, rounded up: at least 1, as `issue` refuses a token with less. */
+	/** Whole seconds left once signed, rounded up: at least 1, as `sign` refuses a token with less. */
 	readonly expiresIn: number;
 	readonly tokenType: string;
 	/** The names of the claims the grant added, in name order; none where it added none. */
@@ -72,7 +72,7 @@ export { accessTokenClaims } from "./claims/claims.ts";
 export type AccessCheck =
 	| {
 			readonly kind: "valid";
-			/** The id `issue` answered. */
+			/** The id `sign` answered. */
 			readonly id: string;
 			readonly grant: AccessGrant;
 			readonly expiresAt: number;
@@ -134,7 +134,7 @@ export type Issued = { readonly kind: "issued"; readonly access: IssuedAccess } 
 export type Admitted = { readonly kind: "allowed" } | IssuanceRefused;
 
 /**
- * `notAfter` (epoch ms) caps the expiry, a token it leaves less than a second refused by `issue`;
+ * `notAfter` (epoch ms) caps the expiry, a token it leaves less than a second refused by `sign`;
  * `lifetimeSeconds` (2–86400) replaces the section's lifetime.
  */
 export interface IssueLimits {
@@ -150,7 +150,7 @@ export interface IssueLimits {
 
 /**
  * The whole seconds an access token may be given to live: `lifetimeSeconds` in `IssueLimits`, any
- * other answered by `issue` with a RangeError, and the section's `access-token-lifetime`. A grant
+ * other answered by `prepare` with a RangeError, and the section's `access-token-lifetime`. A grant
  * may check at boot the value it will give against it.
  */
 export const lifetimeSecondsRange = Object.freeze({ min: 2, max: 86_400 });
@@ -172,7 +172,7 @@ export const accessTokens = contract<Tokens>("tokens");
 /** Issuing access tokens, and the lifetime it applies. */
 export interface AccessTokenIssuance {
 	/**
-	 * The access-token lifetime that `issue` applies where the grant gives no `lifetimeSeconds`, in
+	 * The access-token lifetime that `prepare` applies where the grant gives no `lifetimeSeconds`, in
 	 * whole seconds from 2 to 86400. It is fixed when `tokens` is built and never changes after, so a
 	 * check made at build time stays true. It is not the longest life any token may have: a grant's own
 	 * `lifetimeSeconds` may differ. A boot check against it does not reach
@@ -181,33 +181,28 @@ export interface AccessTokenIssuance {
 	accessTokenLifetimeSeconds(): number;
 	/**
 	 * Whether an access token may be issued for the request; the same judgment `issue` makes, but for
-	 * the lifetime, which only `issue`'s limits and signing fix.
+	 * the lifetime, which only `prepare`'s limits and signing fix.
 	 */
 	admits(request: IssuanceRequest): Promise<Admitted>;
 	/**
-	 * Issues once every policy, its own first, allows it; throws Unavailable when one cannot tell.
-	 * The token's `iat` is the limits' `acceptedAt`, else when `issue` was asked, before the policies
-	 * are, and its lifetime runs from there, their wait included; what it answers is left runs from
-	 * signing. Refuses, as its own rule, one that would pass 16 KiB once signed, which it does not
-	 * read: reason `token_too_large`, the client's word `too large`; and a token with less than a
-	 * second left once signed, its cap passed, its lifetime spent in the policies' wait or its signing
-	 * slow: policy `tokens`, reason `no_lifetime_left`, the client's word `expired`. Such a token is
-	 * handed to no one, and nothing of it is kept.
-	 */
-	issue(request: IssuanceRequest, limits?: IssueLimits): Promise<Issued>;
-	/**
-	 * `issue`'s first half: judged as `issue` judges, the header and claims fixed and nothing signed,
-	 * so a caller can record their texts before the token exists. A token that would pass 16 KiB once
-	 * signed is refused here.
+	 * Judges an issuance, every policy, its own first, and fixes the token's header and claims, signing
+	 * nothing, so a caller can record their texts before the token exists; throws Unavailable when a
+	 * policy cannot tell. The token's `iat` is the limits' `acceptedAt`, else when `prepare` was asked,
+	 * before the policies are, and its lifetime runs from there. Refuses, as its own rule, a token that
+	 * would pass 16 KiB once signed, which it does not read: reason `token_too_large`, the client's
+	 * word `too large`.
 	 */
 	prepare(
 		request: IssuanceRequest,
 		limits?: IssueLimits,
 	): Promise<PreparedAccess | IssuanceRefused>;
 	/**
-	 * `issue`'s second half: signs what this `tokens` prepared, as prepared, and answers as `issue`
-	 * does, refusing only a token with less than a second left; a signing withdrawn is unavailable.
-	 * A value it did not prepare is the caller's TypeError. It may sign one again.
+	 * Signs what this `tokens` prepared, as prepared, answering the token and what is left of it from
+	 * signing. Refuses only a token with less than a second left once signed, its cap passed, its
+	 * lifetime spent in the policies' wait or its signing slow: policy `tokens`, reason
+	 * `no_lifetime_left`, the client's word `expired`; a signing withdrawn is unavailable. Such a token
+	 * is handed to no one, and nothing of it is kept. A value it did not prepare is the caller's
+	 * TypeError. It may sign one again.
 	 */
 	sign(prepared: PreparedAccess): Promise<Issued>;
 }

@@ -5,6 +5,7 @@ import { quietRuntime } from "@mod/kernel/testing";
 import { accessTokenSigning } from "@mod/keys";
 import { describe, expect, it } from "vitest";
 import type { AccessGrant } from "../src/contract.ts";
+import { issueAtOnce } from "../src/testing.ts";
 import {
 	bothOf,
 	composedHttp,
@@ -89,7 +90,7 @@ describe("claims a grant adds to its access token", () => {
 	it("signs them into the payload and reads them back frozen, naming them in name order", async () => {
 		const { t } = await boot();
 		const claims = { "https://example.com/b": [1, { c: false }], a: "x" };
-		const issued = await t.issue({ grant: { ...grant, claims }, grantType: "test" });
+		const issued = await issueAtOnce(t, { grant: { ...grant, claims }, grantType: "test" });
 		if (issued.kind !== "issued") throw new Error(issued.policy);
 		expect(issued.access.addedClaims).toEqual(["a", "https://example.com/b"]);
 		expect(payloadOf(issued.access.token)).toMatchObject(claims);
@@ -101,7 +102,7 @@ describe("claims a grant adds to its access token", () => {
 
 	it("takes an empty set as none, issuing and reading back as before", async () => {
 		const { t } = await boot();
-		const issued = await t.issue({ grant: { ...grant, claims: {} }, grantType: "test" });
+		const issued = await issueAtOnce(t, { grant: { ...grant, claims: {} }, grantType: "test" });
 		if (issued.kind !== "issued") throw new Error(issued.policy);
 		expect("addedClaims" in issued.access).toBe(false);
 		const checked = await t.verifyAccess(issued.access.token);
@@ -111,7 +112,7 @@ describe("claims a grant adds to its access token", () => {
 	it("signs the claims of the table alone where a grant adds none or an empty set", async () => {
 		const { t } = await boot();
 		const membersOf = async (claims?: AccessGrant["claims"]) => {
-			const issued = await t.issue({
+			const issued = await issueAtOnce(t, {
 				grant: claims ? { ...grant, claims } : grant,
 				grantType: "t",
 			});
@@ -129,15 +130,15 @@ describe("claims a grant adds to its access token", () => {
 		for (const name of ["sub", "nbf", "scp", "email", "active", "__proto__"]) {
 			const claims = JSON.parse(`{"${name}": 1}`);
 			const request = { grant: { ...grant, claims }, grantType: "test" };
-			await expect(t.issue(request), name).rejects.toThrow(TypeError);
+			await expect(issueAtOnce(t, request), name).rejects.toThrow(TypeError);
 			await expect(t.admits(request), name).rejects.toThrow(TypeError);
 		}
 		// Reserved at the top alone; an object's own names everywhere.
 		const nested = { grant: { ...grant, claims: { a: { sub: 1 } } }, grantType: "test" };
-		expect((await t.issue(nested)).kind).toBe("issued");
+		expect((await issueAtOnce(t, nested)).kind).toBe("issued");
 		const proto = JSON.parse('{"a": {"__proto__": 1}}');
 		await expect(
-			t.issue({ grant: { ...grant, claims: proto }, grantType: "test" }),
+			issueAtOnce(t, { grant: { ...grant, claims: proto }, grantType: "test" }),
 		).rejects.toThrow(TypeError);
 	});
 
