@@ -19,7 +19,8 @@
 - Contributions: `redirect-uris`' client metadata section to `clients` and its document copy to `client-documents`; the authorization's items but `dpop_jkt` to `approvals`' `statementItems`; its stance.
 - To `acr`'s `amrSources`: `authorize.passkey`, amr `pop` and `user`, what a passkey's assertion proves (a key held, the person present); not `hwk`, as no attestation is taken, nor `mfa`, as user verification is the authenticator's own word.
 - To `issuer`'s metadata: `authorization_endpoint` (the screen's URL), `response_types_supported` (`code`), `response_modes_supported` (`form_post`), `code_challenge_methods_supported` (`S256`), `require_signed_request_object`, `request_parameter_supported`, `authorization_response_iss_parameter_supported`.
-- Operator section: `screen-url` (https), `jar-max-lifetime` (default 10 minutes), `requests` and `window` (default 30 a minute per source), `clock-skew` (default 30 seconds), `delegation-lifetime` (default 1 day: a session's end, from its statement's issue).
+- Operator section: `screen-url` (https), `jar-max-lifetime` (default 10 minutes), `requests` and `window` (default 30 a minute per source), `clock-skew` (default 30 seconds).
+  - A session's length is `refresh.lifetime` (O27): `authorize.delegation-lifetime`, still written, is refused at boot.
 - `./testing`: `authorizeConfig` (`AuthorizeSettings`), and `jarReservationsContract`, the store interface's contract test.
 
 ## Invariants

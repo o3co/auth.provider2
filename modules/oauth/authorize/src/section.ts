@@ -26,13 +26,6 @@ export const section = z.strictObject({
 		.pipe(z.number().int().min(1).max(86_400))
 		.prefault("1m")
 		.describe("The window starts are counted over, from 1s to 1d."),
-	"delegation-lifetime": setting
-		.duration("s")
-		.pipe(z.number().int().min(300).max(31_536_000))
-		.prefault("1d")
-		.describe(
-			"How long a login's delegation lasts from its statement's issue: the session's end, from `5m` to a year in whole seconds.",
-		),
 	"clock-skew": setting
 		.duration("s")
 		.pipe(z.number().int().min(1).max(300))
