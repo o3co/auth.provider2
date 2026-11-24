@@ -15,7 +15,7 @@
 - `powers`: neither withdrawable nor counted outside the Core.
 
 ## Invariants
-- A private PEM signs (Ed25519 under EdDSA, P-256 under ES256, RSA under RS256) and a P-256 one agrees; a public key or a certificate only verifies, its key taken out of it and nothing of the certificate checked. Only a key's public half leaves the module.
+- A private PEM signs (Ed25519 under EdDSA, P-256 under ES256, RSA under PS256 and RS256) and a P-256 one agrees; a public key or a certificate only verifies, its key taken out of it and nothing of the certificate checked. Only a key's public half leaves the module.
 - A `pem` not written as PEM is refused by the section, before it is read; one it cannot read as a key, the example's `REPLACE-` placeholder among them, and a file it cannot read, refuse boot at the key's path, never naming the value.
 - An entry holds exactly one of `pem` and `file`, and a kid once.
 - It stands breaking `core-compromise-contained`: its keys are in the Core's memory, so a compromised Core takes them out and signs on after it is stopped, and no signing is counted outside it.

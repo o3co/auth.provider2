@@ -1,4 +1,5 @@
 import {
+	constants,
 	createPrivateKey,
 	createPublicKey,
 	diffieHellman,
@@ -30,14 +31,23 @@ function keyOfPem(pem: string): KeyObject | undefined {
 const algorithms: Readonly<Record<string, readonly string[]>> = {
 	ed25519: ["EdDSA"],
 	ec: ["ES256"],
-	rsa: ["RS256"],
+	rsa: ["PS256", "RS256"],
 };
 
-/** The signature over `input`, as a JWS writes it: an ECDSA signature as r and s. */
-const signed = (key: KeyObject, alg: string, input: Uint8Array) =>
-	alg === "EdDSA"
-		? sign(null, input, key)
-		: sign("sha256", input, alg === "ES256" ? { key, dsaEncoding: "ieee-p1363" } : key);
+/** The signature over `input`, as a JWS writes it: an ECDSA signature as r and s, PSS's salt as long as SHA-256. */
+function signed(key: KeyObject, alg: string, input: Uint8Array): Uint8Array {
+	if (alg === "EdDSA") return sign(null, input, key);
+	if (alg === "ES256") return sign("sha256", input, { key, dsaEncoding: "ieee-p1363" });
+	if (alg === "PS256") {
+		const pss = constants.RSA_PKCS1_PSS_PADDING;
+		return sign("sha256", input, {
+			key,
+			padding: pss,
+			saltLength: constants.RSA_PSS_SALTLEN_DIGEST,
+		});
+	}
+	return sign("sha256", input, key);
+}
 
 const unreadable =
 	"not readable as a PEM key: write a PEM key, private where it signs (the example's REPLACE- placeholder is none)";

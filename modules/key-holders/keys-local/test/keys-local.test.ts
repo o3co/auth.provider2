@@ -89,10 +89,12 @@ describe("keys-local", () => {
 		expect((await k.verify("core", statement, "approval+jwt")).kind).toBe("valid");
 	});
 
-	it("signs under EdDSA and RS256 too, by the key's kind", async () => {
+	it("signs under EdDSA, PS256 and RS256 too, by the key's kind", async () => {
+		const rsa = generateKeyPairSync("rsa", { modulusLength: 2048 });
 		for (const [alg, pair] of [
 			["EdDSA", generateKeyPairSync("ed25519")],
-			["RS256", generateKeyPairSync("rsa", { modulusLength: 2048 })],
+			["PS256", rsa],
+			["RS256", rsa],
 		] as const) {
 			const k = (
 				await boot(held([{ kid: "k", pem: privatePem(pair.privateKey) }]), {
