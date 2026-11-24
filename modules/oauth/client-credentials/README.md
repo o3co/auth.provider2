@@ -8,13 +8,13 @@
 
 ## Offers
 - Contribution to `grants`: `client_credentials` (`clientCredentialsGrantType`), reading no ambient credential, taking its audience from the request.
-- `clientCredentials` (issuer, the client's keys' `holdsKey`) → the grant, for an assembly of one's own.
+- `clientCredentials` (issuer, `client-assertion`'s `verifiedOf`) → the grant, for an assembly of one's own.
 
 ## Invariants
 - Only a confidential client is served; a public one is `unauthorized_client`.
 - The scope is the client's defaults when it asks none, never one outside its allowance (`invalid_scope`); the audience is within its allowed audiences, or the issuer when it has none.
 - The token's subject and the client it is issued to are both the client, its subject's kind `client`; it is one bundle, naming no root, as the client's registry version is on no log here. Nothing is used up before issuing.
-- A token bound by DPoP is issued only where the proof's key is one of the client's own (`client-assertion`'s `holdsKey` of the binding's thumbprint), so it needs the client's private key; otherwise `invalid_dpop_proof`, nothing issued. A binding of another kind, or none, is left as it is.
+- A token bound by DPoP is issued only where the proof's key is the key the client's assertion was verified with, of the registry version the client came from (`client-assertion`'s `verifiedOf` of the authentication's `proof`): its `cnf` is that key's thumbprint, so using it needs the client's private key. Otherwise, a client that authenticated by no assertion included, `invalid_dpop_proof`, nothing issued. A binding of another kind, or none, is left as it is.
 
 ## Depends on
 - `grants`, `client-allowance`, `client-assertion`, `issuer` (its URL), `kernel`

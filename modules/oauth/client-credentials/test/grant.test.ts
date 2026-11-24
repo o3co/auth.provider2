@@ -17,9 +17,13 @@ const client = (kind: Client["kind"], allowed: Record<string, unknown> = {}): Cl
 			: {}) as T,
 });
 
-/** The thumbprint of the one key the test client holds. */
+/** The key the test client's assertion was verified with, as client-assertion reads it from the proof. */
 const held = "held-key";
-const keys = { holdsKey: async (_client: Client, thumbprint: string) => thumbprint === held };
+const proved = { assertion: true };
+const keys = {
+	verifiedOf: (proof: unknown) =>
+		proof === proved ? { key: { kty: "EC" }, thumbprint: held, version: 4 } : undefined,
+};
 
 /** The grant asked with these parameters and binding, issuing what it is given unless the policies refuse. */
 async function ask(
@@ -27,10 +31,12 @@ async function ask(
 	params: Record<string, string> = {},
 	refused = false,
 	binding?: { member: string; confirmation: string; tokenType: string },
+	proof: unknown = proved,
 ) {
 	const issued: unknown[] = [];
 	const input = {
 		client: c,
+		proof,
 		...(binding ? { binding } : {}),
 		param: (name: string) => params[name],
 		target: (audience: readonly string[]) => ({ kind: "ok" as const, audience }),
@@ -108,18 +114,24 @@ describe("a token bound by DPoP", () => {
 	const allowed = client("confidential", { scopes: ["read"], "default-scopes": ["read"] });
 	const dpop = (confirmation: string) => ({ member: "jkt", confirmation, tokenType: "DPoP" });
 
-	it("is issued only where the proof's key is one of the client's own", async () => {
+	const refused = {
+		answer: {
+			kind: "error",
+			error: "invalid_dpop_proof",
+			description: "the proof's key is not the key the client's assertion was verified with",
+		},
+		issued: [],
+	};
+
+	it("is issued only where the proof's key is the key the client's assertion was verified with", async () => {
 		const bound = await ask(allowed, {}, false, dpop(held));
 		expect(bound.answer).toMatchObject({ kind: "issued" });
-		const foreign = await ask(allowed, {}, false, dpop("another-key"));
-		expect(foreign).toEqual({
-			answer: {
-				kind: "error",
-				error: "invalid_dpop_proof",
-				description: "the proof's key is not one of the client's",
-			},
-			issued: [],
-		});
+		expect(await ask(allowed, {}, false, dpop("another-key"))).toEqual(refused);
+	});
+
+	it("is refused for a client whose authentication verified no key, a secret's, or another method's proof", async () => {
+		expect(await ask(allowed, {}, false, dpop(held), null)).toEqual(refused);
+		expect(await ask(allowed, {}, false, dpop(held), { assertion: true })).toEqual(refused);
 	});
 
 	it("leaves a binding of another kind, and none, as they are", async () => {
