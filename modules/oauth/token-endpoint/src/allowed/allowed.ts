@@ -25,3 +25,23 @@ export function unservedGrants(
 		}),
 	);
 }
+
+/**
+ * Where a client a source lists is allowed a grant nothing composed serves: one refusal for each
+ * module to compose, naming neither a client nor a grant type, which are the source's values.
+ */
+export function unservedListed(
+	listed: readonly Client[],
+	composed: ReadonlySet<string>,
+): Refusal[] {
+	const unserved = listed.flatMap((client) =>
+		clientAllowance.grantsOf(client).filter((grantType) => !composed.has(grantType)),
+	);
+	const servers = new Set(
+		unserved.map((type) => grantServers[type] ?? "the module that serves it"),
+	);
+	return [...servers].map((server) => ({
+		where: "clients.sources",
+		reason: `a client a source lists is allowed a grant no composed module serves: compose ${server}, or take it out of the client's grants where its source keeps them`,
+	}));
+}

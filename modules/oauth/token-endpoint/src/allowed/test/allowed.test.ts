@@ -1,8 +1,9 @@
 import { auditStandIn } from "@mod/audit/testing";
 import clientAllowanceModule from "@mod/client-allowance/module";
 import { allowancesFor } from "@mod/client-allowance/testing";
+import { clientSources } from "@mod/clients";
 import { clientsConfig, confidentialClient } from "@mod/clients/testing";
-import { assemble, BootRefused, type Module } from "@mod/kernel";
+import { assemble, BootRefused, defineModule, type Module } from "@mod/kernel";
 import { quietRuntime } from "@mod/kernel/testing";
 import { rateLimitStandIn } from "@mod/rate-limit/testing";
 import { describe, expect, it } from "vitest";
@@ -77,5 +78,36 @@ describe("a registered client allowed a grant nothing composed serves", () => {
 	it("never names the client's id or the grant type itself", async () => {
 		const told = (await refusals(boot([], ["urn:x:secret-name"]))).join();
 		expect(told).not.toMatch(/c0|urn:x:secret-name/);
+	});
+});
+
+describe("a client a source lists allowed a grant nothing composed serves", () => {
+	/** A source listing one public client allowed each list of `grants`. */
+	const listing = (...allowed: string[][]) =>
+		defineModule({ name: "listing", replicaSafe: true, takes: [] }, (m) => [
+			m.contribute(clientSources).by(() => ({
+				find: async () => undefined,
+				listed: async () =>
+					allowed.map((grants, i) => ({
+						id: `s${i}`,
+						kind: "public" as const,
+						method: "none",
+						sections: allowancesFor({ grants }),
+					})),
+			})),
+		]);
+	const told = (server: string) =>
+		`clients.sources: a client a source lists is allowed a grant no composed module serves: compose ${server}, or take it out of the client's grants where its source keeps them`;
+
+	it("refuses boot once for each module to compose, naming no client and no grant type", async () => {
+		const listed = listing(["client_credentials"], ["client_credentials", "urn:x:secret-name"]);
+		expect(await refusals(boot([listed]))).toEqual([
+			told("client-credentials"),
+			told("the module that serves it"),
+		]);
+	});
+
+	it("boots once a module serving it is composed", async () => {
+		expect(await refusals(boot([clientTokensModule, listing(["client_credentials"])]))).toEqual([]);
 	});
 });

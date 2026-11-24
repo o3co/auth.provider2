@@ -6,7 +6,7 @@ import { defineModule } from "@mod/kernel";
 import { stances } from "@mod/promises";
 import { requestsPerSource } from "@mod/rate-limit";
 import { operationKinds } from "@mod/transparency";
-import { unservedGrants } from "./allowed/allowed.ts";
+import { unservedGrants, unservedListed } from "./allowed/allowed.ts";
 import { clientSubjectStance, tokenEndpointStance } from "./built-in/stance.ts";
 import { composedRule, targetTakes } from "./built-in/targets.ts";
 import { bundleKind } from "./bundle/bundle.ts";
@@ -58,11 +58,13 @@ export default defineModule({ name: "token-endpoint", replicaSafe: true, section
 	}),
 	m.contribute(routes).by(async (c) => {
 		const composed = await c.collect(grants);
-		// A grant a registered client is allowed and nothing serves would go missing in silence.
-		const unserved = unservedGrants(
-			(await c.get(clients)).registered(),
-			new Set(composed.map((g) => g.grantType)),
-		);
+		// A grant a registered or listed client is allowed and nothing serves would go missing in silence.
+		const known = await c.get(clients);
+		const served = new Set(composed.map((g) => g.grantType));
+		const unserved = [
+			...unservedGrants(known.registered(), served),
+			...unservedListed(await known.listed(), served),
+		];
 		if (unserved.length > 0) return c.refuseAll(unserved);
 		// An endpoint with nothing to issue would publish an empty grant_types_supported, which
 		// discovery leaves out and a client reads as authorization_code and implicit (RFC 8414 §2).
