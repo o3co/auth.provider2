@@ -1,6 +1,6 @@
 import { type Random, Unavailable } from "@mod/kernel";
-import type { SecretChecker, SecretHash } from "./contract.ts";
-import { decoyOf, type Hash, hashOf } from "./hashes.ts";
+import type { SecretChecker, SecretHash, SecretWork } from "./contract.ts";
+import { decoyOf, type Hash, hashOf, templateOf } from "./hashes.ts";
 
 /** The longest secret checked; a longer one never matches. */
 const maxSecretBytes = 1024;
@@ -17,14 +17,16 @@ export const placesOf = (max: number): Places => ({ max, taken: 0 });
 
 /** A checker that computes every match with `matches`; tests record the work through it. */
 export function checkerWith(
-	inUse: Iterable<SecretHash>,
+	inUse: Iterable<SecretHash | SecretWork>,
 	random: Random["bytes"],
 	matches: (hash: Hash, secret: string) => Promise<boolean>,
 	places: Places,
 ): SecretChecker {
 	const decoys = new Map<string, Hash>();
 	for (const hash of inUse) {
-		if (!decoys.has(hash.work)) decoys.set(hash.work, decoyOf(hashOf(hash), random));
+		// A work named stands for a hash of it: its decoy is made like the shape it holds.
+		const like = templateOf(hash) ?? hashOf(hash as SecretHash);
+		if (!decoys.has(hash.work)) decoys.set(hash.work, decoyOf(like, random));
 	}
 	const computed = async (hash: SecretHash | undefined, secret: string) => {
 		const own = hash && hashOf(hash);
@@ -45,6 +47,9 @@ export function checkerWith(
 	};
 	return {
 		check: async (hash, secret) => {
+			// A work is no hash: checking against one is the caller's mistake.
+			if (hash !== undefined && templateOf(hash))
+				throw new TypeError("secret-hash: a work is no hash");
 			// The length is the sender's choice, so answering early tells nothing about the hash.
 			if (Buffer.byteLength(secret) > maxSecretBytes) return false;
 			// Refused before any computation, so a flood of checks cannot queue up work.

@@ -1,7 +1,7 @@
 import { scrypt } from "node:crypto";
 import { type Random, sameSecret } from "@mod/kernel";
 import bcrypt from "bcryptjs";
-import type { SecretHash } from "./contract.ts";
+import type { SecretHash, SecretWork } from "./contract.ts";
 
 export type Hash = SecretHash &
 	(
@@ -80,8 +80,60 @@ export function readHash(text: string): Hash | undefined {
 		within(salt.length, saltBytes.least, saltBytes.most) &&
 		within(key.length, keyBytes.least, keyBytes.most);
 	if (!runs || !fits || !sized) return undefined;
-	const work = `scrypt:${ln},${r},${p},${key.length}`;
+	const work = `scrypt:${ln},${r},${p},${key.length},${salt.length}`;
 	return { format: "scrypt", ln, r, p, salt, key, work } as Hash;
+}
+
+const workShape = {
+	bcrypt: /^bcrypt:([1-9]\d?)$/,
+	scrypt: /^scrypt:([1-9]\d*),([1-9]\d*),([1-9]\d*),([1-9]\d*),([1-9]\d*)$/,
+} as const;
+
+/** Each work read, and the shape of a hash of it a decoy is made like: a work is no hash, at run time too. */
+const templates = new WeakMap<SecretWork, Hash>();
+/** The hash a work's decoys are made like; none for anything but a work `readWork` made. */
+export const templateOf = (work: SecretWork | SecretHash): Hash | undefined =>
+	templates.get(work as SecretWork);
+
+/**
+ * A work named as a hash of it names its work (`bcrypt:cost`, `scrypt:ln,r,p,key bytes,salt
+ * bytes`), within the bounds a hash is read in; undefined for anything else. It is no hash: it holds
+ * only the shape its decoys are made like, and nothing matches against it.
+ */
+export function readWork(text: string): SecretWork | undefined {
+	const template = templateFor(text);
+	if (!template) return undefined;
+	const work = Object.freeze({ work: text }) as SecretWork;
+	templates.set(work, template);
+	return work;
+}
+
+function templateFor(text: string): Hash | undefined {
+	const b = workShape.bcrypt.exec(text);
+	if (b) {
+		const cost = Number(b[1]);
+		if (cost < bcryptCostFloor || cost > bcryptMaxCost) return undefined;
+		return { format: "bcrypt", text: "", cost, work: text } as unknown as Hash;
+	}
+	const s = workShape.scrypt.exec(text);
+	if (!s) return undefined;
+	const [ln, r, p, keyLength, saltLength] = s.slice(1).map(Number) as [
+		number,
+		number,
+		number,
+		number,
+		number,
+	];
+	const fits =
+		ln >= scryptLnFloor &&
+		ln < nodeLnPerR * r &&
+		p <= scryptMostP &&
+		scryptBytes(ln, r) <= scryptMaxBytes &&
+		within(keyLength, keyBytes.least, keyBytes.most) &&
+		within(saltLength, saltBytes.least, saltBytes.most);
+	if (!fits) return undefined;
+	const [salt, key] = [Buffer.alloc(saltLength), Buffer.alloc(keyLength)];
+	return { format: "scrypt", ln, r, p, salt, key, work: text } as unknown as Hash;
 }
 
 /** A hash of a random secret with the same work as `like`, every random byte drawn from `random`. */

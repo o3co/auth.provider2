@@ -5,7 +5,12 @@ import bcrypt from "bcryptjs";
 import { describe, expect, it } from "vitest";
 import { checkerWith, type Places, placesOf } from "../src/checker.ts";
 import * as offered from "../src/contract.ts";
-import { readSecretHash, type SecretHash, secretCheckers } from "../src/contract.ts";
+import {
+	readSecretHash,
+	readSecretWork,
+	type SecretHash,
+	secretCheckers,
+} from "../src/contract.ts";
 import { decoyOf, type Hash, matches, readHash } from "../src/hashes.ts";
 import secretHash from "../src/module.ts";
 import {
@@ -78,13 +83,14 @@ describe("reading", () => {
 		expect(handBuilt.work).toBe(read(`$2b$04$${bcryptTail("a")}`).work);
 	});
 
-	it("names bcrypt by cost alone, and scrypt by ln, r, p and key length but not salt length", () => {
+	it("names bcrypt by cost alone, and scrypt by ln, r, p, key length and salt length, each of which its work grows with", () => {
 		const work = (text: string) => read(text).work;
 		expect(work(`$2b$04$${bcryptTail("a")}`), "bcrypt prefix").toBe(
 			work(`$2y$04$${bcryptTail("b")}`),
 		);
-		expect(work(scryptText(10, 8, 1)), "scrypt salt length").toBe(work(scryptText(10, 8, 1, 24)));
+		expect(work(scryptText(10, 8, 1)), "scrypt").toBe("scrypt:10,8,1,32,16");
 		const distinct = [
+			scryptText(10, 8, 1, 24),
 			`$2b$04$${bcryptTail("a")}`,
 			`$2b$05$${bcryptTail("a")}`,
 			scryptText(10, 8, 1),
@@ -175,6 +181,53 @@ describe("the same work for any call", () => {
 		const alwaysMatches = checkerWith(inUse, randomBytes, async () => true, placesOf(8));
 		expect(await alwaysMatches.check(undefined, "x")).toBe(false);
 		expect(await alwaysMatches.check(inUse[0], "x")).toBe(true);
+	});
+
+	it("reads a work by the name a hash of it gives, within the bounds a hash is read in, and nothing else", () => {
+		expect(readSecretWork("bcrypt:4")?.work).toBe(read(testBcryptHash("b", 4)).work);
+		expect(readSecretWork("scrypt:10,8,1,32,16")?.work).toBe(read(testScryptHash("s", 10)).work);
+		for (const fits of [
+			"bcrypt:14",
+			"scrypt:15,8,1,32,16",
+			"scrypt:10,8,2,64,64",
+			"scrypt:16,8,1,32,24",
+		]) {
+			expect(readSecretWork(fits)?.work, fits).toBe(fits);
+		}
+		for (const not of [
+			"bcrypt:3",
+			"bcrypt:15",
+			"bcrypt:04",
+			"scrypt:9,8,1,32,16",
+			"scrypt:10,8,3,32,16",
+			"scrypt:10,8,1,31,16",
+			"scrypt:10,8,1,65,16",
+			"scrypt:10,8,1,32,15",
+			"scrypt:10,8,1,32,65",
+			"scrypt:18,8,1,32,16",
+			"scrypt:10,0,1,32,16",
+			"scrypt:10,8,1,32",
+			"argon2:1",
+			"",
+			"bcrypt:4 ",
+		]) {
+			expect(readSecretWork(not), not).toBeUndefined();
+		}
+	});
+
+	it("computes, with a work in use and no hash of it, that work's decoy, and a hash of that work in its place", async () => {
+		const work = readSecretWork("scrypt:10,8,1,32,16");
+		if (!work) throw new Error("no work");
+		const own = read(testScryptHash("p", 10));
+		for (const hash of [undefined, own]) {
+			const { checker, works } = recordingChecker([work], randomBytes);
+			expect(await checker.check(hash, "p")).toBe(hash === own);
+			expect(works).toEqual([work.work]);
+		}
+		// A work is no hash, at run time too: nothing is checked against it.
+		const { checker, works } = recordingChecker([work], randomBytes);
+		await expect(checker.check(work as unknown as SecretHash, "p")).rejects.toThrow(TypeError);
+		expect(works).toEqual([]);
 	});
 
 	it("computes nothing without a hash when no hash is in use", async () => {

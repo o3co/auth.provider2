@@ -9,7 +9,8 @@
 
 ## Offers
 - `readSecretHash` (text → hash or none), the only maker of a hash; a hash names its `work`, alike for hashes that take equal work.
-- `secretCheckers`: `checkerOf` (the hashes in use) → a checker, `check` (hash or none, secret → matched or not), its decoys from the kernel's random; every checker one assembly makes shares that assembly's `max-concurrent`, apart from any other assembly's.
+- `readSecretWork` (a work's name → `SecretWork` or none): a work named as a hash of it names its own (`bcrypt:12`, `scrypt:15,8,1,32,16`: ln, r, p, key bytes and salt bytes), within the bounds a hash is read in, for a checker to compute where no hash of it is held.
+- `secretCheckers`: `checkerOf` (the hashes and works in use) → a checker, `check` (hash or none, secret → matched or not), its decoys from the kernel's random; every checker one assembly makes shares that assembly's `max-concurrent`, apart from any other assembly's.
 - Operator section `max-concurrent`: how many checks run at once in the assembly, every checker it makes together (1–1024, default 8).
 - `./testing`: bcrypt and scrypt hashes at the cheapest work (`testBcryptHash`, `testScryptHash`), a 72-byte secret (`seventyTwoBytes`), and `recordingChecker`, a checker recording the work of each computation.
 
@@ -19,7 +20,8 @@
 - The minimum is legacy's for bcrypt (scrypt, which legacy did not read, starts at ln 10); the strength is the operator's choice.
 - A secret is compared as its UTF-8 bytes, with no Unicode normalization. One over 1024 bytes never matches, before any computation, a fixed bound far past a generated secret's length; past 72 bytes it never matches a bcrypt hash.
 - Each check computes once per kind of work in use: the hash for its own kind, a decoy of that work (its answer dropped) for every other, so a check without a hash takes the same work as one with it.
-- A hash whose work is not in use is computed besides the decoys; with no hash in use, a check without one computes nothing.
+- A hash whose work is not in use is computed besides the decoys; with no hash or work in use, a check without one computes nothing.
+- A work in use stands for a hash of it: its decoy is computed for a check without a hash, a hash of it in the decoy's place. A work is never a hash: checking against one is a TypeError, before any computation.
 - A check past `max-concurrent` is unavailable before any computation; a secret over 1024 bytes takes no place, and a check keeps its place until each of its computations ends.
 - Decoys are made once, when the checker is made, from the given random bytes only.
 
