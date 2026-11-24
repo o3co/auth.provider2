@@ -1,0 +1,43 @@
+{
+	"name": "@mod/tokens",
+	"private": true,
+	"license": "Apache-2.0",
+	"type": "module",
+	"kind": "feature",
+	"asks": [
+		{
+			"line": "`tokens.revocation`: `denylist`, or `unsupported` to answer revocation as unsupported. With `unsupported`, a composed module that needs access tokens revocable refuses boot and says why.",
+			"decides": true
+		}
+	],
+	"exports": {
+		".": "./src/contract.ts",
+		"./testing": "./src/testing.ts",
+		"./module": "./src/module.ts"
+	},
+	"dependencies": {
+		"@mod/added-claims": "workspace:*",
+		"@mod/issuer": "workspace:*",
+		"@mod/kernel": "workspace:*",
+		"@mod/keys": "workspace:*",
+		"@mod/promises": "workspace:*",
+		"@mod/sender-binding": "workspace:*",
+		"@mod/token-denylist": "workspace:*",
+		"zod": "4.6.7"
+	},
+	"devDependencies": {
+		"@mod/http": "workspace:*",
+		"@mod/http-server": "workspace:*",
+		"@mod/records": "workspace:*",
+		"@mod/transparency-wire": "workspace:*",
+		"vitest": "5.0.5"
+	},
+	"peerDependencies": {
+		"vitest": "5.0.5"
+	},
+	"peerDependenciesMeta": {
+		"vitest": {
+			"optional": true
+		}
+	}
+}

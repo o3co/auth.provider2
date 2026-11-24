@@ -1,0 +1,273 @@
+import type { AddedClaims } from "@mod/added-claims";
+import { contract, extensionPoint } from "@mod/kernel";
+import type { Binding, TokenValidity } from "@mod/sender-binding";
+
+export type { AddedClaims, AddedValue } from "@mod/added-claims";
+
+/** Who acts for the subject, and the actor it acts for in turn (`act`). */
+export interface Actor {
+	readonly subject: string;
+	readonly actor?: Actor;
+}
+
+/** Whom a token's subject is: a person, or a client acting for itself, which then is its subject. */
+export type SubjectKind = "user" | "client";
+
+/** `actor`, `amr` and `authenticatedAt` are written only when given. */
+export interface AccessGrant {
+	readonly subject: string;
+	/** Said by the grant; a client's token names the client it is issued to as its subject. */
+	readonly subjectKind: SubjectKind;
+	readonly issuedTo: string;
+	readonly audience: readonly string[];
+	readonly scope: readonly string[];
+	readonly actor?: Actor;
+	readonly amr?: readonly string[];
+	/** Epoch ms, kept to the second, and never after the token's issue. */
+	readonly authenticatedAt?: number;
+	/** The authentication time is not known: no `auth_time` is written, whatever `authenticatedAt` holds. */
+	readonly authenticatedAtUnknown?: true;
+	readonly acr?: string;
+	/**
+	 * Epoch ms: when the grant's own check compared its subject's boundary, for a token tied to no
+	 * session. Written as `o3co_standing_at` in whole seconds, floored and never after the token's
+	 * issue; it never moves the token's lifetime. Without it, the token stands from its issue.
+	 */
+	readonly standingAt?: number;
+	/**
+	 * Claims the grant adds to its access token: JSON within `added-claims`' limits, no name
+	 * reserved; an empty set is none. What the grant states, never what the provider vouches for.
+	 */
+	readonly claims?: AddedClaims;
+}
+
+export interface IssuedAccess {
+	readonly token: string;
+	readonly id: string;
+	/** Epoch ms. */
+	readonly expiresAt: number;
+	/** Whole seconds left once signed, rounded up: at least 1, as `issue` refuses a token with less. */
+	readonly expiresIn: number;
+	readonly tokenType: string;
+	/** The names of the claims the grant added, in name order; none where it added none. */
+	readonly addedClaims?: readonly string[];
+}
+
+/**
+ * An access token made ready to sign: its protected header and its claims, each as the text the
+ * token carries, fixed before anything is signed. Only `sign` of the tokens that prepared it signs it.
+ */
+export interface PreparedAccess {
+	readonly kind: "prepared";
+	readonly headerText: string;
+	readonly claimsText: string;
+}
+
+/** How a claim of the access token is held to account: matched with evidence, derived by a fixed rule, or outside the monitor's check. */
+export type ClaimClass = "evidence" | "derived" | "outside";
+
+export { accessTokenClaims } from "./claims/claims.ts";
+
+export type AccessCheck =
+	| {
+			readonly kind: "valid";
+			/** The id `issue` answered. */
+			readonly id: string;
+			readonly grant: AccessGrant;
+			readonly expiresAt: number;
+			/** Epoch ms: the token's standing time, its standing claim where it carries one, else its issue time. */
+			readonly standingAt: number;
+			readonly tokenType: string;
+			readonly binding?: Binding;
+	  }
+	| {
+			readonly kind: "invalid";
+			/** "shape" also covers a binding that no contributed sender binding recognises. */
+			readonly reason: "signature" | "issuer" | "expired" | "shape" | "revoked";
+	  };
+
+export type Revocation =
+	| { readonly kind: "revoked" }
+	/** The token does not verify (or has expired), so there is nothing to revoke. */
+	| { readonly kind: "invalid" }
+	| { readonly kind: "unsupported" };
+
+export type IssuedTo =
+	| { readonly kind: "issued"; readonly issuedTo: string }
+	| { readonly kind: "invalid" };
+
+/** What a policy is asked: the grant as its caller verified it, its type, and its session (passed on unread). */
+export interface IssuanceRequest {
+	readonly grant: AccessGrant;
+	readonly grantType: string;
+	readonly session?: string;
+	/** Set by the issuing side alone: this issuance continues a grant the policies already let through. */
+	readonly continuing?: true;
+}
+
+/** A policy's verdict: `reason` is the audit's word, `description` the client's. */
+export type IssuanceVerdict =
+	| { readonly kind: "allowed" }
+	| { readonly kind: "refused"; readonly reason: string; readonly description: string };
+
+/** A rule an operator composes on whether an access token may be issued at all. */
+export interface IssuancePolicy {
+	readonly name: string;
+	/** Throws Unavailable when it cannot tell. `signal` aborts at the policies' deadline, so it may stop its own work. */
+	judge(request: IssuanceRequest, signal?: AbortSignal): Promise<IssuanceVerdict>;
+}
+
+export const issuancePolicies = extensionPoint<IssuancePolicy>("tokens.issuance-policies", {
+	multiplicity: "keyed",
+	keyOf: (policy) => policy.name,
+});
+
+export interface IssuanceRefused {
+	readonly kind: "refused";
+	readonly policy: string;
+	readonly reason: string;
+	readonly description: string;
+}
+
+export type Issued = { readonly kind: "issued"; readonly access: IssuedAccess } | IssuanceRefused;
+export type Admitted = { readonly kind: "allowed" } | IssuanceRefused;
+
+/**
+ * `notAfter` (epoch ms) caps the expiry, a token it leaves less than a second refused by `issue`;
+ * `lifetimeSeconds` (2–86400) replaces the section's lifetime.
+ */
+export interface IssueLimits {
+	readonly notAfter?: number;
+	readonly binding?: Binding;
+	readonly lifetimeSeconds?: number;
+}
+
+/**
+ * The whole seconds an access token may be given to live: `lifetimeSeconds` in `IssueLimits`, any
+ * other answered by `issue` with a RangeError, and the section's `access-token-lifetime`. A grant
+ * may check at boot the value it will give against it.
+ */
+export const lifetimeSecondsRange = Object.freeze({ min: 2, max: 86_400 });
+
+/** Its `verifyAccess` is the validity `sender-binding` checks a token by at a resource. */
+export interface Tokens extends TokenValidity<AccessCheck> {
+	revocable(): boolean;
+	/**
+	 * The access-token lifetime that `issue` applies where the grant gives no `lifetimeSeconds`, in
+	 * whole seconds from 2 to 86400. It is fixed when `tokens` is built and never changes after, so a
+	 * check made at build time stays true. It is not the longest life any token may have: a grant's own
+	 * `lifetimeSeconds` and token exchange's cap may differ. A boot check against it does not reach
+	 * tokens already issued, or instances still on other settings.
+	 */
+	accessTokenLifetimeSeconds(): number;
+	/** Whether access tokens are checked against subject revocation: false where the section states `subject-check = none`. */
+	subjectsChecked(): boolean;
+	/**
+	 * Whether an access token may be issued for the request; the same judgment `issue` makes, but for
+	 * the lifetime, which only `issue`'s limits and signing fix.
+	 */
+	admits(request: IssuanceRequest): Promise<Admitted>;
+	/**
+	 * Issues once every policy, its own first, allows it; throws Unavailable when one cannot tell.
+	 * The token's `iat` is when `issue` was asked, before the policies are, and its lifetime runs
+	 * from there, their wait included; what it answers is left runs from signing. Refuses, as its
+	 * own rule, a token with less than a second left once signed, its cap passed, its lifetime spent
+	 * in the policies' wait or its signing slow: policy `tokens`, reason `no_lifetime_left`, the
+	 * client's word `expired`; and one past 16 KiB once signed, which it does not read: reason
+	 * `token_too_large`, the client's word `too large`. Such a token is handed to no one, and nothing
+	 * of it is kept.
+	 */
+	issue(request: IssuanceRequest, limits?: IssueLimits): Promise<Issued>;
+	/**
+	 * `issue`'s first half: judged as `issue` judges, the header and claims fixed and nothing signed,
+	 * so a caller can record their texts before the token exists.
+	 */
+	prepare(
+		request: IssuanceRequest,
+		limits?: IssueLimits,
+	): Promise<PreparedAccess | IssuanceRefused>;
+	/**
+	 * `issue`'s second half: signs what this `tokens` prepared, as prepared, and answers as `issue`
+	 * does. A value it did not prepare is the caller's TypeError. It may sign one again.
+	 */
+	sign(prepared: PreparedAccess): Promise<Issued>;
+	verifyAccess(token: string): Promise<AccessCheck>;
+	revokeReferenced(reference: string): Promise<Revocation>;
+	issuedToOf(token: string): Promise<IssuedTo>;
+	revokeAccess(token: string): Promise<Revocation>;
+}
+
+export const accessTokens = contract<Tokens>("tokens");
+
+export { referenceOf } from "./reference.ts";
+
+export interface IssuedFor {
+	readonly id: string;
+	readonly subject: string;
+	/** Epoch ms. */
+	readonly issuedAt: number;
+	/** Epoch ms: the time its subject's authentication stands from, its standing claim else its issue. */
+	readonly standingAt: number;
+}
+
+/** A condition every access token must still meet, contributed by the module that owns it. */
+export interface AccessCondition {
+	readonly name: string;
+	/** Throws Unavailable when it cannot tell. */
+	holds(token: IssuedFor): Promise<"holds" | "revoked">;
+}
+
+export const accessConditions = extensionPoint<AccessCondition>("tokens.access-conditions", {
+	multiplicity: "keyed",
+	keyOf: (condition) => condition.name,
+});
+
+/** Whether a token's subject was revoked after the token was issued. */
+export interface SubjectCheck {
+	/** Throws Unavailable when it cannot tell. */
+	holds(token: IssuedFor): Promise<"holds" | "revoked">;
+}
+
+/**
+ * The check of subject revocation on access tokens: exactly one, or none where the operator
+ * states in the section that subjects are not checked.
+ */
+export const subjectChecks = extensionPoint<SubjectCheck>("tokens.subject-checks", {
+	multiplicity: "many",
+});
+
+/** A bundle of credentials about to be answered, as a fence sees it: its subject and its receipt's id. */
+export interface FencedBundle {
+	readonly subject: string;
+	readonly receiptId: string;
+}
+
+/** A fence every bundle of credentials passes before it is answered, contributed by the module that owns it. */
+export interface IssuanceFence {
+	readonly name: string;
+	/** Throws Unavailable when it cannot tell. */
+	fence(bundle: FencedBundle): Promise<"passed" | "refused">;
+}
+
+export const issuanceFences = extensionPoint<IssuanceFence>("tokens.issuance-fences", {
+	multiplicity: "many",
+});
+
+/** Passing a bundle of credentials through every issuance fence, once, before any of it is answered. */
+export interface IssuanceFencing {
+	/**
+	 * Passes the bundle through the fences in collect order, under one receipt id; refused by the
+	 * first to refuse, which is named, with the description of any refused issuance, the rest not
+	 * asked. With no fence, passes.
+	 */
+	pass(bundle: {
+		readonly subject: string;
+	}): Promise<
+		| { readonly kind: "passed" }
+		| { readonly kind: "refused"; readonly fence: string; readonly description: string }
+	>;
+}
+
+export const issuanceFencing = contract<IssuanceFencing>("tokens.issuance-fencing");
+
+export { type RevokedTokens, revokedTokens, revokedTokensNeeds } from "@mod/token-denylist";
