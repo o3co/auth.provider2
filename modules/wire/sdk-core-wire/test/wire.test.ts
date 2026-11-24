@@ -62,6 +62,7 @@ describe("the items T approves, from a JAR", () => {
 
 describe("the payloads", () => {
 	const statement = {
+		v: 1,
 		iss: "https://id.example",
 		sid: "t-1",
 		iat: 1,
@@ -82,7 +83,15 @@ describe("the payloads", () => {
 	});
 
 	it("reads a completion's answer, which names T's hash and the assertion's", () => {
-		const completion = { iss: "i", t_hash: "t", assertion_hash: "a", code: "c", iat: 1, exp: 2 };
+		const completion = {
+			v: 1,
+			iss: "i",
+			t_hash: "t",
+			assertion_hash: "a",
+			code: "c",
+			iat: 1,
+			exp: 2,
+		};
 		expect(payloads.completion.safeParse(completion).success).toBe(true);
 		expect(payloads.completion.safeParse({ ...completion, t_hash: "" }).success).toBe(false);
 	});
@@ -101,6 +110,7 @@ describe("the payloads", () => {
 
 describe("the first key's statements", () => {
 	const common = {
+		v: 1,
 		iss: "https://id.example",
 		sid: "c-1",
 		iat: 1,
@@ -118,7 +128,12 @@ describe("the first key's statements", () => {
 			ct_hash: "ct",
 			subject: "s-1",
 			kg: 0,
-			options: { user_id: "u", rp_id: "id.example", exclude_credentials: [] },
+			options: {
+				user_id: "u",
+				rp_id: "id.example",
+				exclude_credentials: [],
+				algorithms: [-7, -8],
+			},
 		},
 	};
 

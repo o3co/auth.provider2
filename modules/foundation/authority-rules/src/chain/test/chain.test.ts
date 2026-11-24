@@ -135,7 +135,8 @@ describe("a first-trust key (Rules023e Allowed `ft`)", () => {
 			expect(step({ credential: "c", publicKey: coseKey(1, alg) })).toEqual(ok);
 		const eddsa = { credential: "c", publicKey: coseKey(1, -8) };
 		expect(step(eddsa, [-7])).toEqual(refused(/algorithm is not one the creation offered/));
-		expect(step(eddsa, "none")).toEqual(refused(/algorithm is not one the creation offered/));
+		// A creation naming no algorithms is none the protocol reads.
+		expect(step(eddsa, "none")).toEqual(refused(/not both signed/));
 		const unread = { ...checks, keyThumbprint: () => undefined };
 		expect(step(eddsa, undefined, unread)).toEqual(refused(/not a key the protocol takes/));
 		const other = { ...checks, keyThumbprint: () => ({ jkt: digest("other"), alg: -8 }) };

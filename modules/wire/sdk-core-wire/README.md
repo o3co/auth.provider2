@@ -13,7 +13,7 @@
 - `jarClaims`: an authorization's closed set of `items`, those a JAR must carry (`required`), and its `envelope`, the claims that are no item.
 - `itemsFromJar` (payload, the JAR's hash): T's items, or an error naming the claim unknown or missing, or the value not allowed.
 - `payloads`: the schemas of T, the completion's answer, the `creation` and `possession` statements, and what the Core opens of the first key's start and mail's side and the screen of the start's answer. Their types: `StatementPayload`, `CompletionPayload`, `CreationPayload`, `PossessionPayload`, `AuthorizationItems`, `SigningKey`, `FirstKeyStage`.
-- `versions`: the wire versions a reader speaks (1); a statement and a completion may name theirs as `v`. A creation's `options` may name the `algorithms` the ceremony offered, as COSE numbers them, each once.
+- `versions`: the wire versions a reader speaks (1); every statement and completion names its own as `v`. A creation's `options` name the `algorithms` the ceremony offered, as COSE numbers them, each once.
 - `keyThumbprintInput` (a JWK): what a passkey's thumbprint (RFC 7638, RFC 8037) is the SHA-256 of, the JWK's required members sorted; none for a JWK that is not a passkey's (`PasskeyJwk`).
 - `canonicalText`, `challengeInput` and `continuationInput`: what a challenge and a continuation's signature cover. `firstKey`: the first key's `stages` (`start` and `mail`), `evidenceInput` and `aad`, what the evidence's value and a sealed request's additional data cover.
 
@@ -21,7 +21,7 @@
 - A protocol (G33): types, frozen constants, fixed schemas and the functions that build by them; no I/O, clock, randomness or state.
 - Every payload refuses a field it does not know; T's items are a closed set, and a JAR with any other claim beside its envelope yields no items.
 - The identifier never goes into a statement but masked, for display alone.
-- A creation names the key generation it is signed for (`kg`), so a creation signed before a reset cannot register a key after it. A possession names the new key by one of `key_jkt`, its thumbprint, and `key_hash`, the base64url SHA-256 of its uncompressed P-256 point.
+- A creation names the key generation it is signed for (`kg`), so a creation signed before a reset cannot register a key after it. A possession names the new key by `key_jkt`, its thumbprint, the base64url SHA-256 of `keyThumbprintInput`.
 - A passkey's key is ES256 (P-256), EdDSA (Ed25519 alone) or RS256 (a modulus of 2048 to 4096 bits, exponent 65537). A JWK holds its thumbprint's members alone, each in its one unpadded base64url spelling: x and y 32 bytes, a modulus whose first byte is not 0 (refused, never cut). That a point lies on its curve is each side's crypto's.
 - A key travels as its COSE_Key bytes: CTAP2's canonical CBOR, a map of its key type's labels alone (1, 3, -1, -2, and -3 for EC2), in order, each once, of definite lengths, its integers shortest; read whole in the authenticator data, after which come only extensions, where flagged. The screen may read the SPKI instead, its algorithm's identifier and lengths checked, and reads the COSE_Key where the browser gives no SPKI.
 - `test/keys.vectors.json` holds each algorithm's key as COSE, SPKI and JWK with its thumbprint, and keys refused; every reader of this form runs them.

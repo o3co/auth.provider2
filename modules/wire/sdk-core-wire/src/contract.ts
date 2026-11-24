@@ -137,7 +137,7 @@ const approval = z
 	})
 	.strict();
 
-const v = z.literal(versions[0]).optional();
+const v = z.literal(versions[0]);
 
 /** The fields every statement carries: its version, issuer, id, issue and expiry times, and the screen's two keys. */
 const common = {
@@ -197,8 +197,7 @@ const creation = z
 						algorithms: z
 							.array(passkeyAlgorithm)
 							.min(1)
-							.refine((list) => list.every((alg, at) => list.indexOf(alg) === at))
-							.optional(),
+							.refine((list) => list.every((alg, at) => list.indexOf(alg) === at)),
 					})
 					.strict(),
 			})
@@ -216,15 +215,11 @@ const possession = z
 			.object({
 				creation_hash: z.string().min(1),
 				/** The new key's JWK thumbprint (RFC 7638), the SHA-256 of `keyThumbprintInput`, base64url. */
-				key_jkt: thumbprint.optional(),
-				/** The base64url SHA-256 of the new key's uncompressed P-256 point (0x04, x, y: 65 bytes). */
-				key_hash: z.string().min(1).optional(),
+				key_jkt: thumbprint,
 				credential_id: z.string().min(1),
 				reservation_id: z.string().min(1),
 			})
-			.strict()
-			// The new key is named one way: by its thumbprint or by its point's hash.
-			.refine((p) => (p.key_jkt === undefined) !== (p.key_hash === undefined)),
+			.strict(),
 	})
 	.strict();
 
