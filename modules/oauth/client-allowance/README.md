@@ -39,6 +39,5 @@
 - `kernel`, `clients`
 
 ## Vocabulary
-- allowance: what a client may be issued: grants, scopes and audiences.
-- ceiling: the most a client from a source may be allowed.
+- allowance: what a client may be issued: grants, scopes and audiences. ceiling: the most a client from a source may be allowed.
 - self ceiling (`self`): what a client may be issued for itself, apart from what a person delegates: audience and scope pairs its publisher signed.
