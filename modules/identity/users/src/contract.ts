@@ -138,6 +138,22 @@ export interface Users {
 	claimedContacts(subject: string): Promise<readonly Contact[] | Unanswerable>;
 }
 
+/** What importing one record answers: `usersImport`'s words. */
+export type ImportAnswer = "imported" | "conflict" | "outside" | "malformed" | "full";
+
+/** Records brought from another IdP, as an import entry hands them over one at a time. */
+export interface UsersImport {
+	/**
+	 * Keeps `{ subject, identifier?, verifiedEmail? }`: the identifier through the ledger's `keep`,
+	 * then the email as a verified contact. `imported` once every part is held as given, now or
+	 * before; `conflict` where the ledger holds the identifier or the subject otherwise, `outside`
+	 * where an identifier is given and the ledger takes no import, `malformed` for any other shape
+	 * (another key among them), each writing nothing; `full` past a subject's contacts. Throws
+	 * Unavailable if the ledger or the store fails.
+	 */
+	record(record: unknown): Promise<ImportAnswer>;
+}
+
 export interface Ledger {
 	/** None when no user matches, after the same work as for a known identifier; throws Unavailable when the ledger fails or refuses. */
 	verify(identifier: string, password: string): Promise<Verified>;
@@ -147,6 +163,11 @@ export interface Ledger {
 	byUpstream?(idp: string, upstreamSubject: string): Promise<Verified>;
 	/** Makes a new subject for an identifier no user holds, else `exists`; a ledger that makes no subjects leaves it out. */
 	create?(identifier: string): Promise<Created>;
+	/**
+	 * Holds the identifier for the subject as given, written now or before (`kept`), unless either is
+	 * held otherwise (`conflict`); a ledger that takes no import leaves it out.
+	 */
+	keep?(subject: string, identifier: string): Promise<"kept" | "conflict">;
 }
 
 /** The IdP names one module passes to `byUpstream`, each with the issuer it stands for (compared as written). */
@@ -156,6 +177,7 @@ export interface UpstreamNames {
 }
 
 export const users = contract<Users>("users");
+export const usersImport = contract<UsersImport>("users.import");
 export const ledgers = extensionPoint<Ledger>("users.ledgers", { multiplicity: "many" });
 export const upstreamNames = extensionPoint<UpstreamNames>("users.upstream-names", {
 	multiplicity: "many",

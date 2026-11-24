@@ -1,6 +1,7 @@
 import type { Elsewhere, SubjectOf } from "@mod/erasure-extensions";
 import { Unavailable } from "@mod/kernel";
-import { type NameStore, type StoredName, written } from "../store.ts";
+import type { NameStore, StoredName } from "../store.ts";
+import { written } from "../stores/written.ts";
 
 /** A key names keeps an IdP name's record under, in the link space: `{"idp":<name>}`, where a link's is a list. */
 export const isNameKey = (key: string): boolean => {

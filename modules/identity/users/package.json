@@ -12,6 +12,21 @@
 		},
 		"`users.registered`: leave it unset where a user ledger is composed; boot refuses both."
 	],
+	"appEntries": [
+		{
+			"script": "users-import",
+			"shape": "settle-records",
+			"contract": "usersImport",
+			"member": "record",
+			"answers": [
+				"imported",
+				"conflict",
+				"outside",
+				"malformed",
+				"full"
+			]
+		}
+	],
 	"exports": {
 		".": "./src/contract.ts",
 		"./testing": "./src/testing.ts",

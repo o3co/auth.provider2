@@ -10,16 +10,14 @@
 ## Offers
 - `verify` (identifier, password), `bySubject`, `byIdentifier` and `byUpstream` (IdP name, upstream subject), each answering a user or none; `bySubject` and `claimedContacts` may answer unanswerable. `create` (identifier): a new subject the ledger makes, or `exists`; offered only where the composed ledger makes subjects, its absence the composition's fact.
 - `claimedContacts`, `verifiedContact` (subject, `{ kind: "email", value }`), `contactsOf`, `link` (linked, already or conflict) and `unlink` (unlinked, none or fixed).
-- Extension point `ledgers`: a user ledger (verification, user by subject or unanswerable, by identifier, and optionally by upstream identity and a create), which takes the same work for an unknown identifier as for a known one; one looking users up by upstream identity has the last word there (internal module `links`): `link` answers already or conflict, and `unlink` fixed or none.
+- Extension point `ledgers`: a user ledger (verification, user by subject or unanswerable, by identifier, and optionally by upstream identity, a create and an import, `keep`), which takes the same work for an unknown identifier as for a known one; one looking users up by upstream identity has the last word there (internal module `links`): `link` answers already or conflict, and `unlink` fixed or none.
 - Extension point `upstreamNames`: the IdP names a module passes to `byUpstream`, each with the issuer it stands for, one list per module; what refuses boot: internal module `names`. Operator section `issuer-moved` (each `{ idp, from, to }`, default none): a name's stated move to another issuer, its links going with it (internal module `names`).
 - Operator section `registered`: `identifier`, `subject` (default the identifier), `password-hash`, `attributes`, `upstream` (each `{ idp, subject }`).
-- Operator section `waits` (`after`, `first`, `longest`, `forget`): how a password check of an identifier failing in a row waits (internal module `waits`).
+- Operator section `waits`: how a password check of an identifier failing in a row waits; its keys: internal module `waits`.
 - Store interfaces for links, with each declared IdP name's issuer, and verified contacts; what they need, their `issuers` (required in 0.22), `unowned` (deprecated) and erasure ports, and the eraser `users`: internal module `stores`.
 - `userAttribute`, typed by `UserAttributes`: the attributes users names, by OIDC claim name `email`, `email_verified`, `name`, `picture` and `groups`; a user may hold others. `isAttributeValue` (name, value): whether users takes the value. `acceptedAttributes` (values of any shape): the named ones users takes, frozen; an email's verification only beside the email. `isWellFormedSubject`: a subject's shape.
+- `usersImport`, called by the app entry `users-import` (`settle-records`): a record brought from another IdP, kept through the ledger's `keep` and as a verified contact; its shape and answers: internal module `imports`. No passkey is brought.
 - `./testing`: contract tests for users, user ledgers and both Store interfaces, configuration builders, and both Store interfaces in memory.
-
-## Deprecated
-- `written`: a store helper exported by mistake; nothing replaces it, so copy it. A later release removes it.
 
 ## Invariants
 - A subject is 1 to 255 ASCII characters: one outside that refuses boot in the settings (the identifier's, where `subject` is left out), is unavailable in a ledger's answer, is none when looked up without asking the ledger, and throws TypeError on `link`.

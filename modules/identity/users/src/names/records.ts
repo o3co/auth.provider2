@@ -1,13 +1,13 @@
 import { Unavailable } from "@mod/kernel";
-import {
-	type Changed,
-	type LinkStore,
-	type NameStore,
-	type RecordStore,
-	type StoredLink,
-	type StoredName,
-	written,
+import type {
+	Changed,
+	LinkStore,
+	NameStore,
+	RecordStore,
+	StoredLink,
+	StoredName,
 } from "../store.ts";
+import { written } from "../stores/written.ts";
 import { isNameRecord } from "./elsewhere.ts";
 
 /** Where a name's record is kept, as names reads and writes it. */

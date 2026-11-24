@@ -9,6 +9,7 @@ Internal module of `users`: how long a password check of one identifier waits, a
 - What a check answers, and the identifier's form: users' own. The section's keys and their bounds: the package.
 
 ## Offers
+- The rules the package's section `waits` gives: its keys `after`, `first`, `longest` and `forget`, read as `WaitRules`.
 - `identifierWaits` (rules, timing, capacity) → `run` (an identifier, a check): the check's answer, after its wait. `WaitRules` (`after`, `firstMs`, `longestMs`, `forgetMs`); `Timing` (a clock, a pause).
 
 ## Invariants

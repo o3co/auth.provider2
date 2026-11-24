@@ -1,6 +1,5 @@
 import { deepFreeze, isUnavailable, type Log, Unavailable } from "@mod/kernel";
 import {
-	type BySubject,
 	type Created,
 	isAttributeValue,
 	isWellFormedSubject,
@@ -58,7 +57,7 @@ function readAnswer(answer: unknown, log: Log, askedSubject?: string): Verified 
 }
 
 /** Any failure of the ledger is unavailable, never passed on as it came. */
-async function fromLedger(call: () => Promise<BySubject | Created>): Promise<unknown> {
+async function fromLedger(call: () => Promise<unknown>): Promise<unknown> {
 	try {
 		return await call();
 	} catch (error) {
@@ -76,7 +75,16 @@ function readCreated(answer: unknown, log: Log): Created {
 }
 
 export function contributedSource(ledger: Ledger, log: Log): UserSource {
-	const { byUpstream, create } = ledger;
+	const { byUpstream, create, keep } = ledger;
+	const keeping = keep
+		? {
+				keep: async (subject: string, identifier: string) => {
+					const answer = await fromLedger(() => keep.call(ledger, subject, identifier));
+					if (answer === "kept" || answer === "conflict") return answer;
+					throw new Unavailable("users");
+				},
+			}
+		: {};
 	const creating = create
 		? {
 				create: async (identifier: string) => {
@@ -114,5 +122,6 @@ export function contributedSource(ledger: Ledger, log: Log): UserSource {
 		},
 		...upstream,
 		...creating,
+		...keeping,
 	};
 }

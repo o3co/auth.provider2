@@ -13,6 +13,7 @@ Internal module of `users`: how users writes through its store interfaces (decla
 - What the interfaces are, and what each port answers: `store.ts`. What a link or a contact holds: `links` and the package.
 
 ## Offers
+- `written` (a record store, a key, the first record, a change) → the record before and after: changed where it is there, saved where it is not, as names writes its own records.
 - `keptFor` (a store, a key, the first record, a change, the subject) → the record before and after: changed where it is there; saved for the subject where it is not.
 - `portsRefused` (the link store, the contact store) → why their ports cannot be used together, or none.
 - `portsRefused` is the one statement of the sets; `everyPortOffered` (the link store, the contact store) → whether every set is offered whole.

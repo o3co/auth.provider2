@@ -2,7 +2,8 @@ import { erasers } from "@mod/erasure-extensions";
 import { defineModule, setting } from "@mod/kernel";
 import { secretCheckers } from "@mod/secret-hash";
 import { z } from "zod";
-import { ledgers, type UpstreamNames, upstreamNames, users } from "./contract.ts";
+import { ledgers, type UpstreamNames, upstreamNames, users, usersImport } from "./contract.ts";
+import { usersImporter } from "./imports/imports.ts";
 import { contributedSource } from "./ledger/contributed.ts";
 import { contactSubjectOf, ledgerUsers } from "./ledger.ts";
 import { keptLinks } from "./links/kept.ts";
@@ -178,6 +179,12 @@ export default defineModule(
 			// A ledger that looks users up by upstream identity has the last word on links: none is written.
 			const linking = ledger?.byUpstream ? ledgerLinks(source) : keptLinks(source, links);
 			return ledgerUsers(source, linking, contacts);
+		}),
+		// users' build refused more than one ledger, and one beside registered users.
+		m.provide(usersImport).by(async (c) => {
+			const [ledger] = await c.collect(ledgers);
+			const keep = ledger ? contributedSource(ledger, c.log).keep : undefined;
+			return usersImporter(await c.get(users), keep);
 		}),
 	],
 );

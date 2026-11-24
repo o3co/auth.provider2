@@ -4,6 +4,7 @@ import { z } from "zod";
 import {
 	isAttributeValue,
 	isWellFormedSubject,
+	type Ledger,
 	type Unanswerable,
 	type User,
 	type Users,
@@ -84,7 +85,8 @@ export type CheckerOf = (inUse: Iterable<SecretHash>) => SecretChecker;
 export type UserSource = Pick<
 	Users,
 	"verify" | "bySubject" | "byIdentifier" | "byUpstream" | "create"
->;
+> &
+	Pick<Ledger, "keep">;
 
 /** The users the settings register, checked by a checker `secret-hash` makes for their hashes. */
 export function registeredUsers(
