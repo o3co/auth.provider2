@@ -1,5 +1,5 @@
 import { generateKeyPairSync, type KeyObject, verify } from "node:crypto";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { registryWire } from "@mod/registry-wire";
@@ -95,6 +95,37 @@ describe("registry-sign", () => {
 			const d = (privateJwk(ed25519.privateKey) as { d?: string }).d ?? "";
 			expect(done.lines.join("\n")).not.toContain(d);
 			await expect(readFile(done.paths.out)).rejects.toThrow();
+		}
+	});
+
+	it("refuses a key whose private half does not match the public one it names, writing nothing", async () => {
+		for (const [pair, other] of [
+			[ed25519, generateKeyPairSync("ed25519")],
+			[p256, generateKeyPairSync("ec", { namedCurve: "P-256" })],
+		] as const) {
+			const { d } = pair.privateKey.export({ format: "jwk" });
+			const key = { ...other.publicKey.export({ format: "jwk" }), d, kid: "k" };
+			const done = await run(key, version);
+			expect(done.code).toBe(1);
+			expect(done.lines.join("\n")).toContain("key");
+			await expect(readFile(done.paths.out)).rejects.toThrow();
+		}
+	});
+
+	it("refuses to write over the key file or the version file, by a link too", async () => {
+		const done = await run(privateJwk(ed25519.privateKey), version);
+		const link = join(dir, "link.jwk");
+		await symlink(done.paths.key, link);
+		for (const out of [done.paths.key, done.paths.input, link]) {
+			const keyBefore = await readFile(done.paths.key, "utf8");
+			const inputBefore = await readFile(done.paths.input, "utf8");
+			const again = await signRegistry([done.paths.key, done.paths.input, out]);
+			expect(again).toEqual({
+				lines: ["the output is the key file or the version file"],
+				code: 1,
+			});
+			expect(await readFile(done.paths.key, "utf8")).toBe(keyBefore);
+			expect(await readFile(done.paths.input, "utf8")).toBe(inputBefore);
 		}
 	});
 

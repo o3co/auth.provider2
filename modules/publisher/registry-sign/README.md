@@ -15,11 +15,13 @@
 ## Invariants
 - The key is a private JWK with a non-empty `kid`: Ed25519 signs under `EdDSA`, P-256 under `ES256`; a key of another kind, or whose own `alg` names another, is refused.
 - A version that does not fit `registryWire.version` is refused, naming where it fails.
-- A refusal writes no file, and no line names a key member's value.
+- The signature is checked under the public half the JWK names before anything is written; one that does not verify is refused.
+- An output that is the key file or the version file, by a link too, is refused.
+- A refusal writes no file, and no line names a private member's value.
 - It depends on the protocol alone: no other part of the provider runs in it.
 
 ## Depends on
-- `registry-wire` (the version and its `typ`), `zod`; Node's built-ins only.
+- `registry-wire` (the version and its `typ`); Node's built-ins only.
 
 ## Vocabulary
 - version: one signed state of the client registry, as `registry-wire` names it.

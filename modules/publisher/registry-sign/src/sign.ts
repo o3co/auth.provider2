@@ -1,5 +1,5 @@
-import { createPrivateKey, type KeyObject, sign } from "node:crypto";
-import { readFile, writeFile } from "node:fs/promises";
+import { createPrivateKey, createPublicKey, type KeyObject, sign, verify } from "node:crypto";
+import { readFile, stat, writeFile } from "node:fs/promises";
 import { registryWire } from "@mod/registry-wire";
 
 /** A run of `registry-sign`: the lines it writes and its exit code. */
@@ -21,7 +21,9 @@ const algorithms: Readonly<Record<string, string>> = {
 };
 
 /** The signing key a private JWK holds, its kid and its algorithm; or what is wrong, naming no member's value. */
-function signerOf(text: string): { key: KeyObject; kid: string; alg: string } | string {
+function signerOf(
+	text: string,
+): { key: KeyObject; publicKey: KeyObject; kid: string; alg: string } | string {
 	const jwk = jsonOf(text);
 	if (typeof jwk !== "object" || jwk === null || Array.isArray(jwk)) return "the key is no JWK";
 	const given = jwk as Record<string, unknown>;
@@ -31,7 +33,15 @@ function signerOf(text: string): { key: KeyObject; kid: string; alg: string } | 
 	if (typeof given.kid !== "string" || given.kid.length === 0) return "the key has no kid";
 	if (typeof given.d !== "string") return "the key is no private key";
 	try {
-		return { key: createPrivateKey({ key: given as never, format: "jwk" }), kid: given.kid, alg };
+		// The public half as the JWK names it, never derived from `d`, so a signature checked by it
+		// tells a mismatched key.
+		const { kty, crv, x, y } = given;
+		return {
+			key: createPrivateKey({ key: given as never, format: "jwk" }),
+			publicKey: createPublicKey({ key: { kty, crv, x, y } as never, format: "jwk" }),
+			kid: given.kid,
+			alg,
+		};
 	} catch {
 		return "the key cannot be read as a private JWK";
 	}
@@ -43,6 +53,14 @@ function jsonOf(text: string): unknown {
 	} catch {
 		return undefined;
 	}
+}
+
+/** Whether `out` names a file that one of `files` names, through a link too; none where it does not exist yet. */
+async function sameFile(out: string, files: readonly string[]): Promise<boolean> {
+	const target = await stat(out).catch(() => undefined);
+	if (target === undefined) return false;
+	const each = await Promise.all(files.map((file) => stat(file).catch(() => undefined)));
+	return each.some((s) => s !== undefined && s.dev === target.dev && s.ino === target.ino);
 }
 
 const segment = (text: string) => Buffer.from(text).toString("base64url");
@@ -68,10 +86,15 @@ export async function signRegistry(args: readonly string[]): Promise<Run> {
 	}
 	const header = { alg: signer.alg, typ: registryWire.typ, kid: signer.kid };
 	const input = `${segment(JSON.stringify(header))}.${segment(JSON.stringify(parsed.data))}`;
-	const signature =
-		signer.alg === "EdDSA"
-			? sign(null, Buffer.from(input), signer.key)
-			: sign("sha256", Buffer.from(input), { key: signer.key, dsaEncoding: "ieee-p1363" });
+	const ecdsa = signer.alg === "ES256" ? ({ dsaEncoding: "ieee-p1363" } as const) : {};
+	const digest = signer.alg === "EdDSA" ? null : "sha256";
+	const signature = sign(digest, Buffer.from(input), { key: signer.key, ...ecdsa });
+	if (!verify(digest, Buffer.from(input), { key: signer.publicKey, ...ecdsa }, signature)) {
+		return refused("the key's signature does not verify under its public half");
+	}
+	if (await sameFile(outPath, [keyPath, inputPath])) {
+		return refused("the output is the key file or the version file");
+	}
 	const written = await writeFile(outPath, `${input}.${signature.toString("base64url")}\n`).then(
 		() => true,
 		() => false,
