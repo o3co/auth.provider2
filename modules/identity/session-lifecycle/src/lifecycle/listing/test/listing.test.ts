@@ -76,7 +76,7 @@ it("keeps a pushed-out session awaiting, with its end, when the closings refuse 
 	expect((await s.entryOf(second as string)).kind).toBe("absent");
 });
 
-it("keeps a pushed-out session awaiting without reading its record, and hands it to the closings at the next push-out though its record cannot be read", async () => {
+it("keeps a pushed-out session awaiting without reading its record, and hands it to the closings at the next push-out though its record cannot be read, still awaiting until a close finishes", async () => {
 	const booted = await boot();
 	const { stores, login } = booted;
 	const first = await login();
@@ -89,9 +89,9 @@ it("keeps a pushed-out session awaiting without reading its record, and hands it
 		now += 1000;
 		await login();
 	}
-	expect(await stores.awaiting("alice")).toEqual([]);
-	// Its close cannot read it, so it stays among the closings, for the sweep.
+	// Its close cannot read it, so it stays among the closings, for the sweep, and awaiting.
 	expect(stores.kept.pending()).toContain(first);
+	expect(await stores.awaiting("alice")).toEqual([first]);
 });
 
 it("lets a revocation close a session left awaiting", async () => {

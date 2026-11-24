@@ -16,7 +16,7 @@ Internal module of `lifecycle`: a subject's listing once a session closes, and t
 
 ## Data
 - A session is taken off its listing and settled once closed; a failed write is logged by its step and passed.
-- A session pushed out over the cap awaits in the listing, with its end, until it is kept as a closing and settled, so no record is read to keep it. Sessions pushed out are closed by the login that pushed them out, and logged by count only.
+- A session pushed out over the cap awaits in the listing, with its end, until a close of it finishes and settles it, so no record is read to keep it and nobody enters it meanwhile. Sessions pushed out are closed by the login that pushed them out, and logged by count only.
 - A push-out keeps for closing every session awaiting under the subject, those an earlier push-out left included, before any is closed, so the sweep finishes a close that fails.
 - If the closings refuse one, the login is unavailable, the opened session is taken off the listing, and the subject is remembered on this host: each sweep keeps what still awaits for closing and closes it, until the closings take it all. What awaits is also closed at the next push-out or by a revocation, or ends at its end; this host's memory is lost on a restart.
 

@@ -39,16 +39,12 @@ export function listingOver(parts: ListingParts): Listing {
 		await listed.settled(subject, handle).catch(passed("settle"));
 	};
 	/**
-	 * A pushed-out session awaits in the listing, with its end, until it is kept as a closing and
-	 * settled, so neither a refusal nor a crash here loses it: no record is read to keep it.
+	 * A pushed-out session awaits in the listing, with its end, until a close of it finishes and
+	 * settles it, so neither a refusal nor a crash here lets anyone in: no record is read to keep it.
 	 */
 	const keepAwaiting = async (subject: string) => {
-		const kept: string[] = [];
-		for (const handle of await listed.awaiting(subject)) {
-			await closings.add(handle);
-			await listed.settled(subject, handle);
-			kept.push(handle);
-		}
+		const kept = await listed.awaiting(subject);
+		for (const handle of kept) await closings.add(handle);
 		for (const handle of kept) {
 			try {
 				await parts.close(handle);

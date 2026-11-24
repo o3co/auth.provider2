@@ -902,6 +902,28 @@ describe("revoking a subject", () => {
 		await app.stop(1000);
 	});
 
+	it("keeps a pushed-out session awaiting, and nobody in, while the sweep's close of it cannot write, and closes it at a later sweep", async () => {
+		const { app, s, stores, closer, login } = await boot({
+			"sessions-per-subject": 1,
+			"sweep-interval": "1s",
+		});
+		const first = await login();
+		now += 1000;
+		stores.down.closing.failNext("add");
+		await expect(s.open(facts())).rejects.toSatisfy(isUnavailable);
+		stores.down.sessions.unavailable("update");
+		await oneSweep();
+		expect((await s.entryOf(first)).kind).toBe("absent");
+		expect(await stores.awaiting("alice")).toEqual([first]);
+		expect(closer.calls).toBe(0);
+		stores.down.sessions.restore();
+		now += 1000;
+		await nextSweep();
+		expect(closer.done).toEqual(["alice"]);
+		expect(await stores.awaiting("alice")).toEqual([]);
+		await app.stop(1000);
+	});
+
 	it("settles a session awaiting when a close of it finishes", async () => {
 		const { s, stores, login } = await boot({ "sessions-per-subject": 1 });
 		const first = await login();
