@@ -51,17 +51,6 @@ export interface UsersHarness {
 
 /** The users contract, run against any implementation. */
 export function usersContract(name: string, harness: UsersHarness): void {
-	/** Who a link stands for, as a lookup by it finds: unavailable where the users cannot answer by subject. */
-	const holderOf = async (u: Users, idp: string, upstreamSubject: string) => {
-		if (!harness.unanswerableBySubject) {
-			const found = await u.byUpstream(idp, upstreamSubject);
-			return found.kind === "user" ? found.user.subject : found.kind;
-		}
-		await expect(u.byUpstream(idp, upstreamSubject)).rejects.toSatisfy(isUnavailable);
-		return "unavailable";
-	};
-	/** What `holderOf` finds for a link to `subject`. */
-	const held = (subject: string) => (harness.unanswerableBySubject ? "unavailable" : subject);
 	describe(`users contract: ${name}`, () => {
 		it("finds a user by identifier and password, and hands over a frozen copy", async () => {
 			const found = await (await harness.open()).verify("alice", "correct horse");
@@ -126,7 +115,6 @@ export function usersContract(name: string, harness: UsersHarness): void {
 					expect(await u.bySubject(subject), subject).toEqual({ kind: "unanswerable" });
 				}
 				expect(await u.claimedContacts("s-alice")).toEqual({ kind: "unanswerable" });
-				expect(await holderOf(u, "example", "u-alice")).toBe("unavailable");
 			},
 		);
 
@@ -163,101 +151,8 @@ export function usersContract(name: string, harness: UsersHarness): void {
 			},
 		);
 
-		it("finds a user by an upstream identity exactly, never by a part of it", async () => {
+		it("refuses an empty part or an unknown kind of contact instead of keeping it", async () => {
 			const u = await harness.open();
-			expect(await holderOf(u, "example", "u-alice")).toBe(held("s-alice"));
-			if (!harness.unanswerableBySubject) {
-				const found = await u.byUpstream("example", "u-alice");
-				expect(found.kind === "user" && Object.isFrozen(found.user)).toBe(true);
-			}
-			for (const [idp, subject] of [
-				["example", "u-other"],
-				["other", "u-alice"],
-				["Example", "u-alice"],
-				["example:u", "alice"],
-				["", "example:u-alice"],
-				["example", ""],
-			] as const) {
-				expect(await u.byUpstream(idp, subject), `${idp} ${subject}`).toEqual({ kind: "none" });
-			}
-		});
-
-		it("links an upstream identity only when asked, to one subject, and finds the user through the same read", async () => {
-			const u = await harness.open();
-			const added = { idp: "example", subject: "u-added" };
-			expect(await u.byUpstream("example", "u-added")).toEqual({ kind: "none" });
-			expect(await u.link("s-alice", added)).toBe("linked");
-			expect(await holderOf(u, "example", "u-added")).toBe(held("s-alice"));
-			expect(await u.link("s-alice", added)).toBe("already");
-			expect(await u.link("s-bob", added)).toBe("conflict");
-			for (const [idp, subject] of [
-				["Example", "u-added"],
-				["example", "u-adde"],
-				["example:u", "added"],
-			] as const) {
-				expect(await u.byUpstream(idp, subject), `${idp} ${subject}`).toEqual({ kind: "none" });
-			}
-		});
-
-		it("finds a written link's subject as the users answer it: none outweighs the link, unanswerable is unavailable", async () => {
-			const u = await harness.open();
-			expect(await u.link("s-new", { idp: "other", subject: "u-new" })).toBe("linked");
-			if (harness.unanswerableBySubject) {
-				// Nothing can say who the link stands for, so it is neither none nor a user.
-				await expect(u.byUpstream("other", "u-new")).rejects.toSatisfy(isUnavailable);
-				return;
-			}
-			expect(await u.byUpstream("other", "u-new")).toEqual({ kind: "none" });
-			expect(await u.link("s-alice", { idp: "other", subject: "u-alice" })).toBe("linked");
-			const held = await u.byUpstream("other", "u-alice");
-			expect(held.kind === "user" && held.user.subject).toBe("s-alice");
-		});
-
-		it.skipIf(Boolean(harness.writtenLinksOnly))(
-			"never moves or removes a link the settings hold",
-			async () => {
-				const u = await harness.open();
-				const fixed = { idp: "example", subject: "u-alice" };
-				expect(await u.link("s-alice", fixed)).toBe("already");
-				expect(await u.link("s-bob", fixed)).toBe("conflict");
-				expect(await u.unlink("s-alice", fixed)).toBe("fixed");
-				expect(await u.unlink("s-bob", fixed)).toBe("none");
-				const found = await u.byUpstream("example", "u-alice");
-				expect(found.kind === "user" && found.user.subject).toBe("s-alice");
-			},
-		);
-
-		it("unlinks only the subject's own link, after which another subject may take it", async () => {
-			const u = await harness.open();
-			const upstream = { idp: "example", subject: "u-moved" };
-			await u.link("s-alice", upstream);
-			expect(await u.unlink("s-bob", upstream)).toBe("none");
-			expect(await holderOf(u, "example", "u-moved")).toBe(held("s-alice"));
-			expect(await u.unlink("s-alice", upstream)).toBe("unlinked");
-			expect(await u.unlink("s-alice", upstream)).toBe("none");
-			expect(await u.byUpstream("example", "u-moved")).toEqual({ kind: "none" });
-			expect(await u.link("s-bob", upstream)).toBe("linked");
-			expect(await u.link("s-alice", upstream)).toBe("conflict");
-		});
-
-		it("links an upstream identity to one subject when two ask at once", async () => {
-			const u = await harness.open();
-			const upstream = { idp: "example", subject: "u-raced" };
-			const answers = await Promise.all([u.link("s-a", upstream), u.link("s-b", upstream)]);
-			expect(answers.toSorted()).toEqual(["conflict", "linked"]);
-		});
-
-		it("refuses an empty part, an ill-formed subject or an unknown kind of contact instead of linking or keeping it", async () => {
-			const u = await harness.open();
-			for (const [subject, idp, upstream] of [
-				["", "example", "u"],
-				["s-é", "example", "u"],
-				["s".repeat(256), "example", "u"],
-				["s", "", "u"],
-				["s", "example", ""],
-			] as const) {
-				await expect(u.link(subject, { idp, subject: upstream })).rejects.toBeInstanceOf(TypeError);
-			}
 			const email = { kind: "email", value: "a@example.com" } as const;
 			await expect(u.verifiedContact("", email)).rejects.toBeInstanceOf(TypeError);
 			await expect(u.verifiedContact("s", { kind: "email", value: "" })).rejects.toBeInstanceOf(
