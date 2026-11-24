@@ -46,16 +46,16 @@ const refusals = (deployment: Promise<unknown>) =>
 
 describe("a registered client allowed a grant nothing composed serves", () => {
 	it("refuses boot at the grant's place in the client's list, naming the module `grants`' index names, or none", async () => {
-		const none = "no composed module serves this grant: compose the module that serves it";
+		const reason = (module: string) =>
+			`no composed module serves this grant: compose ${module}, or take it out of the client's grants`;
+		const none = reason("the module that serves it");
 		expect(
 			await refusals(boot([], ["authorization_code"], [], ["refresh_token", "urn:x:own"])),
-		).toEqual(
-			[
-				"0.sections.client-allowance.grants.0",
-				"2.sections.client-allowance.grants.0",
-				"2.sections.client-allowance.grants.1",
-			].map((at) => `clients.registered.${at}: ${none}, or take it out of the client's grants`),
-		);
+		).toEqual([
+			`clients.registered.0.sections.client-allowance.grants.0: ${reason("code-grant")}`,
+			`clients.registered.2.sections.client-allowance.grants.0: ${none}`,
+			`clients.registered.2.sections.client-allowance.grants.1: ${none}`,
+		]);
 	});
 
 	it("boots once a module serving the grant is composed", async () => {
