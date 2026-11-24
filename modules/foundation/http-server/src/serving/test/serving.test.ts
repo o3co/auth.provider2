@@ -718,6 +718,8 @@ describe("stop", () => {
 
 	// Stop's hooks start within microtasks, so one macrotask later the listener is closed.
 	const hooksStarted = () => new Promise((resolve) => setImmediate(resolve));
+	/** A stop deadline past any test's time: a connection held to it would never close within the test. */
+	const farDeadline = 600_000;
 
 	it("lets a request in flight finish, refusing new connections, and closes its connection after the answer", async () => {
 		const gate = gated();
@@ -758,8 +760,8 @@ describe("stop", () => {
 		socket.on("error", () => {});
 		const closed = new Promise((resolve) => socket.on("close", resolve));
 		await new Promise((resolve) => socket.once("data", resolve));
-		const held = new Promise((resolve) => setTimeout(() => resolve("held"), 2000));
-		expect(await Promise.race([app.stop(10_000).then(() => "stopped"), held])).toBe("stopped");
+		// A deadline past any test's time: held to it, stop would never end here.
+		await app.stop(farDeadline);
 		await closed;
 	});
 
@@ -773,17 +775,22 @@ describe("stop", () => {
 		);
 		socket.on("error", () => {});
 		// The answer starts as keep-alive, then waits on a reader that does not read.
-		socket.once("data", () => socket.pause());
+		const answering = new Promise<void>((resolve) =>
+			socket.once("data", () => {
+				socket.pause();
+				resolve();
+			}),
+		);
 		socket.on("data", (chunk) => {
 			length += chunk.length;
 		});
-		const closed = new Promise((resolve) => socket.on("close", () => resolve("closed")));
-		await new Promise((resolve) => setTimeout(resolve, 50));
-		const stopping = app.stop(10_000);
+		const closed = new Promise((resolve) => socket.on("close", resolve));
+		await answering;
+		// A deadline past any test's time: held to it, the connection would never close here.
+		const stopping = app.stop(farDeadline);
 		await hooksStarted();
 		socket.resume();
-		const held = new Promise((resolve) => setTimeout(() => resolve("held"), 2000));
-		expect(await Promise.race([closed, held])).toBe("closed");
+		await closed;
 		expect(length).toBeGreaterThan(body.length);
 		await stopping;
 	});
@@ -1055,11 +1062,10 @@ describe("limits", () => {
 	]);
 
 	it("answers 408 and closes a connection whose headers are not all sent within headers-timeout", async () => {
-		const base = await serveWith(routes, { "headers-timeout": "1s", "request-timeout": "5s" });
-		const started = Date.now();
+		// A request-timeout past the test's time: only the headers' could answer within it.
+		const base = await serveWith(routes, { "headers-timeout": "1s", "request-timeout": "5m" });
 		const text = await stalled(Number(new URL(base).port), "GET /p HTTP/1.1\r\nHost: x\r\n");
 		expect(text).toMatch(/^HTTP\/1\.1 408 /);
-		expect(Date.now() - started).toBeLessThan(4000);
 	});
 
 	it("answers 408 and closes a connection whose body is not all sent within request-timeout", async () => {
