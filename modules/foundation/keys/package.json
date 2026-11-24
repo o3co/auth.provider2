@@ -31,6 +31,9 @@
 		"vitest": "5.0.5"
 	},
 	"takenBy": {
+		"accessTokenSigning": [
+			"@mod/tokens"
+		],
 		"./holder": [
 			"@mod/keys-kms",
 			"@mod/keys-local"

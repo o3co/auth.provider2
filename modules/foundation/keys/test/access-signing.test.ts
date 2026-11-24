@@ -174,4 +174,26 @@ describe("accessTokenSigning", () => {
 		]);
 		await expect(boot(true)).resolves.toBeDefined();
 	});
+
+	it("is taken by tokens alone: another module naming it in its takes refuses boot, whatever it declares", async () => {
+		const taking = (name: string) =>
+			defineModule({ name, replicaSafe: true, takes: [accessTokenSigning] }, (m) => [
+				m.contribute(stances).by(() => ({
+					promise: promiseNames.clientToken,
+					holds: true,
+					by: name,
+				})),
+			]);
+		const boot = (name: string) =>
+			assemble({
+				modules: [keysModule, testHolder(held), taking(name)],
+				config: { ...kernelConfig(), ...rotated },
+				runtime,
+			});
+		const refused = await boot("intruder").catch((error: unknown) => error);
+		expect((refused as BootRefused).refusals).toEqual([
+			{ where: "intruder", reason: "keys.access-signing is taken by tokens alone" },
+		]);
+		await expect(boot("tokens")).resolves.toBeDefined();
+	});
 });

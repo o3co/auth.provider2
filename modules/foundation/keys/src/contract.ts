@@ -112,8 +112,12 @@ export interface AccessTokenSigning {
 	verify(token: string): Promise<VerifyResult>;
 }
 
-/** Taken only by a module that declares where it stands on the promises. */
+/**
+ * Taken by `tokens` alone, so no other module of a composition signs or verifies an access token,
+ * and only as it declares where it stands on the promises.
+ */
 export const accessTokenSigning = contract<AccessTokenSigning>("keys.access-signing", {
+	takenBy: ["tokens"],
 	takersContribute: stances,
 });
 
