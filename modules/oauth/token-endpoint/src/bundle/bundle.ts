@@ -1,10 +1,12 @@
 import { createHash } from "node:crypto";
+import { clientRules } from "@mod/authority-rules";
 import type { HttpRequest } from "@mod/http";
 import { isUnavailable, Unavailable } from "@mod/kernel";
 import type { Binding } from "@mod/sender-binding";
 import type {
 	AccessGrant,
 	AccessTokenIssuance,
+	IssuanceRefused,
 	IssuanceRequest,
 	Issued,
 	IssueLimits,
@@ -54,7 +56,7 @@ export interface BundleParts {
 	/** A preimage's plaintext digest, as the log's append names it. */
 	readonly digest: (preimage: Preimage) => string;
 	readonly issuance: Pick<AccessTokenIssuance, "admits" | "prepare" | "sign">;
-	/** An op id's ground where the request carries no evidence: fresh each time. */
+	/** An op id's ground on a person's flow where the request carries no evidence: fresh each time. */
 	readonly fresh: () => string;
 	/** Waits before the `look`-th look again at the bundle's judgment. */
 	readonly pause: (look: number) => Promise<void>;
@@ -62,13 +64,43 @@ export interface BundleParts {
 	readonly looks: number;
 }
 
-/** One bundle asked: its access token's request and limits, the request's evidence, its root's reference. */
+/** One bundle asked: its access token's request and limits, the request's evidence, its root's reference, its client's registry version. */
 export interface BundleAsk {
 	readonly request: IssuanceRequest;
 	readonly limits: IssueLimits;
 	readonly evidence: Evidence;
 	readonly root?: string;
+	/** The registry version the client's record came from, where its source names one. */
+	readonly version?: number;
 }
+
+/** A client's own token refused before its op is decided, or once its evidence is found used. */
+const refusedFor = (reason: string, description: string): IssuanceRefused => ({
+	kind: "refused",
+	policy: "token-endpoint",
+	reason,
+	description,
+});
+const noEvidence = refusedFor(
+	"evidence",
+	"a client's own token is issued to a client of a registry version, on its assertion and DPoP proof, one each",
+);
+const usedEvidence = refusedFor("evidence_used", "the client's assertion or DPoP proof is used");
+
+/** A client's start's op id, its elements and its registry version (V23 OpIdOf, Elems); or why not. */
+function clientStartOf(ask: BundleAsk) {
+	const read = clientRules.start(ask.evidence, sha256);
+	// A client of no registry version has no root a monitor reads: nothing is decided for it.
+	if ("refused" in read || ask.version === undefined) return undefined;
+	return { op: read.op, named: { registryVersion: ask.version, elements: [...read.elements] } };
+}
+
+/**
+ * The widest the Core takes a client's evidence's times by (client-assertion's `clock-skew`, dpop's
+ * `proof-window`): a start within it took, as the rules' window is wider (transparency-local's
+ * `evidence-window`, at least 6m).
+ */
+const evidenceWindowMs = 5 * 60_000;
 
 /** How many times deciding is tried while the flow is not ready, tending it between. */
 const decideTries = 3;
@@ -113,8 +145,11 @@ export function bundling(parts: BundleParts) {
 		const admitted = await parts.issuance.admits(ask.request);
 		if (admitted.kind === "refused") return admitted;
 		const flow = flowOf(ask.request.grant);
-		const ground = ask.evidence.length > 0 ? JSON.stringify(ask.evidence) : parts.fresh();
-		const op = `start:${sha256(ground)}`;
+		// A client's op is its evidence's, checked before it is decided; a person's, as it was verified.
+		const client = flow.of === "client" ? clientStartOf(ask) : undefined;
+		if (flow.of === "client" && !client) return noEvidence;
+		const ground = () => (ask.evidence.length > 0 ? JSON.stringify(ask.evidence) : parts.fresh());
+		const op = client ? client.op : `start:${sha256(ground())}`;
 		const root = ask.root === undefined ? {} : { root: ask.root };
 		const start: Stage = {
 			kind: "start",
@@ -122,16 +157,30 @@ export function bundling(parts: BundleParts) {
 			op,
 			stage: 1,
 			last: false,
-			preimage: { v: 1, ...root, evidence: ask.evidence, content: {} },
+			...client?.named,
+			preimage: {
+				v: 1,
+				...root,
+				evidence: ask.evidence,
+				content: client ? { via: "client" } : {},
+			},
 		};
 		const prev = await decided(flow, op, parts.digest(start.preimage));
 		const started = await transparency.send({ flow, op, stage: start, prev });
-		if ("refused" in started || started.answer.result !== "accepted") {
+		if ("refused" in started) throw new Unavailable("token-endpoint");
+		// Its evidence used: refused for good; its owner does nothing, the op left to its lease's end.
+		if (started.answer.result !== "accepted") {
+			if (client && started.answer.refusal === "evidenceUsed") return usedEvidence;
 			throw new Unavailable("token-endpoint");
 		}
 		const { acceptedAt, id, position } = started.answer;
 		// Its owner closes the op without its bundle: nothing of it is signed.
 		const close = () => transparency.rebase({ flow, op, recheck: () => false }).catch(() => {});
+		// KE-C02: no bundle after a start that may not have taken by its evidence's times.
+		if (client && !clientRules.within(ask.evidence, acceptedAt, evidenceWindowMs)) {
+			await close();
+			throw new Unavailable("token-endpoint");
+		}
 		const prepared = await parts.issuance
 			.prepare(ask.request, { ...ask.limits, acceptedAt })
 			.catch(async (error: unknown) => {
@@ -145,6 +194,8 @@ export function bundling(parts: BundleParts) {
 		const digested = receipts.digestInput(prepared.headerText, prepared.claimsText);
 		if ("error" in digested)
 			throw new TypeError(`token-endpoint: a token's texts: ${digested.error}`);
+		// A client's bundle carries its token's texts, for the rules to read its claims.
+		const token = { header: prepared.headerText, claims: prepared.claimsText };
 		const bundle: Stage = {
 			kind: "bundle",
 			flow,
@@ -152,13 +203,20 @@ export function bundling(parts: BundleParts) {
 			stage: 2,
 			last: true,
 			tokens: [{ frame: "accessToken", digest: sha256(digested.input) }],
-			preimage: { v: 1, ...root, parent: id, evidence: [], content: {} },
+			preimage: {
+				v: 1,
+				...root,
+				parent: id,
+				evidence: [],
+				content: client ? { via: "client", token } : {},
+			},
 		};
 		const append = async () => {
 			const sent = await transparency.send({ flow, op, stage: bundle, prev: position });
 			if ("refused" in sent) throw new Unavailable("token-endpoint");
 			if (sent.answer.result === "accepted") return;
-			if (!sent.end) await close();
+			// A client's op, refused, is its lease's end's to leave, unless the refusal closed it.
+			if (!client && !sent.end) await close();
 			throw new Unavailable("token-endpoint");
 		};
 		await append();

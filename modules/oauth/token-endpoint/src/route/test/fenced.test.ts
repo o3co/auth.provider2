@@ -110,9 +110,7 @@ it("answers a bundle its fence passes, the fence asked once with the subject iss
 	const answered = await post("client_credentials");
 	expect(answered.status).toBe(200);
 	expect(answered.body.access_token).toEqual(expect.any(String));
-	expect(asked).toEqual([
-		{ subject: "basic", subjectKind: "client", receiptId: expect.any(String) },
-	]);
+	expect(asked).toEqual([{ subject: "basic", subjectKind: "user", receiptId: expect.any(String) }]);
 	expect(events().map((e) => e.kind)).toEqual(["token.issued"]);
 });
 

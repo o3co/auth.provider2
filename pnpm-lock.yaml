@@ -1684,6 +1684,9 @@ importers:
       '@mod/audit':
         specifier: workspace:*
         version: link:../../foundation/audit
+      '@mod/authority-rules':
+        specifier: workspace:*
+        version: link:../../foundation/authority-rules
       '@mod/client-allowance':
         specifier: workspace:*
         version: link:../client-allowance

@@ -215,7 +215,7 @@ describe("the audience a request asks for", () => {
 				handle: async ({ client, issue }) => {
 					const access = {
 						subject: client.id,
-						subjectKind: "client" as const,
+						subjectKind: "user" as const,
 						issuedTo: client.id,
 					};
 					const issued = await issue({ access: { ...access, audience: [], scope: [] } });
@@ -1124,7 +1124,7 @@ describe("token endpoint", () => {
 			{
 				grant: {
 					subject: "basic",
-					subjectKind: "client",
+					subjectKind: "user",
 					issuedTo: "basic",
 					audience: ["https://api"],
 					scope: ["read"],

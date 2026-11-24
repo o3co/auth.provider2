@@ -42,4 +42,4 @@
 - Boot is refused, naming the grant type, when a composed grant declares neither `readsAmbient` `none` nor `cookie`: the token route has no own-site policy and relies on that declaration.
 
 ## Depends on
-- `kernel`, `http`, `request-source`, `grants`, `clients`, `client-allowance`, `issuer`, `tokens`, `sender-binding`, `rate-limit`, `audit`, `transparency`, `transparency-wire`, `promises`
+- `kernel`, `http`, `request-source`, `grants`, `clients`, `client-allowance`, `issuer`, `tokens`, `sender-binding`, `rate-limit`, `audit`, `transparency`, `transparency-wire`, `authority-rules` (a client's op id), `promises`

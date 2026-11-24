@@ -46,9 +46,10 @@ export const endpointIn = async (c: BuildContext<unknown>, composed: readonly Gr
 		clients: await c.get(clients),
 		issuing: (request, verified) => {
 			const evidence = evidenceOf(request, verified);
+			const version = verified.version === undefined ? {} : { version: verified.version };
 			return {
 				admits: issuance.admits,
-				issue: (ask) => issueBundle({ ...ask, evidence }),
+				issue: (ask) => issueBundle({ ...ask, evidence, ...version }),
 				revokeReferenced: checking.revokeReferenced,
 			};
 		},

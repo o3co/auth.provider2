@@ -118,7 +118,12 @@ export interface EndpointParts {
 	readonly clients: Clients;
 	readonly issuing: (
 		request: HttpRequest,
-		verified: { readonly binding?: Binding; readonly assertion: boolean },
+		verified: {
+			readonly binding?: Binding;
+			readonly assertion: boolean;
+			/** The registry version the client's record came from, where its source names one. */
+			readonly version?: number;
+		},
 	) => Issuing;
 	readonly fencing: IssuanceFencing;
 	readonly told: readonly SessionIssuance[];
@@ -316,6 +321,7 @@ export function tokenEndpoint(parts: EndpointParts): Pick<Route, "handle" | "una
 			issuing: issuing(request, {
 				...(binding ? { binding } : {}),
 				assertion: authenticated.kind === "authenticated" && authenticated.assertion === true,
+				...(client.version === undefined ? {} : { version: client.version }),
 			}),
 			authenticated: verified,
 			identified: identifiedBy,

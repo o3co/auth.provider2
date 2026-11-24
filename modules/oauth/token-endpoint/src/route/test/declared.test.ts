@@ -55,7 +55,7 @@ const limited: Grant = {
 async function serve() {
 	const types = ["urn:test:own", "urn:test:mismatch", "urn:test:limited", "urn:test:swap"];
 	const parts = defineModule({ name: "parts", replicaSafe: true, takes: [] }, (m) => [
-		m.contribute(grants).by(() => issuing("urn:test:own", "client", "client")),
+		m.contribute(grants).by(() => issuing("urn:test:own", "user", "user")),
 		m.contribute(grants).by(() => issuing("urn:test:mismatch", "user", "client")),
 		m.contribute(grants).by(() => limited),
 		m.contribute(grants).by(() => swapping),

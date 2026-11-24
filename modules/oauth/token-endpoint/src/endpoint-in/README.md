@@ -13,7 +13,7 @@ Internal module of `token-endpoint`: the endpoint's handler, built over what the
 
 ## Invariants
 - A grant is found by its grant type; nothing else is decided here.
-- The owner looks at its bundle's judgment for about 3 s, its waits growing from 10 ms to 200 ms. An op id's fresh ground is random, counted on the instance besides.
+- The owner looks at its bundle's judgment for about 3 s, its waits growing from 10 ms to 200 ms. A person's op id's fresh ground is random, counted on the instance besides.
 
 ## Depends on
 - `kernel` (the build context), `audit`, `clients`, `grants`, `sender-binding`, `tokens`, `transparency`; `route`'s handler, `bundle`.

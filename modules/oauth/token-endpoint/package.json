@@ -12,6 +12,7 @@
 	},
 	"dependencies": {
 		"@mod/audit": "workspace:*",
+		"@mod/authority-rules": "workspace:*",
 		"@mod/client-allowance": "workspace:*",
 		"@mod/clients": "workspace:*",
 		"@mod/grants": "workspace:*",

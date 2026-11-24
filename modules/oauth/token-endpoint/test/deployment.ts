@@ -47,8 +47,9 @@ const transparencyInMemory = defineModule(
 );
 
 /**
- * The client credentials grant (RFC 6749 §4.4) as a fixture, as `client-credentials` serves it: a
- * confidential client takes a token for itself, within its allowance, in one bundle on its own flow.
+ * The client credentials grant (RFC 6749 §4.4) as a fixture: a confidential client takes a token
+ * within its allowance, in one bundle, its subject a person's named after the client. A client's own
+ * flow takes its assertion and DPoP proof, which `client-credentials`' own tests send.
  */
 export const clientTokens = (issuer: string): Grant => ({
 	grantType: "client_credentials",
@@ -64,7 +65,7 @@ export const clientTokens = (issuer: string): Grant => ({
 		);
 		if (asked.kind === "error") return asked;
 		const { audience } = asked;
-		const access = { subject: client.id, subjectKind: "client" as const, issuedTo: client.id };
+		const access = { subject: client.id, subjectKind: "user" as const, issuedTo: client.id };
 		const issued = await issue({ access: { ...access, audience, scope } });
 		if (issued.kind === "refused") return issued;
 		const { token, tokenType, expiresIn } = issued.access;
@@ -116,14 +117,14 @@ export const endpointConfig = ({
 export const basicOf = (id: string, secret: string) =>
 	`Basic ${Buffer.from(`${id}:${secret}`).toString("base64")}`;
 
-/** A grant's answer `body`, its token issued through `issue` under the client, as a grant makes every credential it answers. */
+/** A grant's answer `body`, its token issued through `issue` under a subject named after the client, as a grant makes every credential it answers. */
 export const answered = async (
 	{ client, issue }: Pick<GrantInput, "client" | "issue">,
 	body: Readonly<Record<string, unknown>>,
 ) => {
 	const access = {
 		subject: client.id,
-		subjectKind: "client" as const,
+		subjectKind: "user" as const,
 		issuedTo: client.id,
 		audience: [],
 		scope: [],
