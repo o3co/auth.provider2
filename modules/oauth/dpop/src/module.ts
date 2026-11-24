@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { issuer, metadata } from "@mod/issuer";
 import { defineModule, setting } from "@mod/kernel";
-import { secretBytes } from "@mod/keys";
+import { rs256Deprecated, secretBytes } from "@mod/keys";
 import { rateLimit } from "@mod/rate-limit";
 import { senderBindings } from "@mod/sender-binding";
 import { z } from "zod";
@@ -88,10 +88,6 @@ const section = z.strictObject({
 		}),
 });
 
-/** Why RS256 is deprecated: the operator's choice, yet said at every start where the section names it. */
-const rs256Reason =
-	"RS256 is deprecated: a 2048-bit RSA key gives about 112 bits of strength, padded by PKCS#1 v1.5, and it is outside FAPI 2.0, which takes PS256, ES256 and EdDSA; ES256 is recommended";
-
 /** Kept longer than any proof is accepted by this much, so clock differences never let one back. */
 const clockAllowanceMs = 60_000;
 
@@ -109,8 +105,9 @@ export default defineModule(
 					reason: "no nonce is asked, so a proof made ahead is taken within its window",
 				});
 			}
+			// The operator's choice, yet said at every start, in keys' words.
 			if (c.section.algorithms.includes("RS256")) {
-				c.log.warn("dpop.rs256_deprecated", { reason: rs256Reason });
+				c.log.warn("dpop.rs256_deprecated", { reason: rs256Deprecated });
 			}
 			// The section holds a secret wherever a nonce is asked.
 			const asked =

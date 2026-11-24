@@ -15,6 +15,7 @@ import {
 	Unavailable,
 } from "@mod/kernel";
 import { quietRuntime, recordingLog, takesUnused, unavailableSwitch } from "@mod/kernel/testing";
+import { rs256Deprecated } from "@mod/keys";
 import { type RateLimit, rateLimit } from "@mod/rate-limit";
 import { rateLimitStandIn } from "@mod/rate-limit/testing";
 import { memoryRecords } from "@mod/records/testing";
@@ -956,7 +957,7 @@ it("warns at every start where the section names RS256, and not where it does no
 	};
 	const lines = await warned(["ES256", "RS256"]);
 	expect(lines.map((line) => line.level)).toEqual(["warn"]);
-	expect(lines[0]?.fields.reason).toMatch(/112 bits.*PKCS#1 v1\.5.*FAPI 2\.0/);
+	expect(lines[0]?.fields).toEqual({ reason: rs256Deprecated });
 	expect(await warned(["ES256", "PS256"])).toEqual([]);
 	expect(await warned()).toEqual([]);
 });

@@ -14,7 +14,7 @@
 - Store interface for spent proofs, `spentProofs`: save a name for a lifetime, answering `created` or `exists`.
   - Requirements (`spentProofsNeeds`): no eviction, survives a crash, never rolled back by failover.
   - Its contract test `spentProofsContract`, and the section for tests, `dpopConfig` (`./testing`).
-- Operator section `dpop`: `algorithms` (ES256, PS256 and EdDSA by default, FAPI 2.0's; ES384 and RS256 only where named, RS256 deprecated: warned of at every start, `dpop.rs256_deprecated`, as about 112 bits, PKCS#1 v1.5 and outside FAPI 2.0), `proof-window`, `nonce`, `proofs` in `proofs-window` (default 60 in `1m`), times written with their unit; its keys are in the configuration reference.
+- Operator section `dpop`: `algorithms` (ES256, PS256 and EdDSA by default, FAPI 2.0's; ES384 and RS256 only where named, RS256 deprecated: warned of at every start, `dpop.rs256_deprecated`, in `keys`' words `rs256Deprecated`), `proof-window`, `nonce`, `proofs` in `proofs-window` (default 60 in `1m`), times written with their unit; its keys are in the configuration reference.
   - `nonce`: `required`: `as` by default, asked at the token endpoint, where a token is bound; `as+rs`, at resources too, is no default, as a resource server outside this provider would have to ask it as well; `never` is warned of at every start, `dpop.nonce_not_asked`; `ttl`; `secret`, then required.
 
 ## Invariants
