@@ -11,6 +11,7 @@ import storeModule from "@mod/store/module";
 import { storeConfig } from "@mod/store/testing";
 import { type Stage, transparencyLog } from "@mod/transparency";
 import { type Flow, opIds } from "@mod/transparency-wire";
+import { keyThumbprint } from "@mod/webauthn";
 import webauthnModule from "@mod/webauthn/module";
 import {
 	type RequestOptions,
@@ -19,7 +20,6 @@ import {
 	testOrigin,
 	webauthnConfig,
 } from "@mod/webauthn/testing";
-import { cose, decodeCredentialPublicKey } from "@simplewebauthn/server/helpers";
 import { logStore, logStoreOver } from "../../src/contract.ts";
 import transparencyLocal from "../../src/module.ts";
 
@@ -108,6 +108,7 @@ const ceremonies = testCeremonies({
 	name: "RP",
 	origins: [testOrigin],
 	topOrigins: [],
+	algorithms: ["ES256", "EdDSA", "RS256"],
 });
 const screen = { e_enc: "ZW5j", e_sig: { kty: "EC", crv: "P-256", x: "eA", y: "eQ" } };
 const fresh = () => randomBytes(32).toString("base64url");
@@ -125,9 +126,9 @@ async function signed(world: World, payload: Record<string, unknown>, now: numbe
 	return made.jws;
 }
 
-/** A passkey of the authenticator, as the rules name it: its id and its uncompressed point. */
-export async function passkey() {
-	const authenticator = softwareAuthenticator();
+/** A passkey of the authenticator, of the algorithm given (ES256 unless named), as the rules name it: its id and its COSE_Key. */
+export async function passkey(algorithm: "ES256" | "EdDSA" | "RS256" = "ES256") {
+	const authenticator = softwareAuthenticator({ algorithm });
 	const challenge = fresh();
 	const handle = fresh();
 	const options = ceremonies.creation(challenge, { handle, name: "sam" }, []);
@@ -138,14 +139,6 @@ export async function passkey() {
 		handle,
 	);
 	if (attested.kind !== "attested") throw new Error(attested.reason);
-	const cose_ = decodeCredentialPublicKey(
-		Buffer.from(attested.credential.publicKey, "base64url"),
-	) as Map<number, unknown>;
-	const point = Buffer.concat([
-		Buffer.from([4]),
-		cose_.get(cose.COSEKEYS.x) as Uint8Array,
-		cose_.get(cose.COSEKEYS.y) as Uint8Array,
-	]);
 	const credential = attested.credential;
 	/** Its assertion over a statement, as the rules ask: the get challenge's digest, at `origin`. */
 	const asserts = (statement: string, origin = testOrigin) => {
@@ -153,7 +146,7 @@ export async function passkey() {
 		const request = ceremonies.request(asked, [credential]) as RequestOptions;
 		return JSON.stringify(authenticator.get(request, { origin }));
 	};
-	return { credential: credential.id, publicKey: point.toString("base64url"), point, asserts };
+	return { credential: credential.id, publicKey: credential.publicKey, asserts };
 }
 export type Passkey = Awaited<ReturnType<typeof passkey>>;
 
@@ -178,7 +171,12 @@ export async function firstKey(
 				ct_hash: "ct",
 				subject: flow.id,
 				kg: 0,
-				options: { user_id: "u", rp_id: "rp.example", exclude_credentials: [] },
+				options: {
+					user_id: "u",
+					rp_id: "rp.example",
+					exclude_credentials: [],
+					algorithms: [-7, -8, -257],
+				},
 			},
 		},
 		p.now,
@@ -190,7 +188,7 @@ export async function firstKey(
 			purpose: "possession",
 			possession: {
 				creation_hash: digest(creation),
-				key_hash: digest(key.point),
+				key_jkt: keyThumbprint(key.publicKey)?.jkt,
 				credential_id: key.credential,
 				reservation_id: "res-1",
 			},

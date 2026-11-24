@@ -2,7 +2,7 @@
 
 ## Responsibilities
 - Provides `transparency`'s log axis inside the Core (t0): each flow's records in its own store interface, positions counted by the store, acceptance times from the appending replica's kernel clock.
-- Judges each record as it is placed (j0), running `authority-rules` with the Core ring's verification (`keys`), passkey assertions (`webauthn`) and SHA-256.
+- Judges each record as it is placed (j0), running `authority-rules` with the Core ring's verification (`keys`), passkey assertions and keys' thumbprints (`webauthn`, every algorithm a passkey may be of) and SHA-256.
 - Declares where that leaves the promise a log and a monitor outside the Core would hold.
 
 ## Not here

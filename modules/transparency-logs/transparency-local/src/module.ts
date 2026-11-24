@@ -4,7 +4,7 @@ import { keys } from "@mod/keys";
 import { passkeys } from "@mod/passkeys";
 import { promiseNames, stances } from "@mod/promises";
 import { transparencyLog } from "@mod/transparency";
-import { ceremonies } from "@mod/webauthn";
+import { ceremonies, keyThumbprint } from "@mod/webauthn";
 import { logStore } from "./contract.ts";
 import { localJudging } from "./judging.ts";
 import { localLog } from "./log.ts";
@@ -44,6 +44,7 @@ export default defineModule(
 						verifyJws: (jws, keySet) => ring.verifyJws(jws, keySet),
 						verifyAssertion: checking.verifyAssertion,
 						digest: (data) => createHash("sha256").update(data).digest("base64url"),
+						keyThumbprint,
 					},
 					// t0 names no version and opens every preimage itself: no window, no retry to wait out.
 					context: {

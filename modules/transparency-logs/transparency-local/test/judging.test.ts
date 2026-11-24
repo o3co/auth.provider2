@@ -28,6 +28,21 @@ describe("transparency-local's judgment (j0)", () => {
 		expect(at?.changes).toBeUndefined();
 	});
 
+	it.each(["EdDSA", "RS256"] as const)(
+		"judges a first key of %s by its COSE_Key and thumbprint as it judges ES256's",
+		async (algorithm) => {
+			const clock = testClock();
+			const world = await boot({ clock });
+			const stage = await firstKey(world, subjectFlow(), await passkey(algorithm), {
+				now: clock.now(),
+			});
+			expect((await placed(world, stage))?.finding).toEqual({
+				verdict: "unsupported",
+				outcome: "took",
+			});
+		},
+	);
+
 	it("judges forged a first key whose possession another key asserts", async () => {
 		const clock = testClock();
 		const world = await boot({ clock });
