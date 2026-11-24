@@ -123,6 +123,20 @@ describe("each operation over HTTP", () => {
 			"seq",
 			"body",
 			"sig",
+			"enc",
+			"ct",
+		]);
+		// Per stage: a registration's body and signature, or a sealed delete's or rename's enc and ct
+		// (V24), its body and signature inside; each may be empty on the wire, the Core holding the mix.
+		expect(
+			requests.continue.fields
+				.filter((f) => ["body", "sig", "enc", "ct"].includes(f.name))
+				.map((f) => [f.name, f.min, f.max]),
+		).toEqual([
+			["body", 0, 8192],
+			["sig", 0, 64],
+			["enc", 0, 65],
+			["ct", 0, 2064],
 		]);
 		expect(requests.continue.fields.find((f) => f.name === "seq")).toMatchObject({ values: 17 });
 		expect(requests.continue.fields.find((f) => f.name === "statement")).toMatchObject({

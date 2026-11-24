@@ -200,8 +200,10 @@ export const requests = Object.freeze({
 			field("statement", "jws", 1, 8192),
 			field("stage", "enum", 1, 1, 3),
 			field("seq", "enum", 1, 1, 17),
-			field("body", "utf8", 1, 8192),
-			field("sig", "bytes", 64, 64),
+			field("body", "utf8", 0, 8192),
+			field("sig", "bytes", 0, 64),
+			field("enc", "bytes", 0, 65),
+			field("ct", "bytes", 0, 2064),
 		] as const),
 	}),
 	keyFinish: Object.freeze({

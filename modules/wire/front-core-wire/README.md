@@ -7,7 +7,6 @@
 - Encoding and decoding frames: `front-core-codec`, the one implementation both sides use.
 - Reading what a field means (a JAR, an assertion, a DPoP proof): the Core's verifier of each.
 - The connection, TLS and who may reach the Core, and reading or writing HTTP: the http axis's adapters.
-- Sealing `continue`'s body to the Core, so the Front sees no delete's or rename's target or label (as the keys' list it answers is sealed): the owner's answer pending. Until then the body crosses unsealed, E_sig keeping it whole.
 
 ## Offers
 - `version`, `headerLength`, `maxRequestBody` and `maxReplyBody`: the frame's version byte, its header's length, and its bodies' limits.
@@ -25,7 +24,7 @@
 - Every operation is a POST: one that would need another method is not opened to the Front.
 - Every operation the screen calls names its answer's form, one per value where an enum field decides it (`continue`: `register` a statement, `delete` and `rename` sealed). The names are sdk-core-wire's, which this wire does not depend on: a package reading both checks them.
 - The screen's key operations (§C): `firstKeyRecover` (a lost creation asked again), `approvalStart` and `approvalFinish` (`passkey-add`, `passkey-manage`), `continue` (`register`, `delete`, `rename`) and `keyFinish` (a key change's possession and the new key's assertion, on any path). `firstKeyContinue` and `firstKeyFinish` stay until their callers move.
-- `continue` carries a sequence of 0 to 16 (0 the Core's to refuse), a statement up to 8192 (a creation's excluded credentials among it), and a body: a registration's response as sent, or a delete's or rename's canonical text, whose UTF-8 the continuation's hash covers.
+- `continue` carries a sequence of 0 to 16 (0 the Core's to refuse), a statement up to 8192 (a creation's excluded credentials among it), and per stage: `register` a body (the registration's response as sent) and `sig`, no `enc` nor `ct`; `delete` and `rename` `enc` (65) and `ct` (2064) alone, the body and its `sig` sealed inside (V24), `body` and `sig` empty. Any other mix, or an empty field a stage needs, is the Core's to refuse.
 - A field that is "one of" another (the login's start's `request` and `requestUri`) is of length 0 alone on the wire, which reads lengths only: the Core refuses both or neither.
 - Every operation's first field, `source`, is the source the Front determined (its address, as its trusted proxies tell it), empty where it could not: the Front's declaration, which the Core counts by only while the Front is honest.
 
