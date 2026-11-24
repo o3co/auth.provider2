@@ -7,13 +7,14 @@
 ## Not here
 - The decisions up to issuing a code, and the approval it is issued from (`authorize`, `approvals`). The token format and how tokens are revoked (`tokens`). Recording the bundle on the log, under its start (`token-endpoint`).
 - An ID token: no maker is composed yet, so a code whose scope asks for one is answered `invalid_scope`, never redeemed for an access token alone.
-- Open for later stages, in the bundle and the voiding: the ID token's request (nonce, the code's digest, the login facts) with oidc, its c_hash taken from `digestOf`; the refresh token and its family's revocation on a reuse with refresh; a redemption's pin and report with claims-selection.
+- Open for later stages, in the bundle and the voiding: the ID token's request (nonce, the code's digest, the login facts) with oidc, its c_hash taken from `digestOf`; the refresh token and its family's revocation on a reuse with refresh.
 
 ## Offers
 - `codes`, for `authorize` only:
   - `issue`: client, redirect URI, PKCE challenge, nonce, scope, audience, session handle, subject, optional acr met, the root's reference, and the binding asked for ahead → code, 32 random bytes in base64url (43 characters). It checks again the session enters at use with that subject, the client may use the grant with that scope and audience, the challenge's shape and that a root is named; the authentication context comes from the session.
   - `digestOf` (a code) → its SHA-256 in base64url, never the code; `lifetimeMs`, how long a code lives.
 - A session closed since it was read throws `Unavailable`, for the caller to answer as it can; any other contradiction is a `TypeError`. `challengeShape` is offered for a request to be checked by.
+- Extension point `redemptionHooks` (keyed): `pin` (the redemption, the code's digest as `digestOf` gives it; its subject) before the token is issued, `redeemed` (redemption, subject, scope, the token's id and end) once it passed every check. A hook that fails voids the code.
 - The `authorization_code` grant (`codeGrantType`, taking its audience from the request) to `grants`' grant extension point.
 - Store interfaces (`codeStore`, `redemptionRecords`, `voidList`), their needs (`codeStoreNeeds`) and `storedRecordMaxMs`.
   - Wired by the assembly, never shown what a record holds: codes by a name made from the code, created by the code for its subject (rewrite from the current contents, answering before and after); each redemption record by that name, for its subject (create, read, rewrite; `redemption-record`); the void list (add, done, go through in order).

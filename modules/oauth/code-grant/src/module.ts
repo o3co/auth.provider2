@@ -12,6 +12,7 @@ import {
 	codeGrantType,
 	codeStore,
 	codes,
+	redemptionHooks,
 	redemptionRecords,
 	voidList,
 } from "./contract.ts";
@@ -30,6 +31,7 @@ const takes = [
 	issuer,
 	accessTokens,
 	sessionIssuances,
+	redemptionHooks,
 ];
 
 // Safe on many instances: every instance runs the sweep over the shared void list, and settling a void twice
@@ -125,6 +127,7 @@ export default defineModule({ name: "code-grant", replicaSafe: true, section, ta
 			redemptionRecords: records,
 			sessions: await c.get(sessions),
 			settle: voids.settle,
+			hooks: await c.collect(redemptionHooks),
 			now: c.clock.now,
 		});
 	}),

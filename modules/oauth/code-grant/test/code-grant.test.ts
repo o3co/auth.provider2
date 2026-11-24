@@ -49,6 +49,9 @@ import {
 	type CodeStore,
 	codeStore,
 	codes,
+	type Redeemed,
+	type RedemptionHook,
+	redemptionHooks,
 	redemptionRecords,
 	type StoredCode,
 	type StoredRedemptionRecord,
@@ -931,4 +934,90 @@ it("takes all its module names", async () => {
 	const { input } = assembly();
 	// Its own entry alone: another module's takes this composition leaves unused are its owner's to check.
 	expect((await takesUnused(input))["code-grant"]).toBeUndefined();
+});
+
+describe("the redemption hooks", () => {
+	/** A hook noting what it is told, failing where told to. */
+	const hooked = (fail: { pin?: boolean; redeemed?: boolean } = {}) => {
+		const told: string[] = [];
+		const seen: Redeemed[] = [];
+		const hook: RedemptionHook = {
+			name: "noting",
+			pin: async (redemption, subject) => {
+				told.push(`pin ${redemption} ${subject}`);
+				if (fail.pin) throw new Unavailable("hook");
+			},
+			redeemed: async (redeemed) => {
+				seen.push(redeemed);
+				if (fail.redeemed) throw new Unavailable("hook");
+			},
+		};
+		const module = defineModule({ name: "noting", replicaSafe: true, takes: [] }, (m) => [
+			m.contribute(redemptionHooks).by(() => hook),
+		]);
+		return { told, seen, module };
+	};
+
+	it("pins the redemption by the code's digest for its subject, and tells it of the token issued", async () => {
+		const h = hooked();
+		const s = await serve({ extra: [h.module] });
+		const code = await s.issue();
+		const answered = await s.redeem(code);
+		expect(answered.status).toBe(200);
+		const redemption = s.app.get(codes).digestOf(code);
+		expect(h.told).toEqual([`pin ${redemption} alice`]);
+		expect(h.seen).toEqual([
+			{
+				redemption,
+				subject: "alice",
+				scope: ["read"],
+				access: { id: expect.any(String), expiresAt: expect.any(Number) },
+			},
+		]);
+	});
+
+	/** Redeems through the grant directly, counting each issue and keeping the token it issued. */
+	const redeemCounting = async (s: Served, code: string) => {
+		const grant = s.app.get(grantsSeen).find((g) => g.grantType === "authorization_code");
+		if (!grant) throw new Error("no authorization_code grant");
+		const issuing = { ...s.app.get(accessTokenIssuance), ...s.app.get(accessTokens) };
+		const params = { code, redirect_uri: "https://app.example/cb", code_verifier: verifier };
+		const input = grantInput(issuing, grant, directClient, params);
+		const issued: string[] = [];
+		const outcome = await grant
+			.handle({
+				...input,
+				issue: async (request, limits) => {
+					const answer = await input.issue(request, limits);
+					if (answer.kind === "issued") issued.push(answer.access.token);
+					return answer;
+				},
+			})
+			.catch((error: unknown) => error);
+		return { outcome, issued };
+	};
+
+	it("voids the code where a pin fails, issuing nothing", async () => {
+		const h = hooked({ pin: true });
+		const s = await serve({ extra: [h.module] });
+		const code = await s.issue();
+		const { outcome, issued } = await redeemCounting(s, code);
+		expect(isUnavailable(outcome)).toBe(true);
+		expect(issued).toEqual([]);
+		expect(h.seen).toEqual([]);
+		expect(keptOf(s, code)?.void).toBe(true);
+		expect(redeemedOf(s, code)?.token).toBeUndefined();
+	});
+
+	it("voids the code where the hook told of the token fails, revoking the token", async () => {
+		const h = hooked({ redeemed: true });
+		const s = await serve({ extra: [h.module] });
+		const code = await s.issue();
+		const { outcome, issued } = await redeemCounting(s, code);
+		expect(isUnavailable(outcome)).toBe(true);
+		expect(issued).toHaveLength(1);
+		expect(h.seen[0]?.access.id).toBeDefined();
+		expect(keptOf(s, code)?.void).toBe(true);
+		expect(await revoked(s, issued[0] as string)).toBe(true);
+	});
 });

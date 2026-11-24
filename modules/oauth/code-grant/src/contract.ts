@@ -1,4 +1,4 @@
-import { contract } from "@mod/kernel";
+import { contract, extensionPoint } from "@mod/kernel";
 import type { Binding } from "@mod/sender-binding";
 
 export interface CodeFacts {
@@ -38,5 +38,33 @@ export const codeGrantType = "authorization_code";
 
 /** RFC 7636: an S256 challenge is 43 base64url characters; a code is issued only for one of this shape. */
 export const challengeShape = /^[A-Za-z0-9_-]{43}$/;
+
+/** A redemption that issued its token, as a hook is told of it. */
+export interface Redeemed {
+	/** The redemption's name: the code's digest, as `digestOf` gives it to whoever issued the code. */
+	readonly redemption: string;
+	readonly subject: string;
+	readonly scope: readonly string[];
+	/** The access token issued: its id and its end (epoch ms). */
+	readonly access: { readonly id: string; readonly expiresAt: number };
+}
+
+/** What runs with a redemption, from a module keeping something for the code's tokens. */
+export interface RedemptionHook {
+	readonly name: string;
+	/** Once the code is used up and before its token is issued, with its subject; a failure voids the code, issuing nothing. */
+	pin(redemption: string, subject: string): Promise<void>;
+	/**
+	 * Once its token passed every check, before it is answered: the token's bundle is on the log,
+	 * taken in and signed by then, so a failure voids the code and revokes a token never answered.
+	 */
+	redeemed(redeemed: Redeemed): Promise<void>;
+}
+
+/** The hooks every redemption runs, keyed by name. */
+export const redemptionHooks = extensionPoint<RedemptionHook>("code-grant.redemption-hooks", {
+	multiplicity: "keyed",
+	keyOf: (hook) => hook.name,
+});
 
 export * from "./store.ts";

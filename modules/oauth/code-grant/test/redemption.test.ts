@@ -46,6 +46,7 @@ it("ends the token no later than the allowance before its redemption record ends
 		sessions: {
 			entryOf: async () => ({ kind: "entered", endsAt: Number.POSITIVE_INFINITY }),
 		} as unknown as Sessions,
+		hooks: [],
 		settle: async () => {},
 		now: () => now,
 	});

@@ -3,8 +3,8 @@ import { sameSecret, Unavailable } from "@mod/kernel";
 import { sameBinding } from "@mod/sender-binding";
 import type { Sessions } from "@mod/session";
 import { type AccessGrant, referenceOf } from "@mod/tokens";
-import { type CodeRecord, fromStored, s256, toStored, verifierShape } from "./codes.ts";
-import { codeGrantType } from "./contract.ts";
+import { type CodeRecord, digestOf, fromStored, s256, toStored, verifierShape } from "./codes.ts";
+import { codeGrantType, type RedemptionHook } from "./contract.ts";
 import {
 	createRedemptionRecord,
 	isRedeemed,
@@ -44,9 +44,19 @@ export function codeGrant(parts: {
 	readonly redemptionRecords: RedemptionRecords;
 	readonly sessions: Sessions;
 	readonly settle: (name: string) => Promise<void>;
+	readonly hooks: readonly RedemptionHook[];
 	readonly now: () => number;
 }): Grant {
-	const { store, redemptionRecords, sessions, settle, now } = parts;
+	const { store, redemptionRecords, sessions, settle, hooks, now } = parts;
+	/** Runs each hook; one that fails voids the code, so what was issued is revoked, and the failure goes on. */
+	const runHooks = async (name: string, run: (hook: RedemptionHook) => Promise<void>) => {
+		try {
+			for (const hook of hooks) await run(hook);
+		} catch (error) {
+			await settle(name);
+			throw error;
+		}
+	};
 	/** Whether the code's session enters at use: not closed or ended. */
 	const enters = async (session: string) => (await sessions.entryOf(session)).kind === "entered";
 	return {
@@ -118,6 +128,8 @@ export function codeGrant(parts: {
 			}
 			// Only this request turned the code consumed: a record there already is no state it knows.
 			if (made !== "created") throw new Unavailable("code-grant");
+			const redemption = digestOf(code);
+			await runHooks(name, (hook) => hook.pin(redemption, record.subject));
 			// One bundle, rooted in the code's approval. The token ends no later than its session, nor
 			// later than the allowance before its record's end.
 			const allowed = await issue(
@@ -140,6 +152,9 @@ export function codeGrant(parts: {
 				await settle(name);
 				return refused;
 			}
+			const access = { id: issued.id, expiresAt: issued.expiresAt };
+			const redeemed = { redemption, subject: record.subject, scope: record.scope, access };
+			await runHooks(name, (hook) => hook.redeemed(redeemed));
 			return {
 				kind: "issued",
 				body: {
