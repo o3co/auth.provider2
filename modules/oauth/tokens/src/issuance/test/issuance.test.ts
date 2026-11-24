@@ -1,6 +1,7 @@
 import { addedClaimsLimits, addedClaimsWith } from "@mod/added-claims";
 import { isUnavailable } from "@mod/kernel";
 import { describe, expect, it } from "vitest";
+import { checkClaims } from "../../claims/claims.ts";
 import type { IssuancePolicy, IssuanceRequest } from "../../contract.ts";
 import { section } from "../../section.ts";
 import { issuing, judging, type MadeAccess } from "../issuance.ts";
@@ -154,9 +155,10 @@ describe("the subject's kind and the names tokens writes, as issuing reads them"
 		});
 	});
 
-	it("refuses an added claim taking a name tokens writes, which added-claims does not reserve", async () => {
+	it("refuses an added claim taking a name tokens writes, by its own table whatever added-claims reserves", async () => {
 		for (const name of ["o3co_subject_kind", "txr"]) {
-			await expect(admits(asked({ claims: { [name]: "x" } }))).rejects.toThrow(
+			await expect(admits(asked({ claims: { [name]: "x" } }))).rejects.toThrow(TypeError);
+			expect(() => checkClaims(request.grant, { [name]: "x" })).toThrow(
 				`a claim tokens writes is added: ${name}`,
 			);
 		}
