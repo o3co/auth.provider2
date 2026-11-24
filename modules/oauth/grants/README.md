@@ -22,6 +22,7 @@
 - A grant says whom it issues for in what it gives `admits` and `issue`: the subject, and the subject's kind (`tokens`' `subjectKind`), `user` for a person, or `client` where the client gets a token for itself, as the client credentials grant does, its subject then the client.
 - `admits`: whether `tokens`' issuance policies allow a grant now, under the grant type, the session it comes from and `tokens`' `continuing`.
 - `issue`: asks again, then issues with the binding, and the expiry cap and lifetime the grant gives. A grant may add claims (`AccessGrant.claims`, under `added-claims`' rules).
+  - It answers each `IssuedAccess` signed, on its own: a bundle whose tokens are recorded once before any is signed, with its root's reference, is not what `GrantInput` offers.
 - A refused issuance is a value the grant returns unread; it is answered for every grant as `400 invalid_grant` with the policy's description.
 - Every credential an `issued` answer carries, additions included, is for the one subject its `issue` issued under: an answer issued under none or more than one is the grant's fault, `500`, none of it answered. Before it goes out, that subject passes `tokens`' issuance fences; a bundle refused is answered as a refused issuance, with `tokens`' description.
 - `target`: the audience `targets` answers within the grant's ceiling.
