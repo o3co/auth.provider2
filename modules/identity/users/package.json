@@ -1,0 +1,37 @@
+{
+	"name": "@mod/users",
+	"private": true,
+	"license": "Apache-2.0",
+	"type": "module",
+	"kind": "feature",
+	"asks": [
+		{
+			"line": "Users in the configuration (`users.registered`, written in the local layer).",
+			"unadapted": true
+		},
+		"`users.registered`: leave it unset where a user ledger is composed; boot refuses both."
+	],
+	"exports": {
+		".": "./src/contract.ts",
+		"./testing": "./src/testing.ts",
+		"./module": "./src/module.ts"
+	},
+	"dependencies": {
+		"@mod/erasure-extensions": "workspace:*",
+		"@mod/kernel": "workspace:*",
+		"@mod/mail-address": "workspace:*",
+		"@mod/secret-hash": "workspace:*",
+		"zod": "4.6.7"
+	},
+	"peerDependencies": {
+		"vitest": "5.0.5"
+	},
+	"peerDependenciesMeta": {
+		"vitest": {
+			"optional": true
+		}
+	},
+	"devDependencies": {
+		"vitest": "5.0.5"
+	}
+}
