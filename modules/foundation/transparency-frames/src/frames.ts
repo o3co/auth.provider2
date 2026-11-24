@@ -24,6 +24,15 @@ export const frameParts = extensionPoint<FramePart>("transparency-frames.parts",
 const wordsOf = (unit: IntentUnit) =>
 	"op" in unit ? [unit.flow.of, unit.flow.id, unit.op] : [unit.flow.of, unit.flow.id];
 const endless = (value: Json): Next<Json> => ({ value, lifetimeMs: "endless" });
+/** A key's words as written; none for a key it did not write. */
+const wordsIn = (key: string): readonly unknown[] | undefined => {
+	try {
+		const words: unknown = JSON.parse(key);
+		return Array.isArray(words) ? words : undefined;
+	} catch {
+		return undefined;
+	}
+};
 
 /**
  * The frame store over `records`, in the frames' space and each part's. Refuses through `refuse`
@@ -73,6 +82,17 @@ export function frameStoreOver(p: {
 		},
 		async flowRecord(flow) {
 			return (await held.read([flowTarget(flow)])).values[0];
+		},
+		async clientFlows(cursor) {
+			const page = await p.store.scan(p.space, cursor);
+			const flows = page.keys.flatMap((key) => {
+				const words = key.name === "record" ? wordsIn(key.partition) : undefined;
+				const [of, id, ...more] = words ?? [];
+				return of === "client" && typeof id === "string" && more.length === 0
+					? [{ of: "client" as const, id }]
+					: [];
+			});
+			return page.cursor === undefined ? { flows } : { flows, cursor: page.cursor };
 		},
 		async write(read, next, deadline) {
 			const record = (n: PartNext) => (n === undefined || "remove" in n ? n : endless(n.value));

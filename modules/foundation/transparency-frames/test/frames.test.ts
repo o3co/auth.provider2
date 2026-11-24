@@ -51,6 +51,21 @@ frameStoreContract("transparency-frames over the memory store", {
 });
 
 describe("frames over records", () => {
+	it("lists the client flows holding a record by a scan of the frames' space, none of a subject's frame or a part's record", async () => {
+		const { s, frames, part } = await storeWith();
+		const store = over(s, frames, [{ name: "p", space: part }]);
+		const client = { flow: { of: "client", id: "c1" }, op: "o1" } as const;
+		const read = await store.read(client, [{ part: "p", name: "r" }]);
+		await store.write(
+			read,
+			{ frame: { applied: 0 }, flow: ["o1"], records: [{ value: 1 }] },
+			read.now + 10_000,
+		);
+		const subject = await store.read({ flow: { of: "subject", id: "c2" } }, []);
+		await store.write(subject, { frame: { applied: 0 }, records: [] }, subject.now + 10_000);
+		expect(await store.clientFlows?.()).toEqual({ flows: [{ of: "client", id: "c1" }] });
+	});
+
 	it("refuses, naming its wiring, a store that writes no records of two partitions as one", async () => {
 		const { s, frames } = await storeWith();
 		const { batchAcross: _none, ...lacking } = s;
