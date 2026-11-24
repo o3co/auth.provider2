@@ -9,6 +9,7 @@ import { type BuildContext, defineModule } from "@mod/kernel";
 import { promiseNames, stances } from "@mod/promises";
 import { redirects, redirectsCopy } from "@mod/redirect-uris";
 import { jarReservations, requestSources, withoutPasskey } from "./contract.ts";
+import { delegationSecondsIn, delegationTakes } from "./delegation/delegation.ts";
 import { finishRoute, finishTakes, passkeyAmr } from "./finish/finish.ts";
 import { reserving } from "./jar/jar.ts";
 import { type Settings, section } from "./section.ts";
@@ -40,6 +41,7 @@ export default defineModule(
 			withoutPasskey,
 			statementItems,
 			acr,
+			...delegationTakes,
 			...finishTakes,
 		],
 	},
@@ -105,7 +107,8 @@ export default defineModule(
 		m.contribute(routes).by(async (c: Context) =>
 			finishRoute(c, {
 				issuer: (await c.get(issuer)).url,
-				delegationS: c.section["delegation-lifetime"],
+				// The delegation's length is refresh's (O27): the session ends with its family.
+				delegationS: await delegationSecondsIn(c),
 				window: { limit: c.section.requests, ms: c.section.window * 1000 },
 				// The one acr a passkey's login meets, as `acr`'s table fixes it.
 				acr: (await c.get(acr)).current(passkeyAmr),

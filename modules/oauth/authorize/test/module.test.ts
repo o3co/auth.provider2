@@ -16,6 +16,7 @@ import {
 	type Module,
 } from "@mod/kernel";
 import { quietRuntime } from "@mod/kernel/testing";
+import { delegation } from "@mod/refresh";
 import { senderBinding } from "@mod/sender-binding";
 import { sessions } from "@mod/session";
 import { accessTokenIssuance } from "@mod/tokens";
@@ -45,6 +46,7 @@ const fakes = defineModule(
 		m.provide(codes).by(() => ({ issuesIdTokens: () => false }) as never),
 		m.provide(claimsSelections).by(() => ({}) as never),
 		m.provide(acr).by(() => ({ current: () => undefined }) as never),
+		m.provide(delegation).by(() => ({ lifetimeMs: 86_400_000 })),
 		m.provide(senderBinding).by(() => ({}) as never),
 		m
 			.provide(issuer)
@@ -96,6 +98,7 @@ describe("authorize, composed", () => {
 			m.provide(codes).by(() => ({ issuesIdTokens: () => false }) as never),
 			m.provide(claimsSelections).by(() => ({}) as never),
 			m.provide(acr).by(() => ({ current: () => undefined }) as never),
+			m.provide(delegation).by(() => ({ lifetimeMs: 86_400_000 })),
 			m.provide(senderBinding).by(() => ({}) as never),
 			m
 				.provide(issuer)

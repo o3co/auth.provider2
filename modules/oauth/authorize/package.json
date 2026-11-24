@@ -27,6 +27,7 @@
 		"@mod/promises": "workspace:*",
 		"@mod/rate-limit": "workspace:*",
 		"@mod/redirect-uris": "workspace:*",
+		"@mod/refresh": "workspace:*",
 		"@mod/sdk-core-wire": "workspace:*",
 		"@mod/sender-binding": "workspace:*",
 		"@mod/session": "workspace:*",

@@ -1234,6 +1234,9 @@ importers:
       '@mod/redirect-uris':
         specifier: workspace:*
         version: link:../redirect-uris
+      '@mod/refresh':
+        specifier: workspace:*
+        version: link:../refresh
       '@mod/sdk-core-wire':
         specifier: workspace:*
         version: link:../../wire/sdk-core-wire
