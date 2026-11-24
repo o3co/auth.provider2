@@ -8,7 +8,16 @@ import {
 } from "@mod/kernel";
 import { quietRuntime, recordingLog } from "@mod/kernel/testing";
 import { describe, expect, it } from "vitest";
-import { promiseNames, promises, type Stance, stances } from "../src/contract.ts";
+import {
+	type EvidenceKind,
+	evidence,
+	evidenceKinds,
+	promiseNames,
+	promises,
+	type Stance,
+	stances,
+	trustedNames,
+} from "../src/contract.ts";
 import promisesModule from "../src/module.ts";
 
 const config = (required: readonly string[] = []) => ({
@@ -185,5 +194,163 @@ describe("the promises and their judgment", () => {
 				reason: "keys.sign is taken only by a module that contributes to promises.stances",
 			},
 		]);
+	});
+});
+
+/** A module that declares these evidence kinds. */
+const evidencing = (name: string, ...declared: readonly EvidenceKind[]): Module =>
+	defineModule({ name, replicaSafe: true, takes: [] }, (m) =>
+		declared.map((kind) => m.contribute(evidenceKinds).by(() => kind)),
+	);
+const password: EvidenceKind = {
+	kind: "password",
+	by: "password-evidence",
+	trusts: [trustedNames.password],
+	strength: { kind: "guesses", guesses: { count: 5, windowMs: 900_000 } },
+};
+const inbox: EvidenceKind = {
+	kind: "email-token",
+	by: "first-keys",
+	trusts: [trustedNames.inbox],
+	strength: { kind: "secret", bits: 256, lifetimeMs: 900_000 },
+};
+
+describe("the first key's evidence kinds, apart from the judgment", () => {
+	it("takes every strength of promises' shape, and a kind no longer composed whose keys live on", async () => {
+		const strengths: EvidenceKind["strength"][] = [
+			{ kind: "code", digits: 6, windows: 1, guesses: { count: 5, windowMs: 900_000 } },
+			{ kind: "key", userVerified: true },
+			{ kind: "issuer", issuer: "https://idp.example", acr: ["urn:example:mfa"] },
+		];
+		const declared = strengths.map((strength, i) => ({
+			kind: `kind-${i}`,
+			by: "parts",
+			trusts: [trustedNames.device],
+			strength,
+		}));
+		const past = { ...password, kind: "old-password", past: true as const };
+		const { app } = await judged([evidencing("parts", ...declared, past)]);
+		expect(
+			app
+				.get(evidence)
+				.kinds()
+				.map((k) => k.kind),
+		).toEqual(["kind-0", "kind-1", "kind-2", "old-password"]);
+	});
+
+	it("keeps a required promise held, and boots, beside the weakest evidence", async () => {
+		const holding = declaring("tokens", {
+			promise: promiseNames.clientToken,
+			holds: true,
+			by: "tokens",
+		});
+		const { app } = await judged(
+			[holding, evidencing("parts", password)],
+			[promiseNames.clientToken],
+		);
+		const held = app
+			.get(promises)
+			.judgment()
+			.find((j) => j.promise === promiseNames.clientToken);
+		expect(held?.held).toBe(true);
+	});
+
+	it("names what an evidence kind may trust, each one word of the vocabulary it owns", () => {
+		expect(Object.values(trustedNames)).toEqual(["inbox", "password", "device", "former-idp"]);
+	});
+
+	it("answers the kinds composed, by name, each as its module declares it, and none where none is", async () => {
+		const { app } = await judged([evidencing("parts", password, inbox)]);
+		expect(app.get(evidence).kinds()).toEqual([inbox, password]);
+		const [first] = app.get(evidence).kinds();
+		expect(Object.isFrozen(app.get(evidence).kinds())).toBe(true);
+		expect([first, first?.trusts, first?.strength].every((part) => Object.isFrozen(part))).toBe(
+			true,
+		);
+		expect((await judged([])).app.get(evidence).kinds()).toEqual([]);
+	});
+
+	it("writes one line per kind as it starts, apart from the promises' lines, and judges no promise by them", async () => {
+		const { app, recorded } = await judged([evidencing("parts", password)]);
+		await app.start();
+		expect(recorded.lines().filter((line) => line.event === "promises.evidence")).toEqual([
+			{
+				level: "info",
+				event: "promises.evidence",
+				fields: {
+					kind: "password",
+					by: "password-evidence",
+					trusts: "password",
+					strength: "guesses 5 per 900000 ms on each instance",
+				},
+			},
+		]);
+		expect(
+			app
+				.get(promises)
+				.judgment()
+				.every((j) => !j.held),
+		).toBe(true);
+		await app.stop();
+	});
+
+	it("refuses boot for each kind off promises' shape, where the kernel names it, and for a name declared twice", async () => {
+		const at = (kind: string, part: string) => ({
+			where: `promises.evidence-kinds:${kind}`,
+			reason: `not of promises' shape at ${part}`,
+		});
+		const weak = { kind: "guesses", guesses: { count: 0, windowMs: 1 } } as const;
+		for (const [label, modules, refusals] of [
+			[
+				"nothing trusted",
+				[evidencing("a", { ...password, trusts: [] })],
+				[at("password", "trusts")],
+			],
+			[
+				"another word",
+				[evidencing("a", { ...password, trusts: ["mailbox" as never] })],
+				[at("password", "trusts.0")],
+			],
+			[
+				"a word twice",
+				[evidencing("a", { ...password, trusts: ["password", "password"] })],
+				[at("password", "trusts")],
+			],
+			[
+				"no strength",
+				[evidencing("a", { ...password, strength: undefined as never })],
+				[at("password", "strength")],
+			],
+			[
+				"a strength of no shape",
+				[evidencing("a", { ...password, strength: "strong" as never })],
+				[at("password", "strength")],
+			],
+			[
+				"no guesses",
+				[evidencing("a", { ...password, strength: weak })],
+				[at("password", "strength.guesses.count")],
+			],
+			["a blank name", [evidencing("a", { ...password, kind: " " })], [at(" ", "kind")]],
+			[
+				"a blank module",
+				[evidencing("a", { ...password, by: "" }, { ...inbox, by: "" })],
+				[at("password", "by"), at("email-token", "by")],
+			],
+			[
+				"twice",
+				[evidencing("a", password), evidencing("b", password)],
+				[
+					{
+						where: "promises.evidence-kinds:password",
+						reason: "more than one contribution for the same key",
+					},
+				],
+			],
+		] as const) {
+			const refused = await judged([...modules]).catch((error: unknown) => error);
+			expect(BootRefused.is(refused), label).toBe(true);
+			expect((refused as BootRefused).refusals, label).toEqual(refusals);
+		}
 	});
 });
