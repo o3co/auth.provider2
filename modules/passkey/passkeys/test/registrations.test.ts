@@ -10,7 +10,7 @@ type World = Awaited<ReturnType<typeof world>>;
 /** A reservation of a new credential of s1's, verified. */
 async function verifiedIn(w: World, credential?: Credential) {
 	const c = credential ?? (await w.created());
-	const reserved = await w.reserve({ subject: "s1", credential: c });
+	const reserved = await w.reserve({ subject: "s1", credential: c, first: true });
 	if (!("reservation" in reserved)) throw new Error(reserved.refused);
 	const verified = await w.regs.verifyPending({ subject: "s1", ...reserved, ...w.asserting([c]) });
 	if (!("verification" in verified)) throw new Error(verified.refused);
@@ -115,6 +115,9 @@ describe("registrations", () => {
 		]);
 		expect(raced.filter((r) => "reservation" in r)).toHaveLength(1);
 		expect(raced.filter((r) => "refused" in r)).toEqual([{ refused: "pending" }]);
+		// The loser leaves no binding: another subject may take its credential.
+		const loser = "reservation" in raced[0] ? b : a;
+		expect(await w.reserve({ subject: "s2", credential: loser })).toHaveProperty("reservation");
 	});
 
 	it("reserves a first key only where the subject holds none, under the generation its approval names", async () => {
@@ -193,7 +196,7 @@ describe("registrations", () => {
 	it("commits only a verified reservation, by the verification it gave, registering its key", async () => {
 		const w = await world();
 		const credential = await w.created();
-		const reserved = await w.reserve({ subject: "s1", credential });
+		const reserved = await w.reserve({ subject: "s1", credential, first: true });
 		if (!("reservation" in reserved)) throw new Error("not reserved");
 		const decide = deciding({ key: keyOf(credential) });
 		const commit = (verification: string) =>
@@ -214,6 +217,14 @@ describe("registrations", () => {
 				decide: deciding({ key: keyOf(await w.created()) }),
 			}),
 		).rejects.toThrow(TypeError);
+		// A first key is approved by none, and a registration removes nothing.
+		for (const eff of [
+			{ key: { ...keyOf(credential), by: "k0" } },
+			{ key: keyOf(credential), removeKey: "k0" },
+		])
+			await expect(
+				w.regs.commit({ subject: "s1", ...reserved, ...verified, decide: deciding(eff) }),
+			).rejects.toThrow(TypeError);
 		expect(await commit(verified.verification)).toEqual({ prev: 0 });
 		expect(await commit(verified.verification)).toEqual({ refused: "open" });
 	});
@@ -227,6 +238,7 @@ describe("registrations", () => {
 		expect(await w.reserve({ subject: "s1", credential: next, retrying: r.reservation })).toEqual({
 			refused: "open",
 		});
+		expect(w.credentials.value(next.id)).not.toHaveProperty("subject");
 		w.advance(600_001);
 		expect(await w.reserve({ subject: "s1", credential: next })).toEqual({ refused: "open" });
 		await w.land(
@@ -264,11 +276,82 @@ describe("registrations", () => {
 		await w.land("s1", "rm2", keyStage(flow, "rm2", keyOf(two.credential)), 2);
 		expect(w.recordOf("s1", two.credential.id)).toBeUndefined();
 		expect(k2).toBeDefined();
-		await w.register("s1", false);
+		// Every key but the first hangs from it: the first goes only with all.
+		const three = await w.register("s1", false);
+		expect(await remove(one.credential.id, "rm3")).toEqual({ refused: "last" });
 		const pending = await w.reserve({ subject: "s1", credential: await w.created() });
 		if (!("reservation" in pending)) throw new Error("not reserved");
-		expect(await remove(one.credential.id, pending.reservation)).toEqual({ refused: "op" });
-		expect(await remove(one.credential.id, "rm3")).toEqual({ prev: 4 });
+		expect(await remove(three.credential.id, pending.reservation)).toEqual({ refused: "op" });
+		expect(await remove(three.credential.id, "rm3")).toEqual({ prev: 4 });
+	});
+
+	it("lets no late release of an old reservation unbind a newer one", async () => {
+		const w = await world();
+		const credential = await w.created();
+		const first = await w.reserve({ subject: "s1", credential, first: true });
+		if (!("reservation" in first)) throw new Error("not reserved");
+		// Between the cancel's check and its release, the same credential is reserved and registered.
+		w.credentials.beforeChange(async () => {
+			const again = await verifiedIn(w, credential);
+			const stage = keyStage(flow, again.reservation, keyOf(credential));
+			const committed = await w.regs.commit({
+				subject: "s1",
+				...again,
+				decide: deciding({ key: keyOf(credential) }, stage),
+			});
+			if (!("prev" in committed)) throw new Error(committed.refused);
+			await w.land("s1", again.reservation, stage, committed.prev);
+		});
+		expect(await w.regs.cancel({ subject: "s1", ...first })).toEqual({ cancelled: true });
+		const login = w.asserting();
+		expect(await w.keys.assert(login.response, { ...login, allow: [] })).toMatchObject({
+			kind: "asserted",
+			subject: "s1",
+		});
+	});
+
+	it("never releases the binding of a credential once active", async () => {
+		const w = await world();
+		await w.register();
+		const two = await w.register("s1", false);
+		await w.keys.settle("s1");
+		const k2 = w.recordOf("s1", two.credential.id);
+		await w.regs.remove({
+			subject: "s1",
+			credential: two.credential.id,
+			op: "rm1",
+			decide: deciding({ removeKey: k2 }),
+		});
+		await w.land("s1", "rm1", keyStage(flow, "rm1", keyOf(two.credential)), 2);
+		await w.keys.settle("s1");
+		const again = await w.reserve({ subject: "s1", credential: two.credential });
+		if (!("reservation" in again)) throw new Error(again.refused);
+		await w.regs.cancel({ subject: "s1", ...again });
+		expect(await w.reserve({ subject: "s2", credential: two.credential })).toEqual({
+			refused: "taken",
+		});
+	});
+
+	it("saves a verified count when sent again, and answers alike only the same response and challenge", async () => {
+		const w = await world();
+		const credential = await w.created();
+		const reserved = await w.reserve({ subject: "s1", credential, first: true });
+		if (!("reservation" in reserved)) throw new Error("not reserved");
+		const shown = w.asserting([credential]);
+		w.credentials.failNextChange();
+		const failed = await w.regs
+			.verifyPending({ subject: "s1", ...reserved, ...shown })
+			.catch((e) => e);
+		expect(isUnavailable(failed)).toBe(true);
+		expect(w.credentials.value(credential.id)).toMatchObject({ signCount: 0 });
+		const again = await w.regs.verifyPending({ subject: "s1", ...reserved, ...shown });
+		expect(again).toHaveProperty("verification");
+		expect(w.credentials.value(credential.id)).toMatchObject({ signCount: 1 });
+		const elsewhere = { ...shown, challenge: w.asserting().challenge };
+		// Another challenge with the same response is checked again, never answered from before.
+		expect(await w.regs.verifyPending({ subject: "s1", ...reserved, ...elsewhere })).toEqual({
+			refused: "challenge",
+		});
 	});
 
 	it("is unavailable, never a refusal, where the credential store cannot tell", async () => {

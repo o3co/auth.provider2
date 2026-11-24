@@ -2,15 +2,8 @@ import { createHash } from "node:crypto";
 import { Unavailable } from "@mod/kernel";
 import type { Transparency } from "@mod/transparency";
 import { type Credential, credentialOf as readCredential } from "@mod/webauthn";
-import type { Passkeys, PasskeyWitnessing, Registrations, ReserveRefusal } from "./contract.ts";
-import {
-	counted,
-	credentialOf,
-	credentialRecord,
-	type KeptParts,
-	keysHeld,
-	stored,
-} from "./kept.ts";
+import type { Passkeys, PasskeyWitnessing, Registrations, ReserveRefusal } from "../contract.ts";
+import { credentialOf, credentialRecord, type KeptParts, keysHeld, stored } from "../kept/kept.ts";
 import {
 	activeKey,
 	asJson,
@@ -24,7 +17,7 @@ import {
 	reservationOf,
 	reservationRecords,
 	unitOf,
-} from "./records.ts";
+} from "../records.ts";
 
 /** How many times a change held to a reservation read is tried before it is unavailable. */
 const tries = 3;
@@ -80,10 +73,10 @@ export function registeringOver(p: RegisteringParts): Registrations {
 		throw new Unavailable("passkeys");
 	};
 	/**
-	 * Binds the credential to the subject, unless another subject's binding or other details name it.
-	 * Never lowers a count nor overwrites a backup state kept: a reserve that loses rolls nothing back.
+	 * Binds the credential to the subject under the reservation `version`, unless another subject's
+	 * binding or other details name it. Never lowers a count nor overwrites the details kept.
 	 */
-	const bound = async (subject: string, c: Credential) => {
+	const bound = async (subject: string, c: Credential, version: string) => {
 		const details = {
 			userHandle: c.userHandle,
 			backupEligible: c.backupEligible,
@@ -92,7 +85,7 @@ export function registeringOver(p: RegisteringParts): Registrations {
 		};
 		const created = await p.store.create(
 			c.id,
-			stored({ subject, signCount: c.signCount, details }),
+			stored({ subject, version, signCount: c.signCount, details }),
 		);
 		if (created === "created") return true;
 		const same = (r: ReturnType<typeof credentialRecordOf>) =>
@@ -101,22 +94,34 @@ export function registeringOver(p: RegisteringParts): Registrations {
 				(r.details.userHandle === c.userHandle && r.details.backupEligible === c.backupEligible));
 		const changed = await p.store.change(c.id, (current) => {
 			const now = credentialRecordOf(current);
-			if (!same(now) || (now.subject === subject && now.details)) return undefined;
+			if (!same(now)) return undefined;
 			const signCount = Math.max(now.signCount, c.signCount);
-			return { value: stored({ subject, signCount, details: now.details ?? details }) };
+			return {
+				value: stored({ ...now, subject, version, signCount, details: now.details ?? details }),
+			};
 		});
 		const after = changed && credentialRecordOf(changed.after);
-		return after?.subject === subject && same(after);
+		return after?.subject === subject && after.version === version && same(after);
 	};
-	/** Releases a never-active credential's binding, so another subject may register it. */
-	const release = async (subject: string, r: Reservation | undefined, keep?: string) => {
-		if (!r || r.state === "active" || r.credential === keep) return;
-		if (activeKey(await keysHeld(p.frames, subject), r.credential)) return;
-		await p.store.change(r.credential, (current) => {
+	/**
+	 * Releases the binding `version` made, so another subject may register the credential: only while
+	 * it still carries that version, and never for a key active now or once.
+	 */
+	const release = async (subject: string, credential: string, version: string) => {
+		if (activeKey(await keysHeld(p.frames, subject), credential)) return;
+		await p.store.change(credential, (current) => {
 			const now = credentialRecordOf(current);
-			return now.subject === subject ? { value: stored({ signCount: now.signCount }) } : undefined;
+			if (now.subject !== subject || now.version !== version || now.active) return undefined;
+			return { value: stored({ signCount: now.signCount }) };
 		});
 	};
+	/** Saves the count a pending key's assertion showed, never lowering it. */
+	const saved = (subject: string, credential: string, count: number) =>
+		p.store.change(credential, (current) => {
+			const now = credentialRecordOf(current);
+			if (now.subject !== subject || now.signCount >= count) return undefined;
+			return { value: stored({ ...now, signCount: count }) };
+		});
 
 	return {
 		async reserve(q) {
@@ -125,6 +130,7 @@ export function registeringOver(p: RegisteringParts): Registrations {
 			// The mark settled first: a first key only where the keys and the witness both say none.
 			if (q.first && ((await p.settle(subject)) || (await p.witnessing?.marked(subject))))
 				return { refused: "held" };
+			let binding: string | undefined;
 			const reserved = await held<
 				{ reservation: string; replaced?: Reservation } | { refused: ReserveRefusal }
 			>(async () => {
@@ -140,9 +146,11 @@ export function registeringOver(p: RegisteringParts): Registrations {
 				// A retry keeps the key generation of the one it releases.
 				const generation = q.retrying !== undefined && r ? r.generation : keys.keyGeneration;
 				if (q.generation !== generation) return { refused: "fenced" };
-				if (!(await bound(subject, credential))) return { refused: "taken" };
+				const version = p.token();
+				if (!(await bound(subject, credential, version))) return { refused: "taken" };
+				binding = version;
 				const next: Reservation = {
-					version: p.token(),
+					version,
 					state: "reserved",
 					credential: credential.id,
 					publicKey: credential.publicKey,
@@ -155,20 +163,28 @@ export function registeringOver(p: RegisteringParts): Registrations {
 				if (changed !== "changed") return "moved";
 				return { reservation: next.version, ...(r ? { replaced: r } : {}) };
 			});
-			if (!("reservation" in reserved)) return reserved;
-			await release(subject, reserved.replaced, credential.id);
+			if (!("reservation" in reserved)) {
+				// A reserve that bound and then lost leaves no binding behind.
+				if (binding) await release(subject, credential.id, binding);
+				return reserved;
+			}
+			const { replaced } = reserved;
+			if (replaced && replaced.state !== "active")
+				await release(subject, replaced.credential, replaced.version);
 			return { reservation: reserved.reservation };
 		},
 		async verifyPending(q) {
-			const shown = digestOf(q.response);
+			const shown = digestOf({ response: q.response, challenge: q.challenge });
 			return held(async () => {
 				const at = await reservationAt(q.subject);
 				const r = at.reservation;
 				if (r?.version !== q.reservation) return { refused: "unknown" as const };
 				if (r.state !== "reserved" && r.state !== "verified") return { refused: "state" as const };
-				// The response that verified it, sent again: the same answer, the count not asked again.
-				if (r.verification && r.shown === shown)
+				// The response and challenge that verified it, sent again: its count saved, the same answer.
+				if (r.verification && r.shown === shown && r.count !== undefined) {
+					await saved(q.subject, r.credential, r.count);
 					return { verification: r.verification, userVerified: r.userVerified === true };
+				}
 				if (p.now() > r.until) return { refused: "expired" as const };
 				const id = (q.response as { id?: unknown } | null)?.id;
 				const record = id === r.credential ? await credentialRecord(p.store, id) : undefined;
@@ -184,18 +200,19 @@ export function registeringOver(p: RegisteringParts): Registrations {
 				if (asserted.kind === "refused") return { refused: asserted.reason };
 				const verification = r.verification ?? p.token();
 				const { userVerified } = asserted;
+				const count = asserted.credential.signCount;
 				const changed = await at.change({
 					...r,
 					state: "verified",
 					verification,
 					shown,
 					userVerified,
+					count,
 				});
 				if (changed !== "changed")
 					return changed === "open" ? { refused: "open" as const } : "moved";
-				// Counted once verified, so a write that moved asks the same count again.
-				if ((await counted(p.store, record, asserted.credential)) === "raced")
-					return { refused: "raced" as const };
+				// Saved once verified: a call that fails here is answered alike when sent again, saving it.
+				await saved(q.subject, r.credential, count);
 				return { verification, userVerified };
 			});
 		},
@@ -217,7 +234,7 @@ export function registeringOver(p: RegisteringParts): Registrations {
 				return changed === "changed" ? r : "moved";
 			});
 			if ("refused" in cancelled) return cancelled;
-			await release(q.subject, cancelled);
+			await release(q.subject, cancelled.credential, cancelled.version);
 			return { cancelled: true };
 		},
 		remove: (q) =>

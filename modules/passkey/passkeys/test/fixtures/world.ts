@@ -81,6 +81,9 @@ export function memoryFrames(parts: readonly string[]) {
 		at: (t: number) => {
 			now = t;
 		},
+		/** Loses a record of passkeys' part, as a store losing it would. */
+		drop: (subject: string, name: string) =>
+			kept.delete(keyOf({ of: "subject", id: subject }, { part: passkeyPart, name })),
 		value: (subject: string, name?: string, part = passkeyPart) =>
 			kept.get(keyOf({ of: "subject", id: subject }, name ? { part, name } : undefined))?.value,
 	};
@@ -235,6 +238,8 @@ export const deciding =
 export function memoryCredentials() {
 	const kept = new Map<string, StoredCredential>();
 	let failing = false;
+	let failNext = false;
+	let before: (() => Promise<void>) | undefined;
 	const fails = () => {
 		if (failing) throw new Unavailable("store");
 	};
@@ -251,6 +256,13 @@ export function memoryCredentials() {
 		},
 		async change(id, change) {
 			fails();
+			const run = before;
+			before = undefined;
+			await run?.();
+			if (failNext) {
+				failNext = false;
+				throw new Unavailable("store");
+			}
 			const record = kept.get(id);
 			if (!record) return undefined;
 			const next = change(structuredClone(record));
@@ -265,24 +277,49 @@ export function memoryCredentials() {
 		fail: (on: boolean) => {
 			failing = on;
 		},
+		/** The next change fails as unavailable, writing nothing. */
+		failNextChange: () => {
+			failNext = true;
+		},
+		/** Runs once before the next change reads, as another request would. */
+		beforeChange: (run: () => Promise<void>) => {
+			before = run;
+		},
 	};
 }
 
-/** A witnessing in memory: one mark per subject, set for a key generation. */
+/**
+ * A witnessing in memory: one mark per subject, set for a key generation, and the generation below
+ * which marks were withdrawn. `hold` makes the next mark wait until the test lets it go on.
+ */
 export function memoryWitnessing() {
 	const marks = new Map<string, number>();
+	const floors = new Map<string, number>();
+	let held: Promise<void> | undefined;
 	const witnessing: PasskeyWitnessing = {
 		marked: async (subject) => marks.has(subject),
 		mark: async (subject, generation) => {
-			if (!marks.has(subject)) marks.set(subject, generation);
+			const waiting = held;
+			held = undefined;
+			await waiting;
+			if (generation < (floors.get(subject) ?? 0) || marks.has(subject)) return;
+			marks.set(subject, generation);
 		},
 		withdraw: async (subject, generation) => {
-			if (marks.get(subject) === generation) marks.delete(subject);
+			if ((marks.get(subject) ?? generation) < generation) marks.delete(subject);
+			floors.set(subject, Math.max(floors.get(subject) ?? 0, generation));
 		},
 	};
 	return {
 		marks,
 		witnessing,
+		hold: () => {
+			let go = () => {};
+			held = new Promise<void>((resolve) => {
+				go = resolve;
+			});
+			return go;
+		},
 		module: defineModule({ name: "witnessing", replicaSafe: true, takes: [] }, (m) => [
 			m.contribute(passkeyWitnessing).by(() => witnessing),
 		]),
@@ -357,7 +394,10 @@ export async function world(
 		return t.step({ flow, own: op });
 	};
 	/** A key registered for `subject` from the reservation to the Step; `by` the key that approved it. */
-	const register = async (subject = "s1", first = true, a = auth, by?: string) => {
+	const register = async (subject = "s1", first = true, a = auth, approver?: string) => {
+		// A key that is not the first is approved by one the subject holds.
+		const held = frames.value(subject, "keys") as { keys: Record<string, unknown> } | undefined;
+		const by = first ? undefined : (approver ?? Object.keys(held?.keys ?? {})[0]);
 		const credential = await created(subject, a);
 		const reserved = await reserve({ subject, credential, first });
 		if (!("reservation" in reserved)) throw new Error(reserved.refused);

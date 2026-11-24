@@ -10,9 +10,9 @@ import {
 	passkeyWitnessing,
 	registrations,
 } from "./contract.ts";
-import { type KeptParts, keptOver } from "./kept.ts";
+import { type KeptParts, keptOver } from "./kept/kept.ts";
 import { keyChanges, keysOwner } from "./records.ts";
-import { registeringOver } from "./registering.ts";
+import { registeringOver } from "./registering/registering.ts";
 import { type Settings, section } from "./section.ts";
 
 type Context = BuildContext<Settings>;

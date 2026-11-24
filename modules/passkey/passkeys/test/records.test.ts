@@ -16,7 +16,7 @@ const reservation: Reservation = {
 	credential: "c1",
 	publicKey: "p1",
 	generation: 0,
-	first: false,
+	first: true,
 	until: 100,
 	verification: "x1",
 };
@@ -69,8 +69,10 @@ describe("committing (KE-C01 of a registration)", () => {
 		expect(commit(state(), held(), { now: 101, max: 2 })).toEqual({ refused: "expired" });
 		expect(commit(state({}, 1))).toEqual({ refused: "fenced" });
 		expect(commit(state({ k: key("c9") }), held({ first: true }))).toEqual({ refused: "held" });
-		expect(commit(state({ k: key("c1") }))).toEqual({ refused: "taken" });
-		expect(commit(state({ a: key("a"), b: key("b") }))).toEqual({ refused: "full" });
+		expect(commit(state({ k: key("c1") }), held({ first: false }))).toEqual({ refused: "taken" });
+		expect(commit(state({ a: key("a"), b: key("b") }), held({ first: false }))).toEqual({
+			refused: "full",
+		});
 		expect(commit(state(), held({ version: "v2" }))).toEqual({ refused: "unknown" });
 	});
 });
@@ -118,10 +120,24 @@ describe("removing", () => {
 describe("the keys' owner", () => {
 	it("keeps the key generation and the keys, writing only what changed", () => {
 		const s = state({ k1: key("c1") }, 2);
-		const [written] = keysOwner.write(s, [undefined]);
+		const [written, noted] = keysOwner.write(s, [undefined, undefined]);
 		expect(written).toEqual({ value: { keyGeneration: 2, keys: s.keys } });
+		expect(noted).toBeUndefined();
 		const value = (written as { value: Json }).value;
-		expect(keysOwner.read([value])).toEqual({ keyGeneration: 2, keys: s.keys });
-		expect(keysOwner.write(s, [value])).toEqual([undefined]);
+		expect(keysOwner.read([value, undefined])).toEqual({ keyGeneration: 2, keys: s.keys });
+		expect(keysOwner.write(s, [value, undefined])).toEqual([undefined, undefined]);
+	});
+	it("notes, in the same write, each credential the Step takes off, keeping the latest", () => {
+		const before = { keyGeneration: 0, keys: { k1: key("c1"), k2: key("c2") } } as unknown as Json;
+		const [, noted] = keysOwner.write(state({ k2: key("c2") }), [before, { next: 4, gone: [] }]);
+		expect(noted).toEqual({ value: { next: 5, gone: [{ n: 5, credential: "c1" }] } });
+		const many = {
+			next: 64,
+			gone: Array.from({ length: 64 }, (_, i) => ({ n: i + 1, credential: `x${i}` })),
+		};
+		const [, kept] = keysOwner.write(state({ k2: key("c2") }), [before, many as unknown as Json]);
+		const gone = (kept as { value: { gone: { n: number }[] } }).value.gone;
+		expect(gone).toHaveLength(64);
+		expect(gone.at(-1)).toEqual({ n: 65, credential: "c1" });
 	});
 });

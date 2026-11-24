@@ -7,7 +7,7 @@ import type {
 	Passkeys,
 	PasskeyWitnessing,
 	StoredCredential,
-} from "./contract.ts";
+} from "../contract.ts";
 import {
 	activeKey,
 	type CredentialRecord,
@@ -17,10 +17,11 @@ import {
 	keyChanges,
 	keysOf,
 	keysRecords,
+	noticesOf,
 	settledOf,
 	settledRecords,
 	unitOf,
-} from "./records.ts";
+} from "../records.ts";
 
 /** What reads and asserts the keys kept: the frames, the credential records, the ceremonies. */
 export interface KeptParts {
@@ -102,9 +103,16 @@ export function keptOver(
 	/** Drops a gone credential's details, keeping its binding and count. */
 	const dropDetails = (subject: string, id: string) =>
 		p.store.change(id, (current) => {
+			const { details, ...now } = credentialRecordOf(current);
+			return now.subject === subject && details ? { value: stored(now) } : undefined;
+		});
+	/** Notes on an active key's record that it was active: its binding is never released. */
+	const wasActive = (subject: string, id: string) =>
+		p.store.change(id, (current) => {
 			const now = credentialRecordOf(current);
-			if (now.subject !== subject || !now.details) return undefined;
-			return { value: stored({ subject, signCount: now.signCount }) };
+			return now.subject === subject && !now.active
+				? { value: stored({ ...now, active: true }) }
+				: undefined;
 		});
 	return {
 		async assert(response, asked) {
@@ -141,25 +149,40 @@ export function keptOver(
 				...keysRecords(flowOf(subject)),
 				...records,
 			]);
-			const keys = keysOf(read.held[0]);
-			const before = settledOf(read.held[1]);
+			const [keysHeldNow, noted, settledHeld] = read.held;
+			const keys = keysOf(keysHeldNow);
+			const notices = noticesOf(noted);
+			const before = settledOf(settledHeld);
+			// Keys behind what a settle saw were lost or rolled back: telling from them would mislead.
+			if (
+				before &&
+				(keysHeldNow === undefined ||
+					keys.keyGeneration < before.generation ||
+					notices.next < before.told)
+			)
+				throw new Unavailable("passkeys");
 			const now = credentialsOf(keys);
-			// A mark goes only once the generation moved past its own: never for state found missing.
-			if (before && before.generation < keys.keyGeneration)
-				await p.witnessing?.withdraw(subject, before.generation);
+			for (const id of now) await wasActive(subject, id);
+			// Marks of a generation before the current go; the witness refuses a mark older than that.
+			if (keys.keyGeneration > (before?.generation ?? 0))
+				await p.witnessing?.withdraw(subject, keys.keyGeneration);
 			if (now.length > 0) await p.witnessing?.mark(subject, keys.keyGeneration);
-			for (const id of (before?.credentials ?? []).filter((c) => !now.includes(c))) {
-				for (const removal of p.removals) await removal.removed(subject, id, now.length === 0);
-				await dropDetails(subject, id);
+			for (const { credential } of notices.gone.filter((g) => g.n > (before?.told ?? 0))) {
+				if (now.includes(credential)) continue;
+				for (const removal of p.removals)
+					await removal.removed(subject, credential, now.length === 0);
+				await dropDetails(subject, credential);
 			}
-			const next = { generation: keys.keyGeneration, credentials: now };
+			// A flow whose keys were never written leaves nothing to be held to.
+			if (keysHeldNow === undefined) return false;
+			const next = { generation: keys.keyGeneration, told: notices.next };
 			// Held to what it read; a write refused leaves the next settle to tell the same again.
 			await p.transparency.changeHeld({
 				kind: keyChanges.name,
 				flow: flowOf(subject),
 				records,
 				change: ([held]) => [
-					JSON.stringify(held) === JSON.stringify(read.held[1]) ? { value: next } : undefined,
+					JSON.stringify(held) === JSON.stringify(settledHeld) ? { value: next } : undefined,
 				],
 			});
 			return now.length > 0;

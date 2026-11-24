@@ -60,7 +60,7 @@ export interface Passkeys {
 export const passkeys = contract<Passkeys>("passkeys");
 
 export type ReserveRefusal = "pending" | "held" | "taken" | "fenced" | "unknown" | "state" | "open";
-export type VerifyRefusal = CeremonyRefusal | "unknown" | "state" | "expired" | "open" | "raced";
+export type VerifyRefusal = CeremonyRefusal | "unknown" | "state" | "expired" | "open";
 
 /** A key change of a subject's flow, decided as its writer's op (`transparency`'s KE-C01). */
 export interface KeyChange {
@@ -86,7 +86,7 @@ export interface Registrations {
 	}): Promise<{ readonly reservation: string } | { readonly refused: ReserveRefusal }>;
 	/**
 	 * Checks an assertion by the reserved key, over a request naming it alone; the key stays pending.
-	 * The response that verified it is answered alike again.
+	 * The response and challenge that verified it are answered alike again, its count saved first.
 	 */
 	verifyPending(p: {
 		readonly subject: string;
@@ -118,13 +118,16 @@ export const registrations = contract<Registrations>("passkeys.registrations", {
 	takersContribute: stances,
 });
 
-/** Who keeps the witness's mark in line with the keys, a mark for each key generation; contributed where a witness is composed. */
+/**
+ * Who keeps the witness's mark in line with the keys, a mark for a key generation; contributed where a
+ * witness is composed. Per subject it knows the latest generation it was told to withdraw before.
+ */
 export interface PasskeyWitnessing {
 	/** Whether the subject carries a mark, whichever generation set it. */
 	marked(subject: string): Promise<boolean>;
-	/** Sets the mark for `generation` unless one is set. */
+	/** Sets the mark for `generation` unless one is set; refused for a generation before one withdrawn below. */
 	mark(subject: string, generation: number): Promise<void>;
-	/** Withdraws the mark only where `generation` set it. */
+	/** Withdraws any mark of a generation before `generation`, and refuses such marks from then on. */
 	withdraw(subject: string, generation: number): Promise<void>;
 }
 

@@ -1,4 +1,11 @@
-import { BootRefused, type Contribution, defineModule, type Module, type Parts } from "@mod/kernel";
+import {
+	BootRefused,
+	type Contribution,
+	defineModule,
+	isUnavailable,
+	type Module,
+	type Parts,
+} from "@mod/kernel";
 import { passkeyWitnesses } from "@mod/passkey-witness";
 import { passkeyWitnessStandIn } from "@mod/passkey-witness/testing";
 import { promises } from "@mod/promises";
@@ -108,32 +115,93 @@ describe("passkeys", () => {
 		const one = await w.register();
 		const k1 = w.recordOf("s1", one.credential.id);
 		const two = await w.register("s1", false, w.auth, k1);
-		const three = await w.register("s1", false);
+		const k2 = w.recordOf("s1", two.credential.id);
+		const three = await w.register("s1", false, w.auth, k2);
 		expect(await w.keys.settle("s1")).toBe(true);
 		expect(witnessing.marks.get("s1")).toBe(0);
-		// Removing k1 takes k2, whose chain holds it: both are told, by whoever settles, once each.
+		// Removing k2 takes k3, whose chain holds it: both are told, by whoever settles, once each.
 		const removed = await w.regs.remove({
 			subject: "s1",
-			credential: one.credential.id,
+			credential: two.credential.id,
 			op: "rm1",
-			decide: deciding({ removeKey: k1 }),
+			decide: deciding({ removeKey: k2 }),
 		});
 		if (!("prev" in removed)) throw new Error(removed.refused);
 		await w.land("s1", "rm1", keyStage(flow, "rm1", { credential: "-", publicKey: "-" }), 3);
 		expect(await w.keys.settle("s1")).toBe(true);
 		expect(await w.keys.settle("s1")).toBe(true);
 		expect(told).toEqual([
-			["s1", one.credential.id, false],
 			["s1", two.credential.id, false],
+			["s1", three.credential.id, false],
 		]);
-		expect(w.credentials.value(one.credential.id)).toEqual({ subject: "s1", signCount: 1 });
+		expect(w.credentials.value(two.credential.id)).not.toHaveProperty("details");
 		expect(witnessing.marks.get("s1")).toBe(0);
 		// A boundary empties the keys and moves the generation on: the mark set for the old one goes.
 		w.log.boundary(flow);
 		await w.t.tend(flow);
 		expect(await w.keys.settle("s1")).toBe(false);
-		expect(told.at(-1)).toEqual(["s1", three.credential.id, true]);
+		expect(told.at(-1)).toEqual(["s1", one.credential.id, true]);
 		expect(witnessing.marks.has("s1")).toBe(false);
+	});
+
+	it("tells of a key added and taken off between two settles", async () => {
+		const told: string[] = [];
+		const watcher = contributing("watcher", (m) => [
+			m.contribute(passkeyRemovals).by(() => ({
+				removed: async (_s: string, credential: string) => {
+					told.push(credential);
+				},
+			})),
+		]);
+		const w = await world({ modules: [watcher] });
+		await w.register();
+		await w.keys.settle("s1");
+		const two = await w.register("s1", false);
+		const k2 = w.recordOf("s1", two.credential.id);
+		const removed = await w.regs.remove({
+			subject: "s1",
+			credential: two.credential.id,
+			op: "rm1",
+			decide: deciding({ removeKey: k2 }),
+		});
+		if (!("prev" in removed)) throw new Error(removed.refused);
+		await w.land("s1", "rm1", keyStage(flow, "rm1", { credential: "-", publicKey: "-" }), 2);
+		await w.keys.settle("s1");
+		expect(told).toEqual([two.credential.id]);
+	});
+
+	it("revives no mark of an old generation by a settle that read before a boundary", async () => {
+		const witnessing = memoryWitnessing();
+		const w = await world({ modules: [witnessing.module] });
+		await w.register();
+		const go = witnessing.hold();
+		const late = w.keys.settle("s1");
+		w.log.boundary(flow);
+		await w.t.tend(flow);
+		expect(await w.keys.settle("s1")).toBe(false);
+		go();
+		await late;
+		expect(witnessing.marks.has("s1")).toBe(false);
+		expect(
+			await w.reserve({ subject: "s1", credential: await w.created(), first: true, generation: 1 }),
+		).toHaveProperty("reservation");
+	});
+
+	it("answers unavailable, telling nothing, where the keys are behind what a settle saw", async () => {
+		const told: string[] = [];
+		const watcher = contributing("watcher", (m) => [
+			m.contribute(passkeyRemovals).by(() => ({
+				removed: async (_s: string, credential: string) => {
+					told.push(credential);
+				},
+			})),
+		]);
+		const w = await world({ modules: [watcher] });
+		await w.register();
+		await w.keys.settle("s1");
+		w.frames.drop("s1", "keys");
+		expect(isUnavailable(await w.keys.settle("s1").catch((e) => e))).toBe(true);
+		expect(told).toEqual([]);
 	});
 
 	it("withdraws no mark for state found missing, and reserves no first key beside a mark", async () => {
