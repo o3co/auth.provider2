@@ -2138,6 +2138,21 @@ importers:
         specifier: 5.0.5
         version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(vite@8.3.3(@types/node@26.6.5)(yaml@2.9.1))
 
+  modules/templates/claims-selection-store:
+    dependencies:
+      '@mod/claims-selection':
+        specifier: workspace:*
+        version: link:../../oauth/claims-selection
+      '@mod/kernel':
+        specifier: workspace:*
+        version: link:../../foundation/kernel
+      '@mod/store':
+        specifier: workspace:*
+        version: link:../../foundation/store
+      '@mod/subject-records':
+        specifier: workspace:*
+        version: link:../../foundation/subject-records
+
   modules/templates/client-assertion-store:
     dependencies:
       '@mod/client-assertion':
