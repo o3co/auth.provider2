@@ -11,7 +11,8 @@
 
 ## Offers
 - `codes`, for `authorize` only:
-  - `issue`: client, redirect URI, PKCE challenge, nonce, scope, audience, session handle, subject, optional acr met, the root's reference, and the binding asked for ahead → code, 32 random bytes in base64url (43 characters). It checks again the session enters at use with that subject, the client may use the grant with that scope and audience, the challenge's shape and that a root is named; the authentication context comes from the session.
+  - `issue`: client, redirect URI, PKCE challenge, nonce, scope, audience, session handle, subject, optional acr met, and the binding asked for ahead → code, 32 random bytes in base64url (43 characters). It checks again the session enters at use with that subject, the client may use the grant with that scope and audience, and the challenge's shape; the authentication context comes from the session.
+  - `root` (code, reference): sets a code's root once, on an unused code without one (`set`, and for the same again); `refused` otherwise.
   - `digestOf` (a code) → its SHA-256 in base64url, never the code; `lifetimeMs`, how long a code lives.
 - A session closed since it was read throws `Unavailable`, for the caller to answer as it can; any other contradiction is a `TypeError`. `challengeShape` is offered for a request to be checked by.
 - Extension point `redemptionHooks` (keyed): `pin` (the redemption, the code's digest as `digestOf` gives it; its subject) before the token is issued, `redeemed` (redemption, subject, scope, the token's id and end) once it passed every check. A hook that fails voids the code.
@@ -27,12 +28,11 @@
 - A code is redeemed only with a proof by the key its authorization asked for ahead, and one that asked for none only with no proof (`sender-binding`'s `sameBinding`): the token holds the code's binding and none other. A redemption that fails leaves the code used up; the person logs in again.
 - Every refused code is `invalid_grant` with the same description. A session that does not enter at use (closed, or its subject revoked) is refused, and checked again after issuing: so meanwhile, the code is voided.
 - The audience asked (`grants`' `target`, within the code's), then the issuance policies, are asked before the code is used up, only for its client, redirect URI, verifier and binding (a refusal leaves it unused), and again when issuing (a refusal then leaves it used up, giving nothing). The access token carries the code's amr, authentication time (or that it is not known) and acr, from the code's session; it ends no later than that session.
-- A redemption issues one bundle: its access token, under the code's root's reference, carried unread.
+- A redemption issues one bundle: its access token, under the code's root's reference, carried unread. A code whose root was never set is used up, issuing nothing.
 - A record that vanished during a redemption is refused and never written back (the code would be unused again). A record of a format or shape not known is a code that cannot be used: refused (not unavailable), or logged and removed from the list.
 - A code is voided (`voiding`) when it comes again, its own record there or ended, or when its session closes while its token is made. A reuse marks the code itself, which the redemption reads again after issuing: a mark there, or the code ended, voids its token, even one that came before any redemption record. Issuing that fails leaves it used up, giving nothing.
 - A configuration that cannot revoke access tokens refuses boot.
 - Boot is refused where nothing contributes to `grants`' session issuances: its tokens are issued from the code's session and must be recorded there, so that a logout ends them.
-- Trade-offs: whoever holds a leaked code can revoke the legitimate token while the code lives, as a reuse needs no key; a client that resends a redemption by itself fails it; a right redemption whose code ends while its token is made is refused, its token revoked.
 
 ## Data
 - Codes: a record per code name until its expiry. Redemption records: each for `storedRecordMaxMs` (`kernel`'s clock; syncing hosts is the deployment's). The void list: until each code is settled.

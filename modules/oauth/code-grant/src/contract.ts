@@ -12,8 +12,6 @@ export interface CodeFacts {
 	readonly subject: string;
 	/** The authentication context class the issuer judged met; carried to the token as it is. */
 	readonly acr?: string;
-	/** The reference of the record the code's chain roots in, its approval's: carried to the bundle unread. */
-	readonly root: string;
 	/** The binding the authorization asked for ahead (`dpop_jkt`): the code's tokens hold it, and none other. */
 	readonly binding?: Binding;
 }
@@ -25,6 +23,13 @@ export interface Codes {
 	 * the client contradict.
 	 */
 	issue(facts: CodeFacts): Promise<string>;
+	/**
+	 * Sets the root's reference of a code, once: the record its chain roots in, its approval's, which
+	 * carries the code's digest and so is placed after the code is made; carried to the bundle unread.
+	 * `set` where the code is unused and had none (or had this one), `refused` for any other. Throws
+	 * Unavailable where the store cannot tell.
+	 */
+	root(code: string, root: string): Promise<"set" | "refused">;
 	/** A code's digest, its SHA-256 in base64url: what a record names it by, never the code itself. */
 	digestOf(code: string): string;
 	/** How long a code lives once issued, as `code-lifetime` says. */

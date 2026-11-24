@@ -153,9 +153,9 @@ it("redeems a code bound by DPoP once through code-grant wired to records, and r
 			audience: ["https://api"],
 			session: session.id,
 			subject: "alice",
-			root: "root-of-the-approval",
 			binding,
 		});
+		await app.get(codes).root(code, "root-of-the-approval");
 		/** A fresh proof by the held key, for the token endpoint. */
 		const proof = () =>
 			new SignJWT({

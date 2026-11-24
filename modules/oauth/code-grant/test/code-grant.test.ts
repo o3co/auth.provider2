@@ -303,9 +303,13 @@ async function serve(options: Options = {}) {
 		audience: ["https://api"],
 		session: session.id,
 		subject: "alice",
-		root: "root-of-the-approval",
 	};
-	const issue = (scope = facts.scope) => app.get(codes).issue({ ...facts, scope });
+	/** A code, rooted in its approval's record as its issuer roots it. */
+	const issue = async (scope = facts.scope) => {
+		const code = await app.get(codes).issue({ ...facts, scope });
+		await app.get(codes).root(code, "root-of-the-approval");
+		return code;
+	};
 	/** Redeems through the grant harness, answering as the token endpoint would. */
 	const redeem = async (
 		code: string,
@@ -334,6 +338,12 @@ async function serve(options: Options = {}) {
 	return { app, stores, recorded, issue, redeem, session, facts };
 }
 type Served = Awaited<ReturnType<typeof serve>>;
+/** A code issued for the facts and rooted, as its issuer roots it once the approval is placed. */
+const rootedIssue = async (s: Served, facts: CodeFacts) => {
+	const code = await s.app.get(codes).issue(facts);
+	await s.app.get(codes).root(code, "root-of-the-approval");
+	return code;
+};
 /** What a code's record holds now. */
 const keptOf = (s: Served, code: string) => {
 	const kept = s.stores.peek(nameOf(code));
@@ -381,7 +391,7 @@ async function handleDirectly(
 it("gives the access token the code's amr, authentication time and acr, issued from its session", async () => {
 	const asked: IssuanceRequest[] = [];
 	const s = await serve({ extra: [policy((request) => asked.push(request) > 0)] });
-	const code = await s.app.get(codes).issue({ ...s.facts, acr: "urn:example:acr:high" });
+	const code = await rootedIssue(s, { ...s.facts, acr: "urn:example:acr:high" });
 	const answer = await s.redeem(code);
 	const checked = await s.app.get(accessTokens).verifyAccess(String(answer.body.access_token));
 	const { authenticatedAt } = s.session.context;
@@ -417,7 +427,7 @@ it("issues one bundle rooted in the code's approval, carrying the root's referen
 describe("the binding the authorization asked for ahead", () => {
 	it("redeems a code only with a proof by the key it asked for, the token holding that key", async () => {
 		const s = await serve({ extra: [dpopKind] });
-		const bound = await s.app.get(codes).issue({ ...s.facts, binding: dpop("held") });
+		const bound = await rootedIssue(s, { ...s.facts, binding: dpop("held") });
 		const answer = await s.redeem(bound, {}, dpop("held"));
 		expect(answer).toMatchObject({ status: 200, body: { token_type: "DPoP" } });
 		const checked = await s.app.get(accessTokens).verifyAccess(String(answer.body.access_token));
@@ -426,7 +436,7 @@ describe("the binding the authorization asked for ahead", () => {
 
 	it("tells a proof by another key nothing of the policies, using the code up", async () => {
 		const s = await serve({ extra: [dpopKind, policy(() => false)] });
-		const bound = await s.app.get(codes).issue({ ...s.facts, binding: dpop("held") });
+		const bound = await rootedIssue(s, { ...s.facts, binding: dpop("held") });
 		expect((await s.redeem(bound, {}, dpop("other"))).body).toEqual(refusedBody);
 		expect(keptOf(s, bound)?.state).toBe("consumed");
 	});
@@ -439,7 +449,7 @@ describe("the binding the authorization asked for ahead", () => {
 			["a proof for a code that asked none", undefined, dpop("held")],
 		];
 		for (const [label, asked, proved] of cases) {
-			const code = await s.app.get(codes).issue({
+			const code = await rootedIssue(s, {
 				...s.facts,
 				...(asked ? { binding: asked } : {}),
 			});
@@ -471,7 +481,7 @@ it("has the access token recorded to the code's session", async () => {
 it("ends the access token no later than its session, when the session ends first [rfc6749-5.1-b]", async () => {
 	const s = await serve();
 	const { session } = await opened(s.app, "alice", 30_000);
-	const answer = await s.redeem(await s.app.get(codes).issue({ ...s.facts, session: session.id }));
+	const answer = await s.redeem(await rootedIssue(s, { ...s.facts, session: session.id }));
 	const checked = await s.app.get(accessTokens).verifyAccess(String(answer.body.access_token));
 	if (checked.kind !== "valid") throw new Error("not valid");
 	expect(checked.expiresAt).toBeLessThanOrEqual(runtime.clock.now() + 30_000);
@@ -625,7 +635,7 @@ it("refuses a code whose subject was revoked after it signed in", async () => {
 
 it("refuses a code issued to another client, or presented with another redirect URI, only once and only while it lives [rfc6749-4.1.3-c] [rfc6749-4.1.3-e] [oidc-core-3.1.3.2-b] [oidc-core-3.1.3.2-c] [oidc-core-3.1.3.2-e]", async () => {
 	const s = await serve({ codeGrant: { "code-lifetime": "10s", "sweep-interval": "1s" } });
-	const elsewhere = await s.app.get(codes).issue({ ...s.facts, clientId: "other" });
+	const elsewhere = await rootedIssue(s, { ...s.facts, clientId: "other" });
 	expect((await s.redeem(elsewhere)).body).toEqual(refusedBody);
 	const moved = await s.issue();
 	expect((await s.redeem(moved, { redirect_uri: "https://app.example/other" })).body).toEqual(
@@ -829,7 +839,6 @@ it("refuses to issue a code for facts the session or the client contradict", asy
 		"audience outside the client": { audience: ["https://other"] },
 		"malformed challenge": { challenge: "short" },
 		"unknown client": { clientId: "nobody" },
-		"no root's reference": { root: "" },
 	};
 	for (const [label, over] of Object.entries(bad)) {
 		await expect(issue({ ...s.facts, ...over }), label).rejects.toThrow(TypeError);
@@ -1019,5 +1028,35 @@ describe("the redemption hooks", () => {
 		expect(h.seen[0]?.access.id).toBeDefined();
 		expect(keptOf(s, code)?.void).toBe(true);
 		expect(await revoked(s, issued[0] as string)).toBe(true);
+	});
+});
+
+describe("a code whose root is set once it is made", () => {
+	const rootless = (s: Served) => s.app.get(codes).issue(s.facts);
+
+	it("redeems a code only once its root is set, one root once, and roots its bundle there", async () => {
+		const s = await serve();
+		const code = await rootless(s);
+		expect(await s.app.get(codes).root(code, "approval-record")).toBe("set");
+		expect(await s.app.get(codes).root(code, "approval-record")).toBe("set");
+		expect(await s.app.get(codes).root(code, "another-record")).toBe("refused");
+		expect(keptOf(s, code)?.root).toBe("approval-record");
+		expect((await s.redeem(code)).status).toBe(200);
+		expect(await s.app.get(codes).root(code, "approval-record")).toBe("refused");
+	});
+
+	it("uses up a code whose root was never set, issuing nothing", async () => {
+		const s = await serve();
+		const code = await rootless(s);
+		expect(await s.redeem(code)).toMatchObject({ status: 400, body: refusedBody });
+		expect(keptOf(s, code)?.state).toBe("consumed");
+		expect(redeemedOf(s, code)).toBeUndefined();
+		expect(await s.app.get(codes).root(code, "approval-record")).toBe("refused");
+	});
+
+	it("refuses a root for a code it does not know, and an empty one as its caller's bug", async () => {
+		const s = await serve();
+		expect(await s.app.get(codes).root("no-such-code", "approval-record")).toBe("refused");
+		await expect(s.app.get(codes).root(await rootless(s), "")).rejects.toThrow(TypeError);
 	});
 });

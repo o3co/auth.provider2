@@ -105,6 +105,9 @@ export function codeGrant(parts: {
 				return refused;
 			}
 			if (!presented(record)) return refused;
+			// A code whose root was never set roots in no approval: used up, it issues nothing.
+			const root = record.root;
+			if (root === undefined) return refused;
 			// No ID token is issued yet, so a code asking one gives nothing, rather than a token alone.
 			if (record.scope.includes(openid)) {
 				return { kind: "error", error: "invalid_scope", description: "no ID token is issued" };
@@ -133,7 +136,7 @@ export function codeGrant(parts: {
 			// One bundle, rooted in the code's approval. The token ends no later than its session, nor
 			// later than the allowance before its record's end.
 			const allowed = await issue(
-				{ root: record.root, access: accessOf(record, client.id) },
+				{ root, access: accessOf(record, client.id) },
 				{ session: record.session, notAfter: Math.min(entry.endsAt, tokenEnd) },
 			);
 			if (allowed.kind === "refused") return allowed;

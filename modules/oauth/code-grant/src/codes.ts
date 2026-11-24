@@ -16,7 +16,8 @@ export interface CodeRecord {
 	readonly session: string;
 	readonly subject: string;
 	readonly acr?: string;
-	readonly root: string;
+	/** Set once, after the code is made: a code without one is never redeemed. */
+	readonly root?: string;
 	readonly binding?: {
 		readonly member: string;
 		readonly confirmation: string;
@@ -41,7 +42,7 @@ const recordShape = z.strictObject({
 	session: z.string(),
 	subject: z.string(),
 	acr: z.string().optional(),
-	root: z.string(),
+	root: z.string().optional(),
 	binding: z
 		.strictObject({ member: z.string(), confirmation: z.string(), tokenType: z.string() })
 		.optional(),

@@ -6,7 +6,7 @@ import { issuer } from "@mod/issuer";
 import { defineModule, Unavailable } from "@mod/kernel";
 import { sessions } from "@mod/session";
 import { accessTokens } from "@mod/tokens";
-import { type CodeRecord, digestOf, toStored } from "./codes.ts";
+import { type CodeRecord, digestOf, fromStored, toStored } from "./codes.ts";
 import {
 	challengeShape,
 	codeGrantType,
@@ -45,7 +45,6 @@ export default defineModule({ name: "code-grant", replicaSafe: true, section, ta
 		return {
 			issue: async (facts) => {
 				if (!challengeShape.test(facts.challenge)) throw new TypeError("code-grant: bad challenge");
-				if (facts.root === "") throw new TypeError("code-grant: no root's reference");
 				const entry = await opened.entryOf(facts.session);
 				// One closed or short since the caller read it is no fault of the caller's: it answers as it can.
 				if (entry.kind !== "entered") throw new Unavailable("code-grant");
@@ -89,6 +88,17 @@ export default defineModule({ name: "code-grant", replicaSafe: true, section, ta
 				);
 				if (created !== "created") throw new Unavailable("code-grant");
 				return code;
+			},
+			root: async (code, root) => {
+				if (root === "") throw new TypeError("code-grant: no root's reference");
+				const changed = await store.update(store.nameOf(code), (current) => {
+					const r = fromStored(current);
+					return r?.state === "issued" && r.root === undefined
+						? { value: toStored({ ...r, root }) }
+						: undefined;
+				});
+				const after = changed && fromStored(changed.after);
+				return after?.state === "issued" && after.root === root ? "set" : "refused";
 			},
 			digestOf,
 			lifetimeMs: () => c.section["code-lifetime"] * 1000,
