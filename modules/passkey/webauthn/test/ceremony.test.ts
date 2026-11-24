@@ -90,6 +90,40 @@ describe("the challenge the caller gives", () => {
 		}
 	});
 
+	it("refuses, at attest and at assert alike, client data answering another spelling or length of it, or it with an ending", async () => {
+		const { authenticator, credential } = await made();
+		const challenge = `${"A".repeat(42)}A`;
+		const variants: Record<string, string> = {
+			padded: `${challenge}=`,
+			"a tail of the same bytes": `${"A".repeat(42)}B`,
+			"31 bytes": "A".repeat(42),
+			"33 bytes": "A".repeat(44),
+			"the named ending": `${challenge}.listed`,
+		};
+		for (const [name, answered] of Object.entries(variants)) {
+			const created = ceremonies.creation(challenge, { handle, name: "sam" }, [], "preferred");
+			const response = softwareAuthenticator().create(
+				{ ...(created as CreationOptions), challenge: answered },
+				at,
+			);
+			expect(
+				reasonOf(await ceremonies.attest(response, challenge, handle, "preferred")),
+				name,
+			).toBe("challenge");
+			const requested = ceremonies.request(challenge, [], "preferred") as RequestOptions;
+			const got = authenticator.get({ ...requested, challenge: answered }, at);
+			for (const named of [false, true]) {
+				const asserted = await ceremonies.assert(
+					got,
+					{ challenge, named },
+					credential,
+					"preferred",
+				);
+				expect(reasonOf(asserted), name).toBe("challenge");
+			}
+		}
+	});
+
 	it("is judged by no lifetime: an answer however late passes, and the options name no timeout", async () => {
 		const { authenticator, credential } = await made();
 		const { options, challenge } = request();
@@ -148,6 +182,41 @@ describe("creation and attestation", () => {
 		expect(reasonOf(await ceremonies.attest(unverified, challenge, handle))).toBe(
 			"user-verification",
 		);
+	});
+
+	it("weakens user verification only where preferred or discouraged is asked; any other value asks it", async () => {
+		for (const v of [null, "Preferred", "none", 0] as unknown as Verification[]) {
+			const challenge = fresh();
+			const options = ceremonies.creation(challenge, { handle, name: "sam" }, [], v);
+			expect(options, String(v)).toMatchObject({
+				authenticatorSelection: { userVerification: "required" },
+			});
+			expect(ceremonies.request(challenge, [], v), String(v)).toMatchObject({
+				userVerification: "required",
+			});
+			const unverified = softwareAuthenticator({ userVerified: false }).create(
+				options as CreationOptions,
+				at,
+				{ overlook: true },
+			);
+			expect(reasonOf(await ceremonies.attest(unverified, challenge, handle, v)), String(v)).toBe(
+				"user-verification",
+			);
+		}
+		const { authenticator, credential } = await made(
+			softwareAuthenticator({ userVerified: false }),
+		);
+		for (const v of [null, "Preferred"] as unknown as Verification[]) {
+			const { options, challenge } = request();
+			const response = authenticator.get(options, at, { overlook: true });
+			const asserted = await ceremonies.assert(
+				response,
+				{ challenge, named: false },
+				credential,
+				v,
+			);
+			expect(reasonOf(asserted), String(v)).toBe("user-verification");
+		}
 	});
 
 	it("attests a credential for the handle, keeping its key, count and backup eligibility", async () => {
@@ -423,6 +492,17 @@ describe("request and assertion", () => {
 				await assert(nulled(authenticator.get(again.options, at)), again.challenge, credential),
 			),
 		).toBe("user-handle");
+	});
+
+	it("takes only true as named: a truthy value of another kind asks for the handle", async () => {
+		const { authenticator, credential } = await made();
+		const challenge = fresh();
+		const listed = ceremonies.request(challenge, [credential], "preferred") as RequestOptions;
+		const left = authenticator.get(listed, at, { userHandle: null });
+		for (const named of ["false", 1, [credential], {}] as unknown as boolean[]) {
+			const asserted = await ceremonies.assert(left, { challenge, named }, credential, "preferred");
+			expect(reasonOf(asserted), JSON.stringify(named)).toBe("user-handle");
+		}
 	});
 
 	it("refuses another handle, a changed backup eligibility, and an unverified user when required", async () => {

@@ -79,6 +79,10 @@ function given(challenge: unknown): string {
 	throw new TypeError("a challenge is 32 bytes, unpadded base64url");
 }
 
+/** The verification asked: weakened only where `preferred` or `discouraged` is, `required` for any other value. */
+const verificationOf = (v: unknown): Verification =>
+	v === "preferred" || v === "discouraged" ? v : "required";
+
 /** The library's answer, or the refusal its error names. */
 async function libraryAnswer<T extends object>(
 	verify: () => Promise<T>,
@@ -144,14 +148,14 @@ export function ceremoniesFor(rp: RelyingParty): Ceremonies {
 		const listed = typeof data.topOrigin === "string" && rp.topOrigins.includes(data.topOrigin);
 		return data.crossOrigin === true && listed ? undefined : "top-origin";
 	};
-	const expected = (challenge: string, v: Verification) => ({
+	const expected = (challenge: string, v: Verification | undefined) => ({
 		expectedChallenge: challenge,
 		expectedOrigin: [...rp.origins],
 		expectedRPID: rp.id,
-		requireUserVerification: v === "required",
+		requireUserVerification: verificationOf(v) === "required",
 	});
 	return {
-		creation: (challenge, user, exclude, v = "required", asked = {}) => {
+		creation: (challenge, user, exclude, v, asked = {}) => {
 			const discoverable = asked.discoverable ?? true;
 			return {
 				rp: { id: rp.id, name: rp.name },
@@ -164,11 +168,11 @@ export function ceremoniesFor(rp: RelyingParty): Ceremonies {
 				authenticatorSelection: {
 					residentKey: discoverable ? "required" : "discouraged",
 					requireResidentKey: discoverable,
-					userVerification: v,
+					userVerification: verificationOf(v),
 				},
 			};
 		},
-		attest: async (response, challenge, handle, v = "required") => {
+		attest: async (response, challenge, handle, v) => {
 			const early = precheck(response, given(challenge));
 			if (early) return refused(early);
 			const verified = await libraryAnswer(() =>
@@ -195,7 +199,7 @@ export function ceremoniesFor(rp: RelyingParty): Ceremonies {
 				},
 			};
 		},
-		request: (challenge, allow, v = "required") => ({
+		request: (challenge, allow, v) => ({
 			challenge: given(challenge),
 			rpId: rp.id,
 			allowCredentials: allow.map((c) => ({
@@ -203,9 +207,9 @@ export function ceremoniesFor(rp: RelyingParty): Ceremonies {
 				type: "public-key",
 				...(c.transports ? { transports: c.transports } : {}),
 			})),
-			userVerification: v,
+			userVerification: verificationOf(v),
 		}),
-		assert: async (response, { challenge, named }, credential, v = "required") => {
+		assert: async (response, { challenge, named }, credential, v) => {
 			const early = precheck(response, given(challenge));
 			if (early) return refused(early);
 			const answered = response as Parameters<typeof verifyAuthenticationResponse>[0]["response"];
@@ -232,7 +236,7 @@ export function ceremoniesFor(rp: RelyingParty): Ceremonies {
 				credential,
 				verified.authenticationInfo,
 				answered.response.userHandle,
-				named,
+				named === true,
 			);
 		},
 	};
