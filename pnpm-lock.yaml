@@ -1485,6 +1485,40 @@ importers:
         specifier: workspace:*
         version: link:../../identity/subject-revocation
 
+  modules/templates/tokens-store:
+    dependencies:
+      '@mod/kernel':
+        specifier: workspace:*
+        version: link:../../foundation/kernel
+      '@mod/records':
+        specifier: workspace:*
+        version: link:../../foundation/records
+      '@mod/store':
+        specifier: workspace:*
+        version: link:../../foundation/store
+      '@mod/tokens':
+        specifier: workspace:*
+        version: link:../../oauth/tokens
+    devDependencies:
+      '@mod/http':
+        specifier: workspace:*
+        version: link:../../foundation/http
+      '@mod/http-server':
+        specifier: workspace:*
+        version: link:../../foundation/http-server
+      '@mod/issuer':
+        specifier: workspace:*
+        version: link:../../oauth/issuer
+      '@mod/keys':
+        specifier: workspace:*
+        version: link:../../foundation/keys
+      '@mod/sender-binding':
+        specifier: workspace:*
+        version: link:../../oauth/sender-binding
+      '@mod/token-denylist':
+        specifier: workspace:*
+        version: link:../../oauth/token-denylist
+
   modules/templates/users-store:
     dependencies:
       '@mod/kernel':
