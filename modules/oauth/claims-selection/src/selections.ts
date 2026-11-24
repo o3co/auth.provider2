@@ -2,7 +2,14 @@ import { clientAllowance } from "@mod/client-allowance";
 import type { Client } from "@mod/clients";
 import type { RedemptionHook } from "@mod/code-grant";
 import { Unavailable } from "@mod/kernel";
-import type { Agreed, ClaimScopes, ClaimsSelections, Selection, Target } from "./contract.ts";
+import type {
+	Agreed,
+	ClaimScopes,
+	ClaimsSelections,
+	Issued,
+	Selection,
+	Target,
+} from "./contract.ts";
 import type { SelectionRecords, StoredSelection } from "./store.ts";
 import { holds, nameOf, read, stored, withinLimits } from "./stored.ts";
 
@@ -12,9 +19,6 @@ const codeMarginMs = 60_000;
 const pinHoldMs = 300_000;
 /** A token's selection outlives the token by this much, for clock drift between hosts. */
 const tokenAllowanceMs = 120_000;
-
-/** An access token as a selection is kept for it: its id and its end (epoch ms). */
-type Issued = Pick<Parameters<RedemptionHook["redeemed"]>[0]["access"], "id" | "expiresAt">;
 
 export function selectionsWith(parts: {
 	readonly records: SelectionRecords;
@@ -109,6 +113,23 @@ export function selectionsWith(parts: {
 		},
 		forCode: async (redemption) => (await pinOf(redemption)).selection,
 		forToken: async (tokenId) => (await tokenRecord(tokenId))?.target,
+		follow: async (redemption, familyId, lifetimeMs) => {
+			const { selection, subject } = await pinnedFor(redemption);
+			if (!selection || !holds(selection.userinfo)) return;
+			const family = stored.target(selection.userinfo, subject);
+			unlessErased(await write(nameOf.family(familyId), family, lifetimeMs, subject));
+		},
+		forRefreshed: async (familyId, client, subject, access) => {
+			const found = await records.read(nameOf.family(familyId));
+			if (found === undefined) return;
+			const family = read.target(found);
+			// No agreement is read again: the family's target was cut to the approval's, and is cut to the allowance now.
+			const allowed = family.target.names.filter((named) =>
+				clientAllowance.allowsScope(client, named.scope),
+			);
+			const target = { names: allowed, constraints: family.target.constraints };
+			await keepForToken(access, target, ownerOf(family.subject, subject));
+		},
 	};
 	const hook: RedemptionHook = {
 		name: "claims-selection",

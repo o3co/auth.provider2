@@ -34,11 +34,12 @@ export function withinLimits(asked: Selection): boolean {
 /** Whether a target asks for anything: a name to release or a constraint to hold. */
 export const holds = (t: Target) => t.names.length > 0 || t.constraints.length > 0;
 
-/** Each record's name, by its kind: a code's selection, a pin, a token's target. */
+/** Each record's name, by its kind: a code's selection, a pin, a token's target, a family's target. */
 export const nameOf = {
 	code: (redemption: string) => `c.${redemption}`,
 	pin: (redemption: string) => `p.${redemption}`,
 	token: (tokenId: string) => `t.${tokenId}`,
+	family: (familyId: string) => `f.${familyId}`,
 };
 
 /** A record's kind and what it was named for, from its name; none for a name of no kind. */

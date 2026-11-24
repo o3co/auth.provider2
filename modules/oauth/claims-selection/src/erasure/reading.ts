@@ -5,7 +5,7 @@ import { kindOf, read } from "../stored.ts";
 const unreadable = (reason: string): SubjectOf => ({ kind: "unreadable", reason });
 
 /** Each kind's read. */
-const readOf = { code: read.code, pin: read.pin, token: read.target };
+const readOf = { code: read.code, pin: read.pin, token: read.target, family: read.target };
 
 /**
  * Whose a record is, as the migration reads it: its own subject, which every record keeps; a record

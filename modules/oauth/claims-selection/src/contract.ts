@@ -57,6 +57,22 @@ export interface ClaimsSelections {
 	forCode(redemption: string): Promise<Selection | undefined>;
 	/** The userinfo target kept for an access token; none for a token without one. */
 	forToken(tokenId: string): Promise<Target | undefined>;
+	/**
+	 * Keeps for the family a redemption founded its pin's userinfo target, as the approval agreed to it
+	 * then (O19), for the pin's subject, for the family's lifetime. Throws once the pin is gone.
+	 */
+	follow(redemption: string, familyId: string, lifetimeMs: number): Promise<void>;
+	/**
+	 * Keeps for a token refreshed from a family its family's target, its names cut to what the client
+	 * is allowed now; no agreement is read again. The subject must be the family's.
+	 */
+	forRefreshed(familyId: string, client: Client, subject: string, access: Issued): Promise<void>;
+}
+
+/** An access token as a selection is kept for it: its id and its end (epoch ms). */
+export interface Issued {
+	readonly id: string;
+	readonly expiresAt: number;
 }
 
 export const claimsSelections = contract<ClaimsSelections>("claims-selection");

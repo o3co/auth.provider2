@@ -12,7 +12,7 @@ import {
 	Unavailable,
 } from "@mod/kernel";
 import { quietRuntime, takesUnused } from "@mod/kernel/testing";
-import { afterEach, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import {
 	claimScopes,
 	claimsSelections,
@@ -21,6 +21,7 @@ import {
 	type Target,
 	withinLimits,
 } from "../src/contract.ts";
+import { selectionSubjectOf } from "../src/erasure/reading.ts";
 import claimsSelectionModule from "../src/module.ts";
 import { read, stored } from "../src/stored.ts";
 import { claimsSelectionInMemory } from "../src/testing.ts";
@@ -384,4 +385,83 @@ it("pins a redemption once: a second pin for it is unavailable", async () => {
 	await s.selections.keepForCode("r-1", asked, 600_000, "alice");
 	await s.hook.pin("r-1", "alice");
 	await expect(s.hook.pin("r-1", "alice")).rejects.toSatisfy(isUnavailable);
+});
+
+describe("a refresh family's target", () => {
+	const issued = (id: string, expiresIn = 600_000) => ({
+		id,
+		expiresAt: runtime.clock.now() + expiresIn,
+	});
+
+	it("follows the pin's userinfo target, as the approval agreed to it, for the family's lifetime", async () => {
+		const s = await serve();
+		await s.selections.keepForCode("r-1", asked, 600_000, "alice");
+		await s.hook.pin("r-1", "alice");
+		await s.selections.follow("r-1", "fam-1", 3_600_000);
+		await s.selections.forRefreshed(
+			"fam-1",
+			clientAllowed(["profile", "groups"]),
+			"alice",
+			issued("tok-1"),
+		);
+		expect(await s.selections.forToken("tok-1")).toEqual(asked.userinfo);
+		shift = 3_600_000;
+		await s.selections.forRefreshed(
+			"fam-1",
+			clientAllowed(["profile", "groups"]),
+			"alice",
+			issued("tok-2"),
+		);
+		expect(await s.selections.forToken("tok-2")).toBeUndefined();
+	});
+
+	it("is cut at each refresh to what the client is allowed now, its constraints kept; a name allowed again comes back", async () => {
+		const s = await serve();
+		await s.selections.keepForCode("r-1", asked, 600_000, "alice");
+		await s.hook.pin("r-1", "alice");
+		await s.selections.follow("r-1", "fam-1", 3_600_000);
+		await s.selections.forRefreshed("fam-1", clientAllowed(["profile"]), "alice", issued("tok-1"));
+		expect(await s.selections.forToken("tok-1")).toEqual({
+			names: [name],
+			constraints: asked.userinfo.constraints,
+		});
+		await s.selections.forRefreshed(
+			"fam-1",
+			clientAllowed(["profile", "groups"]),
+			"alice",
+			issued("tok-2"),
+		);
+		expect((await s.selections.forToken("tok-2"))?.names).toEqual([name, groups]);
+	});
+
+	it("keeps nothing for a family whose code had no selection, fails once the pin is gone, and refuses another subject", async () => {
+		const s = await serve();
+		await s.hook.pin("r-1", "alice");
+		await s.selections.follow("r-1", "fam-1", 3_600_000);
+		await s.selections.forRefreshed("fam-1", clientAllowed(["profile"]), "alice", issued("tok-1"));
+		expect(await s.selections.forToken("tok-1")).toBeUndefined();
+		await expect(s.selections.follow("r-gone", "fam-2", 3_600_000)).rejects.toSatisfy(
+			isUnavailable,
+		);
+		await s.selections.keepForCode("r-3", asked, 600_000, "alice");
+		await s.hook.pin("r-3", "alice");
+		await s.selections.follow("r-3", "fam-3", 3_600_000);
+		await expect(
+			s.selections.forRefreshed("fam-3", clientAllowed(["profile"]), "bob", issued("tok-3")),
+		).rejects.toSatisfy(isUnavailable);
+	});
+
+	it("is kept in format 2 with its subject, which erasure reads", async () => {
+		const s = await serve();
+		await s.selections.keepForCode("r-1", asked, 600_000, "alice");
+		await s.hook.pin("r-1", "alice");
+		await s.selections.follow("r-1", "fam-1", 3_600_000);
+		const kept = await s.stores.records.read("f.fam-1");
+		if (kept === undefined) throw new Error("no family record");
+		expect(read.target(kept)).toEqual({ target: asked.userinfo, subject: "alice" });
+		expect(await selectionSubjectOf("f.fam-1", kept)).toEqual({
+			kind: "subject",
+			subject: "alice",
+		});
+	});
 });

@@ -5,7 +5,7 @@
 
 ## Not here
 - Reading the `claims` parameter, which claims a name stands for, and the approval's items (`authorize`, `oidc`, `approvals`): the caller hands what was agreed. Releasing claims and checking values against constraints (`oidc`).
-- A refresh family's selection: none is kept for a family; `refresh` and the family's target come with it.
+- Which family a refresh is of, and when it ends (`refresh`): the family's target is kept by the family's id `refresh` names.
 
 ## Offers
 - Contract `claimsSelections`:
@@ -14,6 +14,7 @@
   - `keepForCode`, by the redemption's name, for the code's subject, for the code's lifetime and a minute more.
   - `forCode`: the selection pinned to a redemption; none for a code without one.
   - `forToken`: the userinfo target kept for an access token; none for a token without one.
+  - `follow` (redemption, family, lifetime): the pin's userinfo target kept for the family a redemption founded, for the pin's subject; `forRefreshed` (family, client, subject, token): its target kept for a token refreshed from it, its names cut to what the client is allowed now.
 - `selectionLimits`, `withinLimits` (whether a selection keeps within them) and the types `Agreed`, `Selection`, `Target`, `Named`, `Constraint` and `Scalar`.
 - Extension point `claimScopes` (at most one, from the module releasing claims): `scopeOf(claim)`.
 - Contribution to `code-grant`'s redemption hooks: the pin, for the code's subject, and a redeemed code's token kept the pinned userinfo target, for the pin's subject: a redemption told another subject or none is unavailable.
@@ -24,6 +25,7 @@
 ## Invariants
 - A name is released only where the approval agreed to it: no record of consent, standing from an earlier login, is read.
 - A selection holds only scalar values: strings up to 256 characters, booleans and finite numbers; exactly one of `value` and a non-empty `values` of up to 16; 4 KiB whole. These are fixed, as a selection is stored and read back under the same bounds. Another is a `TypeError`.
+- A family's target is the approval's, as agreed to at its redemption (O19): written once, never cut; each refresh cuts its names to the client's allowance again, no agreement read again, so a name allowed again comes back. A refresh told another subject than the family's is unavailable.
 - An empty pin means the code had no selection kept, never that claims requests are not taken; every redemption is pinned, once: a pin there already is unavailable.
 - A pin copies the code's selection, or marks it none, and holds it five minutes; the redemption's other reads use only the pin. A pin gone fails the read, never answering none.
 - A code still alive at its pin finds its selection, which outlives the code by a minute; a code past its life is refused by `code-grant` before anything reads its pin.
@@ -31,7 +33,7 @@
 - Writes and reads that fail throw to the caller. A write past its subject's erasure fails as unavailable; a record's own subject wins, and a caller's that differs fails as unavailable. A write a caller past the types gives no subject (`keepForCode`, the pin) is its bug, a `TypeError`, writing nothing.
 
 ## Data
-- Records: a code's selection for the code's lifetime and a minute, so a code still alive finds it; a pin for five minutes, a fixed margin over the one exchange it covers; a token's target until the token's end and two minutes, for clock drift between hosts.
+- Records: a code's selection for the code's lifetime and a minute, so a code still alive finds it; a pin for five minutes, a fixed margin over the one exchange it covers; a family's target until the family's end; a token's target until the token's end and two minutes, for clock drift between hosts.
 
 ## Depends on
 - `kernel`, `clients`, `client-allowance`, `code-grant`, `erasure-extensions`
