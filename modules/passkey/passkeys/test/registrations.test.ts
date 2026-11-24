@@ -44,9 +44,15 @@ describe("registrations", () => {
 		const stepped = await w.land("s1", reserved.reservation, stage, 0);
 		expect(stepped).toMatchObject({ end: { ending: "took", op: reserved.reservation } });
 		expect(w.frames.value("s1", "reservation")).toMatchObject({ state: "active" });
+		// With its registration's record, the key's id in the flow's state.
+		const held = w.frames.value("s1", "keys") as { keys: Record<string, { credential: string }> };
+		const [registration] =
+			Object.entries(held.keys).find(([, k]) => k.credential === credential.id) ?? [];
+		expect(registration).toBeDefined();
 		expect(await w.keys.publicKeyOf(credential.id)).toEqual({
 			subject: "s1",
 			publicKey: credential.publicKey,
+			registration,
 		});
 		const login = w.asserting();
 		expect(await w.keys.assert(login.response, { ...login, allow: [] })).toEqual({

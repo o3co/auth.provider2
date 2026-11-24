@@ -44,10 +44,16 @@ export interface Passkeys {
 		  }
 		| { readonly kind: "refused"; readonly reason: AssertRefusal }
 	>;
-	/** An active key's public key and subject; none for any other credential. */
+	/**
+	 * An active key's public key and subject, and the id of its registration's record on the subject's
+	 * flow (the key's id in the flow's state); none for any other credential.
+	 */
 	publicKeyOf(
 		credential: string,
-	): Promise<{ readonly subject: string; readonly publicKey: string } | undefined>;
+	): Promise<
+		| { readonly subject: string; readonly publicKey: string; readonly registration: string }
+		| undefined
+	>;
 	/**
 	 * After a key change ended, by whoever took the end in: from the applied state alone, tells
 	 * `passkeyRemovals` of each credential gone since the last settle, sets the witness's mark while

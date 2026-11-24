@@ -96,7 +96,7 @@ export function keptOver(
 		if (!record?.subject) return undefined;
 		const key = activeKey(await keysHeld(p.frames, record.subject), id);
 		const credential = key && credentialOf(id, key[1].publicKey, record);
-		return credential && { record, subject: record.subject, credential };
+		return credential && { record, subject: record.subject, credential, registration: key[0] };
 	};
 	const refused = (reason: "unknown-credential" | "not-named" | "raced") =>
 		({ kind: "refused", reason }) as const;
@@ -141,7 +141,13 @@ export function keptOver(
 		},
 		async publicKeyOf(id) {
 			const found = await active(id);
-			return found && { subject: found.subject, publicKey: found.credential.publicKey };
+			return (
+				found && {
+					subject: found.subject,
+					publicKey: found.credential.publicKey,
+					registration: found.registration,
+				}
+			);
 		},
 		async settle(subject) {
 			const records = settledRecords();

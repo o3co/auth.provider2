@@ -57,7 +57,7 @@ export function heldKeys() {
 			assert: async () => ({ kind: "refused", reason: "unknown-credential" }) as const,
 			publicKeyOf: async (credential: string) => {
 				const subject = active.get(credential);
-				return subject === undefined ? undefined : { subject, publicKey: "-" };
+				return subject === undefined ? undefined : { subject, publicKey: "-", registration: "-" };
 			},
 			settle: async () => false,
 		})),
