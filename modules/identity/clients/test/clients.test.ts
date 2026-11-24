@@ -801,6 +801,38 @@ describe("clients", () => {
 		expect((await c.find("conf"))?.signed).toBeUndefined();
 	});
 
+	it("lists the clients of the sources that list theirs, read as find reads them, for a boot check", async () => {
+		const remote = { kind: "public" as const, method: "none", sections: {} };
+		const listing = (name: string, records: readonly unknown[]) =>
+			defineModule({ name, replicaSafe: true, takes: [] }, (m) => [
+				m.contribute(clientSources).by(() => ({
+					signed: true,
+					find: async () => undefined,
+					listed: async () => records as never,
+				})),
+			]);
+		const c = await boot([
+			source(() => undefined),
+			listing("first", [
+				{ id: "listed", ...remote },
+				{ id: "conf", ...remote },
+				{ id: "broken", ...remote, kind: "secret" },
+			]),
+			listing("second", [
+				{ id: "listed", ...remote },
+				{ id: "later", ...remote },
+			]),
+		]);
+		// A registered id wins, a record that fails is left out, and an id is listed once, as the first source names it.
+		const listed = await c.listed();
+		expect(listed.map((client) => [client.id, client.signed, client.registered])).toEqual([
+			["listed", true, false],
+			["later", true, false],
+		]);
+		// With no source that lists, none.
+		expect(await (await boot()).listed()).toEqual([]);
+	});
+
 	it("throws unavailable when a source is unavailable, from find and authenticate", async () => {
 		const c = await boot([
 			source(() => {

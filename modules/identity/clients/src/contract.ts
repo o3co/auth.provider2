@@ -56,6 +56,8 @@ export interface ClientSource {
 	 */
 	readonly signed?: true;
 	find(id: string): Promise<ClientRecord | undefined>;
+	/** Every record it holds, for a source that holds them all; read by a boot check alone. */
+	listed?(): Promise<readonly ClientRecord[]>;
 }
 
 export interface AuthMethod {
@@ -145,6 +147,12 @@ export interface Clients {
 	 * `clients.registered.<i>`, where a boot check names it by its place, never its id.
 	 */
 	registered(): readonly Client[];
+	/**
+	 * The clients of the sources that list theirs (`ClientSource.listed`), each read as `find` reads
+	 * it: one that fails is left out, and an id is listed once, never a registered one's. For a
+	 * boot check, which names none by its id.
+	 */
+	listed(): Promise<readonly Client[]>;
 	/** The names of the ways a client can authenticate here, built in and contributed. */
 	methods(): readonly string[];
 	/** The algorithms those methods take signed credentials in, each once. */

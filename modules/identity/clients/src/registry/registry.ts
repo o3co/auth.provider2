@@ -201,6 +201,20 @@ export function registry(
 		methods: () => methods.map((m) => m.name),
 		signingAlgorithms: () => [...new Set(methods.flatMap((m) => m.signingAlgorithms ?? []))],
 		registered: () => [...registered.values()],
+		listed: async () => {
+			const seen = new Set(registered.keys());
+			const all: Client[] = [];
+			for (const source of sources) {
+				for (const record of (await source.listed?.()) ?? []) {
+					const id = (record as { readonly id?: unknown }).id;
+					if (typeof id !== "string" || seen.has(id)) continue;
+					seen.add(id);
+					const client = await sourced(record, id, source.signed === true);
+					if (client !== "invalid") all.push(client);
+				}
+			}
+			return all;
+		},
 		find: async (id) => {
 			const found = await lookup(id);
 			return found === "invalid" ? undefined : found;

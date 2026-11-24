@@ -12,7 +12,7 @@
 - `checkRecord` (record → where it fails, or nothing): the checks `find` holds a source's record to (the registered rule, a known method, each section's schema), each failure a path from the record's root (`sections.consent.uri`), never a value or message; it rejects when a schema throws.
 - An authenticated answer carries the challenges for a later 401 to that client: its method's, or every method's when its method has none; and what its method verified (`proof`, `Verified`), unread, where it verified one, marked `assertion` for an assertion method's.
 - `bare` (request → whether it carries nothing a client authenticates with, whichever methods are composed). `authenticate`'s `no_credentials` says only that no composed method claimed the request.
-- `registered` (→ the clients the operator registered, in the settings' order, the `i`th at `clients.registered.<i>`), for a boot check that names one by its place, never its id.
+- `registered` (→ the clients the operator registered, in the settings' order, the `i`th at `clients.registered.<i>`), for a boot check that names one by its place, never its id; `listed` (→ the clients of the sources that list theirs, as `registry`'s card says), for a boot check that names none by id.
 - `methods` names the usable authentication methods, built in and contributed; `signingAlgorithms` names the algorithms they take signed credentials in.
 - A client gives its metadata by section, and says whether the operator registered it or another source named it, the registry version its record came from where its source names one, and that the version is one its publisher signed where its source declares all its records are (`signed`).
 - Asking a client for a section no module contributed throws; it never answers undefined.
