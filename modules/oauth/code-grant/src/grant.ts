@@ -10,7 +10,7 @@ import {
 	isRedeemed,
 	noteToken,
 } from "./redemption-record/redemption-record.ts";
-import type { CodeStore, RedemptionRecords } from "./store.ts";
+import type { CodeStore, RedemptionRecords } from "./store/store.ts";
 
 /** One answer for every refused code, so it tells nothing about why. */
 const refused: GrantOutcome = {

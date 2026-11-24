@@ -6,7 +6,11 @@ import { expect, it } from "vitest";
 import { type CodeRecord, toStored } from "../src/codes.ts";
 import { codeGrant } from "../src/grant.ts";
 import { fromStoredRedemptionRecord } from "../src/redemption-record/redemption-record.ts";
-import { type StoredCode, type StoredRedemptionRecord, storedRecordMaxMs } from "../src/store.ts";
+import {
+	type StoredCode,
+	type StoredRedemptionRecord,
+	storedRecordMaxMs,
+} from "../src/store/store.ts";
 
 const verifier = "v".repeat(43);
 const issued: CodeRecord = {

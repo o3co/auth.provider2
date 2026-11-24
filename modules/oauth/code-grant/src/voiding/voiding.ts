@@ -2,7 +2,7 @@ import { type Log, Unavailable } from "@mod/kernel";
 import type { Tokens } from "@mod/tokens";
 import { fromStored, toStored } from "../codes.ts";
 import { markVoid } from "../redemption-record/redemption-record.ts";
-import type { CodeStore, RedemptionRecords, VoidList } from "../store.ts";
+import type { CodeStore, RedemptionRecords, VoidList } from "../store/store.ts";
 
 /** A code's voiding: listing, marking, revoking its token, and the sweep that retries it. */
 export function voiding(parts: {

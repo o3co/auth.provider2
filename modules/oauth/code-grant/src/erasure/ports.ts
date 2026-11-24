@@ -1,4 +1,4 @@
-import type { CodeStore, RedemptionRecords } from "../store.ts";
+import type { CodeStore, RedemptionRecords } from "../store/store.ts";
 
 /** The two places code-grant keeps a subject's data in, each with its erase and migrate. */
 export interface ErasableStores {

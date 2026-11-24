@@ -1,6 +1,6 @@
 import type { MigrationReport, SpaceReport, SubjectReading, Walk } from "@mod/erasure-extensions";
 import { describe, expect, it } from "vitest";
-import type { CodeStore, RedemptionRecords } from "../../store.ts";
+import type { CodeStore, RedemptionRecords } from "../../store/store.ts";
 import { type ErasableStores, portsOf, portsRefused } from "../ports.ts";
 
 const plainCodes = {

@@ -3,7 +3,7 @@ import {
 	type RedemptionRecords,
 	type StoredRedemptionRecord,
 	storedRecordMaxMs,
-} from "../store.ts";
+} from "../store/store.ts";
 
 /** What a redemption keeps: its token, once noted, and whether a reuse voided it. */
 export interface RedemptionRecord {

@@ -114,4 +114,4 @@ export const redemptionHooks = extensionPoint<RedemptionHook>("code-grant.redemp
 	keyOf: (hook) => hook.name,
 });
 
-export * from "./store.ts";
+export * from "./store/store.ts";

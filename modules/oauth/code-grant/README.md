@@ -19,9 +19,7 @@
 - Extension point `idTokens` (at most one; two refuse boot): `part` (an `IdTokenRequest`: the code's subject, client, nonce, amr, acr, scope, session handle, its digest as `code`, and its approval's facts) → the ID token as a part of the redemption's bundle (`grants`' `BundlePart`), its reads made before the bundle starts.
 - Extension point `redemptionHooks` (keyed): `pin` (the redemption, the code's digest as `digestOf` gives it; its subject) before the token is issued, `redeemed` (redemption, subject, scope, the token's id and end) once it passed every check. A hook that fails voids the code.
 - The `authorization_code` grant (`codeGrantType`, taking its audience from the request) to `grants`' grant extension point.
-- Store interfaces (`codeStore`, `redemptionRecords`, `voidList`), their needs (`codeStoreNeeds`) and `storedRecordMaxMs`.
-  - Wired by the assembly, never shown what a record holds: codes by a name made from the code, for its subject (rewrite from the current contents); each redemption record by that name (create, read, rewrite; `redemption-record`); the void list (add, done, go through in order).
-  - Their `erase` and `migrate` back the eraser `code-grant` (`erasure`).
+- Store interfaces (`codeStore`, `redemptionRecords`, `voidList`), their needs (`codeStoreNeeds`) and `storedRecordMaxMs` (internal module `store`), wired by the assembly; their `erase` and `migrate` back the eraser `code-grant` (`erasure`).
 - Operator section: `code-lifetime` (10s–60s, default `60s`), `sweep-interval` (retry of failed revocations, 1s–1h, default `30s`). Times are written with their unit; a bare number is refused.
 - `./testing`: `codeGrantConfig`; `codeStoreContract`, the store interfaces' contract test for every implementation.
 

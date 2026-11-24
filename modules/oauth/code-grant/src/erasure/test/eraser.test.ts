@@ -1,6 +1,6 @@
 import type { MigrationReport, SpaceReport, SubjectReading, Walk } from "@mod/erasure-extensions";
 import { describe, expect, it } from "vitest";
-import type { CodeStore, RedemptionRecords } from "../../store.ts";
+import type { CodeStore, RedemptionRecords } from "../../store/store.ts";
 import { codeGrantEraser } from "../eraser.ts";
 
 const signal = new AbortController().signal;

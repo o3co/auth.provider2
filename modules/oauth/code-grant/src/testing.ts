@@ -8,7 +8,7 @@ import type {
 	StoredCode,
 	StoredRedemptionRecord,
 	VoidList,
-} from "./store.ts";
+} from "./store/store.ts";
 
 export type CodeGrantSettings = z.input<typeof section>;
 

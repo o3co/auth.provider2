@@ -5,7 +5,7 @@ import {
 	fromStoredRedemptionRecord,
 	toStoredRedemptionRecord,
 } from "../../redemption-record/redemption-record.ts";
-import type { RedemptionRecords, StoredRedemptionRecord } from "../../store.ts";
+import type { RedemptionRecords, StoredRedemptionRecord } from "../../store/store.ts";
 import { voiding } from "../voiding.ts";
 
 it("settles a listed void alike whichever instance's sweep reaches it, both at once among them", async () => {

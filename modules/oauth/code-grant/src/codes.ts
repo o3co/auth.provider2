@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
-import type { StoredCode } from "./store.ts";
+import type { StoredCode } from "./store/store.ts";
 
 /** What a code keeps from its issuing to its end. */
 export interface CodeRecord {
