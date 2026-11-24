@@ -37,7 +37,8 @@ export default defineModule(
 				});
 			});
 			// Every record is of the version verified under publisher-key above.
-			return { signed: true, find: async (id) => records.get(id) };
+			const listed = [...records.values()];
+			return { signed: true, find: async (id) => records.get(id), listed: async () => listed };
 		}),
 		m.contribute(stances).by(() => ({
 			promise: promiseNames.coreContained,

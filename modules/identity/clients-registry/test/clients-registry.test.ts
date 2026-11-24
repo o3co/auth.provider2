@@ -79,6 +79,11 @@ describe("clients-registry", () => {
 		// Each says the version it came from, and that its publisher signed it.
 		expect((await c.find("rp-1"))?.version).toBe(3);
 		expect((await c.find("rp-1"))?.signed).toBe(true);
+		// Listed, for a boot check, as find answers them.
+		expect((await c.listed()).map((client) => [client.id, client.signed])).toEqual([
+			["rp-1", true],
+			["rp-2", true],
+		]);
 		await app.stop();
 	});
 
