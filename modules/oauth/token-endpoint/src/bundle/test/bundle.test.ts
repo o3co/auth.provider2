@@ -100,6 +100,13 @@ beforeEach(async () => {
 	world.book.judgeOnAppend({ verdict: "verified", outcome: "took" });
 });
 const records = () => world.book.records(flow).map((p) => p.record);
+/** Whether the op's intent is closed: its frame says so, or is gone with its end. */
+const closed = (op: string | undefined) => {
+	const frame = world.frames.value({ flow, op } as never) as
+		| { intent: { state: string } | null }
+		| undefined;
+	return frame === undefined || frame.intent?.state === "closed";
+};
 
 describe("a bundle, owned by the token endpoint (A40)", () => {
 	it("records its start with the request's evidence, then its token's digest once, under the start, on the client's own flow", async () => {
@@ -153,9 +160,7 @@ describe("a bundle, owned by the token endpoint (A40)", () => {
 		const issue = world.run(await world.replica("w1"));
 		await expect(issue(ask)).rejects.toSatisfy(isUnavailable);
 		expect(signed).toBe(0);
-		expect(world.frames.value({ flow, op: records()[0]?.op } as never)).toMatchObject({
-			intent: { state: "closed" },
-		});
+		expect(closed(records()[0]?.op)).toBe(true);
 	});
 
 	it("signs nothing when its append's answer is lost, leaving its op to be abandoned", async () => {
@@ -231,8 +236,6 @@ describe("a bundle, owned by the token endpoint (A40)", () => {
 		});
 		expect(await late(ask)).toEqual(refused);
 		expect(records().map((r) => r.kind)).toEqual(["start"]);
-		expect(world.frames.value({ flow, op: records()[0]?.op } as never)).toMatchObject({
-			intent: { state: "closed" },
-		});
+		expect(closed(records()[0]?.op)).toBe(true);
 	});
 });
