@@ -21,6 +21,7 @@ export {
 export type { Sealed } from "./hpke.ts";
 export type { Jwk } from "./jws.ts";
 export { type ScreenKeys, screenKeys } from "./keys.ts";
+export { management, type ReadManage } from "./management.ts";
 export {
 	type Purpose,
 	readStatement,
