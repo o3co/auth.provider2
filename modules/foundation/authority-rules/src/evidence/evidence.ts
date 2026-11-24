@@ -21,9 +21,9 @@ export interface Checks {
 	/**
 	 * A passkey's key (its COSE_Key, base64url) to its thumbprint (RFC 7638, as `sdk-core-wire`'s
 	 * `keyThumbprintInput` builds it) and its algorithm as COSE numbers it; none for a key the
-	 * protocol does not take. A caller without it has no possession by thumbprint taken.
+	 * protocol does not take.
 	 */
-	keyThumbprint?(publicKey: string): { readonly jkt: string; readonly alg: number } | undefined;
+	keyThumbprint(publicKey: string): { readonly jkt: string; readonly alg: number } | undefined;
 }
 
 /** The times the rules hold records to, in milliseconds (a configuration version's). */
@@ -70,9 +70,8 @@ const via = z.discriminatedUnion("via", [
 export const contents = Object.freeze({
 	approval: empty,
 	/**
-	 * A first-trust key (the first-key path, F1): its credential and its public key, its COSE_Key (or,
-	 * where the possession names its point's hash, the uncompressed P-256 point) in its one unpadded
-	 * base64url spelling; the key generation is the signed creation's (`kg`).
+	 * A first-trust key (the first-key path, F1): its credential and its public key, its COSE_Key in
+	 * its one unpadded base64url spelling; the key generation is the signed creation's (`kg`).
 	 */
 	keyChange: z
 		.object({ variant: z.literal("first"), credential: id, publicKey: canonical })
@@ -151,13 +150,6 @@ export function assertedBy(
 	const challenge = checks.digest(challengeInput(statement, "get"));
 	const made = checks.verifyAssertion(assertion, key.publicKey, challenge, context.origin);
 	return made?.credential === key.credential;
-}
-
-/** A public key's uncompressed P-256 point (0x04, x, y: 65 bytes) from its base64url, none for any other. */
-export function pointOf(publicKey: string): Uint8Array | undefined {
-	if (!/^[A-Za-z0-9_-]+$/.test(publicKey)) return undefined;
-	const bytes = Buffer.from(publicKey, "base64url");
-	return bytes.length === 65 && bytes[0] === 4 ? new Uint8Array(bytes) : undefined;
 }
 
 /** Whether a statement's times hold the acceptance time: iat ≤ a ≤ exp (the statement in seconds, a in ms). */

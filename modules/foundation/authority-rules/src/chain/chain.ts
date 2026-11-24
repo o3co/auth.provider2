@@ -7,7 +7,6 @@ import {
 	isCoreKind,
 	type Opened,
 	oneOf,
-	pointOf,
 	readPreimage,
 	statementOf,
 	statements,
@@ -105,26 +104,19 @@ function ceremonyOf(read: Read<"keyChange">) {
 	return { creation, possession };
 }
 
-/**
- * Why the new key is not the one the possession names, read by the form it names it in: its
- * thumbprint, of an algorithm the creation offered, or its uncompressed P-256 point's hash.
- */
+/** Why the new key is not the one the possession names by its thumbprint, of an algorithm the creation offered. */
 function newKeyRefusal(
 	checks: Checks,
 	creation: { readonly options: { readonly algorithms?: readonly number[] | undefined } },
-	p: { readonly key_jkt?: string | undefined; readonly key_hash?: string | undefined },
+	p: { readonly key_jkt?: string | undefined },
 	publicKey: string,
 ): Refusal {
-	if (p.key_jkt !== undefined) {
-		const key = checks.keyThumbprint?.(publicKey);
-		if (!key) return "the new key is not a key the protocol takes";
-		if (!creation.options.algorithms?.includes(key.alg))
-			return "the new key's algorithm is not one the creation offered";
-		return p.key_jkt === key.jkt ? undefined : "the signed bytes are not the record's";
-	}
-	const point = pointOf(publicKey);
-	if (!point) return "the new key is not an uncompressed P-256 point";
-	return p.key_hash === checks.digest(point) ? undefined : "the signed bytes are not the record's";
+	if (p.key_jkt === undefined) return "the possession names the new key by no thumbprint";
+	const key = checks.keyThumbprint(publicKey);
+	if (!key) return "the new key is not a key the protocol takes";
+	if (!creation.options.algorithms?.includes(key.alg))
+		return "the new key's algorithm is not one the creation offered";
+	return p.key_jkt === key.jkt ? undefined : "the signed bytes are not the record's";
 }
 
 function firstKeyRefusal(read: Read<"keyChange">): Refusal {

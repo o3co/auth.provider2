@@ -23,7 +23,6 @@ import {
 	creation,
 	digest,
 	limits,
-	point,
 	possession,
 	preimage,
 	sign,
@@ -95,15 +94,15 @@ describe("a first-trust key (Rules023e Allowed `ft`)", () => {
 		expect(
 			verdictOn(step(otherSubject, sign(possession(otherSubject, newKey), "ring-1")), empty),
 		).toEqual(refused(/subject/));
-		const swapped = { credential: "cred-2", publicKey: point(2) };
+		const swapped = { credential: "cred-2", publicKey: coseKey(2) };
 		expect(verdictOn(step(creationJws, possessionJws, swapped), empty)).toEqual(
 			refused(/signed bytes/),
 		);
 		const loose = sign(possession(sign(creation(subject.id, 1), "ring-1"), newKey), "ring-1");
 		expect(verdictOn(step(creationJws, loose), empty)).toEqual(refused(/signed bytes/));
-		const notPoint = { credential: newKey.credential, publicKey: "cGstMQ" };
-		expect(verdictOn(step(creationJws, possessionJws, notPoint), empty)).toEqual(
-			refused(/uncompressed P-256 point/),
+		const notKey = { credential: newKey.credential, publicKey: "cGstMQ" };
+		expect(verdictOn(step(creationJws, possessionJws, notKey), empty)).toEqual(
+			refused(/not a key the protocol takes/),
 		);
 	});
 
@@ -137,12 +136,13 @@ describe("a first-trust key (Rules023e Allowed `ft`)", () => {
 		const eddsa = { credential: "c", publicKey: coseKey(1, -8) };
 		expect(step(eddsa, [-7])).toEqual(refused(/algorithm is not one the creation offered/));
 		expect(step(eddsa, "none")).toEqual(refused(/algorithm is not one the creation offered/));
-		const { keyThumbprint: __, ...without } = checks;
-		expect(step(eddsa, undefined, without)).toEqual(refused(/not a key the protocol takes/));
 		const unread = { ...checks, keyThumbprint: () => undefined };
 		expect(step(eddsa, undefined, unread)).toEqual(refused(/not a key the protocol takes/));
 		const other = { ...checks, keyThumbprint: () => ({ jkt: digest("other"), alg: -8 }) };
 		expect(step(eddsa, undefined, other)).toEqual(refused(/signed bytes/));
+		// A possession naming the key by its point's hash, as one did before keys took every algorithm.
+		const point = Buffer.concat([Buffer.from([4]), Buffer.alloc(64, 1)]).toString("base64url");
+		expect(step({ credential: "c", publicKey: point })).toEqual(refused(/by no thumbprint/));
 	});
 
 	it("is refused unless the new key asserts the possession", () => {

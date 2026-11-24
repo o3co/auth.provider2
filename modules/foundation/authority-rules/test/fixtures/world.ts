@@ -14,10 +14,6 @@ const unb64 = (text: string): unknown => JSON.parse(Buffer.from(text, "base64url
 export const digest = (data: string | Uint8Array) =>
 	createHash("sha256").update(data).digest("base64url");
 
-/** A P-256 public key as its uncompressed point (0x04, x, y), base64url; `seed` picks its bytes. */
-export const point = (seed: number) =>
-	Buffer.concat([Buffer.from([4]), Buffer.alloc(64, seed)]).toString("base64url");
-
 const algorithms = [-7, -8, -257];
 /** A passkey's COSE_Key as this world reads it: a map's head, its algorithm's index, then `seed`'s bytes. */
 export const coseKey = (seed: number, alg = -7) =>
@@ -127,7 +123,7 @@ export const possession = (
 	key: { credential: string; publicKey: string },
 	iat = T0,
 ) => {
-	const thumbprint = checks.keyThumbprint?.(key.publicKey);
+	const thumbprint = checks.keyThumbprint(key.publicKey);
 	return {
 		iss: "https://core.example",
 		sid: "possession-1",

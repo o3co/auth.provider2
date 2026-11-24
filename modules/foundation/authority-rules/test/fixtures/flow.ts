@@ -13,10 +13,10 @@ import {
 	checks,
 	context,
 	coreRecord,
+	coseKey,
 	creation,
 	digest,
 	type FlowRecord,
-	point,
 	possession,
 	preimage,
 	sign,
@@ -25,7 +25,7 @@ import {
 
 /** A login on a fresh flow, as an honest Core of generation 1 writes it: each step's record and preimage. */
 
-export const newKey = { credential: "cred-1", publicKey: point(1) };
+export const newKey = { credential: "cred-1", publicKey: coseKey(1) };
 /** The first key's creation (signed for key generation `kg`) and possession, by the ring of generation 1. */
 const ceremony = (kg = 0) => {
 	const creationJws = sign(creation(subject.id, undefined, kg), "ring-1");
