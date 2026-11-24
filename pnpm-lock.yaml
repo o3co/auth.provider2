@@ -1259,6 +1259,40 @@ importers:
         specifier: 5.0.5
         version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(vite@8.3.3(@types/node@26.6.5)(yaml@2.9.1))
 
+  modules/templates/session-store:
+    dependencies:
+      '@mod/kernel':
+        specifier: workspace:*
+        version: link:../../foundation/kernel
+      '@mod/records':
+        specifier: workspace:*
+        version: link:../../foundation/records
+      '@mod/session-lifecycle':
+        specifier: workspace:*
+        version: link:../../identity/session-lifecycle
+      '@mod/store':
+        specifier: workspace:*
+        version: link:../../foundation/store
+      '@mod/subject-records':
+        specifier: workspace:*
+        version: link:../../foundation/subject-records
+      zod:
+        specifier: 4.6.7
+        version: 4.6.7
+    devDependencies:
+      '@mod/erasure-extensions':
+        specifier: workspace:*
+        version: link:../../foundation/erasure-extensions
+      '@mod/session':
+        specifier: workspace:*
+        version: link:../../identity/session
+      '@mod/session-participants':
+        specifier: workspace:*
+        version: link:../../identity/session-participants
+      '@mod/subject-revocation':
+        specifier: workspace:*
+        version: link:../../identity/subject-revocation
+
   modules/templates/subject-revocation-store:
     dependencies:
       '@mod/erasure-extensions':
