@@ -78,6 +78,12 @@ describe("resetFinding (J0r)", () => {
 		expect(find(body({ flow: { of: "subject", id: "sub-2" } }))).toEqual(forged("subject"));
 		expect(find(body({ flow: { of: "client", id: "sub-1" } }))).toEqual(forged("subject"));
 		expect(find(body({ op: opIds.reset("B".repeat(22)) }))).toEqual(forged("op"));
+		// Padded past reset-wire's limit with whitespace, its payload still the instruction: no CLI carries it.
+		const header = signed().split(".")[0];
+		const padded = Buffer.from(`{${" ".repeat(9000)}${JSON.stringify(instruction).slice(1)}`);
+		const long = `${header}.${padded.toString("base64url")}.reset-1`;
+		expect(long.length).toBeGreaterThan(8192);
+		expect(find(body({ instruction: long }))).toEqual(forged("shape"));
 		// The first that holds is named: a wrong shape before an absent set.
 		expect(find(body({ instruction: "a.b", set: 2 }))).toEqual(forged("shape"));
 	});

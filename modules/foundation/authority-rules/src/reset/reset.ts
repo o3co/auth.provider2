@@ -1,4 +1,9 @@
-import { instructionSkew, type ResetFault, resetInstruction } from "@mod/reset-wire";
+import {
+	instructionLimit,
+	instructionSkew,
+	type ResetFault,
+	resetInstruction,
+} from "@mod/reset-wire";
 import {
 	logTyps,
 	opIds,
@@ -72,6 +77,8 @@ export function resetFinding(
 	const boundary = schemas.bodies.resetBoundary.safeParse(body);
 	if (!boundary.success) return forged("shape");
 	const { flow, op, set, instruction } = boundary.data;
+	// Longer than reset-wire's limit, however it verifies: no CLI carries it, so none is taken.
+	if (Buffer.byteLength(instruction) > instructionLimit) return forged("shape");
 	const read = resetInstruction.safeParse(payloadOf(instruction));
 	if (!read.success) return forged("shape");
 	const keys = reset?.sets(set);
