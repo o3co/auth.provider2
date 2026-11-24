@@ -1,15 +1,11 @@
 import { randomBytes, scryptSync } from "node:crypto";
-import { defineModule, isUnavailable } from "@mod/kernel";
+import { defineModule } from "@mod/kernel";
 import { describe, expect, it } from "vitest";
 import type { Contact, Ledger, Users } from "./contract.ts";
 import {
 	contactStore,
-	type LinkStore,
-	linkStore,
 	type RecordStore,
 	type StoredContacts,
-	type StoredLink,
-	type StoredName,
 	type SubjectRecordStore,
 } from "./store.ts";
 
@@ -324,28 +320,13 @@ function memoryStore<T>() {
 	return { store, raceNextUpdate };
 }
 
-/** users' store interfaces kept in memory, for tests that assemble users. */
-export function memoryUsersStores(options: { readonly issuers?: true } = {}) {
-	const links = memoryStore<StoredLink>();
+/** users' store interface kept in memory, for tests that assemble users. */
+export function memoryUsersStores() {
 	const contacts = memoryStore<StoredContacts>();
-	const issuers = memoryStore<StoredName>();
-	/** While on, the link space keeps no names' record: `unowned` answers `closed`, as once indexed. */
-	const linksClosed = { on: false };
-	const linkPorts: LinkStore = options.issuers
-		? {
-				...links.store,
-				issuers: issuers.store,
-				unowned: async (key, record) =>
-					linksClosed.on
-						? "closed"
-						: links.store.save(key, record as unknown as StoredLink, "endless"),
-			}
-		: links.store;
 	const module = defineModule({ name: "users-stores", replicaSafe: false, takes: [] }, (m) => [
-		m.provide(linkStore).by(() => linkPorts),
 		m.provide(contactStore).by(() => contacts.store),
 	]);
-	return { module, links, contacts, issuers, linksClosed };
+	return { module, contacts };
 }
 
 /** A place that keeps one of users' kinds of record, as one implementation of its store interfaces offers it. */
@@ -432,97 +413,6 @@ function recordTests<T>(open: () => Promise<UsersStorePlace<T>>): void {
 		await pressMemory();
 		expect(await place.records.read(saved)).toEqual(held({ n: 1 }));
 		expect(await place.records.read(changed)).toEqual(held({ n: 2 }));
-	});
-}
-
-/** What users needs from any implementation of its link store: records whose reads are confirmed. */
-export function linkStoreContract(
-	name: string,
-	open: () => Promise<UsersStorePlace<StoredLink>>,
-): void {
-	describe(`users' link store: ${name}`, () => {
-		recordTests(open);
-
-		it("removes a record only where the check holds, in the write that removes it", async (context) => {
-			const links = (await open()).records as LinkStore;
-			if (!links.remove) return context.skip();
-			const key = `removed-${Math.random().toString(36).slice(2)}`;
-			await links.save(key, { subject: key } as unknown as StoredLink, "endless", key);
-			expect(await links.remove(key, () => false)).toBe("left");
-			expect(await links.read(key)).toEqual({ subject: key });
-			expect(await links.remove(key, () => true)).toBe("removed");
-			expect(await links.read(key)).toBeUndefined();
-			expect(await links.remove(key, () => true)).toBe("missing");
-		});
-
-		it("removes nothing a racing writer replaced between the check and the removal", async (context) => {
-			const place = await open();
-			const links = place.records as LinkStore;
-			if (!links.remove) return context.skip();
-			const key = `raced-${Math.random().toString(36).slice(2)}`;
-			const holds = (who: string) => (record: StoredLink) =>
-				(record as unknown as { subject?: string }).subject === who;
-			await links.save(key, { subject: "s-a" } as unknown as StoredLink, "endless", key);
-			// Another writer gives the record to another subject before the removal's write lands.
-			place.raceNextUpdate(key, () => ({ subject: "s-b" }) as unknown as StoredLink);
-			expect(await links.remove(key, holds("s-a"))).toBe("left");
-			expect(await links.read(key)).toEqual({ subject: "s-b" });
-		});
-
-		it("keeps a name's record raw once through unowned, or answers closed and writes nothing, never throwing", async (context) => {
-			const links = (await open()).records as LinkStore;
-			if (!links.unowned) return context.skip();
-			const key = JSON.stringify({ idp: `n-${Math.random().toString(36).slice(2)}` });
-			const record = { issuer: "https://a.example" } as unknown as StoredName;
-			const first = await links.unowned(key, record, "endless");
-			if (first === "closed") {
-				expect(await links.read(key)).toBeUndefined();
-				return;
-			}
-			expect(first).toBe("created");
-			const other = { issuer: "https://b.example" } as unknown as StoredName;
-			expect(await links.unowned(key, other, "endless")).toBe("exists");
-			expect(await links.read(key)).toEqual({ issuer: "https://a.example" });
-		});
-
-		it("answers erased to a save for a subject its erase fenced, where it erases", async (context) => {
-			const links = (await open()).records as LinkStore;
-			if (!links.erase) return context.skip();
-			const subject = `s-${Math.random().toString(36).slice(2)}`;
-			const report = await links.erase(subject, new AbortController().signal);
-			// A store not yet indexed erases nothing, so fences nothing: no case there.
-			if (report.kind !== "erased") return context.skip();
-			const key = `after-${subject}`;
-			expect(await links.save(key, { subject } as unknown as StoredLink, "endless", subject)).toBe(
-				"erased",
-			);
-			expect(await links.read(key)).toBeUndefined();
-		});
-
-		it("reads the names' records only as confirmed, as names relies on before a migration lets one go", async (context) => {
-			const place = await open();
-			const { issuers: names } = place.records as LinkStore;
-			const { stallReplicas: stall } = place;
-			if (!names || !stall) return context.skip();
-			const key = JSON.stringify({ idp: `c-${Math.random().toString(36).slice(2)}` });
-			await names.save(key, { issuer: "https://a.example" } as unknown as StoredName, "endless");
-			stall(true);
-			await expect(names.read(key)).rejects.toSatisfy(isUnavailable);
-			stall(false);
-			expect(await names.read(key)).toEqual({ issuer: "https://a.example" });
-		});
-
-		it("reads only what is confirmed", async (context) => {
-			const place = await open();
-			const { stallReplicas: stall } = place;
-			if (!stall) return context.skip();
-			const key = `confirmed-${Math.random().toString(36).slice(2)}`;
-			await place.records.save(key, {} as StoredLink, "endless", key);
-			stall(true);
-			await expect(place.records.read(key)).rejects.toSatisfy(isUnavailable);
-			stall(false);
-			expect(await place.records.read(key)).toEqual({});
-		});
 	});
 }
 

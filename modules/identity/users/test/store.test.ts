@@ -1,13 +1,12 @@
 import { describe, expect, it } from "vitest";
-import type { RecordStore, StoredContacts, StoredLink } from "../src/contract.ts";
-import { contactStoreContract, linkStoreContract, memoryUsersStores } from "../src/testing.ts";
+import type { RecordStore, StoredContacts } from "../src/contract.ts";
+import { contactStoreContract, memoryUsersStores } from "../src/testing.ts";
 
 const harness = <T>(kept: {
 	store: RecordStore<T>;
 	raceNextUpdate: (key: string, change: (record: T) => T) => void;
 }) => ({ records: kept.store, advance: () => {}, raceNextUpdate: kept.raceNextUpdate });
 
-linkStoreContract("memory stand-in", async () => harness(memoryUsersStores().links));
 contactStoreContract("memory stand-in", async () => harness(memoryUsersStores().contacts));
 
 describe("memory stand-in", () => {
@@ -21,10 +20,10 @@ describe("memory stand-in", () => {
 	});
 
 	it("races only the next update of the key it names", async () => {
-		const { store, raceNextUpdate } = memoryUsersStores().links;
-		const record = (n: number) => ({ n }) as unknown as StoredLink;
-		const count = (held: StoredLink) => (held as unknown as { n: number }).n;
-		const plus = (held: StoredLink) => ({ value: record(count(held) + 1) });
+		const { store, raceNextUpdate } = memoryUsersStores().contacts;
+		const record = (n: number) => ({ n }) as unknown as StoredContacts;
+		const count = (held: StoredContacts) => (held as unknown as { n: number }).n;
+		const plus = (held: StoredContacts) => ({ value: record(count(held) + 1) });
 		await store.save("a", record(1), "endless");
 		await store.save("b", record(1), "endless");
 		raceNextUpdate("a", (held) => record(count(held) * 10));
