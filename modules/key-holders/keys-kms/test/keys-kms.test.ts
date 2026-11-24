@@ -80,23 +80,28 @@ describe("keys-kms", () => {
 		});
 	});
 
-	it("signs under RS256 with an RSA key", async () => {
+	it("signs under PS256 and RS256 with an RSA key, each by its KMS algorithm", async () => {
 		const rsa = generateKeyPairSync("rsa", { modulusLength: 2048 }).privateKey;
-		const fake = fakeKms(
-			fakeKeys({ [arn("rsa")]: { key: rsa, spec: "RSA_2048", usage: "SIGN_VERIFY" } }),
-		);
-		const k = (
-			await boot(fake, entries([{ kid: "r", "key-id": arn("rsa") }]), {
-				authority: { signing: { kid: "r", alg: "RS256" } },
-			})
-		).get(keys);
-		const token = jwsOf(await k.sign(k.prepare("authority", "JWT"), bytes({ sub: "a" })));
-		expect((await k.verify("authority", token, "JWT")).kind).toBe("valid");
-		expect(
-			fake.calls
-				.filter((c) => c.command === "Sign")
-				.map((c) => (c.input as { SigningAlgorithm: string }).SigningAlgorithm),
-		).toEqual(["RSASSA_PKCS1_V1_5_SHA_256"]);
+		for (const [alg, algorithm] of [
+			["PS256", "RSASSA_PSS_SHA_256"],
+			["RS256", "RSASSA_PKCS1_V1_5_SHA_256"],
+		] as const) {
+			const fake = fakeKms(
+				fakeKeys({ [arn("rsa")]: { key: rsa, spec: "RSA_2048", usage: "SIGN_VERIFY" } }),
+			);
+			const k = (
+				await boot(fake, entries([{ kid: "r", "key-id": arn("rsa") }]), {
+					authority: { signing: { kid: "r", alg } },
+				})
+			).get(keys);
+			const token = jwsOf(await k.sign(k.prepare("authority", "JWT"), bytes({ sub: "a" })));
+			expect((await k.verify("authority", token, "JWT")).kind, alg).toBe("valid");
+			expect(
+				fake.calls
+					.filter((c) => c.command === "Sign")
+					.map((c) => (c.input as { SigningAlgorithm: string }).SigningAlgorithm),
+			).toEqual([algorithm]);
+		}
 	});
 
 	it("opens what a screen sealed to the sealing key through KMS's DeriveSharedSecret", async () => {

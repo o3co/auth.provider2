@@ -8,6 +8,7 @@ import type { Section } from "./section.ts";
 /** The JWS algorithms signed here, each by KMS's algorithm over a SHA-256 digest. */
 const algorithms: Readonly<Record<string, SigningAlgorithmSpec>> = {
 	ES256: "ECDSA_SHA_256",
+	PS256: "RSASSA_PSS_SHA_256",
 	RS256: "RSASSA_PKCS1_V1_5_SHA_256",
 };
 

@@ -1,5 +1,6 @@
 import {
 	constants,
+	createHash,
 	createPublicKey,
 	diffieHellman,
 	type KeyObject,
@@ -86,6 +87,31 @@ function ecdsa(key: KeyObject, digest: Uint8Array): Uint8Array {
 /** SHA-256's DigestInfo, ahead of the digest in an RSASSA-PKCS1-v1_5 signature. */
 const sha256Info = Buffer.from("3031300d060960864801650304020105000420", "hex");
 
+const sha256 = (...parts: Uint8Array[]) =>
+	createHash("sha256").update(Buffer.concat(parts)).digest();
+/**
+ * An RSASSA-PSS signature over a SHA-256 digest, as KMS writes one (RFC 8017 §9.1.1, MGF1 with
+ * SHA-256, a salt as long as the digest), for a key of 2048 bits.
+ */
+function pss(key: KeyObject, digest: Uint8Array): Uint8Array {
+	const length = 256;
+	const salt = randomBytes(32);
+	const h = sha256(Buffer.alloc(8), digest, salt);
+	const db = Buffer.concat([Buffer.alloc(length - 32 - 32 - 2), Buffer.of(1), salt]);
+	let mask = Buffer.alloc(0);
+	for (let i = 0; mask.length < db.length; i++) {
+		mask = Buffer.concat([
+			mask,
+			sha256(h, Buffer.from([i >>> 24, i >>> 16, i >>> 8, i].map((b) => b & 255))),
+		]);
+	}
+	const masked = db.map((byte, i) => byte ^ (mask[i] ?? 0));
+	// The leftmost bit is cleared, as the encoded message holds one bit fewer than the modulus.
+	masked[0] = (masked[0] ?? 0) & 0x7f;
+	const encoded = Buffer.concat([masked, h, Buffer.of(0xbc)]);
+	return new Uint8Array(privateEncrypt({ key, padding: constants.RSA_NO_PADDING }, encoded));
+}
+
 /**
  * A fake of the KMS client keys-kms takes: the keys given, by key ARN, and aliases naming them as
  * KMS resolves one (to the key it names at the call); each call recorded; a call failing, or
@@ -137,12 +163,14 @@ export function fakeKms(
 			const signature =
 				input.SigningAlgorithm === "ECDSA_SHA_256"
 					? ecdsa(held.key, digest)
-					: new Uint8Array(
-							privateEncrypt(
-								{ key: held.key, padding: constants.RSA_PKCS1_PADDING },
-								Buffer.concat([sha256Info, digest]),
-							),
-						);
+					: input.SigningAlgorithm === "RSASSA_PSS_SHA_256"
+						? pss(held.key, digest)
+						: new Uint8Array(
+								privateEncrypt(
+									{ key: held.key, padding: constants.RSA_PKCS1_PADDING },
+									Buffer.concat([sha256Info, digest]),
+								),
+							);
 			return { $metadata: {}, KeyId: held.arn, Signature: signature, ...answering.get("Sign") };
 		},
 		deriveSharedSecret: async (
