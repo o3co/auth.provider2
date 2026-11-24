@@ -7,6 +7,7 @@ import {
 	type Issued,
 	type IssueLimits,
 	referenceOf,
+	type SubjectKind,
 	type Tokens,
 } from "@mod/tokens";
 
@@ -31,7 +32,8 @@ export interface Issuing {
 
 /**
  * A grant's `admits` and `issue`, with the binding; `issue` tells `told` of a token from a session,
- * and notes in `bundle` each token's subject and the names of the claims the grant added to it.
+ * and notes in `bundle` each token's subject and the names of the claims the grant added to it. A
+ * bundle whose subject's kind is not the one the grant declares (`declared`) is the grant's fault.
  */
 export function issuanceFor(
 	issuing: Issuing,
@@ -39,6 +41,7 @@ export function issuanceFor(
 	binding: Binding | undefined,
 	told: readonly SessionIssuance[] = [],
 	bundle: IssuedBundle = bundleOf(),
+	declared?: SubjectKind,
 ) {
 	const bound = binding ? { binding } : {};
 	let bundled = false;
@@ -63,6 +66,11 @@ export function issuanceFor(
 		// Read once: tokens signs the subject the bundle notes, whatever the grant answers later.
 		const grant = { ...asked.access };
 		const { subject, subjectKind } = grant;
+		if (declared !== undefined && subjectKind !== declared) {
+			throw new TypeError(
+				`token-endpoint: ${grantType} issued for a subject kind it does not declare`,
+			);
+		}
 		const root = asked.root === undefined ? {} : { root: asked.root };
 		const issued = await issuing.issue({
 			request: requestOf(grant, from),

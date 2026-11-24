@@ -20,6 +20,7 @@ Internal module of `token-endpoint`: the handler of `POST /oauth/token`, from th
 
 ## Invariants
 - Records each answer but an unavailable one through the package's declared audit events, once the client is authenticated, or once a request goes to a grant that identifies its client (with `identified`, and `client` once known).
+- `token.issued` adds `version`, the client's registry version, and `binding` and `confirmation`, the tokens' `cnf` member and value, where there are; and `claims`, the names of the claims a grant added, never their values, as many as fit 2048 characters, with `claims_left` past that.
 - The failure's `reason`: `client_not_identified`, `repeated_parameter`, `mistyped_parameter`, `missing_grant_type`, `unsupported_grant_type`, `grant_type_not_allowed`, `unsupported_body`, `multiple_bindings`, `binding_refused`, `binding_required`, `binding_kind_not_named`, `untargeted`, `grant_refused`, `issuance_refused` with `policy` and `refusal`, or `issuance_fenced` with `fence`.
 - A request naming no client, sent to a grant that identifies its client, is recorded with `identified` (`grant`) from the first check on, its `client` once the grant identifies it; its authentication's refusal is not recorded.
 

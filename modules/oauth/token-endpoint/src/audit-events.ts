@@ -3,8 +3,18 @@ import { auditEvents } from "@mod/audit";
 /** What the token endpoint records; a token or secret is never held. */
 export default auditEvents({
 	"token.issued": {
-		attributes: ["client", "source", "grant_type", "identified", "claims", "claims_left"],
-		when: "a grant issues; `identified` is `grant` where the grant identified the client of a request naming none; `claims` names the claims the grant added to the tokens it issued, in their order, one space apart, never their values: all of them within 2048 characters, else as many as fit, with `claims_left` how many were left out",
+		attributes: [
+			"client",
+			"source",
+			"grant_type",
+			"identified",
+			"version",
+			"binding",
+			"confirmation",
+			"claims",
+			"claims_left",
+		],
+		when: "a grant issues; `identified` is `grant` where the grant identified the client of a request naming none; `version` is the client's registry version where it has one; `binding` and `confirmation` are the `cnf` member and value the tokens are bound by, where they are; `claims` names the claims the grant added to the tokens it issued, in their order, one space apart, never their values: all of them within 2048 characters, else as many as fit, with `claims_left` how many were left out",
 	},
 	"token.issued.failure": {
 		attributes: [

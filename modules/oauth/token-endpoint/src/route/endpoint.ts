@@ -6,7 +6,7 @@ import { type HttpRequest, type HttpResponse, jsonAnswer, type Route } from "@mo
 import { Unavailable } from "@mod/kernel";
 import { determinedSource } from "@mod/request-source";
 import type { Binding, ClientBindings, SenderBindings } from "@mod/sender-binding";
-import type { IssuanceFencing } from "@mod/tokens";
+import type { IssuanceFencing, SubjectKind } from "@mod/tokens";
 import { challenged, oauthError, refusedAuthenticationAnswer } from "../answers/answers.ts";
 import events from "../audit-events.ts";
 import { identifiedClient, identifierOf } from "../identified/identified.ts";
@@ -54,6 +54,7 @@ export function grantInputOf(parts: {
 	readonly request: HttpRequest;
 	readonly client: Client;
 	readonly grantType: string;
+	readonly declared?: SubjectKind | undefined;
 	readonly binding: Binding | undefined;
 	readonly targets: TargetRule;
 	readonly issuing: Issuing;
@@ -68,6 +69,7 @@ export function grantInputOf(parts: {
 		request,
 		client,
 		grantType,
+		declared,
 		binding,
 		targets,
 		issuing,
@@ -86,7 +88,7 @@ export function grantInputOf(parts: {
 		...(binding ? { binding } : {}),
 		...(identified === undefined ? {} : { identified }),
 		...(authenticated === undefined ? {} : { authenticated }),
-		...issuanceFor(issuing, grantType, binding, told, bundle),
+		...issuanceFor(issuing, grantType, binding, told, bundle, declared),
 	};
 }
 
@@ -130,16 +132,20 @@ export interface EndpointParts {
 export function tokenEndpoint(parts: EndpointParts): Pick<Route, "handle" | "unavailable"> {
 	const { clients, issuing, fencing, told, bindings, required, grants, targets, audit } = parts;
 	const recorded = declaredAudit(audit, events);
-	/** A grant's error as answered; a `401` carries the challenges given. */
+	/** A grant's error as answered; a `401` carries the challenges given, a `429` its wait. */
 	const grantError = (
 		outcome: Extract<GrantOutcome, { readonly kind: "error" }>,
 		challenges: readonly string[],
 	) => {
-		// A status but 400 or 401 is answered as if the grant named none.
-		const named = outcome.status === 400 || outcome.status === 401 ? outcome.status : undefined;
+		// A status but 400, 401 or 429 is answered as if the grant named none.
+		const named = [400, 401, 429].includes(outcome.status ?? 0) ? outcome.status : undefined;
 		const status = named ?? (outcome.error === "invalid_client" ? 401 : 400);
 		const response = oauthError(status, outcome.error, outcome.description, outcome.members);
-		return status === 401 ? challenged(response, challenges) : response;
+		if (status === 401) return challenged(response, challenges);
+		const wait = outcome.retryAfterMs;
+		if (status !== 429 || wait === undefined || !Number.isFinite(wait)) return response;
+		const seconds = String(Math.max(1, Math.ceil(wait / 1000)));
+		return { ...response, headers: { ...response.headers, "retry-after": seconds } };
 	};
 	const answer = async (request: HttpRequest): Promise<HttpResponse> => {
 		const authenticated = await clients.authenticate(request);
@@ -159,6 +165,7 @@ export function tokenEndpoint(parts: EndpointParts): Pick<Route, "handle" | "una
 		// Once the client is known, each answer but an unavailable one is recorded; a known grant type is named.
 		// What the grant issued for this request: its subjects, and the claims it added by name, never their values.
 		const bundle = bundleOf();
+		let bound: Binding | undefined;
 		const record = (
 			grantType: string | undefined,
 			failure?: {
@@ -178,8 +185,10 @@ export function tokenEndpoint(parts: EndpointParts): Pick<Route, "handle" | "una
 			if (failure)
 				recorded.record("token.issued.failure", { attributes: { ...attributes, ...failure } });
 			else {
+				const version = client?.version === undefined ? {} : { version: String(client.version) };
+				const cnf = bound ? { binding: bound.member, confirmation: bound.confirmation } : {};
 				recorded.record("token.issued", {
-					attributes: { ...attributes, ...namesOf(bundle.added) },
+					attributes: { ...attributes, ...version, ...cnf, ...namesOf(bundle.added) },
 				});
 			}
 		};
@@ -297,10 +306,12 @@ export function tokenEndpoint(parts: EndpointParts): Pick<Route, "handle" | "una
 		if (!("grant" in admission)) return admission;
 		const { grant, grantType, binding, identifiedBy } = admission;
 		client = admission.client;
+		bound = binding;
 		// What the client's authentication verified; none for a client a grant identified.
 		const verified = authenticated.kind === "authenticated" ? authenticated.proof : undefined;
 		const input = grantInputOf({
 			...{ request, client, grantType, binding, targets, told, bundle },
+			declared: grant.subjectKind,
 			issuing: issuing(request, {
 				...(binding ? { binding } : {}),
 				assertion: authenticated.kind === "authenticated" && authenticated.assertion === true,

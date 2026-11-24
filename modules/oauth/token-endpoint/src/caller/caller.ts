@@ -19,7 +19,7 @@ import {
 	accessTokens,
 	type Tokens,
 } from "@mod/tokens";
-import { tokenEndpointStance } from "../built-in/stance.ts";
+import { clientSubjectStance, tokenEndpointStance } from "../built-in/stance.ts";
 import { composedRule, targetTakes, unread } from "../built-in/targets.ts";
 import { answeredBody } from "../route/answer.ts";
 import { grantInputOf, mistypedRefusal, tokenPath } from "../route/endpoint.ts";
@@ -117,6 +117,7 @@ export function grantInput(
 		request: sentRequest(params, grant.bodies?.[0] ?? "form"),
 		client,
 		grantType: grant.grantType,
+		declared: grant.subjectKind,
 		binding: options.binding,
 		identified: options.identified,
 		authenticated: options.authenticated,
@@ -145,6 +146,7 @@ export const grantCaller = defineModule(
 	(m) => [
 		m.provide(targets).by(composedRule),
 		m.contribute(stances).by(() => tokenEndpointStance),
+		m.contribute(stances).by(async (c) => clientSubjectStance(await c.collect(grants))),
 		m.provide(grantCalls).by(async (c) => {
 			const known = await c.get(clients);
 			const issuance = await c.get(accessTokenIssuance);
