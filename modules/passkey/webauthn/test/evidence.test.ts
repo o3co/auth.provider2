@@ -170,7 +170,7 @@ describe("the evidence check, state-free and at once", () => {
 		).toEqual({ credential: credential.id });
 	});
 
-	it("answers none for another challenge, origin, key, or one that is no P-256 point", async () => {
+	it("answers none for another challenge, origin, key, or one that is no passkey's key", async () => {
 		const { authenticator, credential } = await made();
 		const { challenge, options } = asked(credential);
 		const assertion = JSON.stringify(authenticator.get(options, at));
@@ -182,7 +182,15 @@ describe("the evidence check, state-free and at once", () => {
 		expect(check(assertion, key, challenge, "https://other.rp.example")).toBeUndefined();
 		const notOnCurve = Buffer.concat([Buffer.from([4]), Buffer.alloc(64, 1)]).toString("base64url");
 		const compressed = Buffer.concat([Buffer.from([2]), Buffer.alloc(32, 1)]).toString("base64url");
-		for (const k of [notOnCurve, compressed, credential.publicKey, `${key}=`, ""]) {
+		const { credential: other } = await made();
+		for (const k of [
+			notOnCurve,
+			compressed,
+			other.publicKey,
+			`${key}=`,
+			`${credential.publicKey}=`,
+			"",
+		]) {
 			expect(check(assertion, k, challenge, testOrigin), k).toBeUndefined();
 		}
 	});
@@ -214,13 +222,37 @@ describe("the evidence check, state-free and at once", () => {
 		}
 	});
 
-	it("answers none where the relying party takes ES256 no longer", async () => {
-		const { authenticator, credential } = await made();
-		const elsewhere = ceremoniesFor({ ...rp, algorithms: ["EdDSA", "RS256"] });
-		const { challenge, options } = asked(credential);
-		const assertion = JSON.stringify(authenticator.get(options, at));
-		expect(
-			elsewhere.verifyAssertion(assertion, pointOf(credential), challenge, testOrigin),
-		).toBeUndefined();
+	it.each(["ES256", "EdDSA", "RS256"] as const)(
+		"verifies a %s key's assertion by its COSE_Key, whatever algorithms the relying party offers",
+		async (algorithm) => {
+			const { authenticator, credential } = await made(softwareAuthenticator({ algorithm }));
+			const { challenge, options } = asked(credential);
+			const assertion = JSON.stringify(authenticator.get(options, at));
+			for (const offered of [["ES256"], ["EdDSA", "RS256"]] as const) {
+				const c = ceremoniesFor({ ...rp, algorithms: offered });
+				expect(c.verifyAssertion(assertion, credential.publicKey, challenge, testOrigin)).toEqual({
+					credential: credential.id,
+				});
+			}
+		},
+	);
+
+	it("refuses at attestation a key not in its one COSE_Key form, as malformed", async () => {
+		const challenge = fresh();
+		const options = ceremonies.creation(challenge, { handle, name: "sam" }, [], "preferred");
+		// A key id (label 2) past the key type's labels: CBOR the library reads and gives back alike.
+		const longer = (cose: number[]) => [
+			0xa6,
+			...cose.slice(1, 3),
+			0x02,
+			0x41,
+			0x00,
+			...cose.slice(3),
+		];
+		const response = softwareAuthenticator().create(options as never, at, { cose: longer });
+		expect(await ceremonies.attest(response, challenge, handle, "preferred")).toEqual({
+			kind: "refused",
+			reason: "malformed",
+		});
 	});
 });

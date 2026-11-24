@@ -1,4 +1,4 @@
-import { createHash, createPublicKey, verify } from "node:crypto";
+import { createHash, verify } from "node:crypto";
 import { verifyAuthenticationResponse, verifyRegistrationResponse } from "@simplewebauthn/server";
 import {
 	cose,
@@ -16,6 +16,7 @@ import type {
 	Credential,
 	Verification,
 } from "../contract.ts";
+import { assertionKey, passkeyKey } from "../keys.ts";
 
 /** The signature algorithms a credential may use, by the names `keys` gives them. */
 export const algorithmNames = ["EdDSA", "ES256", "RS256"] as const;
@@ -96,29 +97,18 @@ function frameRefusal(
 	return data.crossOrigin === true && listed ? undefined : "top-origin";
 }
 
-/** A P-256 key from its uncompressed point in base64url (0x04, x, y); throws for any other value. */
-function pointKey(point: string) {
-	if (!/^[A-Za-z0-9_-]+$/.test(point)) throw new TypeError("no point");
-	const bytes = Buffer.from(point, "base64url");
-	if (bytes.length !== 65 || bytes[0] !== 4) throw new TypeError("no uncompressed point");
-	const x = bytes.subarray(1, 33).toString("base64url");
-	const y = bytes.subarray(33).toString("base64url");
-	return createPublicKey({ key: { kty: "EC", crv: "P-256", x, y }, format: "jwk" });
-}
-
 const statuses: readonly unknown[] = ["present", "supported", "notSupported"];
 
 /**
- * The evidence check: an ES256 assertion's credential where it verifies by the point given, for the
- * challenge and origin, at the relying party, with the user present and verified; none otherwise.
- * It reads what the library reads, as `assert` does, and no count, backup state or handle.
+ * The evidence check: an assertion's credential where it verifies by the key given, whatever the
+ * relying party offers, for the challenge and origin, with the user present and verified; none
+ * otherwise. It reads what the library reads, as `assert` does, and no count, backup state or handle.
  */
 function evidenceCheck(rp: RelyingParty): Ceremonies["verifyAssertion"] {
 	const rpIdHash = createHash("sha256").update(rp.id).digest();
-	const taken = rp.algorithms.includes("ES256");
-	const verified = (assertion: string, point: string, challenge: string, origin: string) => {
-		if (!taken || !isChallenge(challenge)) return undefined;
-		const key = pointKey(point);
+	const verified = (assertion: string, publicKey: string, challenge: string, origin: string) => {
+		if (!isChallenge(challenge)) return undefined;
+		const { key, hash } = assertionKey(publicKey);
 		const sent = JSON.parse(assertion);
 		const { id, rawId, type, response } = sent ?? {};
 		if (typeof id !== "string" || id === "" || id !== rawId || type !== "public-key")
@@ -141,14 +131,14 @@ function evidenceCheck(rp: RelyingParty): Ceremonies["verifyAssertion"] {
 			.update(isoBase64URL.toBuffer(clientDataJSON))
 			.digest();
 		const signed = Buffer.concat([authData, clientDataHash]);
-		return verify("sha256", signed, key, isoBase64URL.toBuffer(signature))
+		return verify(hash, signed, key, isoBase64URL.toBuffer(signature))
 			? { credential: id }
 			: undefined;
 	};
-	return (assertion, point, challenge, origin) => {
+	return (assertion, publicKey, challenge, origin) => {
 		// Anything it cannot read, the key included, is evidence that does not verify.
 		try {
-			return verified(assertion, point, challenge, origin);
+			return verified(assertion, publicKey, challenge, origin);
 		} catch {
 			return undefined;
 		}
@@ -190,6 +180,19 @@ function statementDropped(response: unknown): RegistrationResponse {
 	]);
 	const attestationObject = isoBase64URL.fromBuffer(isoCBOR.encode(kept));
 	return { ...sent, response: { ...sent.response, attestationObject } };
+}
+
+/** Whether a new key is in its one COSE_Key form, the very bytes after the credential id (offset 55 + its length). */
+function keyReadWhole(attestationObject: Uint8Array, publicKey: Uint8Array): boolean {
+	const authData = Buffer.from(
+		decodeAttestationObject(new Uint8Array(attestationObject)).get("authData") as Uint8Array,
+	);
+	const at = 55 + authData.readUInt16BE(53);
+	const key = Buffer.from(publicKey);
+	return (
+		passkeyKey(key.toString("base64url")) !== undefined &&
+		authData.subarray(at, at + key.length).equals(key)
+	);
 }
 
 // The client's transports, which the library passes on unchecked: a short list of short strings.
@@ -258,6 +261,8 @@ export function ceremoniesFor(rp: RelyingParty): Ceremonies {
 			if (typeof verified === "string") return refused(verified);
 			const info = verified.registrationInfo;
 			if (!verified.verified || !info) return refused("signature");
+			if (!keyReadWhole(info.attestationObject, info.credential.publicKey))
+				return refused("malformed");
 			const transports = hintOf(info.credential.transports);
 			return {
 				kind: "attested",

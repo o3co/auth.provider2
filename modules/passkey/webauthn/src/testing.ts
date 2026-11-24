@@ -47,6 +47,8 @@ export interface Twist {
 	readonly overlook?: boolean;
 	/** The authenticator data's flags byte, made from the one it would send. */
 	readonly flags?: (flags: number) => number;
+	/** A new credential's COSE_Key, as sent instead of its canonical bytes. */
+	readonly cose?: (cose: number[]) => number[];
 }
 
 /** Credential creation options, as a relying party sends them in JSON. */
@@ -129,8 +131,46 @@ interface Kept {
 	count: number;
 }
 
+/** Each algorithm the authenticator may make a key of, as COSE numbers it. */
+const coseAlgorithms = { ES256: -7, ES384: -35, EdDSA: -8, RS256: -257 } as const;
+
+/** A new key pair of the algorithm, and its COSE_Key as CTAP2 lays it out. */
+function keyPair(alg: number) {
+	const pair =
+		alg === -8
+			? generateKeyPairSync("ed25519")
+			: alg === -257
+				? generateKeyPairSync("rsa", { modulusLength: 2048 })
+				: generateKeyPairSync("ec", { namedCurve: alg === -35 ? "P-384" : "P-256" });
+	const jwk = pair.publicKey.export({ format: "jwk" });
+	const bytes = (field?: string) => Buffer.from(field ?? "", "base64url");
+	const entries: [Cbor, Cbor][] =
+		alg === -8
+			? [
+					[1, 1],
+					[3, alg],
+					[-1, 6],
+					[-2, bytes(jwk.x)],
+				]
+			: alg === -257
+				? [
+						[1, 3],
+						[3, alg],
+						[-1, bytes(jwk.n)],
+						[-2, bytes(jwk.e)],
+					]
+				: [
+						[1, 2],
+						[3, alg],
+						[-1, alg === -35 ? 2 : 1],
+						[-2, bytes(jwk.x)],
+						[-3, bytes(jwk.y)],
+					];
+	return { privateKey: pair.privateKey, cose: cbor(new Map(entries)) };
+}
+
 /**
- * A software WebAuthn authenticator behind a browser: it makes ES256 (or ES384) credentials,
+ * A software WebAuthn authenticator behind a browser: it makes ES256 (or ES384, EdDSA, RS256) credentials,
  * attests with `none`, asserts with a count that goes up unless it keeps none, and checks the
  * options as a browser does unless a twist says to overlook them.
  */
@@ -140,13 +180,13 @@ export function softwareAuthenticator(
 		readonly userVerified?: boolean;
 		readonly backupEligible?: boolean;
 		readonly countless?: boolean;
-		readonly algorithm?: "ES256" | "ES384";
+		readonly algorithm?: keyof typeof coseAlgorithms;
 		/** Whether it can keep a discoverable credential; it can unless told otherwise. */
 		readonly discoverable?: boolean;
 	} = {},
 ) {
 	const kept = new Map<string, Kept>();
-	const alg = settings.algorithm === "ES384" ? -35 : -7;
+	const alg = coseAlgorithms[settings.algorithm ?? "ES256"];
 	const canVerify = settings.userVerified !== false;
 	const canDiscover = settings.discoverable !== false;
 	const flags = (attested: boolean, verified: boolean) =>
@@ -211,19 +251,15 @@ export function softwareAuthenticator(
 		check(twist, residentKey === "required" && !canDiscover, "NotAllowedError", "not discoverable");
 		const verified = verifies(selection.userVerification, twist);
 
-		const { privateKey, publicKey } = generateKeyPairSync("ec", {
-			namedCurve: alg === -35 ? "P-384" : "P-256",
-		});
-		const jwk = publicKey.export({ format: "jwk" });
-		const cose = new Map<Cbor, Cbor>([
-			[1, 2],
-			[3, alg],
-			[-1, alg === -35 ? 2 : 1],
-			[-2, Buffer.from(jwk.x ?? "", "base64url")],
-			[-3, Buffer.from(jwk.y ?? "", "base64url")],
-		]);
+		const { privateKey, cose } = keyPair(alg);
 		const id = twist.credentialId ? Buffer.from(twist.credentialId, "base64url") : randomBytes(16);
-		const attested = [...Buffer.alloc(16), id.length >> 8, id.length & 255, ...id, ...cbor(cose)];
+		const attested = [
+			...Buffer.alloc(16),
+			id.length >> 8,
+			id.length & 255,
+			...id,
+			...(twist.cose ? twist.cose(cose) : cose),
+		];
 		const data = authData(twist.rpId ?? rpId, true, verified, 0, attested);
 		const discoverable = canDiscover && residentKey !== "discouraged";
 		kept.set(b64(id), { key: privateKey, handle: options.user.id, rpId, discoverable, count: 0 });
@@ -287,7 +323,9 @@ export function softwareAuthenticator(
 			response: {
 				clientDataJSON,
 				authenticatorData: b64(data),
-				signature: b64(sign(alg === -35 ? "sha384" : "sha256", signed, credential.key)),
+				signature: b64(
+					sign(alg === -8 ? null : alg === -35 ? "sha384" : "sha256", signed, credential.key),
+				),
 				...(handle === null ? {} : { userHandle: handle }),
 			},
 			clientExtensionResults: {},
