@@ -21,7 +21,7 @@
 - It depends on the protocol alone: no other part of the provider runs in it.
 
 ## Depends on
-- `registry-wire` (the version and its `typ`); Node's built-ins only.
+- `registry-wire` (the version and its `typ`); `zod`, which registry-wire takes as a peer (src imports none of it); Node's built-ins.
 
 ## Vocabulary
 - version: one signed state of the client registry, as `registry-wire` names it.
