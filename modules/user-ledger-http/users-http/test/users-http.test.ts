@@ -204,6 +204,7 @@ ledgerContract("users-http against a fake ledger", {
 		const { ledger } = await open({ "identifier-url": identifierUrl() });
 		const checks: string[] = [];
 		const counted: Ledger = {
+			...ledger,
 			verify: async (identifier, password) => {
 				const before = received.length;
 				try {
@@ -212,8 +213,6 @@ ledgerContract("users-http against a fake ledger", {
 					checks.push(...shapes(before));
 				}
 			},
-			bySubject: ledger.bySubject,
-			byIdentifier: ledger.byIdentifier,
 		};
 		return { ledger: counted, checks };
 	},
@@ -994,7 +993,7 @@ describe("users-http looking a user up by identifier", () => {
 	it("posts the identifier alone, under the name the password call gives it, to identifier-url as written, with the credential", async () => {
 		const { ledger } = await open({ "identifier-url": `${identifierUrl()}?realm=a` });
 		script = () => ({ status: 200, json: alice });
-		await ledger.byIdentifier("alice");
+		await ledger.byIdentifier?.("alice");
 		const [asked] = received;
 		expect([asked?.method, asked?.path]).toEqual(["POST", "/ledger/identifier?realm=a"]);
 		expect(asked?.headers).toMatchObject({ authorization: `Bearer ${credential}` });
@@ -1003,9 +1002,9 @@ describe("users-http looking a user up by identifier", () => {
 
 	it("hands over the user it finds, needing no username, none for a 404 or a 410 saying so, and unavailable to any other answer [guarantee-3-m]", async () => {
 		const { ledger } = await open({ "identifier-url": identifierUrl() });
-		expect(await ledger.byIdentifier("alice")).toMatchObject({ user: { subject: "s-alice" } });
-		expect(await ledger.byIdentifier("nobody")).toEqual({ kind: "none" });
-		expect(await ledger.byIdentifier("gone")).toEqual({ kind: "none" });
+		expect(await ledger.byIdentifier?.("alice")).toMatchObject({ user: { subject: "s-alice" } });
+		expect(await ledger.byIdentifier?.("nobody")).toEqual({ kind: "none" });
+		expect(await ledger.byIdentifier?.("gone")).toEqual({ kind: "none" });
 		for (const answer of [
 			{ status: 401 },
 			{ status: 403 },
@@ -1015,7 +1014,7 @@ describe("users-http looking a user up by identifier", () => {
 			{ status: 410 },
 		]) {
 			script = () => answer;
-			await expect(ledger.byIdentifier("alice"), JSON.stringify(answer)).rejects.toSatisfy(
+			await expect(ledger.byIdentifier?.("alice"), JSON.stringify(answer)).rejects.toSatisfy(
 				isUnavailable,
 			);
 		}
@@ -1023,8 +1022,8 @@ describe("users-http looking a user up by identifier", () => {
 
 	it("answers every lookup by identifier unavailable without identifier-url, asking nothing", async () => {
 		const { ledger, users: u } = await open();
-		await expect(ledger.byIdentifier("alice")).rejects.toSatisfy(isUnavailable);
-		await expect(u.byIdentifier("alice")).rejects.toSatisfy(isUnavailable);
+		await expect(ledger.byIdentifier?.("alice")).rejects.toSatisfy(isUnavailable);
+		await expect(u.byIdentifier?.("alice")).rejects.toSatisfy(isUnavailable);
 		expect(received).toEqual([]);
 	});
 
