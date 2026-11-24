@@ -890,6 +890,28 @@ importers:
         specifier: 5.0.5
         version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(vite@8.3.3(@types/node@26.6.5)(yaml@2.9.1))
 
+  modules/identity/subject-attributes:
+    dependencies:
+      '@mod/kernel':
+        specifier: workspace:*
+        version: link:../../foundation/kernel
+      '@mod/login-attributes':
+        specifier: workspace:*
+        version: link:../login-attributes
+      '@mod/session':
+        specifier: workspace:*
+        version: link:../session
+      '@mod/users':
+        specifier: workspace:*
+        version: link:../users
+    devDependencies:
+      '@mod/secret-hash':
+        specifier: workspace:*
+        version: link:../../foundation/secret-hash
+      vitest:
+        specifier: 5.0.5
+        version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(vite@8.3.3(@types/node@26.6.5)(yaml@2.9.1))
+
   modules/identity/subject-revocation:
     dependencies:
       '@mod/erasure-extensions':
