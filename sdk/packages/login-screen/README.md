@@ -5,7 +5,9 @@
 
 ## Not here
 - What crosses the network, as the protocol's review settled it (V22) and the protocol packages do not yet hold: each operation's request, route and name (`loginStart`, `loginFinish`, `firstKeyNonce`, `firstKeyStart`, `firstKeyMail`, `firstKeyRecover`, `approvalStart`, `approvalFinish`, `continue`, `keyFinish`: `front-core-wire`'s), and each answer's form (`statement`, `sealed`, `nonce`), the sealed value's `{ enc, ct }`, the completion's additional data (`completionAad`) and ⑤'s receipt carried in the login's completion (`sdk-core-wire`'s). Until they land, the caller hands the SDK the statement, the sealed value, the additional data and the receipt it read, and sends what the SDK gives.
-- The management screen (`passkey-add`, `passkey-manage`), the continuation's signature (ES256's raw r||s over `continuationOf`), and keys as COSE_Key with `key_jkt`: they land with the protocol packages' change.
+- The ciphertext hash's input as a protocol function, the `create()` response's form (so one `create()` result yields both the continuation's response and the possession's credential, which today the caller keeps together), and reading a new key from `authData`'s COSE where `getPublicKey()` gives none: they land with the protocol packages' change (V22).
+- F1 (sign-up: the credential first), whose creation names the T the screen read as its evidence and no ciphertext: the protocol packages do not yet hold its form (a creation's `basis`, its `ct_hash` optional); it lands with their change (V22).
+- The management screen (`passkey-add`, `passkey-manage`), the first key's recovery (`firstKeyRecover`), a key change's completion (its receipt, status and `stateOf`), the continuation's other stages (`continuationOf`): they land with the protocol packages' change.
 - A bundle that fixes no log keys (L0): it has no way here yet; V22 lets it take a completion without the receipt, and that comes as an explicit choice with the protocol packages' change, never as a missing key list.
 - The relying party's checks: `rp-kit`.
 
@@ -17,6 +19,13 @@
   - `read` (T, the JAR the screen holds, the ring, the screen keys, the issuer): T as a `ReadT` (the statement and its compact bytes), its items exactly what the JAR gives by sdk-core-wire's rule, or why not (a statement's refusal, `jar`, `items`). Only `read` makes a `ReadT`; the next steps refuse any other (`statement`).
   - `assertionOptions` (a `ReadT`, the RP id, the credentials if any): what a passkey's `get()` is asked: T's get challenge, user verification required; credentials given empty, or any one not a credential id, are refused (`credentials`).
   - `finish` (a `ReadT`, sealed, ⑤'s receipt, the completion's additional data, the screen keys, the ring, the log's keys, the issuer, the assertion's bytes): the code and ⑤'s record (shard, n), or why not (`statement`, `keys`, `open`, `signature`, `typ`, `payload`, `issuer`, `assertion`, `receipt`). `Sealed`: an encapsulated key and a ciphertext.
+- `firstKey`: the first key's path on the screen (O11; the account first).
+  - `start` (the identifier and a password if asked, the start's nonce, the Core's sealing key, the screen keys): the request sealed to the Core, or `plain`. `openCode` (the sealed answer, the nonce): the start's code, or `open`, `payload`.
+  - `mail` (the token from the link's fragment, the identifier, the code, the mail side's nonce): a `Mail`: the sealed request, the evidence's value (the token's hash) and the ciphertext's hash.
+  - `readCreation` (the creation, the `Mail`): a `ReadCreation`, its evidence and ciphertext hash the screen's own, or why not (a statement's refusal, `mail`, `evidence`, `ciphertext`).
+  - `createOptions` (a `ReadCreation`, the RP's name): what `create()` is asked: the create challenge, the creation's subject and RP, a resident key of the algorithms the creation offers in its order, user verification; or `statement`, `options`.
+  - `continuation` (a `ReadCreation`, the sequence, the response's text, the screen keys the creation names): the register stage's signature, ES256's raw r||s, base64url; or `statement`, `keys`, `sequence` (a sequence under 1; its upper bound is the Front's and the Core's).
+  - `readPossession` (the possession, the `ReadCreation`, the credential's id, SPKI and COSE algorithm from `create()`: `getPublicKey()` as it gives it, `getPublicKeyAlgorithm()`): a `ReadPossession`, naming this creation, the screen's own new key and credential, or why not (a statement's refusal, `statement`, `creation`, `key`, `credential`). `assertionOptions` (a `ReadPossession`): the new key's `get()`, for its credential alone, at the RP the creation named.
 
 ## Invariants
 - It depends on the provider's protocol packages alone (the sdk's guard).
@@ -28,7 +37,9 @@
 - The JAR is read without its signature, which the Core verifies; the screen compares its items alone.
 - No key of the log's may be one of the Core ring's, keys told apart by their kind's public members alone: a Core holding both would sign its own receipt.
 - A credential list is never dropped to none: an empty or unreadable one is refused, not widened to any credential.
-- Hashes are SHA-256, base64url without padding.
+- Hashes are SHA-256, base64url without padding. A creation's ciphertext hash is the SHA-256 of the sealed mail request's whole: its `enc` (65 bytes) then its `ct`.
+- Each step takes only what the step before made (`ReadT`, `Mail`, `ReadCreation`, `ReadPossession`): a copy, or one made elsewhere, is refused. What a step hands on is frozen, its bytes aside.
+- A new key is of an algorithm the creation offered (COSE ES256, EdDSA or RS256), its SPKI read as a key of that algorithm in its one DER form, and named by its JWK thumbprint (`key_jkt`) by sdk-core-wire's `keyThumbprintInput`, the vectors both sides share passing the same way. A browser whose WebCrypto lacks an algorithm the creation offers (Ed25519 in an older one) refuses a key of it as `key`, after `create()`: the deployment offers what its screens' browsers read.
 
 ## Depends on
 - `sdk-core-wire` (the words, the payloads, the items' rule, the inputs), `transparency-wire` (the receipt).

@@ -47,3 +47,17 @@ export async function sha256(data: string | Uint8Array): Promise<Uint8Array<Arra
 
 /** SHA-256, base64url without padding: the form a payload's hashes take. */
 export const digest = async (data: string | Uint8Array) => base64url(await sha256(data));
+
+/**
+ * A value and everything it holds, frozen: what a step hands on cannot be changed after it was read.
+ * Bytes cannot be frozen and are left as they are: changing them only makes what they carry fail.
+ * For values just made: it does not go into one already frozen.
+ */
+export function deepFreeze<T>(value: T): T {
+	if (ArrayBuffer.isView(value)) return value;
+	if (value !== null && typeof value === "object" && !Object.isFrozen(value)) {
+		Object.freeze(value);
+		for (const inner of Object.values(value)) deepFreeze(inner);
+	}
+	return value;
+}

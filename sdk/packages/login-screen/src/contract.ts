@@ -11,6 +11,13 @@ export {
 } from "./authorization.ts";
 export { challengeOf } from "./challenge.ts";
 export type { CompletionError, CompletionOptions } from "./completion.ts";
+export {
+	type FirstKeyOptions,
+	firstKey,
+	type Mail,
+	type ReadCreation,
+	type ReadPossession,
+} from "./first-key.ts";
 export type { Sealed } from "./hpke.ts";
 export type { Jwk } from "./jws.ts";
 export { type ScreenKeys, screenKeys } from "./keys.ts";

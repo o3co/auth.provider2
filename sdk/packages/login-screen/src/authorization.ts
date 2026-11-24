@@ -1,6 +1,6 @@
 import { canonicalText, itemsFromJar, type StatementPayload } from "@mod/sdk-core-wire";
 import type { RecordRef } from "@mod/transparency-wire";
-import { digest, fromBase64url, textOf } from "./bytes.ts";
+import { deepFreeze, digest, fromBase64url, textOf } from "./bytes.ts";
 import { challengeOf } from "./challenge.ts";
 import { type CompletionError, type CompletionOptions, readCompletion } from "./completion.ts";
 import type { Sealed } from "./hpke.ts";
@@ -50,7 +50,7 @@ async function read(
 	if (!items || "error" in items) return { error: "jar" };
 	if (canonicalText(read.statement.approval) !== canonicalText(items.items))
 		return { error: "items" };
-	const t: ReadT = Object.freeze({ statement: read.statement, compact: read.compact });
+	const t: ReadT = deepFreeze({ statement: read.statement, compact: read.compact });
 	issued.add(t);
 	return { t };
 }

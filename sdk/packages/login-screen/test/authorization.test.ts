@@ -56,9 +56,9 @@ async function world() {
 describe("authorization.read", () => {
 	it("reads T where its items are exactly what the JAR the screen holds gives", async () => {
 		const { jar, t, tCompact, options } = await world();
-		expect(await authorization.read(tCompact, jar, options)).toMatchObject({
-			t: { statement: t, compact: tCompact },
-		});
+		const read = await authorization.read(tCompact, jar, options);
+		expect(read).toMatchObject({ t: { statement: t, compact: tCompact } });
+		if ("t" in read) expect(Object.isFrozen(read.t.statement.approval)).toBe(true);
 	});
 
 	it("refuses T whose items differ from the JAR's in any item", async () => {
