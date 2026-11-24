@@ -28,7 +28,7 @@ export function resetOver(p: {
 	return {
 		async reset(instruction) {
 			const handed = await p.transparency.reset({ instruction });
-			if ("refused" in handed || handed.answer.result !== "accepted") return handed;
+			if (handed.answer.result !== "accepted") return handed;
 			// Placed, so the log read its shape: one it could not read is no state to pass by.
 			const subject = subjectOf(instruction);
 			if (subject === undefined)

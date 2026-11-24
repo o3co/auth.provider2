@@ -25,7 +25,7 @@ const accepted: ResetAnswer = {
 	receipts: ["h.p.s"],
 };
 
-function world(answer: { answer: ResetAnswer } | { refused: "unsupported" }) {
+function world(answer: { answer: ResetAnswer }) {
 	const calls: string[] = [];
 	const transparency = {
 		reset: async () => {
@@ -56,12 +56,11 @@ describe("the reset's path", () => {
 		expect(w.calls).toEqual(["reset", "tend subject:sub-1", "settle sub-1"]);
 	});
 
-	it("answers a reset not placed, or no reset on the log, as it came, changing nothing", async () => {
+	it("answers a reset not placed as it came, changing nothing", async () => {
 		for (const answer of [
 			{ answer: { v: 1, result: "invalid", fault: "generation" } as ResetAnswer },
 			{ answer: { v: 1, result: "conflict" } as ResetAnswer },
 			{ answer: { v: 1, result: "refused", refusal: "temporary" } as ResetAnswer },
-			{ refused: "unsupported" as const },
 		]) {
 			const w = world(answer);
 			expect(await w.reset.reset(instruction), JSON.stringify(answer)).toEqual(answer);
