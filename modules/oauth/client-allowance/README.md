@@ -1,8 +1,7 @@
 # client-allowance
 
 ## Responsibilities
-- Decides what a client may be issued and may see: its grants, scopes and audiences.
-- Owns the client metadata section that holds them.
+- Decides what a client may be issued and may see: its grants, scopes and audiences; owns the client metadata section that holds them.
 
 ## Not here
 - How a refusal is answered (`unauthorized_client`, `invalid_scope`, `invalid_target`): each caller's.
@@ -29,8 +28,7 @@
 ## Invariants
 - A client without the section is allowed nothing; an unknown field in it refuses the client's record.
 - OpenID Connect's offline access is not offered (out of scope): `offline_access` in `scopes` or `default-scopes` refuses the client's record at that entry.
-- Decisions are pure: no failure, no state.
-- `allowancesWithin` never widens the ceiling.
+- Decisions are pure: no failure, no state. `allowancesWithin` never widens the ceiling.
 - The client's own ceiling is apart from the person's delegation: `allowedSelfIssuance` reads `self` alone, and the other decisions never read it. It is read only for a client whose source declares it signed (`clients`' `signed`), never from the client's version alone, so a registered client is issued nothing for itself.
 - An audience written in two entries of `self`, or `offline_access` among an entry's scopes, refuses the client's record at that entry. A registered client writing `self` refuses boot at its section, as no one would read it.
 
