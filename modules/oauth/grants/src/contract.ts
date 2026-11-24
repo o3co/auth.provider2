@@ -88,6 +88,11 @@ export interface GrantInput {
 	/** What the grant's own `identify` answered with the client, handed back unread; none for a client that authenticated. */
 	readonly identified?: unknown;
 	/**
+	 * What the client's authentication verified (its method's `proof`), handed on unread: its owner
+	 * reads it. None for a client a grant identified, or one whose method verified nothing to carry.
+	 */
+	readonly proof?: unknown;
+	/**
 	 * Whether `issue` would allow the grant now; asked before anything is used up. The grant says
 	 * whom it issues for: its subject and the subject's kind, a client's own being the client itself.
 	 */

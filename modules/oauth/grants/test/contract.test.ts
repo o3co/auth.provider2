@@ -117,3 +117,9 @@ it("has a grant issue one bundle, naming its root's reference where it has one, 
 	expect(asked).toEqual([{ bundle: { root: "r1", access }, from: { lifetimeSeconds: 60 } }]);
 	expectTypeOf<Parameters<GrantInput["issue"]>[0]>().toEqualTypeOf<BundleRequest>();
 });
+
+it("hands a grant what its client's authentication verified, unread", () => {
+	expectTypeOf<GrantInput["proof"]>().toEqualTypeOf<unknown>();
+	const input: Pick<GrantInput, "proof"> = { proof: { key: "k" } };
+	expect(input.proof).toEqual({ key: "k" });
+});
