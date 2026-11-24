@@ -91,6 +91,38 @@ describe("each operation over HTTP", () => {
 		});
 	});
 
+	it("takes a pushed authorization request at the PAR endpoint by RFC 9126's names, from the client's server, answering 201", () => {
+		const par = overHttp.operations.par;
+		expect(par).toMatchObject({ path: "/oauth/par", body: "form", successStatus: 201 });
+		expect(par).not.toHaveProperty("crossOrigin");
+		expect(par.bodyNames).toEqual({
+			clientAssertionType: "client_assertion_type",
+			clientAssertion: "client_assertion",
+			clientId: "client_id",
+			authorizationDetails: "authorization_details",
+			requestUriSent: "request_uri",
+		});
+		expect(par.headerNames).toEqual({ dpop: "dpop" });
+		expect(par.enumTexts?.requestUriSent).toEqual({ texts: { "": 0 }, other: 1 });
+		expect(requests.par.fields.map((f) => f.name)).toEqual([
+			"source",
+			"request",
+			"clientAssertionType",
+			"clientAssertion",
+			"clientId",
+			"authorizationDetails",
+			"requestUriSent",
+			"dpop",
+		]);
+		expect(requests.par.fields.find((f) => f.name === "request")?.min).toBe(1);
+	});
+
+	it("lets the login's start carry its JAR by value or a PAR's reference, either of length 0 on the wire", () => {
+		const fields = Object.fromEntries(requests.loginStart.fields.map((f) => [f.name, f]));
+		expect(fields.request).toMatchObject({ type: "jws", min: 0 });
+		expect(fields.requestUri).toMatchObject({ type: "visible", min: 0, max: 512 });
+	});
+
 	it("is frozen to the leaves", () => {
 		const frozen = (value: unknown): boolean =>
 			typeof value !== "object" || value === null

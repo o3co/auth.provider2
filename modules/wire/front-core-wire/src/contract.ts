@@ -55,13 +55,19 @@ const sealed = Object.freeze([
 
 /** Each operation the Core opens to the Front, its code and its fields in order. A length of 0 is "not sent". */
 export const requests = Object.freeze({
-	/** The login's start: the client, its JAR, and the screen's encryption key (raw P-256, 65 bytes) and signing key (x and y). */
+	/**
+	 * The login's start: the client, its JAR by value (`request`) or by a PAR's reference
+	 * (`requestUri`, RFC 9126), and the screen's encryption key (raw P-256, 65 bytes) and signing key
+	 * (x and y). Exactly one of `request` and `requestUri` is sent; the wire reads lengths alone, so
+	 * the Core refuses both or neither (`invalid_request`).
+	 */
 	loginStart: Object.freeze({
 		code: 0x01,
 		fields: Object.freeze([
 			source,
 			field("clientId", "visible", 1, 64),
-			field("request", "jws", 1, 8192),
+			field("request", "jws", 0, 8192),
+			field("requestUri", "visible", 0, 512),
 			field("eEnc", "bytes", 65, 65),
 			field("eSigX", "bytes", 32, 32),
 			field("eSigY", "bytes", 32, 32),
@@ -133,6 +139,28 @@ export const requests = Object.freeze({
 			source,
 			field("statement", "jws", 1, 4096),
 			field("assertion", "utf8", 1, 8192),
+		] as const),
+	}),
+	/**
+	 * A pushed authorization request (RFC 9126), from the client's server: the client's
+	 * authentication, its JAR (required: no parameter is pushed but inside it), and a DPoP proof
+	 * where the client sends one. The JAR's `dpop_jkt` is required, and a proof's key must be it
+	 * (A44): the Core's to check. A parameter outside the JAR is not carried (RFC 9101 lets the
+	 * server ignore it) but two the Core must refuse rather than drop: whether RAR's came
+	 * (`authorizationDetails`) and whether a `request_uri` came (`requestUriSent`, RFC 9126 §2.1).
+	 * Its success is `201`, the body `request_uri` and `expires_in`.
+	 */
+	par: Object.freeze({
+		code: 0x0a,
+		fields: Object.freeze([
+			source,
+			field("request", "jws", 1, 8192),
+			field("clientAssertionType", "enum", 1, 1, 2),
+			field("clientAssertion", "jws", 1, 4096),
+			field("clientId", "visible", 0, 64),
+			field("authorizationDetails", "enum", 1, 1, 2),
+			field("requestUriSent", "enum", 1, 1, 2),
+			field("dpop", "jws", 0, 4096),
 		] as const),
 	}),
 });
@@ -239,6 +267,8 @@ const tokenEnumTexts = Object.freeze({
 	}),
 	authorizationDetails: Object.freeze({ texts: Object.freeze({ "": 0 }), other: 1 }),
 });
+/** Whether a parameter the Core refuses came: no text is 0, any text 1. */
+const sentOrNot = Object.freeze({ texts: Object.freeze({ "": 0 }), other: 1 });
 const dpopHeader = Object.freeze({ dpop: "dpop" });
 
 /**
@@ -285,6 +315,18 @@ export const overHttp = Object.freeze({
 		firstKeyMail: screen("/first-key/mail"),
 		firstKeyContinue: screen("/first-key/continue"),
 		firstKeyFinish: screen("/first-key/finish"),
+		par: Object.freeze({
+			path: "/oauth/par",
+			body: "form",
+			bodyNames: Object.freeze({ ...tokenNames, requestUriSent: "request_uri" }),
+			headerNames: dpopHeader,
+			enumTexts: Object.freeze({
+				clientAssertionType: tokenEnumTexts.clientAssertionType,
+				authorizationDetails: tokenEnumTexts.authorizationDetails,
+				requestUriSent: sentOrNot,
+			}),
+			successStatus: 201,
+		}),
 	} satisfies Record<keyof typeof requests, OverHttp>) as Readonly<
 		Record<keyof typeof requests, OverHttp>
 	>,

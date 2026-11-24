@@ -22,6 +22,7 @@
 - A rejection's code is never 0, and carries no piece of the input.
 - Every operation is carried over HTTP, each field once; operations sharing a path differ by one body value, all but one.
 - Every operation is a POST: one that would need another method is not opened to the Front.
+- A field that is "one of" another (the login's start's `request` and `requestUri`) is of length 0 alone on the wire, which reads lengths only: the Core refuses both or neither.
 - Every operation's first field, `source`, is the source the Front determined (its address, as its trusted proxies tell it), empty where it could not: the Front's declaration, which the Core counts by only while the Front is honest.
 
 ## Depends on

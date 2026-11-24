@@ -107,6 +107,7 @@ describe("a round trip", () => {
 			source: "",
 			clientId: "",
 			request: "a.b.c",
+			requestUri: "",
 			eEnc: randomBytes(65),
 			eSigX: randomBytes(32),
 			eSigY: randomBytes(32),

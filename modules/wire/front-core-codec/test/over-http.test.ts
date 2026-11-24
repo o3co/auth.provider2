@@ -81,6 +81,23 @@ describe("an operation over HTTP", () => {
 		expect(rebuilt.values.has("client_id")).toBe(false);
 	});
 
+	it("tells the Core a pushed request named a request_uri, which it must refuse, keeping the name in what it rebuilds", () => {
+		const form = {
+			request: "a.b.c",
+			client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+			client_assertion: "d.e.f",
+		};
+		const sent = messageOf("par", carried({ ...form, request_uri: "urn:x" }));
+		expect(sent.ok && sent.message).toMatchObject({ requestUriSent: 1, authorizationDetails: 0 });
+		const rebuilt = carriedOf("par", sent.ok ? sent.message : ({} as never));
+		expect(rebuilt.values.has("request_uri")).toBe(true);
+		const plain = messageOf("par", carried(form));
+		expect(plain.ok && plain.message).toMatchObject({ requestUriSent: 0 });
+		expect(
+			carriedOf("par", plain.ok ? plain.message : ({} as never)).values.has("request_uri"),
+		).toBe(false);
+	});
+
 	it("carries the declared source apart from the request, never reading it from the body or a header", () => {
 		const read = messageOf(
 			"loginFinish",
