@@ -1,5 +1,7 @@
 import { erasers } from "@mod/erasure-extensions";
 import { defineModule, optional, probes } from "@mod/kernel";
+import { passkeyWitnesses } from "@mod/passkey-witness";
+import { promiseNames, stances } from "@mod/promises";
 import { type Space, spaces, store, storeControl } from "@mod/store";
 import {
 	indexSpaceOf,
@@ -14,11 +16,15 @@ import {
 	type IdentifierRecord,
 	identifierSpace,
 	localEraser,
+	localMarks,
 	localRecords,
+	type MarkRecord,
+	markSpace,
 	placed,
 	type SubjectRecord,
 	subjectSpace,
 } from "./records/records.ts";
+import { localWitness } from "./witness.ts";
 
 export default defineModule(
 	{
@@ -32,6 +38,8 @@ export default defineModule(
 		m.contribute(spaces).by(() => indexSpaceOf(identifierSpace)),
 		m.contribute(spaces).by(() => subjectSpace),
 		m.contribute(spaces).by(() => indexSpaceOf(subjectSpace)),
+		m.contribute(spaces).by(() => markSpace),
+		m.contribute(spaces).by(() => indexSpaceOf(markSpace)),
 		m.provide(placed).by(async (c): Promise<Builders> => {
 			const phase = subjectRecordsPhase.once(await c.getOptional(storeControl));
 			const held = await c.get(store);
@@ -61,20 +69,31 @@ export default defineModule(
 					"users-local",
 					c.refuse,
 				),
+				marks: await phasedRecordsIn<MarkRecord>(at(markSpace), phase, "users-local", c.refuse),
 			};
 		}),
 		m.contribute(ledgers).by(async (c) => localLedger(localRecords(await c.get(placed)), c.random)),
+		m.contribute(passkeyWitnesses).by(async (c) => localWitness(localMarks(await c.get(placed)))),
+		// The witness is not apart from the passkeys: a store emptied or rolled back takes both.
+		m.contribute(stances).by(() => ({
+			promise: promiseNames.storeWrite,
+			holds: false,
+			by: "users-local",
+			reason:
+				"its passkey witness keeps its marks in the Core's store beside the passkeys: a store emptied or rolled back takes both, and the subject reads as holding no passkey",
+		})),
 		// Its build takes only its records and collects no `probes`, as an eraser's must (erasure-extensions).
 		m.contribute(erasers).by(async (c) => localEraser(await c.get(placed))),
 		// Out of traffic until the phase reads: no call is judged on a phase not read.
 		m.contribute(probes).by(async (c) => {
-			const { identifiers, subjects, joint } = await c.get(placed);
+			const { identifiers, subjects, joint, marks } = await c.get(placed);
 			return {
 				name: "users-local.phase",
 				check: async () => {
 					await identifiers.ready();
 					await subjects.ready();
 					await joint.ready();
+					await marks.ready();
 				},
 			};
 		}),

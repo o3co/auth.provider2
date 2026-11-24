@@ -35,8 +35,17 @@ export const subjectSpace: Space = {
 	erasedBy: "users-local",
 };
 
+/** The passkey witness's mark of each subject, keyed by the subject: the token that set it. */
+export const markSpace: Space = {
+	name: "users-local.marks",
+	guarantees,
+	subjectData: "online-keyed",
+	erasedBy: "users-local",
+};
+
 export type IdentifierRecord = { readonly subject: string };
 export type SubjectRecord = { readonly identifier: string };
+export type MarkRecord = { readonly token: string };
 
 type Places = "identifiers" | "subjects";
 /** The builders the module makes over its two spaces, at the phase the process reads once. */
@@ -44,9 +53,10 @@ export interface Builders {
 	readonly identifiers: Awaited<ReturnType<typeof phasedRecordsIn<IdentifierRecord>>>;
 	readonly subjects: Awaited<ReturnType<typeof phasedRecordsIn<SubjectRecord>>>;
 	readonly joint: Awaited<ReturnType<typeof phasedJointRecordsIn<Places>>>;
+	readonly marks: Awaited<ReturnType<typeof phasedRecordsIn<MarkRecord>>>;
 }
 
-/** The builders over the two spaces, at the one phase this process reads: the module's own, taken by no other. */
+/** The builders over the three spaces, at the one phase this process reads: the module's own, taken by no other. */
 export const placed = contract<Builders>("users-local.placed");
 
 /** The ledger's records: a user placed by identifier and subject as one, and each read back. */
@@ -104,7 +114,27 @@ export function localRecords(builders: Builders): LocalRecords {
 	};
 }
 
-/** Whose a record written before indexing is: an identifier's names its subject, a subject's is keyed by it. */
+/** The witness's marks: one per subject, set unless one is, and removed only where it is the token's. */
+export interface LocalMarks {
+	/** Sets the subject's mark to `token`, unless one is set (`exists`) or the subject is erased (`erased`). */
+	set(subject: string, token: string): Promise<"created" | "exists" | "erased">;
+	read(subject: string): Promise<MarkRecord | undefined>;
+	/** Removes the mark only where it is `token`'s, checked in the write that removes it. */
+	remove(subject: string, token: string): Promise<void>;
+}
+
+export function localMarks(builders: Pick<Builders, "marks">): LocalMarks {
+	return {
+		set: (subject, token) => builders.marks.create(subject, { token }, "endless", subject),
+		read: async (subject) =>
+			shaped<MarkRecord>(await builders.marks.read(subject), (read) => isText(read.token)),
+		remove: async (subject, token) => {
+			await builders.marks.remove(subject, (held) => held.token === token);
+		},
+	};
+}
+
+/** Whose a record written before indexing is: an identifier's names its subject, a subject's and a mark's are keyed by it. */
 const identifierReading: SubjectReading = async (_key, value): Promise<SubjectOf> => {
 	const subject = (value as { subject?: unknown } | null)?.subject;
 	return isText(subject)
@@ -119,11 +149,14 @@ interface Erasing {
 	migrate(walk: Walk, subjectOf: SubjectReading, signal: AbortSignal): Promise<MigrationReport>;
 }
 
-/** The eraser `users-local`, as its spaces' `erasedBy` names it: a subject's two records erased, and both spaces migrated once. */
-export function localEraser(builders: Pick<Builders, "identifiers" | "subjects">): Eraser {
+/** The eraser `users-local`, as its spaces' `erasedBy` names it: a subject's records and mark erased, and each space migrated once. */
+export function localEraser(
+	builders: Pick<Builders, "identifiers" | "subjects" | "marks">,
+): Eraser {
 	const spaces: readonly [Erasing, SubjectReading][] = [
 		[builders.identifiers, identifierReading],
 		[builders.subjects, subjectReading],
+		[builders.marks, subjectReading],
 	];
 	const online = async (subject: string, signal: AbortSignal) => {
 		const reports = [];
@@ -134,7 +167,7 @@ export function localEraser(builders: Pick<Builders, "identifiers" | "subjects">
 		name: "users-local",
 		erasable: true,
 		online,
-		// Both spaces are indexed by their subject: no walk reaches more.
+		// Each space is indexed or keyed by its subject: no walk reaches more.
 		window: async (subjects, _walk, signal) => {
 			const reports = [];
 			for (const subject of subjects) reports.push(...(await online(subject, signal)).reports);

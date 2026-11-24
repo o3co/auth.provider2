@@ -958,6 +958,12 @@ importers:
       '@mod/kernel':
         specifier: workspace:*
         version: link:../../foundation/kernel
+      '@mod/passkey-witness':
+        specifier: workspace:*
+        version: link:../../passkey/passkey-witness
+      '@mod/promises':
+        specifier: workspace:*
+        version: link:../../foundation/promises
       '@mod/store':
         specifier: workspace:*
         version: link:../../foundation/store

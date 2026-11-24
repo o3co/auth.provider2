@@ -11,6 +11,8 @@
 	"dependencies": {
 		"@mod/erasure-extensions": "workspace:*",
 		"@mod/kernel": "workspace:*",
+		"@mod/passkey-witness": "workspace:*",
+		"@mod/promises": "workspace:*",
 		"@mod/store": "workspace:*",
 		"@mod/subject-records": "workspace:*",
 		"@mod/users": "workspace:*"

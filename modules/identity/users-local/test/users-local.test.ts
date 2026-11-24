@@ -8,6 +8,10 @@ import {
 	kernelConfig,
 } from "@mod/kernel";
 import { quietRuntime } from "@mod/kernel/testing";
+import { type PasskeyWitness, passkeyWitnesses } from "@mod/passkey-witness";
+import { passkeyWitnessContract } from "@mod/passkey-witness/testing";
+import { promiseNames, promises } from "@mod/promises";
+import promisesModule from "@mod/promises/module";
 import secretHashModule from "@mod/secret-hash/module";
 import { store, storeControl } from "@mod/store";
 import storeModule from "@mod/store/module";
@@ -20,13 +24,18 @@ import usersLocal from "../src/module.ts";
 import { localRecords, placed } from "../src/records/records.ts";
 
 const runtime = quietRuntime({ clock: { now: () => 1_800_000_000_000 } });
-const seen = contract<{ ledgers: readonly Ledger[]; erasers: readonly Eraser[] }>("seen");
+const seen = contract<{
+	ledgers: readonly Ledger[];
+	erasers: readonly Eraser[];
+	witnesses: readonly PasskeyWitness[];
+}>("seen");
 const collecting = defineModule(
-	{ name: "collecting", replicaSafe: true, takes: [ledgers, erasers] },
+	{ name: "collecting", replicaSafe: true, takes: [ledgers, erasers, passkeyWitnesses] },
 	(m) => [
 		m.provide(seen).by(async (c) => ({
 			ledgers: await c.collect(ledgers),
 			erasers: await c.collect(erasers),
+			witnesses: await c.collect(passkeyWitnesses),
 		})),
 	],
 );
@@ -47,10 +56,12 @@ async function opened(phase: "reader" | "indexed" = "indexed") {
 		runtime,
 	});
 	const [ledger] = app.get(seen).ledgers;
+	const [witness, ...more] = app.get(seen).witnesses;
 	const eraser = app.get(seen).erasers.find((e) => e.name === "users-local");
-	if (!ledger || !eraser) throw new Error("users-local contributed no ledger or eraser");
+	if (!ledger || !eraser || !witness || more.length > 0)
+		throw new Error("users-local contributed no ledger, eraser or one witness");
 	const builders = app.get(placed);
-	return { app, simulated, ledger, eraser, builders, records: localRecords(builders) };
+	return { app, simulated, ledger, witness, eraser, builders, records: localRecords(builders) };
 }
 
 /** Alice, placed as an import would place her: her own subject. */
@@ -71,6 +82,13 @@ for (const phase of ["reader", "indexed"] as const) {
 		withoutPasswords: true,
 		creates: true,
 	});
+}
+
+for (const phase of ["reader", "indexed"] as const) {
+	passkeyWitnessContract(
+		`users-local's witness, ${phase}`,
+		async () => (await opened(phase)).witness,
+	);
 }
 
 const signal = new AbortController().signal;
@@ -147,25 +165,31 @@ describe("users-local", () => {
 		expect((error as BootRefused).refusals.map((r) => r.where)).toEqual(["users.registered"]);
 	});
 
-	it("erases a subject's two records, so its identifier is free for a new subject", async () => {
-		const { ledger, eraser } = await opened();
+	it("erases a subject's two records and its witness's mark, so its identifier is free for a new subject", async () => {
+		const { ledger, witness, eraser } = await opened();
 		const made = await ledger.create?.("carol");
 		const subject = made?.kind === "created" ? made.user.subject : "";
+		expect(await witness.enroll(subject, "t")).toBe(true);
 		expect(eraser.erasable).toBe(true);
 		const erased = await eraser.online(subject, signal);
 		expect(erased.reports.map((r) => [r.kind, "space" in r && r.space])).toEqual([
 			["erased", "users-local.identifiers"],
 			["erased", "users-local.subjects"],
+			["erased", "users-local.marks"],
 		]);
 		expect(await ledger.byIdentifier?.("carol")).toEqual({ kind: "none" });
 		expect(await ledger.bySubject(subject)).toEqual({ kind: "none" });
+		expect(await witness.read(subject)).toBe(false);
+		// No mark is set past the subject's erasure: unavailable, never another's.
+		await expect(witness.enroll(subject, "t")).rejects.toSatisfy(isUnavailable);
 		const again = await ledger.create?.("carol");
 		expect(again?.kind === "created" && again.user.subject).not.toBe(subject);
 	});
 
 	it("indexes what the reader phase wrote, in the one migration", async () => {
 		const reader = await opened("reader");
-		await reader.ledger.create?.("carol");
+		const made = await reader.ledger.create?.("carol");
+		await reader.witness.enroll(made?.kind === "created" ? made.user.subject : "", "t");
 		reader.simulated.mark("subject-records.phase", "indexed");
 		const shared = defineModule({ name: "store", replicaSafe: true, takes: [] }, (m) => [
 			m.provide(store).by(() => reader.app.get(store)),
@@ -189,6 +213,7 @@ describe("users-local", () => {
 		expect(await eraser?.migrate(walk, signal)).toEqual([
 			{ kind: "migrated", space: "users-local.identifiers", indexed: 1, removed: 0 },
 			{ kind: "migrated", space: "users-local.subjects", indexed: 1, removed: 0 },
+			{ kind: "migrated", space: "users-local.marks", indexed: 1, removed: 0 },
 		]);
 	});
 
@@ -198,6 +223,38 @@ describe("users-local", () => {
 		await expect(ledger.byIdentifier?.("odd")).rejects.toSatisfy(isUnavailable);
 		await builders.subjects.create("s-odd", { identifier: [] } as never, "endless", "s-odd");
 		await expect(ledger.bySubject("s-odd")).rejects.toSatisfy(isUnavailable);
+	});
+
+	it("answers a mark of another shape unavailable, never marked or unmarked", async () => {
+		const { witness, builders } = await opened();
+		await builders.marks.create("s-odd", { token: "" } as never, "endless", "s-odd");
+		await expect(witness.read("s-odd")).rejects.toSatisfy(isUnavailable);
+		await expect(witness.markedWith("s-odd")).rejects.toSatisfy(isUnavailable);
+		await expect(witness.enroll("s-odd", "t")).rejects.toSatisfy(isUnavailable);
+	});
+
+	it("stands breaking store-write: its witness's marks are in the Core's store beside the passkeys", async () => {
+		const simulated = simulatedStore();
+		const app = await assemble({
+			modules: [simulated.module, usersLocal, promisesModule],
+			config: kernelConfig(),
+			runtime,
+		});
+		const judged = app
+			.get(promises)
+			.judgment()
+			.find((j) => j.promise === promiseNames.storeWrite);
+		expect(judged?.held).toBe(false);
+		expect(judged?.breaking).toContainEqual({
+			by: "users-local",
+			reason: expect.stringContaining("passkey witness"),
+		});
+		const refused = await assemble({
+			modules: [simulatedStore().module, usersLocal, promisesModule],
+			config: { ...kernelConfig(), promises: { required: [promiseNames.storeWrite] } },
+			runtime,
+		}).catch((e: unknown) => e);
+		expect(BootRefused.is(refused)).toBe(true);
 	});
 
 	it("places nothing for a subject held, answering taken, never exists", async () => {
@@ -243,7 +300,7 @@ describe("users-local", () => {
 	it("declares both spaces authenticated: over the memory store it boots only as the store's setting accepts", async () => {
 		const simulated = simulatedStore();
 		await assemble({ modules: [simulated.module, usersLocal], config: kernelConfig(), runtime });
-		for (const space of ["users-local.identifiers", "users-local.subjects"]) {
+		for (const space of ["users-local.identifiers", "users-local.subjects", "users-local.marks"]) {
 			expect(simulated.declaredSpace(space).guarantees, space).toContain("authenticated");
 		}
 		const over = (accept: boolean) =>
