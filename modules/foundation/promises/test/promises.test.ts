@@ -33,12 +33,13 @@ const judged = async (modules: readonly Module[], required: readonly string[] = 
 };
 
 describe("the promises and their judgment", () => {
-	it("names the four promises, each one word of the vocabulary it owns", () => {
+	it("names the five promises, each one word of the vocabulary it owns", () => {
 		expect(Object.values(promiseNames)).toEqual([
 			"front-compromise-new-authorization",
 			"front-compromise-client-token",
 			"store-write",
 			"core-compromise-contained",
+			"no-client-subject-token",
 		]);
 	});
 
@@ -114,7 +115,7 @@ describe("the promises and their judgment", () => {
 		const { app, recorded } = await judged([breaking]);
 		await app.start();
 		const lines = recorded.lines().filter((l) => l.event === "promises.judged");
-		expect(lines).toHaveLength(4);
+		expect(lines).toHaveLength(5);
 		expect(lines.find((l) => l.fields.promise === promiseNames.newAuthorization)).toEqual({
 			level: "warn",
 			event: "promises.judged",
@@ -126,6 +127,21 @@ describe("the promises and their judgment", () => {
 				breaking: "oidc: oidc.userinfo.enabled: userinfo answers through the Front",
 			},
 		});
+		await app.stop();
+	});
+
+	it("names, on the line of the client's own token, the issuance it does not see", async () => {
+		const { app, recorded } = await judged([]);
+		await app.start();
+		const line = recorded
+			.lines()
+			.find(
+				(l) =>
+					l.event === "promises.judged" && l.fields.promise === promiseNames.noClientSubjectToken,
+			);
+		expect(line?.fields.unchecked).toBe(
+			"operator's conditions; receivers' duties; issuance not through the token endpoint",
+		);
 		await app.stop();
 	});
 

@@ -19,6 +19,17 @@ const section = z.strictObject({
 		.describe("The promises this deployment requires: boot is refused where one does not hold."),
 });
 
+/** What no promise's judgment checks. */
+const uncheckedByAll = "operator's conditions; receivers' duties";
+
+/** What one promise's judgment does not see, past what none checks. */
+const uncheckedFor: Partial<Record<PromiseName, string>> = {
+	[promiseNames.noClientSubjectToken]: "issuance not through the token endpoint",
+};
+
+const unchecked = (promise: PromiseName) =>
+	[uncheckedByAll, uncheckedFor[promise]].filter((part) => part !== undefined).join("; ");
+
 /** One promise judged from every stance: held where one holds it and none breaks it. */
 function judge(promise: PromiseName, all: readonly Stance[]): PromiseJudgment {
 	const on = all.filter((s) => s.promise === promise);
@@ -63,7 +74,7 @@ export default defineModule(
 						promise: one.promise,
 						held: one.held,
 						basis: one.basis,
-						unchecked: "operator's conditions; receivers' duties",
+						unchecked: unchecked(one.promise),
 						...(one.breaking.length === 0 ? {} : { breaking: said(one.breaking) }),
 					};
 					if (one.held) c.log.info("promises.judged", fields);

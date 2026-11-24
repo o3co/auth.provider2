@@ -10,7 +10,7 @@
 - Checking the operator's conditions and the receivers' duties: they are named as unchecked, never judged.
 
 ## Offers
-- `promiseNames`: `front-compromise-new-authorization` (claim 1, with the session's binding), `front-compromise-client-token` (claim 2), `store-write` and `core-compromise-contained` (claim 3). `PromiseName`, one of them.
+- `promiseNames`: `front-compromise-new-authorization` (claim 1, with the session's binding), `front-compromise-client-token` (claim 2), `store-write` and `core-compromise-contained` (claim 3), and `no-client-subject-token` (no grant through the token endpoint gives a token whose subject is a client). `PromiseName`, one of them.
 - Extension point `stances` (any number): a `Stance` names a promise, whether the module holds it, the module (`by`), and where it breaks it, the setting's key path and the reason.
 - `promises`: `judgment()`, each promise in `promiseNames`' order (`PromiseJudgment`): whether it holds, its basis (`declared`) and what breaks it (`Breaking`).
 - Section `promises`: `required`, the promises a deployment requires.
@@ -18,7 +18,7 @@
 
 ## Invariants
 - A promise holds only where at least one module stands holding it and none stands breaking it; none declared holds nothing.
-- The basis is `declared`: the composition and its settings were checked; the operator's conditions and the receivers' duties were not, and each line says so.
+- The basis is `declared`: the composition and its settings were checked; the operator's conditions and the receivers' duties were not, and each line says so. The line of `no-client-subject-token` also names issuance not through the token endpoint as not checked.
 - A line and a refusal name a setting by its key path and never by its value.
 - A required promise that does not hold refuses boot at `promises.required.<i>`, before anything starts.
 
@@ -28,3 +28,4 @@
 ## Vocabulary
 - promise: a claim of the provider, as a named contract a deployment holds or not.
 - stance: what one module says of one promise.
+- client subject token: a token whose subject is a client, issued on the client's own key rather than on a user's approval.

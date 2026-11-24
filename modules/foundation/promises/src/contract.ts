@@ -10,6 +10,8 @@ export const promiseNames = Object.freeze({
 	storeWrite: "store-write",
 	/** A compromised Core's forgery passes no receiver that checks receipts, and a forged record stops its generation. */
 	coreContained: "core-compromise-contained",
+	/** No grant issued through the token endpoint gives a token whose subject is a client. */
+	noClientSubjectToken: "no-client-subject-token",
 });
 
 export type PromiseName = (typeof promiseNames)[keyof typeof promiseNames];
