@@ -419,7 +419,8 @@ export const challengeInput = (statement: string, use: "get" | "create") =>
 /**
  * The first key's words and inputs: its stages; what its evidence value is the hash of (the mail's
  * token); and the additional data a sealed request is bound to (its stage, nonce and the screen's
- * keys, so a swapped key fails to open).
+ * keys, so a swapped key fails to open); and what a recovery signs with E_sig, where the creation's
+ * answer was lost (§C.4): the mail's nonce and the SHA-256 of the sealed request's `enc` then `ct`.
  */
 export const firstKey = Object.freeze({
 	stages: firstKeyStages,
@@ -431,6 +432,8 @@ export const firstKey = Object.freeze({
 			e_enc: eEnc,
 			e_sig: { x: eSig.x, y: eSig.y },
 		}),
+	recoverInput: (nonce: string, digest: string) =>
+		canonicalText({ purpose: "first-key/recover", nonce, digest }),
 });
 
 /** What a registration's continuation signs: the statement's hash, the stage, the sequence and the response's hash. */

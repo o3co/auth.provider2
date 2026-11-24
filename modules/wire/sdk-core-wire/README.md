@@ -17,7 +17,7 @@
 - `payloads.completions`: `passkeyAdd` (the continued `creation`), `passkeyManage` (the keys' list) and `keyChange` (§C.5). `payloads.completion` is the authorization's, its `purpose` and ⑤'s `receipt` optional.
 - `versions`: the wire versions a reader speaks (1); every statement and completion names its own as `v`. A creation's `options` name the `algorithms` the ceremony offered, as COSE numbers them, each once.
 - `keyThumbprintInput` (a JWK): what a passkey's thumbprint (RFC 7638, RFC 8037) is the SHA-256 of, the JWK's required members sorted; none for a JWK that is not a passkey's (`PasskeyJwk`).
-- `canonicalText`, `challengeInput` and `continuationInput`: what a challenge and a continuation's signature cover. `firstKey`: the first key's `stages` (`start` and `mail`), `evidenceInput` and `aad`, what the evidence's value and a sealed request's additional data cover.
+- `canonicalText`, `challengeInput` and `continuationInput`: what a challenge and a continuation's signature cover. `firstKey`: the first key's `stages` (`start` and `mail`), `evidenceInput`, `aad` and `recoverInput`: what the evidence's value, a sealed request's additional data and a recovery's signature (the mail's nonce, the sealed request's digest) cover.
 
 ## Invariants
 - A protocol (G33): types, frozen constants, fixed schemas and the functions that build by them; no I/O, clock, randomness or state.

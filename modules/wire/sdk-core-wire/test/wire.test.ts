@@ -380,6 +380,14 @@ describe("the first key's statements", () => {
 });
 
 describe("the inputs a hash or a signature covers", () => {
+	it("signs a recovery over the mail's nonce and the sealed request's digest, apart from every other input", () => {
+		expect(firstKey.recoverInput("n", "d")).toBe(
+			'{"digest":"d","nonce":"n","purpose":"first-key/recover"}',
+		);
+		expect(firstKey.recoverInput("n", "d")).not.toBe(firstKey.recoverInput("n", "e"));
+		expect(firstKey.recoverInput("n", "d").startsWith("{")).toBe(true);
+	});
+
 	it("seals a completion under its purpose and the statement's hash, each purpose apart", () => {
 		expect(hpke.completionAad("authorization", "h")).toBe(
 			'{"h":"h","purpose":"completion/authorization"}',
