@@ -32,7 +32,7 @@ const limited = defineModule({ name: "limited", replicaSafe: true, takes: [] }, 
 		),
 	m.contribute(routes).by(() => ({
 		method: "POST",
-		path: "/token",
+		path: "/oauth/token",
 		crossSite: "a client's server calls it",
 		unlimited: "test",
 		uses: [use(limit)],
@@ -51,7 +51,7 @@ const started = async (modules: readonly Module[], config: Record<string, unknow
 };
 
 const answerOf = async (port: number) => {
-	const answer = await fetch(`http://127.0.0.1:${port}/token`, {
+	const answer = await fetch(`http://127.0.0.1:${port}/oauth/token`, {
 		method: "POST",
 		body: new URLSearchParams({
 			grant_type: "refresh_token",

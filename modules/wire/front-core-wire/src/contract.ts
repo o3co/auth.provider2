@@ -284,7 +284,7 @@ export const overHttp = Object.freeze({
 		loginStart: screen("/login/start"),
 		loginFinish: screen("/login/finish"),
 		token: Object.freeze({
-			path: "/token",
+			path: "/oauth/token",
 			body: "form",
 			bodyNames: Object.freeze({
 				grantType: "grant_type",
@@ -299,7 +299,7 @@ export const overHttp = Object.freeze({
 			}),
 		}),
 		refresh: Object.freeze({
-			path: "/token",
+			path: "/oauth/token",
 			body: "form",
 			discriminator: Object.freeze({ name: "grant_type", value: "refresh_token" }),
 			bodyNames: Object.freeze({ refreshToken: "refresh_token", ...tokenNames }),

@@ -16,7 +16,7 @@ afterEach(async () => {
 const coreRoute = defineModule({ name: "core-route", replicaSafe: true, takes: [] }, (m) => [
 	m.contribute(routes).by(() => ({
 		method: "POST",
-		path: "/token",
+		path: "/oauth/token",
 		crossSite: "a client's server calls it",
 		unlimited: "test",
 		handle: (request) => ({
@@ -39,7 +39,7 @@ describe("in-process", () => {
 		await app.start();
 		stops.push(() => app.stop(1000));
 		const url = `http://127.0.0.1:${app.get(listening).port()}`;
-		const token = await fetch(`${url}/token`, {
+		const token = await fetch(`${url}/oauth/token`, {
 			method: "POST",
 			body: new URLSearchParams({ code: "abc" }),
 		});

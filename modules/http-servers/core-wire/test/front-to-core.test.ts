@@ -34,7 +34,7 @@ const coreRoutes = defineModule({ name: "core-routes", replicaSafe: true, takes:
 	})),
 	m.contribute(routes).by(() => ({
 		method: "POST",
-		path: "/token",
+		path: "/oauth/token",
 		crossSite: "a client's server calls it",
 		unlimited: "test",
 		handle: () => jsonAnswer(400, { error: "invalid_grant" }),
@@ -64,7 +64,7 @@ it("carries a request at the Front to the Core's route and its answer back, the 
 		expect([login.status, await login.json()]).toEqual([200, { done: true }]);
 		expect(login.headers.get("access-control-allow-origin")).toBe("https://screen.example");
 		expect(seen.map((r) => r.json)).toEqual([{ statement: "a.b.c", assertion: '{"x":1}' }]);
-		const exchange = await fetch(`${url}/token`, {
+		const exchange = await fetch(`${url}/oauth/token`, {
 			method: "POST",
 			body: new URLSearchParams({
 				grant_type: "refresh_token",

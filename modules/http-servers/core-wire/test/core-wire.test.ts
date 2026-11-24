@@ -43,7 +43,7 @@ function token(answer: (request: HttpRequest) => HttpResponse, more: Partial<Rou
 	return defineModule({ name: "token-route", replicaSafe: true, takes: [] }, (m) => [
 		m.contribute(routes).by(() => ({
 			method: "POST",
-			path: "/token",
+			path: "/oauth/token",
 			crossSite: "a client's server calls it",
 			unlimited: "test",
 			handle: (request) => {
@@ -92,7 +92,7 @@ describe("core-wire", () => {
 		});
 		await new Promise((resolve) => setTimeout(resolve, 10));
 		expect(ended).toEqual([
-			expect.objectContaining({ method: "POST", route: "/token", status: 200 }),
+			expect.objectContaining({ method: "POST", route: "/oauth/token", status: 200 }),
 		]);
 	});
 
@@ -134,7 +134,10 @@ describe("core-wire", () => {
 			token(() => jsonAnswer(200, {}), { uses: [use(gate)] }),
 		]).catch((e: unknown) => e);
 		expect(BootRefused.is(refused) && refused.refusals).toEqual([
-			{ where: "http.routes:POST /token", reason: "uses a policy no module applies: test.gate" },
+			{
+				where: "http.routes:POST /oauth/token",
+				reason: "uses a policy no module applies: test.gate",
+			},
 		]);
 	});
 
@@ -292,7 +295,7 @@ describe("core-wire", () => {
 		const probe = `http://127.0.0.1:${app.probePort}`;
 		expect((await fetch(`${probe}/readyz`)).status).toBe(200);
 		expect((await fetch(`${probe}/_healthcheck`)).status).toBe(200);
-		expect((await fetch(`${probe}/token`, { method: "POST" })).status).toBe(404);
+		expect((await fetch(`${probe}/oauth/token`, { method: "POST" })).status).toBe(404);
 		const front = await client(app.port);
 		expect((await front.send("token", 1, tokenMessage())).outcome).toBe("ok");
 	});

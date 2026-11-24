@@ -88,7 +88,7 @@ const post = (url: string, form: Record<string, string>, headers: Record<string,
 describe("front-relay", () => {
 	it("relays an operation the protocol names as its frame, and answers the Core's reply as HTTP", async () => {
 		const { url, core } = await front(() => ok({ access_token: "t" }, "n0nce"));
-		const answer = await post(`${url}/token`, tokenForm, { dpop: "d.e.f" });
+		const answer = await post(`${url}/oauth/token`, tokenForm, { dpop: "d.e.f" });
 		expect(answer.status).toBe(200);
 		expect(await answer.json()).toEqual({ access_token: "t" });
 		expect(answer.headers.get("dpop-nonce")).toBe("n0nce");
@@ -105,7 +105,7 @@ describe("front-relay", () => {
 			],
 		]);
 		expect(core.peers).toEqual(["URI:spiffe://auth.test/front/1"]);
-		const refresh = await post(`${url}/token`, {
+		const refresh = await post(`${url}/oauth/token`, {
 			grant_type: "refresh_token",
 			refresh_token: "r",
 			client_assertion: "a.b.c",
@@ -126,7 +126,7 @@ describe("front-relay", () => {
 		const app = await boot({ "core-port": core.port }, [], quietRuntime({ log: recorded.log }));
 		await app.start();
 		stops.push(() => app.stop(1000));
-		const url = `http://127.0.0.1:${app.get(listening).port()}/token`;
+		const url = `http://127.0.0.1:${app.get(listening).port()}/oauth/token`;
 		const first = await post(url, tokenForm);
 		expect([first.status, await first.json()]).toEqual([401, { error: "invalid_client" }]);
 		const second = await post(url, tokenForm);
@@ -146,7 +146,7 @@ describe("front-relay", () => {
 		const own = await fetch(`${url}/local`);
 		expect([own.status, await own.json()]).toEqual([200, { here: "front" }]);
 		for (const [method, path] of [
-			["GET", "/token"],
+			["GET", "/oauth/token"],
 			["POST", "/nowhere"],
 			["POST", "/local"],
 		] as const) {
@@ -158,18 +158,18 @@ describe("front-relay", () => {
 
 	it("refuses, sending nothing, a field outside its spec, a name sent twice and a body of another type", async () => {
 		const { url, core } = await front(() => ok({}));
-		const short = await post(`${url}/token`, { ...tokenForm, code_verifier: "short" });
+		const short = await post(`${url}/oauth/token`, { ...tokenForm, code_verifier: "short" });
 		expect([short.status, await short.json()]).toEqual([
 			400,
 			{ error: "invalid_request", error_description: "codeVerifier: fieldLength" },
 		]);
-		const twice = await fetch(`${url}/token`, {
+		const twice = await fetch(`${url}/oauth/token`, {
 			method: "POST",
 			body: `${new URLSearchParams(tokenForm)}&code=again`,
 			headers: { "content-type": "application/x-www-form-urlencoded" },
 		});
 		expect(twice.status).toBe(400);
-		const json = await fetch(`${url}/token`, {
+		const json = await fetch(`${url}/oauth/token`, {
 			method: "POST",
 			body: JSON.stringify(tokenForm),
 			headers: { "content-type": "application/json" },
@@ -200,7 +200,7 @@ describe("front-relay", () => {
 		const screen = await preflight("/login/finish");
 		expect(screen.headers.get("access-control-allow-origin")).toBe("https://screen.example");
 		expect(screen.headers.get("access-control-allow-headers")).toBe("content-type");
-		expect((await preflight("/token")).headers.get("access-control-allow-origin")).toBeNull();
+		expect((await preflight("/oauth/token")).headers.get("access-control-allow-origin")).toBeNull();
 		const call = await fetch(`${url}/login/finish`, {
 			method: "POST",
 			body: JSON.stringify({ statement: "a.b.c", assertion: "x" }),
@@ -219,10 +219,10 @@ describe("front-relay", () => {
 		await app.start();
 		stops.push(() => app.stop(1000));
 		const base = `http://127.0.0.1:${app.get(listening).port()}`;
-		expect((await post(`${base}/token`, tokenForm)).status).toBe(503);
+		expect((await post(`${base}/oauth/token`, tokenForm)).status).toBe(503);
 		expect((await fetch(`${base}/readyz`)).status).toBe(200);
 		await silent.close();
-		expect((await post(`${base}/token`, tokenForm)).status).toBe(503);
+		expect((await post(`${base}/oauth/token`, tokenForm)).status).toBe(503);
 		await new Promise((resolve) => setTimeout(resolve, 1100));
 		expect((await fetch(`${base}/readyz`)).status).toBe(503);
 		expect(silent.seen.map((r) => r.kind)).toEqual(["token"]);
@@ -234,7 +234,7 @@ describe("front-relay", () => {
 		const app = await boot({ "core-port": core.port, timeout: "500ms" });
 		await app.start();
 		stops.push(() => app.stop(1000));
-		const url = `http://127.0.0.1:${app.get(listening).port()}/token`;
+		const url = `http://127.0.0.1:${app.get(listening).port()}/oauth/token`;
 		expect((await post(url, tokenForm)).status).toBe(503);
 		expect(core.seen).toEqual([]);
 	});
@@ -243,7 +243,7 @@ describe("front-relay", () => {
 		const taking = defineModule({ name: "taking", replicaSafe: true, takes: [] }, (m) => [
 			m.contribute(routes).by(() => ({
 				method: "POST",
-				path: "/token",
+				path: "/oauth/token",
 				crossSite: "test",
 				unlimited: "test",
 				handle: () => ({ status: 200, body: { json: { here: "front" } } }),
@@ -267,7 +267,7 @@ describe("front-relay", () => {
 		await app.start();
 		stops.push(() => app.stop(1000));
 		const url = `http://127.0.0.1:${app.get(listening).port()}`;
-		expect(await (await post(`${url}/token`, tokenForm)).json()).toEqual({ here: "front" });
+		expect(await (await post(`${url}/oauth/token`, tokenForm)).json()).toEqual({ here: "front" });
 		const under = await fetch(`${url}/first-key/start`, {
 			method: "POST",
 			body: "{}",
@@ -281,12 +281,16 @@ describe("front-relay", () => {
 				.lines()
 				.filter((l) => l.event === "front-relay.shadowed")
 				.map((l) => l.fields),
-		).toEqual([{ route: "POST /token" }, { route: "POST /first-key/*" }]);
+		).toEqual([{ route: "POST /oauth/token" }, { route: "POST /first-key/*" }]);
 	});
 
 	it("sends the source the Front determined, and none where its trusted proxy said not who sent it", async () => {
 		const { url, core } = await front(() => ok({}));
-		await post(`${url}/token`, { ...tokenForm, source: "203.0.113.9" }, { source: "203.0.113.9" });
+		await post(
+			`${url}/oauth/token`,
+			{ ...tokenForm, source: "203.0.113.9" },
+			{ source: "203.0.113.9" },
+		);
 		expect(core.seen.at(-1)?.message.source).toBe("127.0.0.1");
 		const behind = await fakeCore(certificates, () => ok({}));
 		stops.push(behind.close);
@@ -295,13 +299,13 @@ describe("front-relay", () => {
 		});
 		await app.start();
 		stops.push(() => app.stop(1000));
-		await post(`http://127.0.0.1:${app.get(listening).port()}/token`, tokenForm);
+		await post(`http://127.0.0.1:${app.get(listening).port()}/oauth/token`, tokenForm);
 		expect(behind.seen.at(-1)?.message.source).toBe("");
 	});
 
 	it("answers a limit's refusal 429 with when to ask again", async () => {
 		const { url } = await front(() => refusing("rate_limited", "", "7"));
-		const limited = await post(`${url}/token`, tokenForm);
+		const limited = await post(`${url}/oauth/token`, tokenForm);
 		expect([limited.status, limited.headers.get("retry-after"), await limited.json()]).toEqual([
 			429,
 			"7",

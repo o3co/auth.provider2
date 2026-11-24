@@ -125,15 +125,17 @@ describe("an operation over HTTP", () => {
 	});
 
 	it("picks the refresh by its grant type at the shared path, and nothing for another method or path", () => {
-		expect(operationAt("POST", "/token", values({ grant_type: "refresh_token" }))).toBe("refresh");
-		expect(operationAt("POST", "/token", values({ grant_type: "authorization_code" }))).toBe(
+		expect(operationAt("POST", "/oauth/token", values({ grant_type: "refresh_token" }))).toBe(
+			"refresh",
+		);
+		expect(operationAt("POST", "/oauth/token", values({ grant_type: "authorization_code" }))).toBe(
 			"token",
 		);
-		expect(operationAt("POST", "/token", values({ grant_type: ["refresh_token", "x"] }))).toBe(
-			"token",
-		);
-		expect(operationAt("GET", "/token", values({}))).toBeUndefined();
-		expect(operationAt("POST", "/token/", values({}))).toBeUndefined();
+		expect(
+			operationAt("POST", "/oauth/token", values({ grant_type: ["refresh_token", "x"] })),
+		).toBe("token");
+		expect(operationAt("GET", "/oauth/token", values({}))).toBeUndefined();
+		expect(operationAt("POST", "/oauth/token/", values({}))).toBeUndefined();
 		const rebuilt = carriedOf("refresh", {
 			source: "",
 			refreshToken: "r",
