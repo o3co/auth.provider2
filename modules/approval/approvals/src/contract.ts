@@ -1,0 +1,197 @@
+import { contract, extensionPoint } from "@mod/kernel";
+import type { AssertRefusal } from "@mod/passkeys";
+import { stances } from "@mod/promises";
+import type {
+	AuthorizationItems,
+	CreationPayload,
+	PossessionPayload,
+	SigningKey,
+} from "@mod/sdk-core-wire";
+import { part } from "./completion/completion.ts";
+
+/** The purposes a statement is signed for: the IdP's own operations, a closed set. */
+export type Purpose = "authorization" | "creation" | "possession";
+
+/** Each purpose's items, as sdk-core-wire fixes them. */
+export interface ItemsOf {
+	readonly authorization: AuthorizationItems;
+	readonly creation: CreationPayload["creation"];
+	readonly possession: PossessionPayload["possession"];
+}
+
+/** The screen's two keys: HPKE's raw P-256 point (base64url) and its signing key. */
+export interface Screen {
+	readonly eEnc: string;
+	readonly eSig: SigningKey;
+}
+
+/** A statement asked: its purpose and items, the screen's keys, and the key its issuing is counted by. */
+export type IssueAsk = {
+	readonly [P in Purpose]: {
+		readonly purpose: P;
+		readonly items: ItemsOf[P];
+		readonly screen: Screen;
+		readonly by: string;
+	};
+}[Purpose];
+
+export type Issued =
+	| {
+			readonly kind: "issued";
+			/** The compact JWS, `approval+jwt`, by the Core's ring. */
+			readonly statement: string;
+			/** Its SHA-256, base64url: the key its record is kept by. */
+			readonly hash: string;
+			/** What a `get()` over it is asked with: sdk-core-wire's challenge input, hashed. */
+			readonly challenge: string;
+	  }
+	| { readonly kind: "refused"; readonly reason: "items" | "limited" | "busy" | "withdrawn" };
+
+/** A statement used once: what its purpose's owner takes, from the record alone. */
+export interface Approval {
+	readonly hash: string;
+	readonly purpose: Purpose;
+	readonly items: ItemsOf[Purpose];
+	/** By an assertion: the subject and credential it showed. */
+	readonly subject?: string;
+	readonly credential?: string;
+	/** By a possession: the verification passkeys gave the pending key. */
+	readonly verification?: string;
+	/** When it was used, by the kernel's clock, in ms: the same evidence again answers the same time. */
+	readonly usedAt?: number;
+}
+
+export type UseRefusal = AssertRefusal | "unknown" | "expired" | "used" | "purpose" | "unverified";
+
+export type Used =
+	| { readonly kind: "approved"; readonly approval: Approval }
+	| { readonly kind: "refused"; readonly reason: UseRefusal };
+
+/** What a continuation's step answers, kept as JSON. */
+export type StepResult =
+	| null
+	| boolean
+	| number
+	| string
+	| readonly StepResult[]
+	| { readonly [key: string]: StepResult };
+
+export type Continued =
+	| {
+			readonly kind: "continued";
+			readonly seq: number;
+			/** Whether another call took this sequence number first. */
+			readonly again: boolean;
+			/** What its step answered: run once it was taken, kept, and given again alike. */
+			readonly result: StepResult;
+	  }
+	| {
+			readonly kind: "refused";
+			/** `pending`: another call holds that continuation's step; ask again. */
+			readonly reason: "unknown" | "expired" | "purpose" | "signature" | "seq" | "pending";
+	  };
+
+export type Completed =
+	| {
+			readonly kind: "completed";
+			/** The completion, sealed to the screen's `eEnc`: HPKE's `enc` and ciphertext, base64url. */
+			readonly enc: string;
+			readonly ct: string;
+	  }
+	| {
+			readonly kind: "refused";
+			readonly reason:
+				| "unknown"
+				| "purpose"
+				| "unused"
+				| "expired"
+				| "code"
+				| "key"
+				| "ended"
+				| "withdrawn";
+	  };
+
+/** Statements a person approves with a passkey, each signed, recorded, used once and answered. */
+export interface Approvals {
+	/** Signs a statement of `purpose` over its items, as the declared modules fill them, and records it. */
+	issue(ask: IssueAsk): Promise<Issued>;
+	/**
+	 * Uses a statement once: an authorization's by an assertion over its challenge, its user verified;
+	 * a possession's by the verification of its pending key. The same evidence again answers alike.
+	 */
+	use(
+		p: {
+			readonly statement: string;
+		} /** The assertion response's JSON text, as the screen sent it: its bytes are what is hashed. */ & (
+			| { readonly assertion: string }
+			| { readonly verification: string }
+		),
+	): Promise<Used>;
+	/**
+	 * A continuation the screen signed with its `eSig`: the next sequence number, once the last one's
+	 * answer is kept, taken by one call, which runs `step` and keeps its answer on the record. The same
+	 * continuation again answers what was kept, `pending` while a call holds its step, and runs `step`
+	 * again only where the call that held it let its hold lapse: a step must take a second run alike.
+	 */
+	continue(p: {
+		readonly hash: string;
+		readonly seq: number;
+		readonly body: string;
+		readonly signature: string;
+		readonly step: () => Promise<StepResult>;
+	}): Promise<Continued>;
+	/** An authorization's completion: its approval taken in on the subject's flow, then signed and sealed. */
+	complete(p: { readonly hash: string; readonly code: string }): Promise<Completed>;
+	/** A used statement's approval; none for any other. */
+	usedOf(hash: string): Promise<Approval | undefined>;
+}
+
+/** Taken only by a module that declares where it stands on the promises. */
+export const approvals = contract<Approvals>("approvals", { takersContribute: stances });
+
+/** The items of one purpose a module fills, by their names in sdk-core-wire's schema. */
+export interface StatementItems {
+	readonly purpose: Purpose;
+	readonly names: readonly string[];
+	readonly by: string;
+}
+
+/** Who fills which items: boot refuses a name the schema lacks, or one two modules fill. */
+export const statementItems = extensionPoint<StatementItems>("approvals.statement-items", {
+	multiplicity: "many",
+});
+
+declare const storedStatement: unique symbol;
+/** A statement's record as kept: opaque to the store. */
+export type StoredStatement = { readonly [storedStatement]: true };
+
+/** Where statements' records are kept, by the statement's hash. Throws Unavailable when it cannot tell. */
+export interface ApprovalStore {
+	/** Keeps the record for its lifetime, unless one is kept already. */
+	create(hash: string, record: StoredStatement, lifetimeMs: number): Promise<"created" | "exists">;
+	read(hash: string): Promise<StoredStatement | undefined>;
+	/** Changes the record from what it holds; `change` runs again on a lost race. None where none is kept. */
+	change(
+		hash: string,
+		change: (
+			current: StoredStatement,
+		) => { readonly value: StoredStatement; readonly lifetimeMs?: number } | undefined,
+	): Promise<{ readonly before: StoredStatement; readonly after: StoredStatement } | undefined>;
+}
+
+export const approvalStore = contract<ApprovalStore>("approvals.store");
+
+/** What the statements' place must be, each a guarantee its wiring declares. */
+export const approvalStoreNeeds = {
+	/** A use lost to eviction or failover would let a statement be used twice. */
+	neverEvicted: true,
+	survivesCrash: true,
+	survivesFailover: true,
+	/** A stale read could answer a used statement as unused, or a continuation's sequence as free. */
+	confirmedReads: true,
+	/** A record written outside the provider would approve what no person approved. */
+	authenticated: true,
+} as const;
+
+/** approvals' part of each subject's flow, which its wiring binds. */
+export const approvalPart = part;
