@@ -13,7 +13,7 @@ export interface PasskeyReset {
 	 * answers the log's answer; where placed, it tends the subject's flow and settles its passkeys
 	 * first.
 	 */
-	reset(instruction: string): Promise<{ readonly answer: ResetAnswer }>;
+	reset(instruction: string): Promise<ResetAnswer>;
 	/**
 	 * The subject's key generation, as the Core's applied state holds it once the subject's flow is
 	 * tended: the instruction's `kg` on L0's path. L1's procedure reads the monitor's signed `stateOf`

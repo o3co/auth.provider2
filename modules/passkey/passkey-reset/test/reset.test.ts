@@ -1,6 +1,9 @@
 import type { PasskeyGenerations, Passkeys } from "@mod/passkeys";
+import { resetRefusal } from "@mod/reset-wire";
 import type { ResetAnswer, Transparency } from "@mod/transparency";
+import { schemas } from "@mod/transparency-wire";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 import { resetOver } from "../src/reset.ts";
 
 const b64 = (value: unknown) => Buffer.from(JSON.stringify(value)).toString("base64url");
@@ -52,7 +55,7 @@ function world(answer: { answer: ResetAnswer }) {
 describe("the reset's path", () => {
 	it("hands the instruction to the log and, where placed, takes the subject's boundary in and settles its passkeys before answering", async () => {
 		const w = world({ answer: accepted });
-		expect(await w.reset.reset(instruction)).toEqual({ answer: accepted });
+		expect(await w.reset.reset(instruction)).toEqual(accepted);
 		expect(w.calls).toEqual(["reset", "tend subject:sub-1", "settle sub-1"]);
 	});
 
@@ -63,8 +66,21 @@ describe("the reset's path", () => {
 			{ answer: { v: 1, result: "refused", refusal: "temporary" } as ResetAnswer },
 		]) {
 			const w = world(answer);
-			expect(await w.reset.reset(instruction), JSON.stringify(answer)).toEqual(answer);
+			expect(await w.reset.reset(instruction), JSON.stringify(answer)).toEqual(answer.answer);
 			expect(w.calls).toEqual(["reset"]);
+		}
+	});
+
+	it("answers the wire's own form, read back by the log's append answer or reset-wire's refusal", async () => {
+		const read = z.union([schemas.appendAnswer, resetRefusal.schema]);
+		for (const answer of [
+			accepted,
+			{ v: 1, result: "invalid", fault: "generation" } as ResetAnswer,
+			{ v: 1, result: "conflict" } as ResetAnswer,
+			{ v: 1, result: "refused", refusal: "temporary" } as ResetAnswer,
+		]) {
+			const line = JSON.stringify(await world({ answer }).reset.reset(instruction));
+			expect(read.parse(JSON.parse(line)), line).toEqual(answer);
 		}
 	});
 
@@ -96,7 +112,7 @@ describe("the reset's path", () => {
 		});
 		await expect(failing.reset(instruction)).rejects.toThrow("unavailable");
 		fail = false;
-		expect(await failing.reset(instruction)).toEqual({ answer: accepted });
+		expect(await failing.reset(instruction)).toEqual(accepted);
 		expect(w.calls).toEqual(["tend", "tend", "settle"]);
 	});
 });

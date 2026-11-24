@@ -12,7 +12,7 @@
 - Showing a holding stance's condition beside the promises' judgment (proposal 544's Operator's): `promises`', which today prints only breaking stances' reasons; the condition is this card's and the stance's reason.
 
 ## Offers
-- `passkeyReset`, taken only by a module standing on the promises (O1): `reset` (instruction) → the log's `ResetAnswer`; `generation` (subject) → its key generation in the Core's applied state, its flow tended first.
+- `passkeyReset`, taken only by a module standing on the promises (O1): `reset` (instruction) → the log's `ResetAnswer`, the wire's own form (an append's answer, or reset-wire's refusal), told by `result`; `generation` (subject) → its key generation in the Core's applied state, its flow tended first.
 - Composition definition: the contract and its stance (`promises`' `stances`). An opt-in feature: composed only where a composition names it, bringing `transparency` and `passkeys`; never with passkeys alone.
 
 ## Invariants
