@@ -1375,6 +1375,21 @@ importers:
         specifier: 5.0.5
         version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(vite@8.3.3(@types/node@26.6.5)(yaml@2.9.1))
 
+  modules/templates/dpop-store:
+    dependencies:
+      '@mod/dpop':
+        specifier: workspace:*
+        version: link:../../oauth/dpop
+      '@mod/kernel':
+        specifier: workspace:*
+        version: link:../../foundation/kernel
+      '@mod/records':
+        specifier: workspace:*
+        version: link:../../foundation/records
+      '@mod/store':
+        specifier: workspace:*
+        version: link:../../foundation/store
+
   modules/templates/session-store:
     dependencies:
       '@mod/kernel':
