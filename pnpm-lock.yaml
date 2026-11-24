@@ -621,6 +621,9 @@ importers:
       '@mod/kernel':
         specifier: workspace:*
         version: link:../kernel
+      '@mod/reset-wire':
+        specifier: workspace:*
+        version: link:../../wire/reset-wire
       '@mod/transparency-wire':
         specifier: workspace:*
         version: link:../../wire/transparency-wire

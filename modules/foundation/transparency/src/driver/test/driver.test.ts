@@ -510,3 +510,60 @@ describe("what a replica does not run", () => {
 		expect(world.frame()).toMatchObject({ intent: { state: "abandoning", by: "w3" } });
 	});
 });
+
+describe("a reset", () => {
+	const b64 = (value: unknown) => Buffer.from(JSON.stringify(value)).toString("base64url");
+	const instruction = (over: Record<string, unknown> = {}) =>
+		`${b64({ alg: "ES256", typ: "reset-instruction+jwt" })}.${b64({
+			v: 1,
+			installation: "inst-1",
+			subject: flow.id,
+			action: "reset",
+			kg: 0,
+			id: "A".repeat(22),
+			iat: 1,
+			exp: 600,
+			...over,
+		})}.c2ln`;
+
+	beforeEach(() => {
+		world = makeWorld();
+	});
+
+	it("hands an instruction to the log and the Core takes its boundary in, the key generation on", async () => {
+		const placed = await world.w1.reset({ instruction: instruction() });
+		expect(placed).toMatchObject({ answer: { result: "accepted", position: 1 } });
+		await world.w3.step({ flow });
+		expect(world.part("keys")).toEqual({ keyGeneration: 1, keys: {} });
+	});
+
+	it("answers the same instruction sent again as placed, and another under its id a conflict", async () => {
+		const first = await world.w1.reset({ instruction: instruction() });
+		expect(await world.w2.reset({ instruction: instruction() })).toEqual(first);
+		expect(await world.w1.reset({ instruction: instruction({ kg: 1 }) })).toEqual({
+			answer: { v: 1, result: "conflict" },
+		});
+		expect(await world.w1.reset({ instruction: "a.b.c" })).toEqual({
+			answer: { v: 1, result: "invalid", fault: "shape" },
+		});
+	});
+
+	it("looks a reset's op up on its own subject's flow: the same id under another subject is another reset", async () => {
+		const first = await world.w1.reset({ instruction: instruction() });
+		const elsewhere = await world.w1.reset({ instruction: instruction({ subject: "s2" }) });
+		expect(elsewhere).toMatchObject({ answer: { result: "accepted", position: 1 } });
+		expect(await world.w1.reset({ instruction: instruction() })).toEqual(first);
+	});
+
+	it("moves no key generation for a reset that does not take", async () => {
+		world.log.judgeResets({ verdict: "verified", outcome: "didNotTake" });
+		await world.w1.reset({ instruction: instruction() });
+		await world.w3.step({ flow });
+		expect(world.part("keys")).toEqual(seeded.keys);
+	});
+
+	it("answers unsupported where the log has no reset", async () => {
+		const bare = world.replica("w4", { log: ({ reset: _, ...l }) => l });
+		expect(await bare.reset({ instruction: instruction() })).toEqual({ refused: "unsupported" });
+	});
+});

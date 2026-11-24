@@ -502,6 +502,11 @@ export function transparencyOver(p: {
 			}
 			return { stepped, ...did };
 		},
+		async reset(q) {
+			return log.reset
+				? { answer: await log.reset(q.instruction) }
+				: { refused: "unsupported" as const };
+		},
 		async changeHeld(q) {
 			const kind = kinds.get(q.kind);
 			if (!kind) throw new TypeError(`no kind of operation ${q.kind} is registered`);

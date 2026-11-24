@@ -1,5 +1,6 @@
 import type { Changes, Finding, FlowState } from "@mod/authority-rules";
 import { contract, extensionPoint } from "@mod/kernel";
+import type { ResetRefusal } from "@mod/reset-wire";
 import type {
 	AppendAnswer,
 	AppendRequest,
@@ -124,6 +125,14 @@ export interface OpOnFlow {
 	readonly abandonments: number;
 }
 
+/**
+ * A reset's answer (V22 §B.6): placed, as the log answers an append (its receipt; the same
+ * instruction sent again answered the same); not placed, reset-wire's `invalid` (its fault) or
+ * `conflict` (the same id with another instruction); or an append's refusal the placer could not get
+ * past (`temporary`, `stopped`; a `prevMismatch` it retries, never answers). Read by `result`.
+ */
+export type ResetAnswer = AppendAnswer | ResetRefusal;
+
 /** The log's axis: how this Core's writer appends and reads its flows; an adapter provides it. */
 export interface TransparencyLog {
 	/** The writer this replica appends as: its instance, and its Core generation (`Gen(w)`). */
@@ -141,6 +150,11 @@ export interface TransparencyLog {
 	at(flow: Flow, position: number): Promise<Placed | undefined>;
 	/** What the flow holds of an op, by the op ids its records name. */
 	of(flow: Flow, op: string): Promise<OpOnFlow>;
+	/**
+	 * Places a reset boundary for an embedder's signed instruction, as the monitor does (§B.4): L0's
+	 * log itself, L1's by handing it to the monitor's endpoint. Optional until every log has it.
+	 */
+	reset?(instruction: string): Promise<ResetAnswer>;
 }
 
 /** What two hooks hold around a bundle: its tokens' digests before its append, their signing after its receipts. */
@@ -288,6 +302,13 @@ export interface Transparency {
 		  }
 		| Refused<"notSubject">
 	>;
+	/**
+	 * Hands an embedder's reset instruction to the log's axis, answering what it answered; `unsupported`
+	 * where the log has no reset. The boundary is taken in as any monitor's record, by `step` or `tend`.
+	 */
+	reset(p: {
+		readonly instruction: string;
+	}): Promise<{ readonly answer: ResetAnswer } | Refused<"unsupported">>;
 	/**
 	 * A change of a kind's records held to the frame: only while the flow has no open intent. A kind's
 	 * owner changes them so alone, never in the store directly.

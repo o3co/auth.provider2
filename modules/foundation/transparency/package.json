@@ -12,6 +12,7 @@
 	"dependencies": {
 		"@mod/authority-rules": "workspace:*",
 		"@mod/kernel": "workspace:*",
+		"@mod/reset-wire": "workspace:*",
 		"@mod/transparency-wire": "workspace:*",
 		"zod": "4.6.7"
 	},

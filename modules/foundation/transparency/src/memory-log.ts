@@ -1,10 +1,33 @@
 import { createHash } from "node:crypto";
 import type { Changes, Finding } from "@mod/authority-rules";
-import type { AppendAnswer, Flow, Preimage, recordKinds } from "@mod/transparency-wire";
-import type { Placed, Stage, TransparencyLog } from "./contract.ts";
+import { resetInstruction, resetRefusal } from "@mod/reset-wire";
+import {
+	type AppendAnswer,
+	type Flow,
+	opIds,
+	type Preimage,
+	type recordKinds,
+} from "@mod/transparency-wire";
+import type { Placed, ResetAnswer, Stage, TransparencyLog } from "./contract.ts";
 
 const digest = (text: string) => createHash("sha256").update(text).digest("base64url");
 const flowKey = (flow: Flow) => `${flow.of}:${flow.id}`;
+const canonical = (value: unknown): string =>
+	Array.isArray(value)
+		? `[${value.map(canonical).join(",")}]`
+		: value !== null && typeof value === "object"
+			? `{${Object.keys(value)
+					.sort()
+					.map((k) => `${JSON.stringify(k)}:${canonical((value as Record<string, unknown>)[k])}`)
+					.join(",")}}`
+			: JSON.stringify(value);
+const payloadOf = (jws: string): unknown => {
+	try {
+		return JSON.parse(Buffer.from(jws.split(".")[1] ?? "", "base64url").toString());
+	} catch {
+		return undefined;
+	}
+};
 
 /**
  * A log in memory every replica appends to: conditional appends on a subject's flow, unconditional
@@ -16,6 +39,8 @@ export function logBook(now: () => number) {
 	const digests = new Map<string, string>();
 	let n = 0;
 	let onAppend: Finding | undefined;
+	let onReset: Finding = { verdict: "verified", outcome: "took" };
+	const resets = new Map<string, string>();
 	const sent: { readonly instance: string; readonly stage: Stage; readonly prev?: number }[] = [];
 	const onFlow = (flow: Flow) => {
 		const placed = flows.get(flowKey(flow)) ?? [];
@@ -84,6 +109,29 @@ export function logBook(now: () => number) {
 			if (onAppend) placed[placed.length - 1] = { ...p, finding: onAppend };
 			return accepted(p);
 		},
+		// §B.4 without signatures (none here to check): read the shape, look the op up first, the same
+		// payload answered as placed and another refused; else placed at the flow's head.
+		async reset(instruction): Promise<ResetAnswer> {
+			const payload = payloadOf(instruction);
+			const read = resetInstruction.safeParse(payload);
+			if (!read.success) return resetRefusal.invalid("shape");
+			const flow = { of: "subject", id: read.data.subject } as const;
+			const op = opIds.reset(read.data.id);
+			const placed = onFlow(flow).find((p) => p.record.op === op);
+			if (placed)
+				return resets.get(`${flowKey(flow)} ${op}`) === canonical(payload)
+					? accepted(placed)
+					: resetRefusal.conflict();
+			const p = place(
+				flow,
+				{ kind: "resetBoundary", op, plaintextDigest: digest(canonical(payload)) },
+				{ role: "monitor", key: "mk" },
+			);
+			resets.set(`${flowKey(flow)} ${op}`, canonical(payload));
+			const all = onFlow(flow);
+			all[all.length - 1] = { ...p, finding: onReset, changes: {} };
+			return accepted(p);
+		},
 		head: async (flow) => onFlow(flow).length,
 		at: async (flow, position) => onFlow(flow)[position - 1],
 		of: async (flow, op) => {
@@ -99,6 +147,10 @@ export function logBook(now: () => number) {
 	return {
 		as,
 		sent,
+		/** The finding every later reset is judged with at once (verified and took unless named). */
+		judgeResets(finding: Finding) {
+			onReset = finding;
+		},
 		/** The finding every later append is judged with at once, as a local judgment gives it; none stops it. */
 		judgeOnAppend(finding: Finding | undefined) {
 			onAppend = finding;
