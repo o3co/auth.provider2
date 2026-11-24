@@ -24,7 +24,7 @@
 - A key is usable only once active: reserved, its possession shown by an assertion over a request naming it alone (`verifyPending`), its key change committed and taken in with `took`. The reservation's states, `commit`'s and `remove`'s rules and the bindings: the internal module `registering`'s card.
 - No op of passkeys empties a subject's keys: `remove` refuses, in the write deciding it, a removal after which the subject holds no key.
 - `settle` is run by whoever took in an end of a key change: its writer, or a replica whose tending ended one; a boundary's take-in is no such end, so a replica runs it whenever its `tend` stepped one record or more (for `passkey-reset` and the key management package). From the applied state alone and idempotent, as the internal module `kept`'s card says. Until it runs after a `took`, a new key carries no mark.
-- The witness's mark is set for a key generation; marks of generations before the current are withdrawn, and the witnessing refuses them from then on, so a late settle revives none.
+- The witness's mark is set for a key generation. Every settle withdraws marks of generations before the current; one that sets a mark reads the keys again after, and withdraws below a generation moved meanwhile. So a mark a late settle set across a boundary goes by that settle's read again, and one a settle stopped before that read goes at the next settle.
 - `assert` takes only a credential its request named, where it named any (WebAuthn §7.2). A store that cannot tell is unavailable, never a refusal.
 - A passkey witness composed with no witnessing, or two witnessings, refuse boot; so does `registrations` where no writer registers the key change's kind.
 

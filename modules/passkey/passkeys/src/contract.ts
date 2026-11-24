@@ -51,8 +51,9 @@ export interface Passkeys {
 	/**
 	 * After a key change ended, by whoever took the end in: from the applied state alone, tells
 	 * `passkeyRemovals` of each credential gone since the last settle, sets the witness's mark while
-	 * the subject holds a key, and withdraws a mark only once the key generation moved past the one
-	 * it was set for. Idempotent. Whether the subject holds a key.
+	 * the subject holds a key, reading the keys again after to withdraw it where a boundary moved the
+	 * generation on meanwhile, and withdraws marks of generations before the current. Idempotent.
+	 * Whether the subject holds a key.
 	 */
 	settle(subject: string): Promise<boolean>;
 }
@@ -120,14 +121,14 @@ export const registrations = contract<Registrations>("passkeys.registrations", {
 
 /**
  * Who keeps the witness's mark in line with the keys, a mark for a key generation; contributed where a
- * witness is composed. Per subject it knows the latest generation it was told to withdraw before.
+ * witness is composed.
  */
 export interface PasskeyWitnessing {
 	/** Whether the subject carries a mark, whichever generation set it. */
 	marked(subject: string): Promise<boolean>;
-	/** Sets the mark for `generation` unless one is set; refused for a generation before one withdrawn below. */
+	/** Sets the mark for `generation` unless one is set. */
 	mark(subject: string, generation: number): Promise<void>;
-	/** Withdraws any mark of a generation before `generation`, and refuses such marks from then on. */
+	/** Withdraws any mark of a generation before `generation`. */
 	withdraw(subject: string, generation: number): Promise<void>;
 }
 

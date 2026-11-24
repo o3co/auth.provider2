@@ -163,10 +163,15 @@ export function keptOver(
 				throw new Unavailable("passkeys");
 			const now = credentialsOf(keys);
 			for (const id of now) await wasActive(subject, id);
-			// Marks of a generation before the current go; the witness refuses a mark older than that.
-			if (keys.keyGeneration > (before?.generation ?? 0))
-				await p.witnessing?.withdraw(subject, keys.keyGeneration);
-			if (now.length > 0) await p.witnessing?.mark(subject, keys.keyGeneration);
+			// Marks of a generation before the current go at every settle, one a stopped settle left too.
+			await p.witnessing?.withdraw(subject, keys.keyGeneration);
+			if (now.length > 0 && p.witnessing) {
+				await p.witnessing.mark(subject, keys.keyGeneration);
+				// A boundary taken in meanwhile leaves the mark just set behind: read again and withdraw it.
+				const again = await keysHeld(p.frames, subject);
+				if (again.keyGeneration > keys.keyGeneration)
+					await p.witnessing.withdraw(subject, again.keyGeneration);
+			}
 			for (const { credential } of notices.gone.filter((g) => g.n > (before?.told ?? 0))) {
 				if (now.includes(credential)) continue;
 				for (const removal of p.removals)

@@ -289,12 +289,11 @@ export function memoryCredentials() {
 }
 
 /**
- * A witnessing in memory: one mark per subject, set for a key generation, and the generation below
- * which marks were withdrawn. `hold` makes the next mark wait until the test lets it go on.
+ * A witnessing in memory: one mark per subject, set for a key generation. `hold` makes the next mark
+ * wait until the test lets it go on.
  */
 export function memoryWitnessing() {
 	const marks = new Map<string, number>();
-	const floors = new Map<string, number>();
 	let held: Promise<void> | undefined;
 	const witnessing: PasskeyWitnessing = {
 		marked: async (subject) => marks.has(subject),
@@ -302,12 +301,10 @@ export function memoryWitnessing() {
 			const waiting = held;
 			held = undefined;
 			await waiting;
-			if (generation < (floors.get(subject) ?? 0) || marks.has(subject)) return;
-			marks.set(subject, generation);
+			if (!marks.has(subject)) marks.set(subject, generation);
 		},
 		withdraw: async (subject, generation) => {
 			if ((marks.get(subject) ?? generation) < generation) marks.delete(subject);
-			floors.set(subject, Math.max(floors.get(subject) ?? 0, generation));
 		},
 	};
 	return {

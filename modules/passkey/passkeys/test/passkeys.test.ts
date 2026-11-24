@@ -170,7 +170,7 @@ describe("passkeys", () => {
 		expect(told).toEqual([two.credential.id]);
 	});
 
-	it("revives no mark of an old generation by a settle that read before a boundary", async () => {
+	it("withdraws, reading the keys again, the mark of a settle that read before a boundary", async () => {
 		const witnessing = memoryWitnessing();
 		const w = await world({ modules: [witnessing.module] });
 		await w.register();
@@ -185,6 +185,20 @@ describe("passkeys", () => {
 		expect(
 			await w.reserve({ subject: "s1", credential: await w.created(), first: true, generation: 1 }),
 		).toHaveProperty("reservation");
+	});
+
+	it("withdraws, at the next settle, a mark of an old generation a settle stopped after setting", async () => {
+		const witnessing = memoryWitnessing();
+		const w = await world({ modules: [witnessing.module] });
+		await w.register();
+		expect(await w.keys.settle("s1")).toBe(true);
+		w.log.boundary(flow);
+		await w.t.tend(flow);
+		expect(await w.keys.settle("s1")).toBe(false);
+		// A settle that read before the boundary set its mark, then stopped before reading again.
+		await witnessing.witnessing.mark("s1", 0);
+		expect(await w.keys.settle("s1")).toBe(false);
+		expect(witnessing.marks.has("s1")).toBe(false);
 	});
 
 	it("answers unavailable, telling nothing, where the keys are behind what a settle saw", async () => {
