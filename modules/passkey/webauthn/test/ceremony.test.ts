@@ -587,7 +587,21 @@ describe("the algorithms the relying party takes", () => {
 		expect(reasonOf(await attestedBy(eddsa, true))).toBe("algorithm");
 	});
 
-	it("refuses an assertion by a credential registered with an algorithm it no longer takes", async () => {
-		expect(reasonOf(await assertedBy(taking("EdDSA", "RS256")))).toBe("algorithm");
+	it("asserts by a credential of an algorithm it no longer offers: the setting narrows creation and attestation alone", async () => {
+		expect(await assertedBy(taking("EdDSA", "RS256"))).toMatchObject({ kind: "asserted" });
+	});
+
+	it("refuses an assertion by a credential whose key is not a passkey's key in its one form", async () => {
+		const { authenticator, credential } = await made();
+		const challenge = fresh();
+		const options = ceremonies.request(challenge, [credential], "preferred");
+		const sent = authenticator.get(options as RequestOptions, at);
+		const longer = Buffer.concat([
+			Buffer.from(credential.publicKey, "base64url"),
+			Buffer.from([0]),
+		]);
+		const kept = { ...credential, publicKey: longer.toString("base64url") };
+		const asserted = await ceremonies.assert(sent, { challenge, named: true }, kept, "preferred");
+		expect(reasonOf(asserted)).toBe("algorithm");
 	});
 });

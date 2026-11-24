@@ -260,7 +260,14 @@ export function softwareAuthenticator(
 			...id,
 			...(twist.cose ? twist.cose(cose) : cose),
 		];
-		const data = authData(twist.rpId ?? rpId, true, verified, 0, attested);
+		const plainData = authData(twist.rpId ?? rpId, true, verified, 0, attested);
+		const data = twist.flags
+			? Buffer.concat([
+					plainData.subarray(0, 32),
+					Buffer.from([twist.flags(plainData[32] ?? 0)]),
+					plainData.subarray(33),
+				])
+			: plainData;
 		const discoverable = canDiscover && residentKey !== "discouraged";
 		kept.set(b64(id), { key: privateKey, handle: options.user.id, rpId, discoverable, count: 0 });
 		const attestationObject = twist.attestationObject

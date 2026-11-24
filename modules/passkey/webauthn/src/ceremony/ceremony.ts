@@ -1,10 +1,8 @@
 import { createHash, verify } from "node:crypto";
 import { verifyAuthenticationResponse, verifyRegistrationResponse } from "@simplewebauthn/server";
 import {
-	cose,
 	decodeAttestationObject,
 	decodeClientDataJSON,
-	decodeCredentialPublicKey,
 	isoBase64URL,
 	isoCBOR,
 	parseAuthenticatorData,
@@ -189,10 +187,13 @@ function keyReadWhole(attestationObject: Uint8Array, publicKey: Uint8Array): boo
 	);
 	const at = 55 + authData.readUInt16BE(53);
 	const key = Buffer.from(publicKey);
-	return (
-		passkeyKey(key.toString("base64url")) !== undefined &&
-		authData.subarray(at, at + key.length).equals(key)
-	);
+	const rest = authData.subarray(at + key.length);
+	if (passkeyKey(key.toString("base64url")) === undefined) return false;
+	if (!authData.subarray(at, at + key.length).equals(key)) return false;
+	// After the key: nothing, or where the extension flag is set, one map of extensions, read whole.
+	if (((authData[32] ?? 0) & 0x80) === 0) return rest.length === 0;
+	const extensions: unknown = isoCBOR.decodeFirst(rest);
+	return extensions instanceof Map && Buffer.from(isoCBOR.encode(extensions)).equals(rest);
 }
 
 // The client's transports, which the library passes on unchecked: a short list of short strings.
@@ -206,16 +207,6 @@ const hintOf = (value: unknown): string[] | undefined =>
 export function ceremoniesFor(rp: RelyingParty): Ceremonies {
 	const algorithms = rp.algorithms.map((name) => coseIds[name]);
 	/** Whether a kept credential's key is of an algorithm taken; one that cannot be read is not. */
-	const keyTaken = (publicKey: string) => {
-		try {
-			const alg = decodeCredentialPublicKey(Buffer.from(publicKey, "base64url")).get(
-				cose.COSEKEYS.alg,
-			);
-			return alg !== undefined && algorithms.includes(alg);
-		} catch {
-			return false;
-		}
-	};
 	/** Before the library: a challenge other than the one given, and a frame not listed. */
 	const precheck = (response: unknown, challenge: string): CeremonyRefusal | undefined => {
 		const data = clientDataOf(response);
@@ -293,7 +284,7 @@ export function ceremoniesFor(rp: RelyingParty): Ceremonies {
 			const answered = response as Parameters<typeof verifyAuthenticationResponse>[0]["response"];
 			if (answered.id !== credential.id) return refused("malformed");
 			// The library checks no algorithm at assertion: a key of one no longer taken is refused here.
-			if (!keyTaken(credential.publicKey)) return refused("algorithm");
+			if (!passkeyKey(credential.publicKey)) return refused("algorithm");
 			const verified = await libraryAnswer(() =>
 				verifyAuthenticationResponse({
 					response: answered,

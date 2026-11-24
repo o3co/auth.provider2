@@ -224,6 +224,24 @@ describe("the evidence check, state-free and at once", () => {
 		},
 	);
 
+	it("refuses at attestation bytes after the key but one map of extensions where flagged, as malformed", async () => {
+		const attested = async (tail: number[], flagged: boolean) => {
+			const challenge = fresh();
+			const options = ceremonies.creation(challenge, { handle, name: "sam" }, [], "preferred");
+			const twist = {
+				cose: (cose: number[]) => [...cose, ...tail],
+				...(flagged ? { flags: (f: number) => f | 0x80 } : {}),
+			};
+			const response = softwareAuthenticator().create(options as never, at, twist);
+			return (await ceremonies.attest(response, challenge, handle, "preferred")).kind;
+		};
+		expect(await attested([0xa0], true)).toBe("attested");
+		// An empty list where the extensions' map stands, which the library reads as none.
+		expect(await attested([0x80], true)).toBe("refused");
+		expect(await attested([0xa0], false)).toBe("refused");
+		expect(await attested([0xa0, 0x00], true)).toBe("refused");
+	});
+
 	it("refuses at attestation a key not in its one COSE_Key form, as malformed", async () => {
 		const challenge = fresh();
 		const options = ceremonies.creation(challenge, { handle, name: "sam" }, [], "preferred");
