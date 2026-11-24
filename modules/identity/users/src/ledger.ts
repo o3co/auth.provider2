@@ -27,6 +27,12 @@ function required(...parts: string[]) {
 	if (parts.some((part) => part === "")) throw new TypeError("users: an empty part names no one");
 }
 
+/** A lookup by identifier answering none past the bound, unasked. */
+const fittingLookup =
+	(lookup: NonNullable<UserSource["byIdentifier"]>): NonNullable<UserSource["byIdentifier"]> =>
+	async (identifier) =>
+		identifierFits(identifier) ? lookup(identifier) : none;
+
 /** `create` refusing an identifier past the bound with a TypeError, unasked. */
 const fitting =
 	(create: NonNullable<UserSource["create"]>): NonNullable<UserSource["create"]> =>
@@ -44,8 +50,7 @@ export function ledgerUsers(source: UserSource, contacts: ContactStore): Users {
 				? none
 				: source.verify(identifier, password),
 		bySubject: source.bySubject,
-		byIdentifier: async (identifier) =>
-			identifierFits(identifier) ? source.byIdentifier(identifier) : none,
+		...(source.byIdentifier ? { byIdentifier: fittingLookup(source.byIdentifier) } : {}),
 		...(source.create ? { create: fitting(source.create) } : {}),
 		verifiedContact: async (subject, contact) => {
 			required(subject, contact.value);

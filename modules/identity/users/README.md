@@ -8,9 +8,9 @@
 - Steps after verification, how much of the attributes to expose, registration, password reset, when to verify a contact, and the proofs each feature keeps.
 
 ## Offers
-- `verify` (identifier, password), `bySubject` and `byIdentifier`, each answering a user or none; `bySubject` and `claimedContacts` may answer unanswerable. `create` (identifier): a new subject the ledger makes, or `exists`; offered only where the composed ledger makes subjects, its absence the composition's fact.
+- `verify` (identifier, password), `bySubject` and `byIdentifier`, each answering a user or none; `bySubject` and `claimedContacts` may answer unanswerable. `byIdentifier` is offered where the settings hold the users or the ledger looks users up by identifier, and `create` (identifier: a new subject the ledger makes, or `exists`) only where it makes subjects: each one's absence is the composition's fact.
 - `claimedContacts`, `verifiedContact` (subject, `{ kind: "email", value }`) and `contactsOf`.
-- Extension point `ledgers`: a user ledger (verification, user by subject or unanswerable, by identifier, and optionally a create and an import, `keep`), which takes the same work for an unknown identifier as for a known one.
+- Extension point `ledgers`: a user ledger (verification, user by subject or unanswerable, and optionally by identifier, a create and an import, `keep`), which takes the same work for an unknown identifier as for a known one.
 - Operator section `registered`: `identifier`, `subject` (default the identifier), `password-hash`, `attributes`.
 - Operator section `waits`: how a password check of an identifier that failed waits; its keys: internal module `waits`.
 - Store interface for verified contacts; what it needs, its erasure ports, and the eraser `users`: internal module `stores`.

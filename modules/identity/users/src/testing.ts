@@ -31,6 +31,8 @@ export interface UsersHarness {
 	readonly unanswerableBySubject?: boolean;
 	/** Set where the users make subjects (`create`); else they offer no `create`. */
 	readonly creates?: boolean;
+	/** Set where the ledger looks no one up by identifier: the users then offer no `byIdentifier`. */
+	readonly withoutIdentifierLookup?: boolean;
 	/** For implementations that read bcrypt: users holding "long", whose password is `seventyTwoBytes`. */
 	openBcrypt?(): Promise<Users>;
 	/**
@@ -59,15 +61,25 @@ export function usersContract(name: string, harness: UsersHarness): void {
 			expect(await u.verify("", "correct horse")).toEqual({ kind: "none" });
 		});
 
-		it("finds a user by identifier exactly, never folded or by subject, and none for an empty one", async () => {
-			const u = await harness.open();
-			const found = await u.byIdentifier("alice");
-			expect(found.kind === "user" && found.user.subject).toBe("s-alice");
-			expect(found.kind === "user" && Object.isFrozen(found.user)).toBe(true);
-			for (const identifier of ["Alice", "alice ", "s-alice", "nobody", ""]) {
-				expect(await u.byIdentifier(identifier), identifier).toEqual({ kind: "none" });
-			}
-		});
+		it.skipIf(Boolean(harness.withoutIdentifierLookup))(
+			"finds a user by identifier exactly, never folded or by subject, and none for an empty one",
+			async () => {
+				const u = await harness.open();
+				const found = await u.byIdentifier?.("alice");
+				expect(found?.kind === "user" && found.user.subject).toBe("s-alice");
+				expect(found?.kind === "user" && Object.isFrozen(found.user)).toBe(true);
+				for (const identifier of ["Alice", "alice ", "s-alice", "nobody", ""]) {
+					expect(await u.byIdentifier?.(identifier), identifier).toEqual({ kind: "none" });
+				}
+			},
+		);
+
+		it.runIf(Boolean(harness.withoutIdentifierLookup))(
+			"offers no lookup by identifier where the ledger looks no one up so",
+			async () => {
+				expect((await harness.open()).byIdentifier).toBeUndefined();
+			},
+		);
 
 		it.skipIf(Boolean(harness.creates))("offers no create where no subject is made", async () => {
 			expect((await harness.open()).create).toBeUndefined();
@@ -82,7 +94,7 @@ export function usersContract(name: string, harness: UsersHarness): void {
 				if (made?.kind !== "created") return;
 				expect(Object.isFrozen(made.user)).toBe(true);
 				expect(made.user.subject).not.toBe("carol");
-				expect(await u.byIdentifier("carol")).toEqual({ kind: "user", user: made.user });
+				expect(await u.byIdentifier?.("carol")).toEqual({ kind: "user", user: made.user });
 				expect(await u.create?.("carol")).toEqual({ kind: "exists" });
 				expect(await u.create?.("alice")).toEqual({ kind: "exists" });
 				await expect(u.create?.("")).rejects.toThrow(TypeError);
@@ -207,6 +219,8 @@ export interface LedgerHarness {
 	readonly unanswerableBySubject?: boolean;
 	/** Set where the ledger makes subjects (`create`). */
 	readonly creates?: boolean;
+	/** Set where the ledger looks no one up by identifier (no `byIdentifier`). */
+	readonly withoutIdentifierLookup?: boolean;
 }
 
 /** The user ledger contract, run against any user ledger. */
@@ -227,13 +241,16 @@ export function ledgerContract(name: string, harness: LedgerHarness): void {
 			expect(await ledger.bySubject("s-nobody")).toEqual({ kind: "none" });
 		});
 
-		it("finds alice by her identifier, exactly, and none for one it does not know", async () => {
-			const { ledger } = await harness.open();
-			const found = await ledger.byIdentifier("alice");
-			expect(found.kind === "user" && found.user.subject).toBe("s-alice");
-			expect(await ledger.byIdentifier("nobody")).toEqual({ kind: "none" });
-			expect(await ledger.byIdentifier("Alice")).toEqual({ kind: "none" });
-		});
+		it.skipIf(Boolean(harness.withoutIdentifierLookup))(
+			"finds alice by her identifier, exactly, and none for one it does not know",
+			async () => {
+				const { ledger } = await harness.open();
+				const found = await ledger.byIdentifier?.("alice");
+				expect(found?.kind === "user" && found.user.subject).toBe("s-alice");
+				expect(await ledger.byIdentifier?.("nobody")).toEqual({ kind: "none" });
+				expect(await ledger.byIdentifier?.("Alice")).toEqual({ kind: "none" });
+			},
+		);
 
 		it.runIf(Boolean(harness.creates))(
 			"makes a new subject for an identifier it does not hold, and answers exists for one it holds",
@@ -243,8 +260,8 @@ export function ledgerContract(name: string, harness: LedgerHarness): void {
 				expect(made?.kind).toBe("created");
 				if (made?.kind !== "created") return;
 				expect(made.user.subject).not.toBe("s-alice");
-				const found = await ledger.byIdentifier("carol");
-				expect(found.kind === "user" && found.user.subject).toBe(made.user.subject);
+				const found = await ledger.byIdentifier?.("carol");
+				expect(found?.kind === "user" && found.user.subject).toBe(made.user.subject);
 				if (!harness.unanswerableBySubject) {
 					const bySubject = await ledger.bySubject(made.user.subject);
 					expect(bySubject.kind === "user" && bySubject.user.subject).toBe(made.user.subject);

@@ -1,13 +1,13 @@
 # ledger
 
 ## Responsibilities
-- Reads a contributed user ledger's answers into users' own: verification, a user by subject or unanswerable, a user by identifier, a create where the ledger makes subjects, and a `keep` where it takes imports.
+- Reads a contributed user ledger's answers into users' own: verification, a user by subject or unanswerable, a user by identifier where the ledger looks users up so, a create where the ledger makes subjects, and a `keep` where it takes imports.
 
 ## Not here
 - Links, contacts and which answer users gives: users' own.
 
 ## Offers
-- `contributedSource(ledger, log)`: the ledger as a source of users; a `create` and a `keep` only where the ledger has them.
+- `contributedSource(ledger, log)`: the ledger as a source of users; `byIdentifier`, `create` and `keep` only where the ledger has them.
 
 ## Invariants
 - A ledger's answer is read once into a frozen copy of `subject` and `attributes`; its failure, an ill-formed subject, attributes that are no object, or another subject's user is unavailable, never none.

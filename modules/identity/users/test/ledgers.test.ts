@@ -128,6 +128,20 @@ usersContract("a contributed user ledger that makes subjects", {
 	creates: true,
 });
 
+/** The same ledger, looking no one up by identifier. */
+const noLookup = (calls?: string[]): Ledger => {
+	const { byIdentifier: _left, ...rest } = fakeLedger(calls);
+	return rest;
+};
+usersContract("a contributed user ledger that looks no one up by identifier", {
+	open: () => openWith(noLookup()),
+	openCounting: async () => {
+		const checks: string[] = [];
+		return { users: await openWith(noLookup(checks)), checks };
+	},
+	withoutIdentifierLookup: true,
+});
+
 /** The same ledger, unable to look users up by subject. */
 const verifyOnly = (calls?: string[]): Ledger => ({
 	...fakeLedger(calls),
@@ -172,11 +186,11 @@ describe("users ledgers", () => {
 		expect(await u.bySubject("s-é")).toEqual(none);
 		expect(await u.bySubject("s".repeat(256))).toEqual(none);
 		expect(await u.claimedContacts("")).toEqual([]);
-		expect(await u.byIdentifier("")).toEqual(none);
+		expect(await u.byIdentifier?.("")).toEqual(none);
 		// Past 255 bytes, as one 3-byte character too many: none, asking nothing.
 		const long = `${"a".repeat(253)}\u3042`;
 		expect(await u.verify(long, "correct horse")).toEqual(none);
-		expect(await u.byIdentifier(long)).toEqual(none);
+		expect(await u.byIdentifier?.(long)).toEqual(none);
 		expect(calls).toEqual([]);
 		const creating = await openWith(creatingLedger(calls));
 		await expect(creating.create?.("")).rejects.toThrow(TypeError);
@@ -200,7 +214,7 @@ describe("users ledgers", () => {
 				create: fail as never,
 			});
 			for (const call of [
-				() => u.byIdentifier("alice"),
+				() => u.byIdentifier?.("alice"),
 				async () => u.create?.("carol"),
 				() => u.verify("alice", "correct horse"),
 				() => u.bySubject("s-alice"),
@@ -285,7 +299,7 @@ describe("users ledgers", () => {
 			const u = await usersOf(answering(answer));
 			await expect(u.verify("a", "p"), name).rejects.toSatisfy(isUnavailable);
 			await expect(u.bySubject("s-alice"), name).rejects.toSatisfy(isUnavailable);
-			await expect(u.byIdentifier("a"), name).rejects.toSatisfy(isUnavailable);
+			await expect(u.byIdentifier?.("a"), name).rejects.toSatisfy(isUnavailable);
 			// A user well formed under another kind is a well-formed user made.
 			if (name === "unknown kind with a user") continue;
 			const created = { kind: "created", user: (answer as { user?: unknown } | null)?.user };

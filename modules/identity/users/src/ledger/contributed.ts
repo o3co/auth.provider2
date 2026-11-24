@@ -75,7 +75,18 @@ function readCreated(answer: unknown, log: Log): Created {
 }
 
 export function contributedSource(ledger: Ledger, log: Log): UserSource {
-	const { create, keep } = ledger;
+	const { byIdentifier, create, keep } = ledger;
+	const lookingUp = byIdentifier
+		? {
+				byIdentifier: async (identifier: string) =>
+					identifier === ""
+						? none
+						: readAnswer(
+								copyOf(await fromLedger(() => byIdentifier.call(ledger, identifier))),
+								log,
+							),
+			}
+		: {};
 	const keeping = keep
 		? {
 				keep: async (subject: string, identifier: string) => {
@@ -98,10 +109,7 @@ export function contributedSource(ledger: Ledger, log: Log): UserSource {
 			identifier === ""
 				? none
 				: readAnswer(copyOf(await fromLedger(() => ledger.verify(identifier, password))), log),
-		byIdentifier: async (identifier) =>
-			identifier === ""
-				? none
-				: readAnswer(copyOf(await fromLedger(() => ledger.byIdentifier(identifier))), log),
+
 		bySubject: async (subject) => {
 			if (!isWellFormedSubject(subject)) return none;
 			const answer = copyOf(await fromLedger(() => ledger.bySubject(subject)));
@@ -109,6 +117,7 @@ export function contributedSource(ledger: Ledger, log: Log): UserSource {
 				? unanswerable
 				: readAnswer(answer, log, subject);
 		},
+		...lookingUp,
 		...creating,
 		...keeping,
 	};

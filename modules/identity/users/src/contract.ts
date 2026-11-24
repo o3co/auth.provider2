@@ -114,8 +114,12 @@ export interface Users {
 	 */
 	verify(identifier: string, password: string): Promise<Verified>;
 	bySubject(subject: string): Promise<BySubject>;
-	/** The user holding the identifier, matched exactly; none for an empty one. Throws Unavailable if the ledger fails. */
-	byIdentifier(identifier: string): Promise<Verified>;
+	/**
+	 * The user holding the identifier, matched exactly; none for an empty one. Offered where the
+	 * settings hold the users or the ledger looks users up by identifier: its absence is the
+	 * composition's fact. Throws Unavailable if the ledger fails.
+	 */
+	byIdentifier?(identifier: string): Promise<Verified>;
 	/**
 	 * Makes a new subject for the identifier, offered where the ledger makes subjects: its absence is
 	 * the composition's fact. Throws TypeError on an empty identifier, Unavailable if the ledger fails.
@@ -149,8 +153,8 @@ export interface Ledger {
 	/** None when no user matches, after the same work as for a known identifier; throws Unavailable when the ledger fails or refuses. */
 	verify(identifier: string, password: string): Promise<Verified>;
 	bySubject(subject: string): Promise<BySubject>;
-	/** None when no user holds the identifier; throws Unavailable when the ledger fails or refuses. */
-	byIdentifier(identifier: string): Promise<Verified>;
+	/** None when no user holds the identifier; throws Unavailable when the ledger fails or refuses. A ledger that looks no one up by identifier leaves it out. */
+	byIdentifier?(identifier: string): Promise<Verified>;
 	/** Makes a new subject for an identifier no user holds, else `exists`; a ledger that makes no subjects leaves it out. */
 	create?(identifier: string): Promise<Created>;
 	/**
