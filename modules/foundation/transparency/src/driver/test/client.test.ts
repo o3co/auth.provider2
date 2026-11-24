@@ -46,7 +46,7 @@ function makeWorld() {
 		store.value(unit(op) as never) as
 			| { applied: number; intent: Record<string, unknown> | null }
 			| undefined;
-	const listed = () => store.frames.flowRecord?.(flow).then((v) => v ?? []);
+	const listed = () => store.frames.flowRecord(flow).then((v) => v ?? []);
 	return { store, log, replica, w1: replica("w1"), w2: replica("w2"), frame, listed };
 }
 beforeEach(() => {

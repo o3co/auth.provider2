@@ -17,7 +17,7 @@
 - `frameStore`, the frame's store interface (`IntentUnit`, `FrameRead`, `PartRecord`, `PartNext`, `Json`), and `frameStoreNeeds`: never evicted, survives a crash and a failover, reads confirmed, authenticated. On a client's op, a read holds its flow's record and a write may set it and drop the frame; `flowRecord` reads it alone.
 - `operationKinds` (`OperationKind`: bundle or not, its parts and records, its end's writes, a taker's resend) and `stateOwners` (`StateOwner`: the state's fields it holds, its records, records → fields, state → records), keyed by name.
 - `BundleSigning`: the token endpoint's `prepare` before a bundle's append and `sign` after its receipts, implemented by their owners. `Deciding`: a writer's part of KE-C01.
-- `./testing`: `frameStoreContract`, the contract test of every frame store; `memoryFrames` and `logBook`, a frame store and a log in memory.
+- `./testing`: `frameStoreContract`, the contract test of every frame store, a client's flow's record and a dropped frame included; `memoryFrames` and `logBook`, a frame store and a log in memory.
 
 ## Invariants
 - An intent unit (V17: a subject's flow, or one op of a client's) has one frame: its applied position, the generation that sealed it, and its one intent. Every event writes once, held to all it read: the frame, every state owner's records, and the intent's kind's records.

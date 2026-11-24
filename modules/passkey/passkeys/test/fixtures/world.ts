@@ -59,6 +59,10 @@ export function memoryFrames(parts: readonly string[]) {
 				basis: entries.map((e) => e?.version ?? null),
 			};
 		},
+		// passkeys runs on a subject's flow alone: no client's flow record is kept.
+		async flowRecord() {
+			return undefined;
+		},
 		async write(read, next, deadline) {
 			if (now > deadline) return "late";
 			const keys = [keyOf(read.unit.flow), ...read.records.map((r) => keyOf(read.unit.flow, r))];

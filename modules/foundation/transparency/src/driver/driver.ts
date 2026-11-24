@@ -427,7 +427,7 @@ export function transparencyOver(p: {
 			// A client's flow: its open ops as its record lists them, oldest first, as many as one turn takes.
 			let stepped = 0;
 			let did = {};
-			const listed = openOps(await frames.flowRecord?.({ of: "client", id: flow.id }));
+			const listed = openOps(await frames.flowRecord({ of: "client", id: flow.id }));
 			for (const op of listed.slice(0, tendSteps)) {
 				const { stepped: count, ...claimed } = await tendUnit({
 					flow: { of: "client", id: flow.id },

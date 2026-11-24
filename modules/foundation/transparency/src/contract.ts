@@ -59,7 +59,7 @@ export interface FrameStore {
 	readonly parts: readonly string[];
 	read(unit: IntentUnit, records: readonly PartRecord[]): Promise<FrameRead>;
 	/** A client's flow's record, as a confirmed read; none where it holds none. */
-	flowRecord?(flow: IntentUnit["flow"]): Promise<Json | undefined>;
+	flowRecord(flow: IntentUnit["flow"]): Promise<Json | undefined>;
 	/**
 	 * Writes the frame (none keeps it; `drop` removes it), on a client's op its flow's record (none
 	 * keeps it), and the records as one, held to every version the read saw, refused past `deadline`

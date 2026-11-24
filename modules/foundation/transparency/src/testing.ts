@@ -102,5 +102,31 @@ export function frameStoreContract(name: string, harness: FrameStoreHarness): vo
 			expect(await frames.write(read, next, read.now - 1)).toBe("late");
 			expect((await frames.read(flow, records)).frame).toBeUndefined();
 		});
+
+		it("keeps a client's flow's record with each of its ops' frames, held to their writes, and drops a frame", async () => {
+			const { frames } = await harness.open();
+			const c1 = { of: "client", id: "c1" } as const;
+			const a = await frames.read(client("a"), []);
+			expect(a.flow).toBeUndefined();
+			expect(
+				await frames.write(a, { frame: frame(1), flow: ["a"], records: [] }, a.now + 10_000),
+			).toBe("written");
+			const b = await frames.read(client("b"), []);
+			expect(b.flow).toEqual(["a"]);
+			const stale = await frames.read(client("a"), []);
+			expect(
+				await frames.write(b, { frame: frame(1), flow: ["a", "b"], records: [] }, b.now + 10_000),
+			).toBe("written");
+			expect(
+				await frames.write(stale, { drop: true, flow: [], records: [] }, stale.now + 10_000),
+			).toBe("moved");
+			const fresh = await frames.read(client("a"), []);
+			expect(
+				await frames.write(fresh, { drop: true, flow: ["b"], records: [] }, fresh.now + 10_000),
+			).toBe("written");
+			expect((await frames.read(client("a"), [])).frame).toBeUndefined();
+			expect(await frames.flowRecord(c1)).toEqual(["b"]);
+			expect(await frames.flowRecord({ of: "client", id: "c2" })).toBeUndefined();
+		});
 	});
 }
