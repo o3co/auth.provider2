@@ -1,3 +1,4 @@
+import { amrSources } from "@mod/acr";
 import { approvals, statementItems } from "@mod/approvals";
 import { clientAssertion } from "@mod/client-assertion";
 import { documentCopies } from "@mod/client-documents";
@@ -8,9 +9,17 @@ import { type BuildContext, defineModule } from "@mod/kernel";
 import { promiseNames, stances } from "@mod/promises";
 import { redirects, redirectsCopy } from "@mod/redirect-uris";
 import { jarReservations, requestSources, withoutPasskey } from "./contract.ts";
+import { finishRoute, finishTakes, passkeyAmr } from "./finish/finish.ts";
 import { reserving } from "./jar/jar.ts";
 import { type Settings, section } from "./section.ts";
-import { byValue, filledItems, issuerMetadata, startRoute, unfilled } from "./start/start.ts";
+import {
+	bindingsIn,
+	byValue,
+	filledItems,
+	issuerMetadata,
+	startRoute,
+	unfilled,
+} from "./start/start.ts";
 
 type Context = BuildContext<Settings>;
 
@@ -29,6 +38,7 @@ export default defineModule(
 			requestSources,
 			withoutPasskey,
 			statementItems,
+			...finishTakes,
 		],
 	},
 	(m) => [
@@ -36,6 +46,8 @@ export default defineModule(
 		m.contribute(documentCopies).by(() => redirectsCopy),
 		m.contribute(requestSources).by(() => byValue),
 		m.contribute(statementItems).by(() => filledItems),
+		// The amr a login it finishes carries, which `acr`'s table is checked against.
+		m.contribute(amrSources).by(() => ({ name: "authorize.passkey", amr: passkeyAmr })),
 		// It takes `approvals`, which asks where its takers stand: it starts a login only on a statement.
 		m.contribute(stances).by(() => ({
 			promise: promiseNames.newAuthorization,
@@ -82,9 +94,17 @@ export default defineModule(
 					}),
 					approvals: await c.get(approvals),
 					withoutPasskey: passkeyless[0],
+					bindings: await bindingsIn(c),
 				},
 				window,
 			);
 		}),
+		m.contribute(routes).by(async (c: Context) =>
+			finishRoute(c, {
+				issuer: (await c.get(issuer)).url,
+				delegationS: c.section["delegation-lifetime"],
+				window: { limit: c.section.requests, ms: c.section.window * 1000 },
+			}),
+		),
 	],
 );

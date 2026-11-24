@@ -1,0 +1,171 @@
+import { type Approvals, approvals, type ItemsOf } from "@mod/approvals";
+import { clientAllowance } from "@mod/client-allowance";
+import { type Clients, clients } from "@mod/clients";
+import { type Codes, challengeShape, codeGrantType, codes } from "@mod/code-grant";
+import { type HttpRequest, type HttpResponse, jsonAnswer, use } from "@mod/http";
+import { type BuildContext, Unavailable } from "@mod/kernel";
+import { requestsPerSource, type Window } from "@mod/rate-limit";
+import { type SenderBindings, senderBinding } from "@mod/sender-binding";
+import { type Sessions, sessions } from "@mod/session";
+import { type AccessTokenIssuance, accessTokenIssuance } from "@mod/tokens";
+
+/**
+ * How a person's login with a passkey is named in the session and the token (RFC 8176), by what its
+ * assertion proves: `pop`, a key held (its signature), and `user`, the person present (its flags). No
+ * `hwk` (no attestation is taken; a synced passkey is held by no one device), no `mfa` (verifying the
+ * user is the authenticator's own word; strength is `acr`'s to say).
+ */
+export const passkeyAmr = ["pop", "user"] as const;
+
+export interface FinishParts {
+	readonly approvals: Pick<Approvals, "use" | "complete" | "completionOf" | "publish">;
+	readonly clients: Pick<Clients, "find">;
+	readonly issuance: Pick<AccessTokenIssuance, "admits">;
+	readonly sessions: Pick<Sessions, "open" | "close">;
+	readonly codes: Pick<Codes, "issue" | "root">;
+	readonly bindings: Pick<SenderBindings, "requestedOf">;
+	readonly issuer: string;
+	/** How long a login's delegation lasts from its statement's issue, in seconds (O27). */
+	readonly delegationS: number;
+}
+
+const refused = (status: number, error: string, description: string): HttpResponse =>
+	jsonAnswer(status, { error, error_description: description });
+const bad = (description: string) => refused(400, "invalid_request", description);
+const denied = (description: string) => refused(400, "access_denied", description);
+
+/** The approval's refusals that are the request's own fault; any other is the person's passkey refused. */
+const malformed = new Set(["unknown", "expired", "used", "purpose", "malformed"]);
+
+/**
+ * ⑤⑥: the person's assertion over T used once, the issuance judged, the session opened and a code
+ * made, the approval put on the subject's flow, the code rooted in that record, and the completion
+ * answered, sealed to the screen. A resent finish whose completion is kept is answered it again.
+ */
+export function finishing(p: FinishParts) {
+	return async (request: HttpRequest): Promise<HttpResponse> => {
+		const statement = request.json?.statement;
+		const assertion = request.json?.assertion;
+		if (typeof statement !== "string" || typeof assertion !== "string")
+			return bad("the finish names the statement and the assertion");
+		const used = await p.approvals.use({ statement, assertion });
+		if (used.kind === "refused")
+			return malformed.has(used.reason)
+				? bad("the statement cannot be used")
+				: denied("the login was not approved");
+		const { approval } = used;
+		if (approval.purpose !== "authorization" || approval.subject === undefined)
+			return bad("the statement is no authorization's");
+		if (approval.completed) {
+			// Given again only once it went out, its code rooted: before that, no second code is made.
+			const kept = await p.approvals.completionOf(approval.hash);
+			return kept
+				? jsonAnswer(200, { enc: kept.enc, ct: kept.ct })
+				: refused(503, "temporarily_unavailable", "the login is being finished; ask again");
+		}
+		const items = approval.items as ItemsOf["authorization"];
+		const subject = approval.subject;
+		const client = await p.clients.find(items.client_id);
+		if (!client) return refused(401, "invalid_client", "no such client");
+		// Checked before the session opens, so nothing a code needs fails once the person tapped.
+		if (!clientAllowance.allowsGrant(client, codeGrantType))
+			return bad("the client may not use the code grant");
+		if (!challengeShape.test(items.code_challenge)) return bad("the code challenge is malformed");
+		const allowed = clientAllowance.allowedIssuance(client, items.scope, p.issuer);
+		if (allowed.kind === "error") return refused(400, "invalid_scope", "the scope is not allowed");
+		const resource = items.resource;
+		if (resource !== undefined && !clientAllowance.allowsAudience(client, resource, p.issuer))
+			return bad("the resource is not one the client may be issued for");
+		const audience = resource === undefined ? allowed.audience : [resource];
+		const asked = p.bindings.requestedOf((name) =>
+			name === "dpop_jkt" ? items.dpop_jkt : undefined,
+		);
+		if (asked.kind !== "requested") return bad("the statement names no binding asked for ahead");
+		const begunMs = approval.issuedAt;
+		const authenticatedAt = approval.usedAt ?? begunMs;
+		const grant = {
+			subject,
+			subjectKind: "user" as const,
+			issuedTo: client.id,
+			audience,
+			scope: allowed.scope,
+			amr: passkeyAmr,
+			authenticatedAt,
+		};
+		const admitted = await p.issuance.admits({ grant, grantType: codeGrantType });
+		if (admitted.kind === "refused") return denied("the login was not approved");
+		const opened = await p.sessions.open({
+			subject,
+			amr: passkeyAmr,
+			authenticatedAt,
+			provenSince: begunMs,
+			endsAt: begunMs + p.delegationS * 1000,
+		});
+		if (opened.kind === "revoked") return denied("the login was not approved");
+		const handle = opened.session.id;
+		// A session opened for a finish that gives no completion is closed again.
+		const close = () => p.sessions.close(handle).catch(() => undefined);
+		try {
+			// Made with no root: its root, the approval's record, carries the code's digest and is placed after.
+			const code = await p.codes.issue({
+				clientId: client.id,
+				redirectUri: items.redirect_uri,
+				challenge: items.code_challenge,
+				nonce: items.nonce,
+				scope: allowed.scope,
+				audience,
+				session: handle,
+				subject,
+				binding: asked.binding,
+			});
+			const completed = await p.approvals.complete({ hash: approval.hash, code });
+			if (completed.kind === "refused") {
+				await close();
+				if (completed.reason === "withdrawn")
+					return refused(503, "temporarily_unavailable", "the Core cannot sign now");
+				return completed.reason === "expired" || completed.reason === "unknown"
+					? bad("the statement cannot be used")
+					: denied("the login was not approved");
+			}
+			// Rooted before the completion goes out; one never rooted is never redeemed.
+			if ((await p.codes.root(code, completed.record)) !== "set")
+				throw new Unavailable("authorize");
+			// Published after: a resend is given it only now. One whose publishing failed is answered
+			// here all the same, its code rooted; a resend of it is told to ask again.
+			await p.approvals.publish(approval.hash).catch(() => undefined);
+			return jsonAnswer(200, { enc: completed.enc, ct: completed.ct });
+		} catch (error) {
+			await close();
+			throw error;
+		}
+	};
+}
+
+/** The contracts the finish takes, for the module to declare. */
+export const finishTakes = [accessTokenIssuance, sessions, codes, senderBinding] as const;
+
+/** The route of ⑤⑥, its parts taken from the composition, counted per source. */
+export async function finishRoute(
+	c: Pick<BuildContext<unknown>, "get">,
+	p: { readonly issuer: string; readonly delegationS: number; readonly window: Window },
+) {
+	return {
+		method: "POST" as const,
+		path: "/login/finish",
+		uses: [use(requestsPerSource, { name: "authorize.finish", window: p.window })],
+		takes: ["json" as const],
+		cors: { headers: ["content-type"] },
+		crossSite:
+			"The screen's request reads no cookie; what it finishes is bound to the statement and the person's assertion over it.",
+		handle: finishing({
+			approvals: await c.get(approvals),
+			clients: await c.get(clients),
+			issuance: await c.get(accessTokenIssuance),
+			sessions: await c.get(sessions),
+			codes: await c.get(codes),
+			bindings: await c.get(senderBinding),
+			issuer: p.issuer,
+			delegationS: p.delegationS,
+		}),
+	};
+}

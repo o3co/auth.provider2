@@ -1,6 +1,8 @@
 import { approvals, statementItems } from "@mod/approvals";
 import { clientAssertion } from "@mod/client-assertion";
 import { clients } from "@mod/clients";
+import { codes } from "@mod/code-grant";
+import { overHttp } from "@mod/front-core-wire";
 import { type Route, routes } from "@mod/http";
 import { issuer, type MetadataItem, metadata } from "@mod/issuer";
 import {
@@ -12,6 +14,9 @@ import {
 	type Module,
 } from "@mod/kernel";
 import { quietRuntime } from "@mod/kernel/testing";
+import { senderBinding } from "@mod/sender-binding";
+import { sessions } from "@mod/session";
+import { accessTokenIssuance } from "@mod/tokens";
 import { describe, expect, it } from "vitest";
 import { jarReservations, withoutPasskey } from "../src/contract.ts";
 import authorize from "../src/module.ts";
@@ -33,6 +38,10 @@ const fakes = defineModule(
 		m.provide(clientAssertion).by(() => ({}) as never),
 		m.provide(approvals).by(() => ({}) as never),
 		m.provide(jarReservations).by(() => ({}) as never),
+		m.provide(accessTokenIssuance).by(() => ({}) as never),
+		m.provide(sessions).by(() => ({}) as never),
+		m.provide(codes).by(() => ({}) as never),
+		m.provide(senderBinding).by(() => ({}) as never),
 		m
 			.provide(issuer)
 			.by(() => ({ url: "https://issuer.example", endpointOrigin: "https://issuer.example" })),
@@ -58,7 +67,10 @@ describe("authorize, composed", () => {
 	it("serves the start, publishes the screen as the authorization endpoint, and fills every item but dpop_jkt", async () => {
 		const app = await boot();
 		const { routes: served, metadata: items, items: filled } = await app.get(seen);
-		expect(served.map((r) => `${r.method} ${r.path}`)).toEqual(["POST /login/start"]);
+		expect(served.map((r) => `${r.method} ${r.path}`)).toEqual([
+			`POST ${overHttp.operations.loginStart.path}`,
+			`POST ${overHttp.operations.loginFinish.path}`,
+		]);
 		expect(items).toContainEqual({
 			name: "authorization_endpoint",
 			value: "https://login.example/authorize",
@@ -75,6 +87,10 @@ describe("authorize, composed", () => {
 			m.provide(clientAssertion).by(() => ({}) as never),
 			m.provide(approvals).by(() => ({}) as never),
 			m.provide(jarReservations).by(() => ({}) as never),
+			m.provide(accessTokenIssuance).by(() => ({}) as never),
+			m.provide(sessions).by(() => ({}) as never),
+			m.provide(codes).by(() => ({}) as never),
+			m.provide(senderBinding).by(() => ({}) as never),
 			m
 				.provide(issuer)
 				.by(() => ({ url: "https://issuer.example", endpointOrigin: "https://issuer.example" })),

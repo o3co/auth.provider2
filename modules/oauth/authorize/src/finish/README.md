@@ -1,0 +1,22 @@
+# finish
+
+Internal module of `authorize`: the route of a login's finish (⑤⑥).
+
+## Responsibilities
+- Uses the person's assertion over T once, judges the issuance, opens the session, has `code-grant` make a code, has `approvals` put the approval on the subject's flow and seal the completion, and roots the code in that record before the completion is answered.
+
+## Not here
+- T, its use and its completion (`approvals`). The code, its record and redemption (`code-grant`). The session's record (`session`). The policies (`tokens`). Reading the binding asked for ahead (`sender-binding`).
+
+## Offers
+- `finishing` (`FinishParts`) → the handler; `finishRoute` (the parts taken from the composition, the issuer, the delegation's length, the window) → the route; `finishTakes`, the contracts it takes.
+
+## Invariants
+- The steps run in this order: the approval used, the scope and audience within the client's allowance, the policies, the session (from the statement's issue: `provenSince`, and `endsAt` that and the delegation's length), the code made with no root, the approval completed, the code rooted in its record, the completion answered.
+- A completion goes out only after its code is rooted: the finish that made the code answers it, then publishes it, and a resent finish is given it only once published. A resend before that is answered `temporarily_unavailable` and makes no code.
+- A code made where the finish fell between completing and rooting is never rooted, as no finish roots a code but the one that made it: never given out, never redeemed, it ends with its lifetime, the approval used. Two finishes at once make two codes; only the one `approvals` keeps is completed and rooted, the other's finish answering `access_denied`.
+- What a code needs (the client's code grant, an S256 challenge, the binding asked for ahead) is checked before the session opens; a session opened for a finish that gives no completion is closed.
+- A login with a passkey is named by `amr` `pop` and `user`, what its assertion proves: a key held (its signature) and the person present (its flags). No `hwk`, as no attestation is taken and a synced passkey is bound to no one device; no `mfa`, as verifying the user is the authenticator's own word, and strength is `acr`'s.
+
+## Depends on
+- `kernel`, `approvals`, `clients`, `client-allowance`, `code-grant`, `tokens`, `session`, `sender-binding`, `http`, `rate-limit`.

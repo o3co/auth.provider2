@@ -19,7 +19,9 @@ const client: Client = {
 	method: "none",
 	registered: true,
 	section: <T>(s: { name: string }) =>
-		(s.name === redirects.name ? { "redirect-uris": ["https://rp.example/cb"] } : {}) as T,
+		(s.name === redirects.name
+			? { "redirect-uris": ["https://rp.example/cb"] }
+			: { grants: ["authorization_code"], scopes: ["read"], audiences: [] }) as T,
 };
 
 const claims = (more: Record<string, unknown> = {}) => ({
@@ -32,9 +34,9 @@ const claims = (more: Record<string, unknown> = {}) => ({
 	response_type: "code",
 	response_mode: "form_post",
 	state: "st",
-	scope: "openid",
+	scope: "read",
 	nonce: "n",
-	code_challenge: "cc",
+	code_challenge: "c".repeat(43),
 	code_challenge_method: "S256",
 	dpop_jkt: "jkt",
 	...more,
@@ -116,6 +118,15 @@ function harness(
 		}),
 		approvals,
 		withoutPasskey: p.allows === undefined ? undefined : { allows: async () => p.allows === true },
+		bindings: {
+			requestedOf: (param) => {
+				const jkt = param("dpop_jkt");
+				if (jkt === "bad") return { kind: "malformed", parameter: "dpop_jkt" };
+				return jkt === undefined
+					? { kind: "none" }
+					: { kind: "requested", binding: { member: "jkt", confirmation: jkt, tokenType: "DPoP" } };
+			},
+		},
 	});
 	const send = (fields: Record<string, string>) =>
 		start({ json: fields, source: { address: "192.0.2.1" } } as unknown as HttpRequest);
@@ -334,5 +345,50 @@ describe("a login's start (②)", () => {
 			json: { error: "invalid_request" },
 		});
 		expect(await h.body(h.fields(request))).toMatchObject({ status: 200 });
+	});
+
+	it("refuses an OpenID request and one asking claims before T is made", async () => {
+		const h = harness();
+		expect(await h.body(h.fields(jar(claims({ scope: "openid read" }))))).toMatchObject({
+			status: 400,
+			json: { error: "invalid_scope" },
+		});
+		expect(
+			await h.body(h.fields(jar(claims({ jti: "j9", claims: { id_token: {} } })))),
+		).toMatchObject({
+			status: 400,
+			json: { error: "invalid_request_object" },
+		});
+		expect(h.asked).toHaveLength(0);
+	});
+
+	it("refuses, before T, a challenge not of S256's shape and a dpop_jkt out of its form", async () => {
+		const h = harness();
+		expect(await h.body(h.fields(jar(claims({ code_challenge: "cc" }))))).toMatchObject({
+			json: { error: "invalid_request_object" },
+		});
+		expect(await h.body(h.fields(jar(claims({ jti: "j8", dpop_jkt: "bad" }))))).toMatchObject({
+			json: { error: "invalid_request_object" },
+		});
+		expect(h.asked).toHaveLength(0);
+	});
+
+	it("refuses, before T, a client not allowed the code grant", async () => {
+		const h = harness();
+		const plain = {
+			...client,
+			section: <T>() => ({ grants: [], scopes: ["read"], audiences: [] }) as T,
+		};
+		const allowance = client.section;
+		(client as { section: unknown }).section = <T>(s: { name: string }) =>
+			(s.name === redirects.name ? allowance<T>(s as never) : plain.section<T>()) as T;
+		try {
+			expect(await h.body(h.fields(jar(claims())))).toMatchObject({
+				json: { error: "invalid_request" },
+			});
+			expect(h.asked).toHaveLength(0);
+		} finally {
+			(client as { section: unknown }).section = allowance;
+		}
 	});
 });
