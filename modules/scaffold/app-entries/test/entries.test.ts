@@ -42,10 +42,10 @@ export async function assemble({ runtime }) {
 	if (process.env.REFUSE_MANY) throw new BootRefused(Array.from({ length: Number(process.env.REFUSE_MANY) }, (_, i) => ({ where: \`at.\${i}\`, reason: "r".repeat(100) })));
 	// Without the script's own runtime, the composed sink would write this line.
 	(runtime?.log ?? { warn: (event) => process.stdout.write(\`LOG \${event}\\n\`) }).warn("fake.assembled");
-	const { settler, namer, tool } = await import("fake-package");
+	const { settler, namer, tool, recorder } = await import("fake-package");
 	const many = Array.from({ length: Number(process.env.LINES ?? 1) }, (_, i) => \`line-\${i}-\${"h".repeat(100)}\`);
 	const caller = { run: async () => ({ lines: [...many, "all done"], code: 0 }) };
-	const asked = { naming: namer, callRun: caller, toolRun: tool, lines: tool, tell: tool };
+	const asked = { naming: namer, callRun: caller, toolRun: tool, lines: tool, tell: tool, recording: recorder };
 	// Where a test signals the app: kept alive once started, each stop told and slow.
 	const signalled = process.env.SIGNALLED !== undefined;
 	let alive;
@@ -77,6 +77,7 @@ import { appendFileSync } from "node:fs";
 export const settling = "settling";
 export const resettling = "resettling";
 export const naming = "naming";
+export const recording = "recording";
 export const callRun = "callRun";
 export const toolRun = "toolRun";
 // Contracts named as the scripts' own names are: each script takes its contract under a name of its own.
@@ -104,6 +105,14 @@ export const namer = {
 		if (subject === "down") throw Object.assign(new Error("down for alice"), { name: "Unavailable" });
 		if (subject === "boom") throw new Error("secret of alice");
 		return subject.startsWith("claimless") ? 2 : 0;
+	},
+};
+export const recorder = {
+	keep: async (record) => {
+		appendFileSync(process.env.SEEN, \`\${JSON.stringify(record)}\\n\`);
+		if (record.subject === "down") throw Object.assign(new Error("down for alice"), { name: "Unavailable" });
+		if (record.subject === "boom") throw new Error("secret of alice");
+		return record.subject === "s-held" ? "held" : "kept";
 	},
 };
 export const settler = {
@@ -166,6 +175,18 @@ const declaredByFakes: readonly Declaring[] = [
 				contract: "resettling",
 				member: "settle",
 				answers: ["marked", "held", "none", "pending", "inconsistent"],
+			},
+		],
+	},
+	{
+		name: "@mod/recorder",
+		appEntries: [
+			{
+				script: "recorded",
+				shape: "settle-records",
+				contract: "recording",
+				member: "keep",
+				answers: ["kept", "held"],
 			},
 		],
 	},
@@ -287,6 +308,43 @@ it("settles each line as it was sent, skipping only empty lines, and counts a li
 	);
 	expect(done.status).toBe(1);
 	expect(`${done.stdout}${done.stderr}`).not.toMatch(/alice|LOG/);
+});
+
+it("settles each line as a JSON object, skipping only empty lines, counting one that is no object or past 4096 bytes as failed, and tells no record", async () => {
+	const run = await script("@mod/recorder", "src/recorded.ts");
+	const long = { subject: "s-long", identifier: "y".repeat(4096) };
+	const input = [
+		JSON.stringify({ subject: "s-alice", identifier: "alice" }),
+		"",
+		"[1]",
+		"alice",
+		"null",
+		JSON.stringify(long),
+		JSON.stringify({ subject: "s-held" }),
+		JSON.stringify({ subject: "down" }),
+		`${JSON.stringify({ subject: "s-bob", identifier: "bob" })}\r`,
+	].join("\n");
+	const done = await run(input);
+	expect(done.seen).toEqual([
+		{ subject: "s-alice", identifier: "alice" },
+		{ subject: "s-held" },
+		{ subject: "down" },
+		{ subject: "s-bob", identifier: "bob" },
+	]);
+	expect(done.stdout).toBe("kept 2 held 1 unknown 0 failed 5\n");
+	expect(done.status).toBe(1);
+	expect(`${done.stdout}${done.stderr}`).not.toMatch(/alice|bob|LOG/);
+	const clean = await run(`${JSON.stringify({ subject: "s-carol" })}\n`);
+	expect([clean.stdout, clean.status]).toEqual(["kept 1 held 0 unknown 0 failed 0\n", 0]);
+});
+
+it("stops reading records at an unexpected failure, telling only the counts", async () => {
+	const run = await script("@mod/recorder", "src/recorded.ts");
+	const lines = ["s-first", "boom", "s-after"].map((subject) => JSON.stringify({ subject }));
+	const done = await run(lines.join("\n"));
+	expect(done.seen).toEqual([{ subject: "s-first" }, { subject: "boom" }]);
+	expect(done.stdout).toBe("kept 1 held 0 unknown 0 failed 1\n");
+	expect(`${done.stdout}${done.stderr}`).not.toMatch(/secret|alice|boom/);
 });
 
 it("holds no more of an endless line than a subject may be", async () => {
@@ -562,7 +620,7 @@ it.each([
 	[
 		"a shape",
 		declaring({ shape: "stream" }),
-		"tool's shape is not one of call, settle-subjects, name-subjects",
+		"tool's shape is not one of call, settle-subjects, settle-records, name-subjects",
 	],
 	["a key", declaring({ fill: {} }), "tool has keys its shape does not take: fill"],
 	[
@@ -601,6 +659,11 @@ it.each([
 		"the script's own count",
 		declaring({ shape: "settle-subjects", answers: ["marked", "failed"] }),
 		"names an answer the script counts itself",
+	],
+	[
+		"no answers to records",
+		declaring({ shape: "settle-records" }),
+		"tool's answers are not a list of at least one",
 	],
 	[
 		"a script declared twice",
@@ -753,6 +816,7 @@ it("assembles every tool shape never to start, and the app's entry to start", as
 	const fields = {
 		call: {},
 		"settle-subjects": { answers: ["marked"] },
+		"settle-records": { answers: ["kept"] },
 		"name-subjects": {},
 	} satisfies Record<Shape, Record<string, unknown>>;
 	for (const [shape, extra] of Object.entries(fields)) {

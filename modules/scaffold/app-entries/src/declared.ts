@@ -14,6 +14,7 @@ export interface Declaring {
 const shapes = {
 	call: [],
 	"settle-subjects": ["answers"],
+	"settle-records": ["answers"],
 	"name-subjects": [],
 } as const satisfies Record<string, readonly string[]>;
 
@@ -72,7 +73,7 @@ function checked(name: string, item: unknown): Declared {
 		contract: contract as string,
 		member: member as string,
 	};
-	if (shape !== "settle-subjects") return entry;
+	if (!shapes[shape as Shape].some((key) => key === "answers")) return entry;
 	const { answers } = given;
 	if (!Array.isArray(answers) || answers.length === 0) {
 		return refused(name, `${script}'s answers are not a list of at least one`);

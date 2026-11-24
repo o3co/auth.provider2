@@ -1,0 +1,38 @@
+{{subjects}}
+const settling = app.get(declaredContract);
+// The answers counted by name, in the order the line tells them; one this script does not know (a
+// later release's) is counted as unknown.
+const answers: readonly string[] = {{answers}};
+const counts = new Map([...answers, "unknown", "failed"].map((name) => [name, 0]));
+const count = (name: string) => counts.set(name, (counts.get(name) ?? 0) + 1);
+/** A line read as one JSON object, or undefined for anything else: the member reads what it holds. */
+const recordOf = (line: string): object | undefined => {
+	try {
+		const read: unknown = JSON.parse(line);
+		return typeof read === "object" && read !== null && !Array.isArray(read) ? read : undefined;
+	} catch {
+		return undefined;
+	}
+};
+// One record a line, a JSON object; only an empty line is skipped. No record is ever written out.
+for await (const line of lines(process.stdin)) {
+	if (line === "") continue;
+	const record = line === undefined ? undefined : recordOf(line);
+	if (record === undefined) {
+		count("failed");
+		continue;
+	}
+	try {
+		const answer: string = await settling.{{member}}(record);
+		count(answers.includes(answer) ? answer : "unknown");
+	} catch (error) {
+		count("failed");
+		// Anything but an outage may come again for every record, and may carry one: stop, telling none of it.
+		if (!isUnavailable(error)) break;
+	}
+}
+tell(1, `${[...counts].map(([name, n]) => `${name} ${n}`).join(" ")}\n`);
+// Stopped, though never started, so its stop hooks run; a stop that fails keeps the code.
+await app.stop().catch(() => undefined);
+// A record settled with any answer it knows is counted, not failed: one that could not be read or settled, or an answer not known, is 1.
+end(undefined, counts.get("failed") === 0 && counts.get("unknown") === 0 ? 0 : 1);

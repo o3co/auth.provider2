@@ -5,6 +5,7 @@ import { configFiles, filled, type KeysWritten, kernel, refusedPart } from "./st
 interface Row {
 	readonly package: string;
 	readonly script: string;
+	readonly shape: Shape;
 	readonly template: string;
 	readonly fill: Readonly<Record<string, string>>;
 }
@@ -12,13 +13,23 @@ interface Row {
 const templates: Readonly<Record<Shape, string>> = {
 	call: "call.ts.template",
 	"settle-subjects": "settle-subjects.ts.template",
+	"settle-records": "settle-records.ts.template",
 	"name-subjects": "name-subjects.ts.template",
+};
+
+/** The longest line a reading script holds, in bytes: a subject's (255), or a record's. */
+const longestOf: Readonly<Record<Shape, number>> = {
+	call: 0,
+	"settle-subjects": 255,
+	"settle-records": 4096,
+	"name-subjects": 255,
 };
 
 /** A declared entry as its shape's template fills it: each answer written as JSON data, never spliced in raw. */
 const rowOf = (entry: Declared): Row => ({
 	package: entry.package,
 	script: entry.script,
+	shape: entry.shape,
 	template: templates[entry.shape],
 	fill: {
 		contract: entry.contract,
@@ -61,6 +72,7 @@ export async function entriesOf(
 		};
 		const shared = {
 			...fill,
+			longest: String(longestOf[row.shape]),
 			refused: await refusedPart(keys),
 			guard: await filled("guard.ts.part", {}),
 			reads: modules.map((name) => `import("${importOf(name)}/module")`).join(", "),

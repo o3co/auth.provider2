@@ -18,12 +18,12 @@ const notBuilt = (error: unknown): never => {
 	const many = Number.isSafeInteger(n) && (n as number) >= 0 ? ` ${n}` : "";
 	return end(`refused${many}: start the app with this configuration to read why`, 78);
 };
-/** The longest subject, in bytes. */
-const longest = 255;
+/** The longest line, in bytes: a subject's, or a record's for a script reading records. */
+const longest = {{longest}};
 
 /**
  * Each line of standard input as it was sent, without its line ending, or undefined for a line
- * longer than a subject may be. No more of a line than that is ever held.
+ * longer than `longest`. No more of a line than that is ever held.
  */
 async function* lines(input: AsyncIterable<Buffer>): AsyncGenerator<string | undefined> {
 	let held: Buffer[] = [];
