@@ -16,6 +16,9 @@ import type { AccessGrant, Actor } from "../../contract.ts";
 import { issueAtOnce } from "../at-once.ts";
 
 const runtime = quietRuntime();
+// RSA keys this large take seconds to make: made once, as the file loads, never within a test's time.
+const rsa4096 = generateKeyPairSync("rsa", { modulusLength: 4096 }).privateKey;
+const rsa6144 = generateKeyPairSync("rsa", { modulusLength: 6144 }).privateKey;
 const grant: AccessGrant = {
 	subject: "s",
 	subjectKind: "user",
@@ -68,10 +71,12 @@ describe("an access token at its largest", () => {
 		// these a token may pass 16 KiB, and issue then refuses it (`token_too_large`). Subject, client
 		// and two audiences of 256 characters, 1 KiB of scope, an actor chain of four subjects of 64,
 		// an acr of 64 and room for a `cnf` (a DPoP thumbprint), signed with RSA-4096.
-		const rsa = generateKeyPairSync("rsa", { modulusLength: 4096 }).privateKey;
 		const kid = "k".repeat(64);
 		const app = await assemble({
-			modules: [...composedWith({ [kid]: rsa }), revokedInMemory(() => runtime.clock.now()).module],
+			modules: [
+				...composedWith({ [kid]: rsa4096 }),
+				revokedInMemory(() => runtime.clock.now()).module,
+			],
 			config: {
 				...kernelConfig(),
 				...composedHttp(),
@@ -110,11 +115,12 @@ describe("an access token at its largest", () => {
 });
 
 describe("the 16 KiB bound, by the signing key's own signature", () => {
-	// A 6144-bit RSA key takes seconds to make, past the default per-test time.
 	it("refuses at prepare, for an RSA key past 4096 bits, exactly the tokens that would pass 16 KiB once signed", async () => {
-		const rsa = generateKeyPairSync("rsa", { modulusLength: 6144 }).privateKey;
 		const app = await assemble({
-			modules: [...composedWith({ big: rsa }), revokedInMemory(() => runtime.clock.now()).module],
+			modules: [
+				...composedWith({ big: rsa6144 }),
+				revokedInMemory(() => runtime.clock.now()).module,
+			],
 			config: {
 				...kernelConfig(),
 				...composedHttp(),
@@ -142,5 +148,5 @@ describe("the 16 KiB bound, by the signing key's own signature", () => {
 		expect(signed.access.token.length).toBeLessThanOrEqual(16_384);
 		expect(signed.access.token.length).toBeGreaterThan(16_384 - 4);
 		expect(await at(high)).toMatchObject({ kind: "refused", reason: "token_too_large" });
-	}, 60_000);
+	});
 });
