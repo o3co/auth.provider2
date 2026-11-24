@@ -121,7 +121,7 @@ export default defineModule(
 		m.provide(usersImport).by(async (c) => {
 			const [ledger] = await c.collect(ledgers);
 			const keep = ledger ? contributedSource(ledger, c.log).keep : undefined;
-			return usersImporter(await c.get(users), keep);
+			return usersImporter(await c.get(users), keep, ledger?.passwords?.work);
 		}),
 	],
 );

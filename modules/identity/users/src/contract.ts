@@ -139,12 +139,13 @@ export type ImportAnswer = "imported" | "conflict" | "outside" | "malformed" | "
 /** Records brought from another IdP, as an import entry hands them over one at a time. */
 export interface UsersImport {
 	/**
-	 * Keeps `{ subject, identifier?, verifiedEmail? }`: the identifier through the ledger's `keep`,
-	 * then the email as a verified contact. `imported` once every part is held as given, now or
-	 * before; `conflict` where the ledger holds the identifier or the subject otherwise, `outside`
-	 * where an identifier is given and the ledger takes no import, `malformed` for any other shape
-	 * (another key among them), each writing nothing; `full` past a subject's contacts. Throws
-	 * Unavailable if the ledger or the store fails.
+	 * Keeps `{ subject, identifier?, passwordHash?, verifiedEmail? }`: the identifier, with the
+	 * password's hash where given, through the ledger's `keep`, then the email as a verified contact.
+	 * `imported` once every part is held as given, now or before; `conflict` where the ledger holds
+	 * the identifier or the subject otherwise, `outside` where an identifier is given and the ledger
+	 * takes no import, or a hash and it holds no passwords of its work, `malformed` for any other shape (another
+	 * key, a hash with no identifier or one `secret-hash` does not read, among them), each writing
+	 * nothing; `full` past a subject's contacts. Throws Unavailable if the ledger or the store fails.
 	 */
 	record(record: unknown): Promise<ImportAnswer>;
 }
@@ -159,9 +160,16 @@ export interface Ledger {
 	create?(identifier: string): Promise<Created>;
 	/**
 	 * Holds the identifier for the subject as given, written now or before (`kept`), unless either is
-	 * held otherwise (`conflict`); a ledger that takes no import leaves it out.
+	 * held otherwise (`conflict`); a ledger that takes no import leaves it out. A password's hash, as
+	 * `secret-hash` reads one, is given only to a ledger that holds passwords, for the identifier.
 	 */
-	keep?(subject: string, identifier: string): Promise<"kept" | "conflict">;
+	keep?(subject: string, identifier: string, passwordHash?: string): Promise<"kept" | "conflict">;
+	/**
+	 * The work (`secret-hash`'s word) of the passwords' hashes its `keep` takes, which `verify` checks
+	 * them at. A ledger whose `keep` takes none, or with no `keep`, leaves it out, whether or not it
+	 * checks passwords: it says nothing of whether a deployment holds them.
+	 */
+	readonly passwords?: { readonly work: string };
 }
 
 export const users = contract<Users>("users");

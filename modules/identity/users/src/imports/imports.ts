@@ -1,4 +1,5 @@
 import { isAddress } from "@mod/mail-address";
+import { readSecretHash } from "@mod/secret-hash";
 import {
 	type ImportAnswer,
 	isWellFormedSubject,
@@ -8,11 +9,13 @@ import {
 import { identifierFits, type UserSource } from "../registered.ts";
 
 /** A record's keys: any other refuses it, so nothing brought is dropped unseen. */
-const keys = new Set(["subject", "identifier", "verifiedEmail"]);
+const keys = new Set(["subject", "identifier", "passwordHash", "verifiedEmail"]);
 
 interface Read {
 	readonly subject: string;
 	readonly identifier?: string;
+	/** The password's hash as brought, and its work as `secret-hash` reads it. */
+	readonly password?: { readonly hash: string; readonly work: string };
 	readonly verifiedEmail?: string;
 }
 
@@ -21,27 +24,41 @@ function readOf(given: unknown): Read | undefined {
 	if (typeof given !== "object" || given === null || Array.isArray(given)) return undefined;
 	const record = { ...(given as Record<string, unknown>) };
 	if (Object.keys(record).some((key) => !keys.has(key))) return undefined;
-	const { subject, identifier, verifiedEmail } = record;
+	const { subject, identifier, passwordHash, verifiedEmail } = record;
 	if (!isWellFormedSubject(subject)) return undefined;
 	const named = typeof identifier === "string" && identifier !== "" && identifierFits(identifier);
 	if (identifier !== undefined && !named) return undefined;
+	// A password's hash goes with the identifier it is checked for, and is one `secret-hash` reads.
+	const hashed = typeof passwordHash === "string" ? readSecretHash(passwordHash) : undefined;
+	if (passwordHash !== undefined && (!hashed || identifier === undefined)) return undefined;
 	if (verifiedEmail !== undefined && !isAddress(verifiedEmail)) return undefined;
 	return {
 		subject,
 		...(identifier === undefined ? {} : { identifier: identifier as string }),
+		...(hashed ? { password: { hash: passwordHash as string, work: hashed.work } } : {}),
 		...(verifiedEmail === undefined ? {} : { verifiedEmail: verifiedEmail as string }),
 	};
 }
 
 /** Imports through the ledger's `keep`, where it has one, and users' verified contacts. */
-export function usersImporter(users: Users, keep: UserSource["keep"]): UsersImport {
+export function usersImporter(
+	users: Users,
+	keep: UserSource["keep"],
+	passwordWork: string | undefined,
+): UsersImport {
 	return {
 		record: async (given): Promise<ImportAnswer> => {
 			const read = readOf(given);
 			if (!read) return "malformed";
 			if (read.identifier !== undefined) {
-				if (!keep) return "outside";
-				if ((await keep(read.subject, read.identifier)) === "conflict") return "conflict";
+				// A hash goes only to a ledger whose `keep` takes hashes of its work.
+				const taken = read.password === undefined || read.password.work === passwordWork;
+				if (!keep || !taken) return "outside";
+				const kept =
+					read.password === undefined
+						? await keep(read.subject, read.identifier)
+						: await keep(read.subject, read.identifier, read.password.hash);
+				if (kept === "conflict") return "conflict";
 			}
 			if (read.verifiedEmail !== undefined) {
 				try {

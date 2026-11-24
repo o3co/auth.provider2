@@ -89,8 +89,12 @@ export function contributedSource(ledger: Ledger, log: Log): UserSource {
 		: {};
 	const keeping = keep
 		? {
-				keep: async (subject: string, identifier: string) => {
-					const answer = await fromLedger(() => keep.call(ledger, subject, identifier));
+				keep: async (subject: string, identifier: string, passwordHash?: string) => {
+					const answer = await fromLedger(() =>
+						passwordHash === undefined
+							? keep.call(ledger, subject, identifier)
+							: keep.call(ledger, subject, identifier, passwordHash),
+					);
 					if (answer === "kept" || answer === "conflict") return answer;
 					throw new Unavailable("users");
 				},

@@ -1,6 +1,7 @@
 import { assemble, defineModule, isUnavailable, kernelConfig } from "@mod/kernel";
 import { switchedModule, unavailableSwitch } from "@mod/kernel/testing";
 import secretHashModule from "@mod/secret-hash/module";
+import { testScryptHash } from "@mod/secret-hash/testing";
 import { describe, expect, it } from "vitest";
 import {
 	type ContactStore,
@@ -64,6 +65,31 @@ describe("users' import", () => {
 		expect(await importer.record({ subject: "s-bob" })).toBe("imported");
 	});
 
+	it("keeps a password's hash with the identifier where the ledger holds passwords, and none where it holds none", async () => {
+		const hash = testScryptHash("correct horse");
+		const kept: (string | undefined)[] = [];
+		const ledger = keepingLedger();
+		const holding: Ledger = {
+			...ledger,
+			passwords: { work: "scrypt:10,8,1,32,16" },
+			keep: async (s, i, passwordHash) => {
+				kept.push(passwordHash);
+				return ledger.keep?.(s, i) ?? "conflict";
+			},
+		};
+		const record = { subject: "s-alice", identifier: "alice", passwordHash: hash };
+		expect(await (await opened(holding)).importer.record(record)).toBe("imported");
+		expect(kept).toEqual([hash]);
+		// A hash of another work than the ledger's: outside, writing nothing.
+		const other = { ...record, passwordHash: testScryptHash("correct horse", 11) };
+		expect(await (await opened(holding)).importer.record(other)).toBe("outside");
+		expect(kept).toEqual([hash]);
+		// A ledger holding no passwords takes no hash: outside, writing nothing.
+		const held = new Map<string, string>();
+		expect(await (await opened(keepingLedger(held))).importer.record(record)).toBe("outside");
+		expect(held.size).toBe(0);
+	});
+
 	it("answers conflict for an identifier another subject holds, writing nothing of the record", async () => {
 		const { importer, u } = await opened(keepingLedger(new Map([["alice", "s-alice"]])));
 		const record = { subject: "s-mallory", identifier: "alice", verifiedEmail: "m@example.com" };
@@ -112,6 +138,10 @@ describe("users' import", () => {
 			{ subject: "s-alice", identifier: "a".repeat(256) },
 			{ subject: "s-alice", verifiedEmail: "not an address" },
 			{ subject: "s-alice", passkey: { id: "x" } },
+			// A password's hash goes with an identifier, and is a hash read as one.
+			{ subject: "s-alice", passwordHash: testScryptHash("p") },
+			{ subject: "s-alice", identifier: "alice", passwordHash: "correct horse" },
+			{ subject: "s-alice", identifier: "alice", passwordHash: 7 },
 		]) {
 			expect(await importer.record(record), JSON.stringify(record)).toBe("malformed");
 		}
