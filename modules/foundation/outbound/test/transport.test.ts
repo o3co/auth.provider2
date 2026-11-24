@@ -527,12 +527,11 @@ describe("outbound", () => {
 
 	it("refuses a switch of protocols and gives its place back, and waits past an informational answer", async () => {
 		const { resolve } = svcResolver();
-		const outbound = over(resolve, { "max-concurrent": 1, timeout: "2s" });
+		// A deadline past any test's time: refused at it, the fetch would not end within the test.
+		const outbound = over(resolve, { "max-concurrent": 1, timeout: "1m" });
 		for (let i = 0; i < 2; i++) {
-			const started = Date.now();
-			expect(await failure(outbound.fetch(svc("/switch")))).toBe("unavailable: unsupported-answer");
 			// Node closes it with neither an answer nor an error: refused as it closes, not at the deadline.
-			expect(Date.now() - started).toBeLessThan(1000);
+			expect(await failure(outbound.fetch(svc("/switch")))).toBe("unavailable: unsupported-answer");
 		}
 		const answer = await outbound.fetch(svc("/hints"));
 		expect([answer.status, new TextDecoder().decode(answer.body)]).toEqual([200, "final"]);

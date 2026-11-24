@@ -170,14 +170,18 @@ it("refuses to boot while a proxy is set, unless told to go direct", async () =>
 it("boots with a proxy configured whatever the variables say, and warns what it leaves to the proxy", async () => {
 	onlyProxy("HTTPS_PROXY");
 	const recorded = recordingLog();
+	// Names resolved in process: each boot starts no helper processes, which the proxy never asks.
 	const withProxy = (outboundSettings: Record<string, unknown>) =>
-		boot(outboundSettings, recorded.log);
-	// Those of revocation aside, as their own test holds them.
+		boot({ ...outboundSettings, resolution: "in-process" }, recorded.log);
+	// Those of revocation and of the resolution aside, as their own tests hold them.
 	const warned = () =>
 		recorded
 			.lines()
 			.map((line) => line.event)
-			.filter((event) => !event.startsWith("outbound.revocation"));
+			.filter(
+				(event) =>
+					!event.startsWith("outbound.revocation") && event !== "outbound.resolution_in_process",
+			);
 	await withProxy({ proxy: "http://127.0.0.1:3128", "proxy-authorization": "Basic dGVzdA==" });
 	expect(warned()).toEqual(["outbound.proxy_checks_addresses"]);
 	await withProxy({
