@@ -1,0 +1,17 @@
+{
+	"name": "@mod/registry-sign",
+	"private": true,
+	"license": "Apache-2.0",
+	"type": "module",
+	"kind": "companion",
+	"bin": {
+		"registry-sign": "./src/main.ts"
+	},
+	"dependencies": {
+		"@mod/registry-wire": "workspace:*",
+		"zod": "4.6.7"
+	},
+	"devDependencies": {
+		"vitest": "5.0.5"
+	}
+}
