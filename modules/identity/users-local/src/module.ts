@@ -74,13 +74,13 @@ export default defineModule(
 		}),
 		m.contribute(ledgers).by(async (c) => localLedger(localRecords(await c.get(placed)), c.random)),
 		m.contribute(passkeyWitnesses).by(async (c) => localWitness(localMarks(await c.get(placed)))),
-		// The witness is not apart from the passkeys: a store emptied or rolled back takes both.
+		// Its records and the witness are not apart from the Core's store: a store emptied or rolled back takes them.
 		m.contribute(stances).by(() => ({
 			promise: promiseNames.storeWrite,
 			holds: false,
 			by: "users-local",
 			reason:
-				"its passkey witness keeps its marks in the Core's store beside the passkeys: a store emptied or rolled back takes both, and the subject reads as holding no passkey",
+				"its users and its passkey witness's marks are records in the Core's store, the marks beside the passkeys: a store emptied or rolled back takes them unseen, so a subject's identifier may move and a subject holding a passkey reads as holding none",
 		})),
 		// Its build takes only its records and collects no `probes`, as an eraser's must (erasure-extensions).
 		m.contribute(erasers).by(async (c) => localEraser(await c.get(placed))),

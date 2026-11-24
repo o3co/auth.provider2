@@ -22,10 +22,11 @@
 - `keep` answers `kept` where the identifier is held for the subject, written now or by an earlier import, and `conflict` where the identifier or the subject is held otherwise, or the subject is erased, writing nothing then; a create meeting an erased subject is unavailable.
 - A user holds no attributes and no password: a password check answers none for every identifier, reading nothing, so it tells nothing of who exists.
 - A record of another shape is unavailable, never none.
-- Erasing a subject removes its two records; its identifier is then free for a new subject.
+- Erasing a subject removes its two records and its mark; its identifier is then free for a new subject. The mark goes with them whatever the keys: the erasure boundary is to be taken in first, as a key standing after it has no mark, and a mark asked for the erased subject is unavailable.
 - With `users`, it is the one ledger: `users` refuses boot beside another ledger or `registered` users.
 - Its witness keeps `passkey-witness`' promises over the store's: a mark is set unless one is, and removed only as its token's, each in one write. An enroll finding a mark gone before it reads its token sets it again, 3 times at most, then is unavailable. A mark of another shape is unavailable; none is set for an erased subject (unavailable).
-- It stands breaking `store-write`: its witness keeps its marks in the Core's store beside the passkeys, so a store emptied or rolled back takes both, and the subject reads as holding no passkey.
+- It stands breaking `store-write`: its users and its witness's marks are records in the Core's store, the marks beside the passkeys, so a store emptied or rolled back takes them unseen: a subject's identifier may move, and a subject holding a passkey reads as holding none.
+- Composed beside `passkey-witness-http`, two witnesses stand, and `passkey-witnessing` refuses boot: users kept here take their witness here too.
 - It holds nothing in process, so it is safe on many instances.
 
 ## Data
