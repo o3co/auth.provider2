@@ -399,6 +399,22 @@ describe("keyChanges.read: a delete", () => {
 		expect(await reading).toEqual({ error: "tooOld" });
 	});
 
+	it("verifies by the signer sets as they were given, a set changed while it reads reaching nothing", async () => {
+		const d = await deleted();
+		const sealed = await d.completion();
+		const statusSigners = setOf("status", [d.statusKey]);
+		const stateOfSigners = setOf("stateOf", [d.stateKey]);
+		const reading = keyChanges.read(
+			d.source,
+			sealed,
+			d.options({ ...d.checks, statusSigners, stateOfSigners }),
+		);
+		const stranger = await signingKey("ES256", "x-1");
+		statusSigners.keys[0] = publicOf(stranger);
+		stateOfSigners.keys.splice(0, 1, publicOf(stranger));
+		expect(await reading).toMatchObject({ change: d.change });
+	});
+
 	it("keeps a refusal for the change whatever source is made again for it, and refuses a log that is no list", async () => {
 		const d = await deleted();
 		const sealed = await d.completion({
