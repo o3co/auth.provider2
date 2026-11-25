@@ -1,4 +1,4 @@
-import { logTyps, type ReceiverKey, schemas } from "@mod/transparency-wire";
+import { logTyps, type ReceiverKey, type SignerSet, schemas } from "@mod/transparency-wire";
 import { fromBase64url, textOf } from "./bytes.ts";
 import { type Jwk, keyIdentity, verifyCompact } from "./jws.ts";
 
@@ -25,19 +25,17 @@ const jwkOf = (key: ReceiverKey, kid: string): Jwk =>
 
 /**
  * An object a signer set signs (JWS JSON General Serialization, as its JSON text), where enough of
- * the set signed it: the set read as the wire's and of the purpose, each signature verified with the
+ * the set signed it: the set (as `readSet` read it) of the purpose, each signature verified with the
  * set's key of its kid under the purpose's `typ`, each key counted once by its identity (one key
  * named under two kids is one signer). Answers its payload, a JSON object, or none. The same rule
  * as rp-kit's status reading, which this package does not depend on (sdk/README).
  */
 export async function readSetSigned(
 	text: string,
-	signers: unknown,
+	set: SignerSet,
 	purpose: SetPurpose,
 ): Promise<Record<string, unknown> | undefined> {
-	const given = schemas.signerSet.safeParse(signers);
-	if (!given.success || given.data.purpose !== purpose) return undefined;
-	const set = given.data;
+	if (set.purpose !== purpose) return undefined;
 	let envelope: unknown;
 	try {
 		envelope = JSON.parse(text);
@@ -61,9 +59,12 @@ export async function readSetSigned(
 	return signed.size >= set.required ? objectOf(payload) : undefined;
 }
 
-/** The identities of a set's keys, as given; none where the set does not read as the wire's. */
-export function setIdentities(signers: unknown): readonly string[] | undefined {
+/** A signer set read as the wire's: a copy of its own, so a caller's later change reaches nothing read; none otherwise. */
+export function readSet(signers: unknown): SignerSet | undefined {
 	const given = schemas.signerSet.safeParse(signers);
-	if (!given.success) return undefined;
-	return given.data.keys.map((entry) => keyIdentity(jwkOf(entry.key, entry.kid)) ?? "");
+	return given.success ? given.data : undefined;
 }
+
+/** The identities of a set's keys ("" for one with none). */
+export const setIdentities = (set: SignerSet): readonly string[] =>
+	set.keys.map((entry) => keyIdentity(jwkOf(entry.key, entry.kid)) ?? "");

@@ -1,6 +1,13 @@
 import { logTyps } from "@mod/transparency-wire";
 import { describe, expect, it } from "vitest";
-import { readSetSigned } from "../src/signed-set.ts";
+import { readSet, readSetSigned } from "../src/signed-set.ts";
+
+/** The set read as the screen reads it, then the object by it; a set that does not read gives none. */
+const readBy = async (text: string, signers: unknown, purpose: "status" | "stateOf") => {
+	const set = readSet(signers);
+	return set && readSetSigned(text, set, purpose);
+};
+
 import { signCompact, signingKey } from "./fixtures.ts";
 
 type Key = Awaited<ReturnType<typeof signingKey>>;
@@ -39,7 +46,7 @@ describe("readSetSigned", () => {
 			],
 			logTyps.status,
 		);
-		expect(await readSetSigned(text, set, "status")).toEqual({ x: 1 });
+		expect(await readBy(text, set, "status")).toEqual({ x: 1 });
 	});
 
 	it("counts one key named under two kids once, a signature of another typ none, and refuses a set of another purpose", async () => {
@@ -53,7 +60,7 @@ describe("readSetSigned", () => {
 			required: 2,
 		};
 		expect(
-			await readSetSigned(
+			await readBy(
 				await signed(
 					{ x: 1 },
 					[
@@ -74,7 +81,7 @@ describe("readSetSigned", () => {
 			required: 2,
 		};
 		expect(
-			await readSetSigned(
+			await readBy(
 				await signed(
 					{ x: 1 },
 					[
@@ -95,8 +102,8 @@ describe("readSetSigned", () => {
 			],
 			logTyps.status,
 		);
-		expect(await readSetSigned(text, { ...set, purpose: "stateOf" }, "status")).toBeUndefined();
-		expect(await readSetSigned(text, set, "stateOf")).toBeUndefined();
+		expect(await readBy(text, { ...set, purpose: "stateOf" }, "status")).toBeUndefined();
+		expect(await readBy(text, set, "stateOf")).toBeUndefined();
 	});
 
 	it("refuses fewer signers than required, and a text that is no set's signed object", async () => {
@@ -110,9 +117,9 @@ describe("readSetSigned", () => {
 			required: 2,
 		};
 		expect(
-			await readSetSigned(await signed({ x: 1 }, [[a, "a"]], logTyps.status), set, "status"),
+			await readBy(await signed({ x: 1 }, [[a, "a"]], logTyps.status), set, "status"),
 		).toBeUndefined();
 		for (const text of ["", "{", "[]", "{}", "a.b.c"])
-			expect(await readSetSigned(text, set, "status"), text).toBeUndefined();
+			expect(await readBy(text, set, "status"), text).toBeUndefined();
 	});
 });

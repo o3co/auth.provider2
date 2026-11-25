@@ -1,6 +1,6 @@
 import { credentialsOf } from "@mod/flow-state-wire";
 import { hpke, payloads } from "@mod/sdk-core-wire";
-import { type Receipt, schemas } from "@mod/transparency-wire";
+import { type Receipt, type SignerSet, schemas } from "@mod/transparency-wire";
 import { digest, utf8 } from "./bytes.ts";
 import { openCompletion } from "./completion.ts";
 import { creationOfPossession, type ReadPossession } from "./first-key.ts";
@@ -9,7 +9,7 @@ import { type Jwk, keyIdentity } from "./jws.ts";
 import type { ScreenKeys } from "./keys.ts";
 import { type Continued, wasSent } from "./management.ts";
 import { readLogReceipt } from "./receipt.ts";
-import { readSetSigned, setIdentities } from "./signed-set.ts";
+import { readSet, readSetSigned, setIdentities } from "./signed-set.ts";
 
 type KeyChange = ReturnType<typeof payloads.completions.keyChange.parse>;
 
@@ -70,13 +70,12 @@ export type KeyChangeError =
 
 /**
  * What a fetch may change, with the receipt read (its flow, position, shard and n name what to
- * fetch): no status, or the attached one not read (`status`); no stateOf, or the attached one not
- * read (`stateOf`); the record past the status's watermark (`notYetChecked`); a stateOf before the
- * record (`stateBehind`); a status or stateOf older than one this page already read for the same
- * change (`stale`). The caller fetches the one named from the log's source and reads again with it
- * in the checks, success never shown before.
+ * fetch): no status, the attached one not read, or one older than this page already read for the
+ * same change (`status`); the same of the stateOf (`stateOf`); the record past the status's
+ * watermark (`notYetChecked`); a stateOf before the record (`stateBehind`). The caller fetches the
+ * one named from the log's source and reads again with it in the checks, success never shown before.
  */
-export type KeyChangeRetry = "status" | "stateOf" | "notYetChecked" | "stateBehind" | "stale";
+export type KeyChangeRetry = "status" | "stateOf" | "notYetChecked" | "stateBehind";
 
 /** Refusals the log's own objects gave: they stay with the change, whatever is given later. */
 const final: readonly KeyChangeError[] = ["denied", "result", "state", "key"];
@@ -126,16 +125,58 @@ const sameChange = (a: KeyChange["change"], b: KeyChange["change"]) =>
 	a.credential_id === b.credential_id &&
 	(a.op === "add" ? b.op === "add" && a.key_jkt === b.key_jkt : true);
 
-/** The log inputs, held: a key list, both sets read as the wire's, finite times, and no key of the log's or the sets' one of the Core ring's (a Core holding both would sign its own proof). */
-function inputsHold(checks: Extract<KeyChangeChecks, { level: "log" }>, ring: readonly Jwk[]) {
-	const times = [checks.now, checks.skew, checks.maxAge];
-	if (!times.every(Number.isFinite) || checks.skew < 0 || checks.maxAge < 0) return false;
-	const status = setIdentities(checks.statusSigners);
-	const stateOf = setIdentities(checks.stateOfSigners);
-	if (checks.log.length === 0 || !status || !stateOf) return false;
+/** The log inputs as read: copies of their own, taken before anything is awaited. */
+interface LogInputs {
+	readonly log: readonly Jwk[];
+	readonly statusSigners: SignerSet;
+	readonly stateOfSigners: SignerSet;
+	readonly maxAge: number;
+	readonly now: number;
+	readonly skew: number;
+	readonly status?: string;
+	readonly stateOf?: string;
+}
+
+/**
+ * The log inputs, read: a list of log keys (copied), both sets read as the wire's (copies), finite
+ * times, and no key of the log's or the sets' one of the Core ring's (a Core holding both would sign
+ * its own proof); none otherwise.
+ */
+function logInputs(
+	given: Extract<KeyChangeChecks, { level: "log" }>,
+	ring: readonly Jwk[],
+): LogInputs | undefined {
+	const { now, skew, maxAge, status, stateOf } = given;
+	if (![now, skew, maxAge].every(Number.isFinite) || skew < 0 || maxAge < 0) return undefined;
+	if (!Array.isArray(given.log) || given.log.length === 0) return undefined;
+	let log: Jwk[];
+	try {
+		log = structuredClone(given.log) as Jwk[];
+	} catch {
+		return undefined;
+	}
+	const statusSigners = readSet(given.statusSigners);
+	const stateOfSigners = readSet(given.stateOfSigners);
+	if (!statusSigners || !stateOfSigners) return undefined;
+	if (typeof status !== "string" && status !== undefined) return undefined;
+	if (typeof stateOf !== "string" && stateOf !== undefined) return undefined;
 	const core = new Set(ring.map(keyIdentity).filter((id) => id !== undefined));
-	const theirs = [...checks.log.map((key) => keyIdentity(key) ?? ""), ...status, ...stateOf];
-	return theirs.every((id) => id !== "" && !core.has(id));
+	const theirs = [
+		...log.map((key) => keyIdentity(key) ?? ""),
+		...setIdentities(statusSigners),
+		...setIdentities(stateOfSigners),
+	];
+	if (!theirs.every((id) => id !== "" && !core.has(id))) return undefined;
+	return {
+		log,
+		statusSigners,
+		stateOfSigners,
+		maxAge,
+		now,
+		skew,
+		...(status === undefined ? {} : { status }),
+		...(stateOf === undefined ? {} : { stateOf }),
+	};
 }
 
 /**
@@ -149,9 +190,11 @@ function inputsHold(checks: Extract<KeyChangeChecks, { level: "log" }>, ring: re
  * now; (2) no older than `maxAge`; (3) a status its set signed covering the record, not denying it;
  * (4) a stateOf its set signed, of that flow, at or past the record, the record's result verified
  * or unsupported and took, its state (flow-state-wire's read) holding the key added, or not the one
- * deleted. The checks are copied before anything is awaited. A refusal the log's objects gave stays
- * with the change, and a status or stateOf older than one read before for it is `stale`, so no older
- * object, nor a source made again, undoes what was read.
+ * deleted. The checks and the ring are copied before anything is awaited. A refusal the log's
+ * objects gave stays with the change, and a status or stateOf older than one read before for it is
+ * fetched again, so no older object, no source made again, nor a read of the same change running
+ * beside this one, undoes what was read: what was read is merged into what the page holds, which is
+ * read again before success.
  */
 async function read(
 	source: KeyChangeSource,
@@ -169,22 +212,14 @@ async function read(
 > {
 	const given = options.checks;
 	if (given?.level !== "L0" && given?.level !== "log") return { error: "checks" };
-	const checks: KeyChangeChecks =
-		given.level === "L0"
-			? { level: "L0" }
-			: {
-					level: "log",
-					log: [...given.log],
-					statusSigners: given.statusSigners,
-					stateOfSigners: given.stateOfSigners,
-					maxAge: given.maxAge,
-					now: given.now,
-					skew: given.skew,
-					...(given.status === undefined ? {} : { status: given.status }),
-					...(given.stateOf === undefined ? {} : { stateOf: given.stateOf }),
-				};
-	const ring = [...options.ring];
-	if (checks.level === "log" && !inputsHold(checks, ring)) return { error: "checks" };
+	let ring: Jwk[];
+	try {
+		ring = structuredClone([...options.ring]) as Jwk[];
+	} catch {
+		return { error: "checks" };
+	}
+	const checks = given.level === "log" ? logInputs(given, ring) : undefined;
+	if (given.level === "log" && !checks) return { error: "checks" };
 	const want = await waited(source);
 	if (!want) return { error: "source" };
 	const opened = await openCompletion(sealed, {
@@ -199,15 +234,30 @@ async function read(
 	if (done.iss !== options.issuer) return { error: "issuer" };
 	if (done.purpose !== want.purpose) return { error: "purpose" };
 	if (!sameChange(done.change, want.change)) return { error: "change" };
-	if (checks.level === "L0") return { change: done.change };
+	if (!checks) return { change: done.change };
 
 	const name = `${want.purpose}|${want.h}|${want.change.op}|${want.change.credential_id}`;
-	const before = seen.get(name) ?? { statusVersion: 0, stateOfPosition: 0 };
-	if (before.refused) return { error: before.refused };
+	const held = () => seen.get(name) ?? { statusVersion: 0, stateOfPosition: 0 };
+	/** Merges what was read into what the page holds: a refusal kept, the newest version and position. */
+	const mark = (read: {
+		refused?: KeyChangeError;
+		statusVersion?: number;
+		stateOfPosition?: number;
+	}) => {
+		const now = held();
+		const refused = now.refused ?? read.refused;
+		seen.set(name, {
+			...(refused === undefined ? {} : { refused }),
+			statusVersion: Math.max(now.statusVersion, read.statusVersion ?? 0),
+			stateOfPosition: Math.max(now.stateOfPosition, read.stateOfPosition ?? 0),
+		});
+	};
 	const refuse = (error: KeyChangeError) => {
-		if (final.includes(error)) seen.set(name, { ...before, refused: error });
+		if (final.includes(error)) mark({ refused: error });
 		return { error };
 	};
+	const kept = held().refused;
+	if (kept) return { error: kept };
 
 	// (1) The receipt.
 	const receipt = done.receipt && (await readLogReceipt(done.receipt, checks.log));
@@ -229,12 +279,12 @@ async function read(
 	if (!statusRead?.success)
 		return checks.status === undefined ? { retry: "status", receipt } : { error: "status" };
 	const status = statusRead.data;
-	if (status.version < before.statusVersion) return { retry: "stale", receipt };
+	if (status.version < held().statusVersion) return { retry: "status", receipt };
+	mark({ statusVersion: status.version });
 	const shard = Object.hasOwn(status.shards, receipt.shard)
 		? status.shards[receipt.shard]
 		: undefined;
 	if (!shard || receipt.n > shard.watermark) return { retry: "notYetChecked", receipt };
-	seen.set(name, { ...before, statusVersion: status.version });
 	if (status.deny.includes(receipt.id)) return refuse("denied");
 	// (4) The stateOf, as the status.
 	const stateOfText = checks.stateOf ?? done.stateOf;
@@ -248,16 +298,21 @@ async function read(
 		return checks.stateOf === undefined ? { retry: "stateOf", receipt } : { error: "stateOf" };
 	const at = stateOfRead.data;
 	if (at.flow.of !== receipt.flow.of || at.flow.id !== receipt.flow.id) return { error: "flow" };
-	if (at.position < before.stateOfPosition) return { retry: "stale", receipt };
+	if (at.position < held().stateOfPosition) return { retry: "stateOf", receipt };
 	if (at.position < receipt.position) return { retry: "stateBehind", receipt };
-	seen.set(name, { ...before, statusVersion: status.version, stateOfPosition: at.position });
+	mark({ stateOfPosition: at.position });
 	const result = at.results[receipt.position - 1];
 	const verdicts: readonly string[] = ["verified", "unsupported"];
 	if (result?.id !== receipt.id || !verdicts.includes(result.verdict) || result.outcome !== "took")
 		return refuse("result");
-	const held = credentialsOf(at.state);
-	if (held === undefined) return refuse("state");
-	if (held.includes(want.change.credential_id) !== (want.change.op === "add")) return refuse("key");
+	const ids = credentialsOf(at.state);
+	if (ids === undefined) return refuse("state");
+	if (ids.includes(want.change.credential_id) !== (want.change.op === "add")) return refuse("key");
+	// A read of the same change beside this one may have been refused, or read newer, meanwhile.
+	const last = held();
+	if (last.refused) return { error: last.refused };
+	if (last.statusVersion > status.version) return { retry: "status", receipt };
+	if (last.stateOfPosition > at.position) return { retry: "stateOf", receipt };
 	return { change: done.change, receipt };
 }
 

@@ -351,8 +351,78 @@ describe("keyChanges.read: a delete", () => {
 		});
 		expect(await keyChanges.read(d.source, newer, d.options())).toHaveProperty("change");
 		expect(await keyChanges.read(d.source, await d.completion(), d.options())).toMatchObject({
-			retry: "stale",
+			retry: "status",
 		});
+		const newStatus = await d.completion({ status: await d.statusOf({ version: 3 }) });
+		expect(await keyChanges.read(d.source, newStatus, d.options())).toMatchObject({
+			retry: "stateOf",
+		});
+	});
+
+	it("keeps a refusal that a read of the same change beside this one gave, and remembers a status read before its watermark", async () => {
+		const d = await deleted();
+		// The same version: only the page's holding, read again before success, tells the two apart.
+		const denying = await d.completion({ status: await d.statusOf({ deny: ["rec-3"] }) });
+		const plain = await d.completion();
+		const [one, two] = await Promise.all([
+			keyChanges.read(d.source, plain, d.options()),
+			keyChanges.read(d.source, denying, d.options()),
+		]);
+		expect(two).toEqual({ error: "denied" });
+		expect(one).not.toHaveProperty("change");
+		expect(await keyChanges.read(d.source, plain, d.options())).toEqual({ error: "denied" });
+		const e = await deleted();
+		const unchecked = await e.completion({
+			status: await e.statusOf({
+				version: 5,
+				shards: { s1: { watermark: 4, generation: 1, state: "running" } },
+			}),
+		});
+		expect(await keyChanges.read(e.source, unchecked, e.options())).toMatchObject({
+			retry: "notYetChecked",
+		});
+		expect(await keyChanges.read(e.source, await e.completion(), e.options())).toMatchObject({
+			retry: "status",
+		});
+	});
+
+	it("reads the checks as they were given, whatever the caller changes while it reads", async () => {
+		const d = await deleted();
+		const sealed = await d.completion({
+			receipt: await d.receiptOf(d.h, d.made.sent.bodyHash, { acceptedAt: now - 120_000 }),
+		});
+		const statusSigners = setOf("status", [d.statusKey]);
+		const checks = { ...d.checks, statusSigners };
+		const reading = keyChanges.read(d.source, sealed, d.options(checks));
+		(checks as { now: number }).now = now - 100_000;
+		statusSigners.keys[0] = { kid: "status-1", key: publicOf(d.ring).key };
+		expect(await reading).toEqual({ error: "tooOld" });
+	});
+
+	it("keeps a refusal for the change whatever source is made again for it, and refuses a log that is no list", async () => {
+		const d = await deleted();
+		const sealed = await d.completion({
+			stateOf: await d.stateOfOf({ k1: { credential: "AQID" } }),
+		});
+		expect(await keyChanges.read(d.source, sealed, d.options())).toEqual({ error: "key" });
+		const again = await management.continuation(
+			d.read.manage,
+			"delete",
+			1,
+			{ credential_id: "AQID" },
+			d,
+		);
+		if ("error" in again) throw new Error(again.error);
+		expect(
+			await keyChanges.read({ delete: again.sent }, await d.completion(), d.options()),
+		).toEqual({ error: "key" });
+		expect(
+			await keyChanges.read(
+				d.source,
+				await d.completion(),
+				d.options({ ...d.checks, log: {} as never }),
+			),
+		).toEqual({ error: "checks" });
 	});
 
 	it("refuses a stateOf of another flow, where the record did not take, of a state unread, or still holding the key, and keeps refusing what the log's objects gave", async () => {
