@@ -121,26 +121,7 @@ export const requests = Object.freeze({
 	firstKeyStart: Object.freeze({ code: 0x06, fields: sealed }),
 	/** The mail's side, sealed as the start is (inside: the token, the identifier and the code). */
 	firstKeyMail: Object.freeze({ code: 0x07, fields: sealed }),
-	/** A registration's continuation: the creation statement, its sequence, the registration response and the screen's signature (r||s). */
-	firstKeyContinue: Object.freeze({
-		code: 0x08,
-		fields: Object.freeze([
-			source,
-			field("statement", "jws", 1, 4096),
-			field("seq", "enum", 1, 1, 16),
-			field("response", "utf8", 1, 8192),
-			field("sig", "bytes", 64, 64),
-		] as const),
-	}),
-	/** The first key's finish: the possession statement and the new key's assertion. */
-	firstKeyFinish: Object.freeze({
-		code: 0x09,
-		fields: Object.freeze([
-			source,
-			field("statement", "jws", 1, 4096),
-			field("assertion", "utf8", 1, 8192),
-		] as const),
-	}),
+	// 0x08 and 0x09 were the first key's old continuation and finish (now `continue` and `keyFinish`): not given again.
 	/**
 	 * A pushed authorization request (RFC 9126), from the client's server: the client's
 	 * authentication, its JAR (required: no parameter is pushed but inside it), and a DPoP proof
@@ -378,8 +359,6 @@ export const overHttp = Object.freeze({
 		}),
 		firstKeyStart: screen("/first-key/start", "sealed"),
 		firstKeyMail: screen("/first-key/mail", "statement"),
-		firstKeyContinue: screen("/first-key/continue", "statement"),
-		firstKeyFinish: screen("/first-key/finish", "sealed"),
 		par: Object.freeze({
 			path: "/oauth/par",
 			body: "form",
