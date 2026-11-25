@@ -20,6 +20,13 @@ export {
 } from "./first-key.ts";
 export type { Sealed } from "./hpke.ts";
 export type { Jwk } from "./jws.ts";
+export {
+	type KeyChangeChecks,
+	type KeyChangeError,
+	type KeyChangeRetry,
+	type KeyChangeSource,
+	keyChanges,
+} from "./key-changes.ts";
 export { type ScreenKeys, screenKeys } from "./keys.ts";
 export { management, type ReadManage } from "./management.ts";
 export {

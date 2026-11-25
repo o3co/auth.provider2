@@ -293,7 +293,12 @@ export interface ReadPossession {
 	/** The RP id the creation named, which the new key's `get()` is asked for. */
 	readonly rpId: string;
 }
-const possessions = new WeakSet<ReadPossession>();
+/** Each possession read here, with the creation it names. */
+const possessions = new WeakMap<ReadPossession, ReadCreation>();
+
+/** The creation a possession read here names; none for one made elsewhere. Not offered: for this package's next steps. */
+export const creationOfPossession = (possession: ReadPossession): ReadCreation | undefined =>
+	possessions.get(possession);
 
 /**
  * The possession read before the new key's `get()`: a statement of its purpose naming this creation,
@@ -329,7 +334,7 @@ async function readPossession(
 		compact,
 		rpId: creation.statement.creation.options.rp_id,
 	});
-	possessions.add(held);
+	possessions.set(held, creation);
 	return { possession: held };
 }
 

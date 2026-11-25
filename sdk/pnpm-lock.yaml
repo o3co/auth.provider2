@@ -23,6 +23,9 @@ importers:
 
   packages/login-screen:
     dependencies:
+      '@mod/flow-state-wire':
+        specifier: link:../../../modules/wire/flow-state-wire
+        version: link:../../../modules/wire/flow-state-wire
       '@mod/sdk-core-wire':
         specifier: link:../../../modules/wire/sdk-core-wire
         version: link:../../../modules/wire/sdk-core-wire

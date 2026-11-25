@@ -147,6 +147,9 @@ export interface Continued {
 }
 const sent = new WeakSet<Continued>();
 
+/** Whether `continuation` sent this one. Not offered: for this package's key change reading. */
+export const wasSent = (continuation: Continued): boolean => sent.has(continuation);
+
 /**
  * A delete's or a rename's continuation (V24): its body, of its stage's shape, signed with E_sig over
  * the plaintext body's hash (`continuation.of`, as every stage), and the body with its signature
