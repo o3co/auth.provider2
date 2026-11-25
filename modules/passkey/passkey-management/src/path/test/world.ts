@@ -14,7 +14,7 @@ import { continuations } from "@mod/continuation-wire";
 import { type Route, routes } from "@mod/http";
 import { testRequest } from "@mod/http/testing";
 import { issuer } from "@mod/issuer";
-import { assemble, contract, defineModule, kernelConfig } from "@mod/kernel";
+import { assemble, contract, defineModule, kernelConfig, Unavailable } from "@mod/kernel";
 import { quietRuntime, recordingLog } from "@mod/kernel/testing";
 import { keys } from "@mod/keys";
 import keysModule from "@mod/keys/module";
@@ -214,9 +214,14 @@ export async function firstKeyWorld() {
 	const recorded = recordingLog();
 	// Each removal passkeys' settle tells, as a contributor (refresh, in a deployment) hears it.
 	const told: (readonly [string, string, boolean])[] = [];
+	let falls = 0;
 	const removals = defineModule({ name: "removals", replicaSafe: true, takes: [] }, (m) => [
 		m.contribute(passkeyRemovals).by(() => ({
 			removed: async (subject: string, credential: string, emptied: boolean) => {
+				if (falls > 0) {
+					falls--;
+					throw new Unavailable("removals");
+				}
 				told.push([subject, credential, emptied]);
 			},
 		})),
@@ -262,6 +267,10 @@ export async function firstKeyWorld() {
 		sent,
 		recorded,
 		told,
+		/** The next removal told fails, as a contributor whose store cannot tell. */
+		failRemovalOnce: () => {
+			falls = 1;
+		},
 		statements,
 		corePoint: pointOf(core),
 		/** The next mail sent, once its job ran. */

@@ -66,24 +66,28 @@ export async function keyFlow() {
 	const book = logBook(() => clock);
 	const log = book.as("w1");
 	const credentials = memoryCredentials();
-	const writer = defineModule({ name: "writer", replicaSafe: true, takes: [] }, (m) => [
-		m.provide(frameStore).by(() => frames.frames),
-		m.provide(transparencyLog).by(() => log),
-		m.provide(passkeyStore).by(() => credentials),
-		m.contribute(operationKinds).by(() => keyChangeKind),
-		m.contribute(stateOwners).by(() => otherOwner("grants", ["approvals", "consumed"])),
-		m.contribute(stateOwners).by(() => otherOwner("families", ["families"])),
-		m.contribute(stances).by(() => ({
-			promise: "front-compromise-new-authorization",
-			holds: true,
-			by: "writer",
-		})),
-	]);
-	const app = await assemble({
-		modules: [writer, transparencyModule, webauthnModule, passkeysModule],
-		config: { ...kernelConfig(), ...webauthnConfig(), passkeys: {} },
-		runtime: quietRuntime({ clock: { now: () => clock } }),
-	});
+	/** One replica: its own composition over the shared frames, credentials and log, appending as `instance`. */
+	const replicaAs = (instance: string) =>
+		assemble({
+			modules: [writerAs(instance), transparencyModule, webauthnModule, passkeysModule],
+			config: { ...kernelConfig(), ...webauthnConfig(), passkeys: {} },
+			runtime: quietRuntime({ clock: { now: () => clock } }),
+		});
+	const writerAs = (instance: string) =>
+		defineModule({ name: "writer", replicaSafe: true, takes: [] }, (m) => [
+			m.provide(frameStore).by(() => frames.frames),
+			m.provide(transparencyLog).by(() => (instance === "w1" ? log : book.as(instance))),
+			m.provide(passkeyStore).by(() => credentials),
+			m.contribute(operationKinds).by(() => keyChangeKind),
+			m.contribute(stateOwners).by(() => otherOwner("grants", ["approvals", "consumed"])),
+			m.contribute(stateOwners).by(() => otherOwner("families", ["families"])),
+			m.contribute(stances).by(() => ({
+				promise: "front-compromise-new-authorization",
+				holds: true,
+				by: "writer",
+			})),
+		]);
+	const app = await replicaAs("w1");
 	const regs = await app.get(registrations);
 	const cer = await app.get(ceremonies);
 	const auth = softwareAuthenticator();
@@ -124,6 +128,8 @@ export async function keyFlow() {
 		verified,
 		transparency: await app.get(transparency),
 		passkeys: await app.get(passkeys),
+		/** Another replica's transparency, under another instance name than `w1`, over the same frames, credentials and log. */
+		replica: async (instance: string) => (await replicaAs(instance)).get(transparency),
 		/** Moves the composition's clock and the store's with it. */
 		advance: (ms: number) => {
 			clock += ms;

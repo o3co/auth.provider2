@@ -19,8 +19,11 @@ type Started = Awaited<ReturnType<typeof withFirstKey>>;
 type Screen = Awaited<ReturnType<typeof screen>>;
 const utf8 = (text: string) => new TextEncoder().encode(text);
 
-/** A passkey-manage approved by alice's key, and the list its finish answers, opened. */
-async function approved(k: Started) {
+/** A passkey-manage approved by one of alice's keys, her first unless told, and the list its finish answers, opened. */
+async function approved(
+	k: Started,
+	by: { auth: Started["auth"]; id: string } = { ...k, id: k.key.id },
+) {
 	const s = await screen();
 	const started = await k.w.post("/approval/start", {
 		purpose: "passkey-manage",
@@ -31,7 +34,7 @@ async function approved(k: Started) {
 	const statement = started.json.statement as string;
 	const request = k.cer.request(sha256(challengeInput(statement, "get")), [], "required");
 	const assertion = JSON.stringify(
-		k.auth.get(request as never, { origin: testOrigin }, {}, k.key.id),
+		by.auth.get(request as never, { origin: testOrigin }, {}, by.id),
 	);
 	const finished = await k.w.post("/approval/finish", { statement, assertion });
 	expect(finished.status).toBe(200);
@@ -88,7 +91,7 @@ async function deleting(k: Started, s: Screen, statement: string, seq: number, c
 	return { statement, stage: "delete", seq: String(seq), enc: b64(box.enc), ct: b64(box.ct) };
 }
 
-/** A second key of alice's, added by a passkey-add her first key approves, over the routes. */
+/** A second key of alice's, added by a passkey-add her first key approves, over the routes; and its authenticator. */
 async function added(k: Started) {
 	const s = await screen();
 	const started = await k.w.post("/approval/start", {
@@ -106,11 +109,12 @@ async function added(k: Started) {
 	const aad = hpke.completionAad("passkey-add", sha256(statement));
 	const done = await opened(s, finished.json.sealed as never, hpke.info.completion, aad);
 	const creation = payloadOf(hpke.unpaddedCompletion(done ?? "") ?? "").creation as string;
-	const r = await register(k.w, s, creation, softwareAuthenticator());
+	const auth = softwareAuthenticator();
+	const r = await register(k.w, s, creation, auth);
 	expect(
 		(await k.w.post("/key/finish", { statement: r.possession, assertion: r.assertion })).status,
 	).toBe(200);
-	return r.key;
+	return { id: r.key.id, auth };
 }
 
 const keysOf = (k: Started) =>
@@ -299,6 +303,92 @@ describe("a key deleted by a passkey-manage, from the approval to the log, over 
 			change: { op: "delete", credential_id: second.id },
 		});
 		expect(k.w.book.records(flow)).toHaveLength(placed);
+		await k.w.app.stop();
+	});
+});
+
+describe("a key deleted, at its edges", () => {
+	it("answers `last` exactly where the rules refuse the same deletion, and takes it where they allow it", async () => {
+		const k = await withFirstKey();
+		const alone = { ...emptyState, keys: keysOf(k) } as FlowState;
+		const m = await approved(k);
+		const last = await k.w.post("/continue", await deleting(k, m.s, m.statement, 1, k.key.id));
+		expect((await read(m.s, m.hash, last.json)).payload).toMatchObject({
+			continued: { stage: "delete", refused: "last" },
+		});
+		await added(k);
+		const both = { ...emptyState, keys: keysOf(k) } as FlowState;
+		// The same deletion, by the same key, once another is live.
+		const n = await approved(k);
+		const taken = await k.w.post("/continue", await deleting(k, n.s, n.statement, 1, k.key.id));
+		expect((await read(n.s, n.hash, taken.json)).payload).toMatchObject({
+			change: { op: "delete", credential_id: k.key.id },
+		});
+		const stage = k.w.book.sent.at(-1)?.stage as Stage;
+		const askOf = await rulesOf(k.w);
+		expect(allowed(askOf(stage, both))).toEqual({ allowed: true });
+		expect(allowed(askOf(stage, alone))).toEqual({
+			allowed: false,
+			reason: "the flow's last key is not deleted: a reset, a denial or an erasure takes it",
+		});
+		await k.w.app.stop();
+	});
+
+	it.each([
+		["first", [0, 1]],
+		["second", [1, 0]],
+	])(
+		"takes one of two self-deletes racing, the %s sent first, the other answered `last`",
+		async (_, order) => {
+			const k = await withFirstKey();
+			const second = await added(k);
+			const by = [{ ...k, id: k.key.id }, second];
+			const approvals = [await approved(k, by[0]), await approved(k, by[1])];
+			const fields = await Promise.all(
+				approvals.map((m, i) => deleting(k, m.s, m.statement, 1, by[i]?.id as string)),
+			);
+			// Both sealed before either is posted; the posts then run together.
+			const posted: Promise<Awaited<ReturnType<typeof k.w.post>>>[] = [];
+			for (const i of order) posted[i] = k.w.post("/continue", fields[i] ?? {});
+			// Answered in the approvals' order, whichever was sent first.
+			const answered = await Promise.all(posted);
+			expect(answered.map((x) => x?.status)).toEqual([200, 200]);
+			const answers = await Promise.all(
+				approvals.map(async (m, i) => (await read(m.s, m.hash, answered[i]?.json ?? {})).payload),
+			);
+			const outcomes = answers.map((x) => x.change?.op ?? x.continued?.refused);
+			expect([...outcomes].sort()).toEqual(["delete", "last"]);
+			// The key left is the one whose deletion was answered `last`.
+			const loser = outcomes.indexOf("last");
+			expect(Object.values(keysOf(k)).map((x) => x.credential)).toEqual([by[loser]?.id]);
+			await k.w.app.stop();
+		},
+	);
+
+	it("keeps nothing where telling the removal failed after the deletion took, and tells it on the retry", async () => {
+		const k = await withFirstKey();
+		const second = await added(k);
+		const m = await approved(k);
+		const fields = await deleting(k, m.s, m.statement, 1, second.id);
+		k.w.failRemovalOnce();
+		await expect(k.w.post("/continue", fields)).rejects.toThrow(/unavailable/);
+		const flow = { of: "subject", id: "s1" } as const;
+		const placed = k.w.book.records(flow).length;
+		expect(Object.values(keysOf(k)).map((x) => x.credential)).toEqual([k.key.id]);
+		expect(k.w.told).toEqual([]);
+		k.w.advance(30_001);
+		const again = await k.w.post("/continue", fields);
+		const answer = (await read(m.s, m.hash, again.json)).payload;
+		expect(answer).toMatchObject({
+			change: { op: "delete", credential_id: second.id },
+			receipt: expect.any(String),
+		});
+		expect(k.w.told).toEqual([["s1", second.id, false]]);
+		// The one record placed before: the retry answers it, the next post the same, and tells nothing again.
+		expect(k.w.book.records(flow)).toHaveLength(placed);
+		const third = await k.w.post("/continue", fields);
+		expect((await read(m.s, m.hash, third.json)).payload).toEqual(answer);
+		expect(k.w.told).toHaveLength(1);
 		await k.w.app.stop();
 	});
 });

@@ -5,6 +5,8 @@ import { describe, expect, it } from "vitest";
 import { openSealed, screenKeys, sha256, world } from "../../../test/fixtures/world.ts";
 
 type World = Awaited<ReturnType<typeof world>>;
+const utf8 = (text: string) => new TextEncoder().encode(text);
+const b64 = (bytes: Uint8Array) => Buffer.from(bytes).toString("base64url");
 const payloadOf = (jws: string) =>
 	JSON.parse(Buffer.from(jws.split(".")[1] ?? "", "base64url").toString("utf8"));
 
@@ -313,6 +315,102 @@ describe("a passkey-manage's completion", () => {
 				continued: { ...base, credential: "other", receipt: "h.p.s" },
 			}),
 		).toEqual({ kind: "refused", reason: "continued" });
+	});
+
+	it("fits a delete's answer, its target's ID the longest, a long receipt and the issuer at the wire's limit, in the larger bucket, taken or not", async () => {
+		const { issuerChars } = hpke.completionLimits;
+		const iss = `https://${"a".repeat(issuerChars - 8)}`;
+		const w = await world({ issuer: iss });
+		const { a, keys, key } = await used(w);
+		// The key it names is not the subject's: its size is kept with the number all the same.
+		const long = Buffer.alloc(1023, 7).toString("base64url");
+		const body = { credential_id: long };
+		const bodyHash = sha256(continuations.bodyText("delete", body) as string);
+		const sig = keys.signs(continuations.of("delete", a.hash, 1, bodyHash));
+		const box = await w.keys.seal(
+			w.corePoint,
+			hpke.info.continuation,
+			utf8(continuations.aad("delete", a.hash, 1)),
+			utf8(continuations.plainOf("delete", body, sig) as string),
+		);
+		// A receipt as the log signs one, long: a header, a payload and an RSA 8192 signature.
+		const receipt = `${"h".repeat(200)}.${"p".repeat(1200)}.${"s".repeat(1366)}`;
+		const continued = { stage: "delete", seq: 1, bodyHash } as const;
+		const label = "😀".repeat(64);
+		const planted: string[] = [];
+		const answers: Awaited<ReturnType<typeof w.approvals.completePasskeyManage>>[] = [];
+		const done = await w.approvals.continueSealed({
+			hash: a.hash,
+			stage: "delete",
+			seq: 1,
+			sealed: { enc: b64(box.enc), ct: b64(box.ct) },
+			step: async (_, opened) => {
+				answers.push(
+					await w.approvals.completePasskeyManage({
+						hash: a.hash,
+						continued: { ...continued, credential: long, receipt },
+					}),
+				);
+				// Not taken over the subject's one short key: the size its number kept lifts it alike.
+				answers.push(
+					await w.approvals.completePasskeyManage({
+						hash: a.hash,
+						continued: { ...continued, refused: "unknown" },
+					}),
+				);
+				// Not taken, over sixteen keys of the longest ID and label.
+				const flow = { of: "subject", id: "s1" } as const;
+				const where = { part: "passkeys", name: "keys" } as const;
+				const held = w.frames.value(flow, where) as { keys: Record<string, object> };
+				const record = w.credentials.kept.get(key.id) as unknown as { details: object };
+				const many: Record<string, object> = {};
+				for (let i = 0; i < 16; i++) {
+					const id = Buffer.alloc(1023, i + 8).toString("base64url");
+					planted.push(id);
+					many[`r${i}`] = { ...held.keys.r0, credential: id };
+					const details = { ...record.details, label };
+					w.credentials.kept.set(id, { ...record, details } as never);
+				}
+				w.frames.put(flow, where, { ...held, keys: many } as never);
+				answers.push(
+					await w.approvals.completePasskeyManage({
+						hash: a.hash,
+						continued: { ...continued, refused: "unknown" },
+					}),
+				);
+				return { hash: opened.bodyHash };
+			},
+		});
+		expect(done).toMatchObject({ kind: "continued", seq: 1 });
+		const [taken, short, kept] = answers;
+		if (taken?.kind !== "completed") throw new Error("not taken");
+		const text = openSealed(
+			keys.encKey,
+			taken,
+			hpke.info.completion,
+			hpke.completionAad("passkey-manage", a.hash),
+		);
+		expect(text).toHaveLength(hpke.completionBuckets[1]);
+		const jws = hpke.unpaddedCompletion(text) as string;
+		expect(await w.keys.verify("core", jws, typs.completion)).toMatchObject({ kind: "valid" });
+		const change = payloadOf(jws);
+		expect(payloads.completions.keyChange.safeParse(change).success).toBe(true);
+		expect(change).toMatchObject({ iss, change: { op: "delete", credential_id: long }, receipt });
+		if (short?.kind !== "completed") throw new Error("short not answered");
+		const one = await opened(w, keys, a.hash, short);
+		expect(one.length).toBe(hpke.completionBuckets[1]);
+		expect(one.payload.keys).toEqual([expect.objectContaining({ credential_id: key.id })]);
+		if (kept?.kind !== "completed") throw new Error("sixteen not answered");
+		const list = await opened(w, keys, a.hash, kept);
+		expect(list.length).toBe(hpke.completionBuckets[1]);
+		expect(list.payload.continued).toMatchObject({ stage: "delete", seq: 1, refused: "unknown" });
+		expect(list.payload.iss).toBe(iss);
+		const rows = list.payload.keys as { credential_id: string; label: string }[];
+		expect(rows.map((x) => x.credential_id).sort()).toEqual([...planted].sort());
+		for (const row of rows) {
+			expect(row.credential_id).toHaveLength(1364);
+			expect(row.label).toBe(label);
+		}
 	});
 
 	it("names no continuation but the one its record took and holds unanswered", async () => {

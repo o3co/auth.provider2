@@ -125,6 +125,34 @@ describe("a key deleted's change", () => {
 		expect(await removed(d)).toEqual({ kind: "took", receipts: ["h.p.s"] });
 	});
 
+	it("is placed by another replica's tend where its writer fell after deciding, and answered from the log", async () => {
+		const { w, first, second, r2, deleting } = await twoKeys();
+		const d = deleting(first.credential, { credential: second.credential, registration: r2 });
+		// Decided, its stage kept beside its op, then the writer gone before it sent.
+		const gone = writer({
+			...w,
+			transparency: {
+				...w.transparency,
+				send: async () => {
+					throw new Error("gone");
+				},
+			},
+		});
+		await expect(gone.remove(d)).rejects.toThrow("gone");
+		expect(await writer(w).removed(d)).toEqual({ kind: "none" });
+		// Past the 5s lease the store's clock holds, the other replica takes it over and resends the stage it kept.
+		w.advance(6_000);
+		const w2 = await w.replica("w2");
+		const placed = w.book.sent.length;
+		expect(await w2.tend(flow)).toMatchObject({ did: "tookOver", answer: { result: "accepted" } });
+		expect(w.book.sent.slice(placed).map((x) => x.instance)).toEqual(["w2"]);
+		expect(await w2.tend(flow)).toEqual({ stepped: 1 });
+		expect(keysOf(w)).toEqual([r2]);
+		const after = writer(w);
+		expect(await after.removed(d)).toEqual({ kind: "took", receipts: ["h.p.s"] });
+		expect(after.settled).toEqual(["s1"]);
+	});
+
 	it("deletes the approving key itself while another is left", async () => {
 		const { w, second, r1, r2, deleting, first } = await twoKeys();
 		const { remove } = writer(w);
