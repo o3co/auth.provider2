@@ -138,6 +138,16 @@ export interface ReadCreation {
 const creations = new WeakSet<ReadCreation>();
 
 /**
+ * A creation another path read (passkey-add's, `management.finish`), made a `ReadCreation` so the
+ * same next steps take it. Not offered: only a reader that held the creation to its path makes one.
+ */
+export function creationOf(statement: CreationPayload, compact: string): ReadCreation {
+	const creation: ReadCreation = deepFreeze({ statement, compact });
+	creations.add(creation);
+	return creation;
+}
+
+/**
  * The creation read before `create()`: a statement of its purpose, of the first key's path (no
  * `basis`, or `first-key`; §C.3), its evidence and ciphertext hash exactly the screen's own for the
  * mail it sealed. Another's would mean the Front rewrapped another token or request to the screen's
@@ -158,9 +168,7 @@ async function readCreation(
 	if (basis !== undefined && basis !== "first-key") return { error: "basis" };
 	if (read.statement.creation.evidence !== sent.evidence) return { error: "evidence" };
 	if (read.statement.creation.ct_hash !== sent.ctHash) return { error: "ciphertext" };
-	const creation: ReadCreation = deepFreeze({ statement: read.statement, compact });
-	creations.add(creation);
-	return { creation };
+	return { creation: creationOf(read.statement, compact) };
 }
 
 const credentialsOf = (ids: readonly string[]) => {

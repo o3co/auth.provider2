@@ -13,12 +13,14 @@ const schemas = {
 	authorization: payloads.statement,
 	creation: payloads.creation,
 	possession: payloads.possession,
+	"passkey-add": payloads.passkeyAdd,
 	"passkey-manage": payloads.passkeyManage,
 } as const;
 interface ByPurpose {
 	readonly authorization: StatementPayload;
 	readonly creation: CreationPayload;
 	readonly possession: PossessionPayload;
+	readonly "passkey-add": ReturnType<typeof payloads.passkeyAdd.parse>;
 	readonly "passkey-manage": ReturnType<typeof payloads.passkeyManage.parse>;
 }
 export type Purpose = keyof ByPurpose;
