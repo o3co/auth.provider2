@@ -143,7 +143,7 @@ export function starting(p: StartParts) {
 		if (resource !== undefined) {
 			if (!p.targets)
 				return answerOf(400, {
-					error: "invalid_request_object",
+					error: "invalid_target",
 					description: "resource is read by no rule here",
 				});
 			const verdict = p.targets.target({
@@ -157,7 +157,7 @@ export function starting(p: StartParts) {
 				verdict.audience[0] !== resource
 			)
 				return answerOf(400, {
-					error: "invalid_request_object",
+					error: "invalid_target",
 					description:
 						verdict.kind === "error" ? verdict.description : "resource is not the audience asked",
 				});

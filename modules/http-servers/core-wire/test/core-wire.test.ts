@@ -102,17 +102,25 @@ describe("core-wire", () => {
 			jsonAnswer(503, { error: "service_unavailable" }),
 			{ status: 201 },
 			jsonAnswer(400, { error: "made_up" }),
+			// RFC 8707's word, the token endpoint's answer to a resource it issues for no audience.
+			jsonAnswer(400, { error: "invalid_target", error_description: "one resource at most" }),
 		];
 		const app = await started([token(() => answers.shift() ?? { status: 500 })]);
 		const front = await client(app.port);
 		const messages = [];
-		for (const id of [1, 2, 3, 4])
+		for (const id of [1, 2, 3, 4, 5])
 			messages.push((await front.send("token", id, tokenMessage())).message);
 		expect(messages).toEqual([
 			{ error: word("invalid_grant"), detail: "used once", dpopNonce: "", retryAfter: "" },
 			{ error: word("temporarily_unavailable"), detail: "", dpopNonce: "", retryAfter: "" },
 			{ error: word("server_error"), detail: "", dpopNonce: "", retryAfter: "" },
 			{ error: word("server_error"), detail: "", dpopNonce: "", retryAfter: "" },
+			{
+				error: word("invalid_target"),
+				detail: "one resource at most",
+				dpopNonce: "",
+				retryAfter: "",
+			},
 		]);
 		expect(app.lines().filter((l) => l.event === "core-wire.unrelayable")).toHaveLength(2);
 	});

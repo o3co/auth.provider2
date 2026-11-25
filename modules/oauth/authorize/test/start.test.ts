@@ -449,7 +449,7 @@ describe("a login's start (②)", () => {
 		const unruled = harness();
 		expect(await unruled.body(unruled.fields(jar(claims({ resource: api }))))).toMatchObject({
 			json: {
-				error: "invalid_request_object",
+				error: "invalid_target",
 				error_description: "resource is read by no rule here",
 			},
 		});
@@ -459,7 +459,7 @@ describe("a login's start (②)", () => {
 			await ruled.body(ruled.fields(jar(claims({ jti: "j9", resource: "https://elsewhere" })))),
 		).toMatchObject({
 			json: {
-				error: "invalid_request_object",
+				error: "invalid_target",
 				error_description: "resource is not an audience this client may be issued",
 			},
 		});
@@ -494,7 +494,7 @@ describe("a login's start (②)", () => {
 		const refusedFor = async (resource: string, jti: string) =>
 			((await h.body(h.fields(jar(claims({ jti, resource }))))) as { json: unknown }).json;
 		expect(await refusedFor("api.example", "r1")).toMatchObject({
-			error: "invalid_request_object",
+			error: "invalid_target",
 			error_description: "resource is not an absolute URI",
 		});
 		expect(await refusedFor("https://api.example#f", "r2")).toMatchObject({

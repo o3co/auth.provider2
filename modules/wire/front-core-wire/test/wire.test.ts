@@ -72,7 +72,9 @@ describe("the frame and its answers", () => {
 		expect([code("invalid_request"), code("server_error"), code("too_many_attempts")]).toEqual([
 			1, 11, 13,
 		]);
-		expect([code("login_required"), code("invalid_request_uri")]).toEqual([14, 15]);
+		expect([code("login_required"), code("invalid_request_uri"), code("invalid_target")]).toEqual([
+			14, 15, 16,
+		]);
 	});
 
 	it("holds every word frozen", () => {
