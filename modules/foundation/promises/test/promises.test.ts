@@ -238,6 +238,16 @@ describe("the first key's evidence kinds, apart from the judgment", () => {
 		).toEqual(["kind-0", "kind-1", "kind-2", "old-password"]);
 	});
 
+	it("says, on a kind's line, that a key may have been bound by it alone", async () => {
+		const alone = { ...inbox, alone: true as const };
+		const { app, recorded } = await judged([evidencing("parts", alone)]);
+		expect(app.get(evidence).kinds()).toEqual([alone]);
+		await app.start();
+		const line = recorded.lines().find((l) => l.event === "promises.evidence");
+		expect(line?.fields).toMatchObject({ kind: inbox.kind, alone: true });
+		await app.stop();
+	});
+
 	it("keeps a required promise held, and boots, beside the weakest evidence", async () => {
 		const holding = declaring("tokens", {
 			promise: promiseNames.clientToken,
@@ -332,6 +342,11 @@ describe("the first key's evidence kinds, apart from the judgment", () => {
 				[at("password", "strength.guesses.count")],
 			],
 			["a blank name", [evidencing("a", { ...password, kind: " " })], [at(" ", "kind")]],
+			[
+				"alone not true",
+				[evidencing("a", { ...password, alone: false as never })],
+				[at("password", "alone")],
+			],
 			[
 				"a blank module",
 				[evidencing("a", { ...password, by: "" }, { ...inbox, by: "" })],

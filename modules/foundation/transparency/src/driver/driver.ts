@@ -98,6 +98,8 @@ export function transparencyOver(p: {
 	/** A client's op: its flow is unconditional, holds no state, and its records lie among other ops'. */
 	const perOp = (unit: IntentUnit) => "op" in unit;
 	const notSubject = { refused: "notSubject" } as const;
+	/** A previous position no flow's head ever reaches. */
+	const neverAHead = Number.MAX_SAFE_INTEGER;
 	const atNow = (now: number): At => ({
 		replica: log.writer.instance,
 		generation: log.writer.generation,
@@ -504,6 +506,21 @@ export function transparencyOver(p: {
 		},
 		async reset(q) {
 			return { answer: await log.reset(q.instruction) };
+		},
+		async receiptOf(q) {
+			// A subject's flow alone: an unconditional append names no previous position to hold it back.
+			if (q.flow.of !== "subject") return notSubject;
+			const { stage } = q;
+			if (stage.op !== q.op || stage.flow.of !== q.flow.of || stage.flow.id !== q.flow.id)
+				throw new TypeError("a stage asked again names another op or flow");
+			// Read first, writing nothing: an op of no stage on the log is not asked of it at all.
+			if ((await log.of(q.flow, q.op)).stages === 0) return { refused: "unplaced" as const };
+			// After a position no head reaches: the log answers the same id as first placed before it
+			// reads the position, and refuses any stage it does not hold, so this never places one.
+			const answer = await log.append(stage, neverAHead);
+			if (answer.result === "refused" && answer.refusal === "prevMismatch")
+				return { refused: "unplaced" as const };
+			return { answer };
 		},
 		async changeHeld(q) {
 			const kind = kinds.get(q.kind);

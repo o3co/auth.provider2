@@ -1,7 +1,13 @@
 import { isUnavailable, Unavailable } from "@mod/kernel";
 import { describe, expect, it } from "vitest";
 import type { Verified } from "../../contract.ts";
-import { failedChecksWithin, identifierWaits, queueBound, type WaitRules } from "../waits.ts";
+import {
+	failedChecksWithin,
+	fullTelling,
+	identifierWaits,
+	queueBound,
+	type WaitRules,
+} from "../waits.ts";
 
 const rules: WaitRules = { after: 2, firstMs: 1000, longestMs: 4000, forgetMs: 60_000 };
 const none: Verified = { kind: "none" };
@@ -205,6 +211,39 @@ describe("failedChecksWithin", () => {
 
 	it("counts a run of no waits without stepping through it", () => {
 		expect(failedChecksWithin({ ...rules, after: 1_000_000_000 })).toBeGreaterThan(1_000_000_000);
+	});
+});
+
+describe("a full table told", () => {
+	it("tells of each identifier refused because every one held keeps failures, and of none else", async () => {
+		let told = 0;
+		const clock = { at: 0 };
+		const timing = { now: () => clock.at, pause: async () => {} };
+		const waits = identifierWaits(rules, timing, 1, () => told++);
+		await waits.run("alice", async () => none);
+		await expect(waits.run("bob", async () => none)).rejects.toSatisfy(isUnavailable);
+		await expect(waits.run("carol", async () => none)).rejects.toSatisfy(isUnavailable);
+		clock.at += rules.forgetMs;
+		await waits.run("dave", async () => none);
+		expect(told).toBe(2);
+	});
+
+	it("counts each refusal, and writes at most once in its time", () => {
+		const clock = { at: 0 };
+		const counted: number[] = [];
+		const written: number[] = [];
+		const full = fullTelling({
+			count: () => counted.push(clock.at),
+			write: () => written.push(clock.at),
+			now: () => clock.at,
+			everyMs: 1000,
+		});
+		for (const at of [0, 10, 999, 1000, 1500, 2100]) {
+			clock.at = at;
+			full();
+		}
+		expect(counted).toHaveLength(6);
+		expect(written).toEqual([0, 1000, 2100]);
 	});
 });
 

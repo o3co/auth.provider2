@@ -10,6 +10,7 @@ import type {
 	Approval,
 	ApprovalStore,
 	Completed,
+	CreationRecord,
 	IssueAsk,
 	Issued,
 	ItemsOf,
@@ -53,6 +54,8 @@ const recordShape = z
 		enc: id.optional(),
 		/** The digest of the code its completion carries. */
 		code: id.optional(),
+		/** The path's purpose a possession's key-change completion was asked for. */
+		asked: z.enum(["first-key", "passkey-add"]).optional(),
 		/** The id of the approval's record on the subject's flow, which the code's chain roots in. */
 		record: id.optional(),
 		/** That record's reference on the log, its shard and number. */
@@ -301,24 +304,38 @@ export function statementsOver(p: StatementParts) {
 			: undefined;
 	}
 
+	/** A creation's record as kept, while its statement lives and this generation's ring verifies it; none for any other purpose. */
+	async function creationOf(hash: string): Promise<CreationRecord | undefined> {
+		const r = recordOf(await p.store.read(hash));
+		if (r?.purpose !== "creation" || p.now() > r.exp) return undefined;
+		// Signed by the Core's ring of this generation alone, as a use takes a statement.
+		if (!(await current(p.keys, r.jws))) return undefined;
+		const items = itemsIn(r.jws, "creation") as ItemsOf["creation"];
+		return { statement: r.jws, items, screen: { eEnc: r.e_enc, eSig: r.e_sig } };
+	}
+
 	async function completionOf(hash: string) {
 		const r = recordOf(await p.store.read(hash));
-		return r?.state === "completed" && r.published ? completionIn(r) : undefined;
+		return r?.purpose === "authorization" && r.state === "completed" && r.published
+			? completionIn(r)
+			: undefined;
 	}
 
 	/** Marks a kept completion as gone out; `published`, or `unknown` where none is kept. */
 	async function publish(hash: string): Promise<"published" | "unknown"> {
 		const changed = await p.store.change(hash, (current) => {
 			const r = recordOf(current);
-			return r?.state === "completed" && !r.published
+			return r?.purpose === "authorization" && r.state === "completed" && !r.published
 				? { value: stored({ ...r, published: true }) }
 				: undefined;
 		});
 		const after = recordOf(changed?.after);
-		return after?.state === "completed" && after.published ? "published" : "unknown";
+		return after?.purpose === "authorization" && after.state === "completed" && after.published
+			? "published"
+			: "unknown";
 	}
 
-	return { issue, use, usedOf, rootOf, completionOf, publish };
+	return { issue, use, usedOf, rootOf, creationOf, completionOf, publish };
 }
 
 /** The thumbprint of a statement's E_sig: none is a record no statement was issued with, so unavailable. */

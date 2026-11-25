@@ -59,7 +59,7 @@ export interface Approval {
 	readonly verification?: string;
 	/** When it was used, by the kernel's clock, in ms: the same evidence again answers the same time. */
 	readonly usedAt?: number;
-	/** Set once an authorization's completion is kept, whether or not it went out yet. */
+	/** Set once its completion is kept, an authorization's or a key change's, whether or not it went out yet. */
 	readonly completed?: true;
 	/** When its statement was issued, in ms: where the proof of the login it approves began. */
 	readonly issuedAt: number;
@@ -72,6 +72,58 @@ export type UseRefusal = AssertRefusal | "unknown" | "expired" | "used" | "purpo
 export type Used =
 	| { readonly kind: "approved"; readonly approval: Approval }
 	| { readonly kind: "refused"; readonly reason: UseRefusal };
+
+/**
+ * A key change's completion asked: the possession it answers, whose items name the key added, the
+ * path's purpose, and what the change's record was given on the log, as sdk-core-wire's `keyChange`
+ * names them.
+ */
+export interface KeyChangeAsk {
+	readonly hash: string;
+	readonly purpose: "first-key" | "passkey-add";
+	readonly receipt?: string;
+	readonly status?: string;
+	readonly stateOf?: string;
+}
+
+export type KeyChangeCompleted =
+	| {
+			readonly kind: "completed";
+			/** The completion, sealed to the possession's `eEnc`: HPKE's `enc` and ciphertext, base64url. */
+			readonly enc: string;
+			readonly ct: string;
+	  }
+	| {
+			readonly kind: "refused";
+			/**
+			 * `unknown`: no record, or one this generation's ring does not verify. `purpose`: a statement
+			 * no possession. `unused`: a possession not used. `expired` comes after a change took too: its
+			 * screen learns of the key from the keys' list. `other`: kept for another path's purpose.
+			 * `form`: one sdk-core-wire's `keyChange` refuses. `withdrawn`: the ring signs no more.
+			 */
+			readonly reason:
+				| "unknown"
+				| "purpose"
+				| "unused"
+				| "expired"
+				| "other"
+				| "form"
+				| "withdrawn";
+	  };
+
+/**
+ * A creation as its record keeps it, the one purpose continued: its items as signed (the subject among
+ * them), and the screen's keys it was signed for.
+ */
+export interface KeptCreation {
+	readonly items: ItemsOf["creation"];
+	readonly screen: Screen;
+}
+
+/** A creation's record as kept, apart from a continuation: its statement's bytes, its items and the screen's keys. */
+export interface CreationRecord extends KeptCreation {
+	readonly statement: string;
+}
 
 /** What a continuation's step answers, kept as JSON. */
 export type StepResult =
@@ -144,16 +196,25 @@ export interface Approvals {
 	 * answer is kept, taken by one call, which runs `step` and keeps its answer on the record. The same
 	 * continuation again answers what was kept, `pending` while a call holds its step, and runs `step`
 	 * again only where the call that held it let its hold lapse: a step must take a second run alike.
+	 * The step is handed the creation as its record keeps it, so its owner reads it from the record
+	 * alone.
 	 */
 	continue(p: {
 		readonly hash: string;
 		readonly seq: number;
 		readonly body: string;
 		readonly signature: string;
-		readonly step: () => Promise<StepResult>;
+		readonly step: (kept: KeptCreation) => Promise<StepResult>;
 	}): Promise<Continued>;
 	/** An authorization's completion: its approval taken in on the subject's flow, then signed and sealed. */
 	complete(p: { readonly hash: string; readonly code: string }): Promise<Completed>;
+	/**
+	 * A key change's completion, asked once its change took on the subject's flow (its caller's to
+	 * know): the key its used possession names, signed and sealed to its screen, and kept on its
+	 * record. Asked again for the same purpose, the one kept, with what the log gave as first asked;
+	 * for another, `other`. The record lives a minute past the statement's expiry, `unknown` after.
+	 */
+	completeKeyChange(ask: KeyChangeAsk): Promise<KeyChangeCompleted>;
 	/** A used statement's approval; none for any other. */
 	usedOf(hash: string): Promise<Approval | undefined>;
 	/**
@@ -167,6 +228,12 @@ export interface Approvals {
 		| { readonly statement: string; readonly assertion: string; readonly credential: string }
 		| undefined
 	>;
+	/**
+	 * A creation's record, whatever its continuations, until its statement expires and while the Core's
+	 * ring of this generation verifies it; none for any other purpose. What its caller holds is its own
+	 * to check against the creation.
+	 */
+	creationOf(hash: string): Promise<CreationRecord | undefined>;
 	/**
 	 * The completion kept for an authorization, as `complete` answered it, once its caller published
 	 * it; none before.

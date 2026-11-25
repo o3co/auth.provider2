@@ -11,7 +11,8 @@
 - `verify` (identifier, password), `bySubject` and `byIdentifier`, each answering a user or none; `bySubject` and `claimedContacts` may answer unanswerable. `byIdentifier` is offered where the settings hold the users or the ledger looks users up by identifier, and `create` (identifier: a new subject the ledger makes, or `exists`) only where it makes subjects: each one's absence is the composition's fact.
 - `createIdentifierless` (an idempotency key, a SHA-256 in base64url; F1): the subject the key names, made now or before, with no identifier, as long as the ledger keeps it; offered only where the ledger makes identifierless subjects.
 - `verifyAsPart` (identifier, password): `verify` for a check that is one part of something larger, whose caller settles once whether the whole passed; until then, and where it never does, its waits count it failed. `failedChecks`: the most failed checks of one identifier in any `windowMs`, as the waits allow, on each instance.
-- `claimedContacts`, `verifiedContact` (subject, `{ kind: "email", value }`) and `contactsOf`.
+- `claimedContacts`, `verifiedContact` (subject, `{ kind: "email", value }`) and `contactsOf`: those verified here, the last first, then those an import brought, in the order brought.
+- Metric `auth_users_waits_full_total`: the checks refused because the waits' table is full; on the first such refusal in a forget time, a `warn` line `users.waits_full`.
 - Extension point `ledgers`: a user ledger (verification, user by subject or unanswerable, and optionally by identifier, a create, an identifierless create (idempotent by its key) and an import, `keep`, with a password's hash of the work it declares its `keep` takes, `passwords`, which says nothing of whether the deployment holds passwords), which takes the same work for an unknown identifier as for a known one.
 - Operator section `registered`: `identifier`, `subject` (default the identifier), `password-hash`, `attributes`.
 - Operator section `waits`: how a password check of an identifier that failed waits; its keys: internal module `waits`.
@@ -26,13 +27,13 @@
 - A password check waits as its identifier's failures say, an unknown identifier as a known one, at most 4 checks of one identifier held, so at most 4 × `longest`; one more is Unavailable, unchecked, as is an identifier not held where the `capacity` held keep failures not forgotten (internal module `waits`). That holds the failed checks stated over availability: a password is checked only as a first key's evidence, and no module logs in by one, so a full table stops that path alone.
 - Boot is refused on identifiers that differ only in case, Unicode normal form or surrounding whitespace, on two identifiers with one subject, and on more than one ledger or a ledger beside `registered` users.
 - Unanswerable is never read as none: claimed contacts are then unanswerable. `verifiedContact` for an erased subject: internal module `stores`.
-- A contact is kept once per subject by its `canonicalAddress` form, as first given, up to 20 (a fixed capacity guard: no subject needs more), and another past them throws RangeError; an empty subject or contact value throws TypeError.
+- A contact is kept once per subject by its `canonicalAddress` form, as first given, and one verified again moves first (one an import brings moves none, a new one going last); up to 20 (a fixed capacity guard: no subject needs more), and another past them throws RangeError; an empty subject or contact value throws TypeError.
 - Attribute values: `email` one `isAddress` takes that is also RFC 5322's addr-spec in ASCII (a dot-atom local part, LDH labels), `picture` an https URL that reads back as given, `email_verified` a boolean, `name` text holding more than blanks, `groups` a list of text, no text with a control or format character; another refuses boot in the settings, and from a ledger is left out, its name logged.
 - `email_verified` holds only beside `email`: without it, boot is refused in the settings, and a ledger's is left out, as it is with an email left out.
 - A password hash is one `secret-hash` reads (bcrypt or scrypt), else boot is refused; a password over 1024 bytes is none before any computation or ledger call (fixed, to guard hashing, far past NIST SP 800-63B's 64-character floor), and `secret-hash` decides the rest, within its assembly's `max-concurrent`. Each verification does the work of every kind of hash in use, so timing does not tell whether a user exists.
 
 ## Depends on
-- `kernel`, `mail-address`, `secret-hash`, `erasure-extensions`
+- `kernel`, `mail-address`, `secret-hash`, `erasure-extensions`, `metrics`
 
 ## Vocabulary
 - user: a subject and frozen attributes. user ledger: the outside system that holds users.

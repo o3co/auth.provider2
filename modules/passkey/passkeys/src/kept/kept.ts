@@ -2,6 +2,7 @@ import { Unavailable } from "@mod/kernel";
 import type { FrameStore, Transparency } from "@mod/transparency";
 import type { Ceremonies, Credential, Verification } from "@mod/webauthn";
 import type {
+	Held,
 	PasskeyRemoval,
 	PasskeyStore,
 	Passkeys,
@@ -18,6 +19,9 @@ import {
 	keysOf,
 	keysRecords,
 	noticesOf,
+	pendingAt,
+	reservationOf,
+	reservationRecords,
 	settledOf,
 	settledRecords,
 	unitOf,
@@ -35,6 +39,33 @@ export interface KeptParts {
 export async function keysHeld(frames: FrameStore, subject: string) {
 	const read = await frames.read(unitOf(subject), keysRecords(unitOf(subject).flow));
 	return keysOf(read.held[0]);
+}
+
+/**
+ * A subject's keys and pending reservation as its flow's records hold them, in one read, and the
+ * witness's mark, frozen: all always read.
+ */
+export async function heldOf(
+	frames: FrameStore,
+	witnessing: PasskeyWitnessing | undefined,
+	subject: string,
+	now: number,
+): Promise<Held> {
+	const unit = unitOf(subject);
+	const records = keysRecords(unit.flow);
+	const read = await frames.read(unit, [...records, ...reservationRecords(subject)]);
+	const keys = keysOf(read.held[0]);
+	const r = reservationOf(read.held[records.length]);
+	const marked = (await witnessing?.marked(subject)) === true;
+	const pending =
+		r && pendingAt(r, now)
+			? { reservation: r.version, credential: r.credential, publicKey: r.publicKey }
+			: undefined;
+	return Object.freeze({
+		credentials: Object.freeze(credentialsOf(keys)),
+		marked,
+		...(pending ? { pending: Object.freeze(pending) } : {}),
+	});
 }
 
 /** A credential's record, read in the shape written; a record of another shape is unavailable. */

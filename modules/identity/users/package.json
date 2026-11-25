@@ -36,6 +36,7 @@
 		"@mod/erasure-extensions": "workspace:*",
 		"@mod/kernel": "workspace:*",
 		"@mod/mail-address": "workspace:*",
+		"@mod/metrics": "workspace:*",
 		"@mod/secret-hash": "workspace:*",
 		"zod": "4.6.7"
 	},

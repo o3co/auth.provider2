@@ -1,6 +1,14 @@
 import { randomBytes } from "node:crypto";
-import { assemble, BootRefused, isUnavailable, kernelConfig } from "@mod/kernel";
+import {
+	assemble,
+	BootRefused,
+	contract,
+	defineModule,
+	isUnavailable,
+	kernelConfig,
+} from "@mod/kernel";
 import { switchedModule, unavailableSwitch } from "@mod/kernel/testing";
+import { type Instrument, instruments } from "@mod/metrics";
 import secretHashModule from "@mod/secret-hash/module";
 import { recordingChecker, testBcryptHash } from "@mod/secret-hash/testing";
 import { describe, expect, it } from "vitest";
@@ -286,6 +294,19 @@ it("states the failed checks of one identifier its waits allow in their forget t
 	});
 	// Three at once, then 1, 2, 4, 8 and 16 seconds, then one each half minute (none), and one more.
 	expect(app.get(users).failedChecks).toEqual({ count: 3 + 5 + 0 + 1, windowMs: 60_000 });
+});
+
+it("offers a count of the checks refused because the waits' table is full", async () => {
+	const seen = contract<readonly Instrument[]>("seen");
+	const collecting = defineModule(
+		{ name: "collecting", replicaSafe: true, takes: [instruments] },
+		(m) => [m.provide(seen).by((c) => c.collect(instruments))],
+	);
+	const app = await assemble({
+		modules: [usersModule, secretHashModule, memoryUsersStores().module, collecting],
+		config: { ...kernelConfig(), users: { registered: [aliceEntry] } },
+	});
+	expect(app.get(seen).map((i) => i.spec.name)).toEqual(["auth_users_waits_full_total"]);
 });
 
 describe("records", () => {

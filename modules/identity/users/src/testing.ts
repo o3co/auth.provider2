@@ -247,8 +247,25 @@ export function usersContract(name: string, harness: UsersHarness): void {
 			await expect(u.verifiedContact("s-full", email(21))).rejects.toBeInstanceOf(RangeError);
 			await u.verifiedContact("s-full", email(20));
 			expect(await u.contactsOf("s-full")).toEqual(
-				Array.from({ length: 20 }, (_, i) => email(i + 1)),
+				Array.from({ length: 20 }, (_, i) => email(20 - i)),
 			);
+			// Full, one held verified again still moves first.
+			await u.verifiedContact("s-full", email(1));
+			expect((await u.contactsOf("s-full"))[0]).toEqual(email(1));
+		});
+
+		it("answers the contact verified last first, one verified again moving there as first given", async () => {
+			const u = await harness.open();
+			const email = (value: string) => ({ kind: "email", value }) as const;
+			await u.verifiedContact("s-order", email("a@example.com"));
+			await u.verifiedContact("s-order", email("b@example.com"));
+			await u.verifiedContact("s-order", email("c@example.com"));
+			await u.verifiedContact("s-order", email("a@EXAMPLE.com"));
+			expect(await u.contactsOf("s-order")).toEqual([
+				email("a@example.com"),
+				email("c@example.com"),
+				email("b@example.com"),
+			]);
 		});
 
 		it.runIf(Boolean(harness.openBcrypt))(

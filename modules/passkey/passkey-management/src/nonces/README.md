@@ -1,0 +1,17 @@
+# nonces
+
+Internal module of `passkey-management`: the nonces of a first key's stages.
+
+## Responsibilities
+- Issues each stage's nonce for the nonce's lifetime, and uses it once: bound, in one write, to the first request's digest.
+
+## Not here
+- What a stage does with a nonce used again: its own. The sealed request's digest: the stage that opens it.
+
+## Offers
+- `noncesOver` (the nonces' store, random bytes, the lifetime) → `issue` (stage) → a nonce; `use` (nonce, stage, digest) → `first`, `again` (the same request), or `refused`.
+
+## Invariants
+- A nonce is 32 random bytes, base64url; a drawn one already held is drawn again, never shared.
+- A nonce is used by one request alone: the first to use it binds its digest; the same digest again is `again`, another `refused`, as are an unknown nonce, one of another stage and one past its life.
+- Its record names no subject: a stage and a digest.

@@ -1,16 +1,20 @@
 import { erasers } from "@mod/erasure-extensions";
-import { defineModule, setting } from "@mod/kernel";
+import { contract, defineModule, setting } from "@mod/kernel";
+import { type Counter, counter, instruments } from "@mod/metrics";
 import { secretCheckers } from "@mod/secret-hash";
 import { z } from "zod";
 import { ledgers, users, usersImport } from "./contract.ts";
 import { usersImporter } from "./imports/imports.ts";
 import { contributedSource } from "./ledger/contributed.ts";
-import { contactSubjectOf, ledgerUsers } from "./ledger.ts";
+import { contactSubjectOf, keptContact, ledgerUsers } from "./ledger.ts";
 import { record, registeredUsers } from "./registered.ts";
 import { contactStore } from "./store.ts";
 import { usersEraser } from "./stores/eraser.ts";
 import { portsRefused } from "./stores/ports.ts";
-import { failedChecksWithin, identifierWaits } from "./waits/waits.ts";
+import { failedChecksWithin, fullTelling, identifierWaits } from "./waits/waits.ts";
+
+/** The identifiers the waits refused, every one held keeping failures not forgotten. */
+const fullRefusals = contract<Counter>("users.waits-full");
 
 /** Identifiers match exactly; this form, folding case fully ("straße", "STRASSE", "STRAẞE"), only finds look-alikes. */
 const confusable = (identifier: string) =>
@@ -93,6 +97,14 @@ export default defineModule(
 			.by(async (c) =>
 				usersEraser(await c.get(contactStore), async (key, value) => contactSubjectOf(key, value)),
 			),
+		m.provide(fullRefusals).by(() =>
+			counter({
+				name: "auth_users_waits_full_total",
+				help: "Password checks refused since boot, unchecked, because the waits held as many identifiers as they may, each keeping failures not forgotten.",
+				labels: {},
+			}),
+		),
+		m.contribute(instruments).by((c) => c.get(fullRefusals)),
 		m.provide(users).by(async (c) => {
 			const [ledger, ...more] = await c.collect(ledgers);
 			if (more.length > 0) return c.refuse("users", "more than one user ledger is contributed");
@@ -113,7 +125,14 @@ export default defineModule(
 				now: () => c.clock.monotonic?.() ?? c.clock.now(),
 				pause: (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
 			};
-			const waited = identifierWaits(rules, timing, capacity);
+			const refused = await c.get(fullRefusals);
+			const full = fullTelling({
+				count: () => refused.add({}),
+				write: () => c.log.warn("users.waits_full", { capacity }),
+				now: timing.now,
+				everyMs: forget,
+			});
+			const waited = identifierWaits(rules, timing, capacity, full);
 			// Every check of a password waits as its identifier's run of failures says, whoever answers.
 			const source = {
 				...answering,
@@ -136,7 +155,8 @@ export default defineModule(
 		m.provide(usersImport).by(async (c) => {
 			const [ledger] = await c.collect(ledgers);
 			const keep = ledger ? contributedSource(ledger, c.log).keep : undefined;
-			return usersImporter(await c.get(users), keep, ledger?.passwords?.work);
+			const brought = keptContact(await c.get(contactStore), "brought");
+			return usersImporter(keep, ledger?.passwords?.work, brought);
 		}),
 	],
 );

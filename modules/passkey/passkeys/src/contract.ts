@@ -77,6 +77,29 @@ export interface PasskeyGenerations {
 }
 
 export const passkeyGenerations = contract<PasskeyGenerations>("passkeys.generations");
+/** A subject's keys as read, nothing written; its key generation is `passkeyGenerations`'. */
+export interface Held {
+	/** The credentials of its keys. */
+	readonly credentials: readonly string[];
+	/**
+	 * Whether the witness's mark is set, of whatever generation: after a `settle`, this generation's
+	 * alone. A first key's reservation takes a subject holding no key and no mark.
+	 */
+	readonly marked: boolean;
+	/** Its one reservation waiting for its key's possession, unlapsed; none otherwise. */
+	readonly pending?: {
+		readonly reservation: string;
+		readonly credential: string;
+		/** The reserved key's COSE_Key, base64url, as webauthn attested it. */
+		readonly publicKey: string;
+	};
+}
+
+/**
+ * Reads a subject's keys, its pending reservation and the witness's mark, writing nothing: the same
+ * reads for a subject no flow holds. Anyone may take it.
+ */
+export const heldKeys = contract<{ of(subject: string): Promise<Held> }>("passkeys.held");
 
 export type ReserveRefusal = "pending" | "held" | "taken" | "fenced" | "unknown" | "state" | "open";
 export type VerifyRefusal = CeremonyRefusal | "unknown" | "state" | "expired" | "open";

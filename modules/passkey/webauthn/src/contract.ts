@@ -96,6 +96,8 @@ export interface Ceremonies {
 	attestedKey(
 		response: string,
 	): { readonly credential: string; readonly publicKey: string } | undefined;
+	/** Whether a ceremony may come from `origin`, as attestation and assertion match it: exactly, against `origins`. */
+	allowsOrigin(origin: string): boolean;
 }
 
 export const ceremonies = contract<Ceremonies>("webauthn.ceremonies");

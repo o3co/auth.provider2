@@ -1,4 +1,4 @@
-import { extensionPoint } from "@mod/kernel";
+import { contract, extensionPoint } from "@mod/kernel";
 
 /**
  * A first key's start, which every item of evidence is bound to: the nonce the path gave the
@@ -63,3 +63,75 @@ export const firstKeyEvidence = extensionPoint<FirstKeyEvidence>(
 	"passkey-management.first-key-evidence",
 	{ multiplicity: "keyed", keyOf: (evidence) => evidence.kind },
 );
+
+/** A record as one of the stores keeps it: opaque to the store. */
+export interface Kept<T> {
+	/** Keeps the record for its lifetime, unless one is kept already. */
+	create(key: string, record: T, lifetimeMs: number): Promise<"created" | "exists">;
+	read(key: string): Promise<T | undefined>;
+	/**
+	 * Changes the record from what it holds; `change` runs again on a lost race. None where none is
+	 * kept. The record's lifetime stays as created: no change moves it.
+	 */
+	change(
+		key: string,
+		change: (current: T) => { readonly value: T } | undefined,
+	): Promise<{ readonly before: T; readonly after: T } | undefined>;
+}
+
+declare const storedNonce: unique symbol;
+/** A nonce of a first key's stage as kept. */
+export type StoredNonce = { readonly [storedNonce]: true };
+
+/** Where a first key's nonces are kept, by their value: no subject. Throws Unavailable when it cannot tell. */
+export const firstKeyNonces = contract<Kept<StoredNonce>>("passkey-management.nonces");
+
+/** What the nonces' place must be, each a guarantee its wiring declares. */
+export const firstKeyNoncesNeeds = {
+	/** A nonce lost to eviction or failover would let a sealed request be sent twice. */
+	neverEvicted: true,
+	survivesCrash: true,
+	survivesFailover: true,
+	/** A stale read could take a used nonce for a fresh one. */
+	confirmedReads: true,
+	/** A nonce written outside the provider would bind a request it never gave. */
+	authenticated: true,
+} as const;
+
+declare const storedToken: unique symbol;
+/** A mail token, or the answer its mail's side was given, as kept. */
+export type StoredToken = { readonly [storedToken]: true };
+
+/**
+ * Where a first key's mail tokens, and the answers of its mail's side, are kept, by keys this
+ * package names: each names a subject. Throws Unavailable when it cannot tell.
+ */
+export const firstKeyTokens = contract<Kept<StoredToken>>("passkey-management.tokens");
+
+/** What the tokens' place must be, each a guarantee its wiring declares. */
+export const firstKeyTokensNeeds = {
+	/** A token lost to eviction would end a first key's path; an answer lost would hand out another. */
+	neverEvicted: true,
+	survivesCrash: true,
+	survivesFailover: true,
+	/** A stale read could count a code twice, or take a used token for a fresh one. */
+	confirmedReads: true,
+	/** A token written outside the provider would bind a first key to any subject. */
+	authenticated: true,
+} as const;
+
+/** A first key's mail: its purpose, as `mail`'s purposes name it, and the values its wording is given. */
+export const firstKeyMail = Object.freeze({
+	purpose: "first-key",
+	values: Object.freeze({
+		/** The link to the mail's side, the token in its fragment. */
+		link: "link",
+		/** The account, its identifier masked. */
+		account: "account",
+		/** How many minutes the link lives. */
+		minutes: "minutes",
+	}),
+});
+
+/** This package's part of a subject's flow: a key change's preimage, kept beside passkeys' reservation for a resend. */
+export const keyChangePart = "passkey-management";

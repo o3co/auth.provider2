@@ -271,6 +271,7 @@ export function ceremoniesFor(rp: RelyingParty): Ceremonies {
 			evidence(assertion, publicKey, challenge, origin),
 		reverifyAssertion: (assertion, publicKey, challenge) =>
 			evidence(assertion, publicKey, challenge),
+		allowsOrigin: (origin) => rp.origins.includes(origin),
 		creation: (challenge, user, exclude, v, asked = {}) => {
 			const discoverable = asked.discoverable ?? true;
 			return {

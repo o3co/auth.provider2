@@ -153,7 +153,7 @@ export interface Users {
 	createIdentifierless?(key: string): Promise<User>;
 	/** Keeps a contact the subject has shown is theirs, up to 20. Throws TypeError on an empty part, RangeError past 20. */
 	verifiedContact(subject: string, contact: Contact): Promise<void>;
-	/** The subject's verified contacts, in the order first kept, frozen. */
+	/** The subject's verified contacts, frozen: those verified here, the last first, then those brought, in the order brought. */
 	contactsOf(subject: string): Promise<readonly Contact[]>;
 	/** Contacts the settings or the ledger state for the subject, not shown to be theirs; frozen, or unanswerable. */
 	claimedContacts(subject: string): Promise<readonly Contact[] | Unanswerable>;

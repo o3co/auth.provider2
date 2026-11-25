@@ -10,7 +10,7 @@ Internal module of `users`: how long a password check of one identifier waits, a
 
 ## Offers
 - The rules the package's section `waits` gives: its keys `after`, `first`, `longest` and `forget`, read as `WaitRules`, and `capacity`.
-- `identifierWaits` (rules, timing, capacity) → `run` (an identifier, a check): the check's answer, after its wait; `runPending`: the answer `Pending`, a user found counted a failure until `settle(true)`. `Timing` (a clock, a pause). `queueBound` (4): the checks of one identifier held at once.
+- `identifierWaits` (rules, timing, capacity, full: told of each identifier a full table refuses) → `run` (an identifier, a check): the check's answer, after its wait; `runPending`: the answer `Pending`, a user found counted a failure until `settle(true)`. `Timing` (a clock, a pause). `queueBound` (4): the checks of one identifier held at once. `fullTelling`: counts each refusal and writes at most once in a given time.
 - `failedChecksWithin` (rules): the most failed checks of one identifier in any window of `forgetMs`: one run's, its first wait maybe before the window, and one more for a run forgotten at its edge.
 
 ## Invariants

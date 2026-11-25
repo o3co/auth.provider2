@@ -10,7 +10,7 @@ Internal module of `approvals`: issuing statements and using each once.
 - Continuations (`continuation`). The completion and the flow (`completion`).
 
 ## Offers
-- `statementsOver` (`StatementParts`) → `issue`, `use`, `usedOf`. `declaredOf` (the declarations, a refusal) → each purpose's declared names. `itemNames`, `itemsIn`, `challengeOf`, `sha256`; the record's shape (`recordOf`, `stored`).
+- `statementsOver` (`StatementParts`) → `issue`, `use`, `usedOf`, `creationOf`. `declaredOf` (the declarations, a refusal) → each purpose's declared names. `itemNames`, `itemsIn`, `challengeOf`, `sha256`; the record's shape (`recordOf`, `stored`).
 
 ## Invariants
 - `issue` checks the items against the declared names and the purpose's schema, and the screen's `eEnc` as a P-256 point, before anything is counted or signed; counts all statements and the caller's key in `issue-window`; refuses past `max-concurrent` signings in this process.

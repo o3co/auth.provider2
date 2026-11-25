@@ -7,6 +7,7 @@ import { promiseNames, stances } from "@mod/promises";
 import { rateLimit } from "@mod/rate-limit";
 import { operationKinds, stateOwners, transparency, transparencyLog } from "@mod/transparency";
 import { approvalKind, approvalsOwner, completionsOver } from "./completion/completion.ts";
+import { keyChangeCompletionsOver } from "./completion/key-change.ts";
 import { continuationsOver } from "./continuation/continuation.ts";
 import { approvalStore, approvals, statementItems } from "./contract.ts";
 import { type Settings, section } from "./section.ts";
@@ -80,6 +81,7 @@ export default defineModule(
 					pause: (look) => sleep(lookAgainMs(look)),
 					looks: 18,
 				}),
+				completeKeyChange: keyChangeCompletionsOver({ keys: signer, store, issuer: iss, now }),
 			};
 		}),
 	],

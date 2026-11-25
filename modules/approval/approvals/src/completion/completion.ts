@@ -205,7 +205,8 @@ export function completionsOver(p: CompletionParts) {
 		const signed = await p.keys.sign(prepared, new TextEncoder().encode(canonicalText(payload)));
 		if (signed.kind !== "signed") return refused("withdrawn");
 		const to = new Uint8Array(Buffer.from(r.e_enc, "base64url"));
-		const aad = new TextEncoder().encode(hash);
+		// The screen opens it under sdk-core-wire's additional data, as it does a key change's.
+		const aad = new TextEncoder().encode(hpke.completionAad("authorization", hash));
 		const box = await p.keys.seal(
 			to,
 			hpke.info.completion,

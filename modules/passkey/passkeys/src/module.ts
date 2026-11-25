@@ -4,6 +4,7 @@ import { promiseNames, stances } from "@mod/promises";
 import { frameStore, operationKinds, stateOwners, transparency } from "@mod/transparency";
 import { ceremonies } from "@mod/webauthn";
 import {
+	heldKeys,
 	passkeyGenerations,
 	passkeyRemovals,
 	passkeyStore,
@@ -11,7 +12,7 @@ import {
 	passkeyWitnessing,
 	registrations,
 } from "./contract.ts";
-import { type KeptParts, keptOver, keysHeld } from "./kept/kept.ts";
+import { heldOf, type KeptParts, keptOver, keysHeld } from "./kept/kept.ts";
 import { keyChanges, keysOwner } from "./records.ts";
 import { registeringOver } from "./registering/registering.ts";
 import { type Settings, section } from "./section.ts";
@@ -69,6 +70,11 @@ export default defineModule(
 			ceremonies: await c.get(ceremonies),
 			verification: c.section["user-verification"],
 		})),
+		m.provide(heldKeys).by(async (c) => {
+			const { frames } = await c.get(kept);
+			const witnessing = await witnessingOf(c);
+			return { of: (subject: string) => heldOf(frames, witnessing, subject, c.clock.now()) };
+		}),
 		m.provide(passkeys).by(async (c) =>
 			keptOver({
 				...(await c.get(kept)),

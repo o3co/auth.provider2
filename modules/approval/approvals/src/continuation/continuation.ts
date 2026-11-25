@@ -1,7 +1,7 @@
 import { createPublicKey, verify, type webcrypto } from "node:crypto";
 import { continuation, type SigningKey } from "@mod/sdk-core-wire";
-import type { ApprovalStore, Continued, StepResult } from "../contract.ts";
-import { recordOf, type StatementRecord, sha256, stored } from "../statement/statement.ts";
+import type { ApprovalStore, Continued, ItemsOf, KeptCreation, StepResult } from "../contract.ts";
+import { itemsIn, recordOf, type StatementRecord, sha256, stored } from "../statement/statement.ts";
 
 /** Whether `signature` (ES256, r‖s, base64url) is the screen's over `input`. */
 function signedBy(key: SigningKey, input: string, signature: string): boolean {
@@ -68,7 +68,7 @@ export function continuationsOver(p: {
 		readonly seq: number;
 		readonly body: string;
 		readonly signature: string;
-		readonly step: () => Promise<StepResult>;
+		readonly step: (kept: KeptCreation) => Promise<StepResult>;
 	}): Promise<Continued> => {
 		const r = recordOf(await p.store.read(q.hash));
 		if (!r) return { kind: "refused", reason: "unknown" };
@@ -90,7 +90,11 @@ export function continuationsOver(p: {
 			const same = now?.seq === q.seq && now.body === body;
 			return answered(now, true) ?? { kind: "refused", reason: same ? "pending" : "seq" };
 		}
-		const result = await q.step();
+		// A creation, the one purpose continued: its items read from its bytes, the screen's keys from its record.
+		const result = await q.step({
+			items: itemsIn(r.jws, "creation") as ItemsOf["creation"],
+			screen: { eEnc: r.e_enc, eSig: r.e_sig },
+		});
 		const after = await kept(q.hash, q.seq, by, result);
 		return (
 			answered(after, r.seq === q.seq) ??

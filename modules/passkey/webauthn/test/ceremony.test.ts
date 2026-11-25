@@ -605,3 +605,13 @@ describe("the algorithms the relying party takes", () => {
 		expect(reasonOf(asserted)).toBe("algorithm");
 	});
 });
+
+describe("the origins a ceremony may come from", () => {
+	it("allows a listed origin exactly, never a top origin, another spelling or another path", () => {
+		expect(ceremonies.allowsOrigin(testOrigin)).toBe(true);
+		expect(ceremonies.allowsOrigin("https://shell.example")).toBe(false);
+		expect(ceremonies.allowsOrigin(evil.origin)).toBe(false);
+		expect(ceremonies.allowsOrigin(`${testOrigin}/`)).toBe(false);
+		expect(ceremonies.allowsOrigin(testOrigin.toUpperCase())).toBe(false);
+	});
+});

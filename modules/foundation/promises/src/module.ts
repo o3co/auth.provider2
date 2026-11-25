@@ -44,6 +44,7 @@ const kindShape = z.strictObject({
 		}),
 	]),
 	past: z.literal(true).optional(),
+	alone: z.literal(true).optional(),
 });
 
 /** A strength as one line says it, its values only, in a fixed order. */
@@ -161,6 +162,7 @@ export default defineModule(
 						trusts: k.trusts.join(" "),
 						strength: strengthLine(k.strength),
 						...(k.past ? { past: true } : {}),
+						...(k.alone ? { alone: true } : {}),
 					};
 					c.log.info("promises.evidence", fields);
 				}

@@ -90,6 +90,14 @@ export function memoryFrames(parts: readonly string[]) {
 			kept.delete(keyOf({ of: "subject", id: subject }, { part: passkeyPart, name })),
 		value: (subject: string, name?: string, part = passkeyPart) =>
 			kept.get(keyOf({ of: "subject", id: subject }, name ? { part, name } : undefined))?.value,
+		/** Writes a record of passkeys' part, as a boundary taken in would leave it. */
+		set: (subject: string, name: string, value: Json) => {
+			version += 1;
+			kept.set(keyOf({ of: "subject", id: subject }, { part: passkeyPart, name }), {
+				value: structuredClone(value),
+				version,
+			});
+		},
 	};
 }
 

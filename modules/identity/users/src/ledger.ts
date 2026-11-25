@@ -55,6 +55,34 @@ const keyed =
 		return create(key);
 	};
 
+/**
+ * Keeps a contact for the subject, up to `maxContacts`, compared in mail's one form and kept as first
+ * given. Verified here, it comes first, one held moving there; brought from another IdP, a new one is
+ * added last and one held stays where it is, as that IdP verified it before any verified here.
+ */
+export function keptContact(contacts: ContactStore, how: "verified" | "brought") {
+	return async (subject: string, contact: Contact): Promise<void> => {
+		required(subject, contact.value);
+		if (contact.kind !== "email") throw new TypeError("users: an unknown kind of contact");
+		const kept = { kind: contact.kind, value: contact.value };
+		const sameAs = (value: string) => canonicalAddress(value) ?? value;
+		const isKept = (c: Contact) => c.kind === kept.kind && sameAs(c.value) === sameAs(kept.value);
+		const holds = (held: Contact[]) => held.some(isKept);
+		const add = (record: StoredContacts) => {
+			const held = contactsIn(record);
+			const at = held.findIndex(isKept);
+			if (at === 0 || (at > 0 && how === "brought")) return undefined;
+			if (at > 0) return { value: contactsRecord([held[at] as Contact, ...held.toSpliced(at, 1)]) };
+			if (held.length >= maxContacts) return undefined;
+			return { value: contactsRecord(how === "verified" ? [kept, ...held] : [...held, kept]) };
+		};
+		const { after } = await keptFor(contacts, subject, contactsRecord([kept]), add, subject);
+		if (!holds(contactsIn(after))) {
+			throw new RangeError(`users: a subject keeps at most ${maxContacts} contacts`);
+		}
+	};
+}
+
 /** The source's users, with the contacts written through the store interface. */
 export function ledgerUsers(
 	source: UserSource & Pick<Users, "verifyAsPart" | "failedChecks">,
@@ -77,24 +105,7 @@ export function ledgerUsers(
 		...(source.createIdentifierless
 			? { createIdentifierless: keyed(source.createIdentifierless) }
 			: {}),
-		verifiedContact: async (subject, contact) => {
-			required(subject, contact.value);
-			if (contact.kind !== "email") throw new TypeError("users: an unknown kind of contact");
-			const kept = { kind: contact.kind, value: contact.value };
-			// Compared in mail's one form, the domain's case aside; kept as first given.
-			const sameAs = (value: string) => canonicalAddress(value) ?? value;
-			const holds = (held: Contact[]) =>
-				held.some((c) => c.kind === kept.kind && sameAs(c.value) === sameAs(kept.value));
-			const add = (record: StoredContacts) => {
-				const held = contactsIn(record);
-				if (holds(held) || held.length >= maxContacts) return undefined;
-				return { value: contactsRecord([...held, kept]) };
-			};
-			const { after } = await keptFor(contacts, subject, contactsRecord([kept]), add, subject);
-			if (!holds(contactsIn(after))) {
-				throw new RangeError(`users: a subject keeps at most ${maxContacts} contacts`);
-			}
-		},
+		verifiedContact: keptContact(contacts, "verified"),
 		contactsOf: async (subject) => deepFreeze(contactsIn(await contacts.read(subject))),
 		claimedContacts: async (subject) => {
 			const found = await source.bySubject(subject);

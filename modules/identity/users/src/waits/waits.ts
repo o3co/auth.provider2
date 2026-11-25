@@ -74,6 +74,26 @@ interface Run {
 	forgotten: number;
 }
 
+/**
+ * What a refusal of a full table does: `count` each time, `write` at most once in `everyMs`, so a
+ * flood of refusals fills no log.
+ */
+export function fullTelling(p: {
+	readonly count: () => void;
+	readonly write: () => void;
+	readonly now: () => number;
+	readonly everyMs: number;
+}): () => void {
+	let writtenAt: number | undefined;
+	return () => {
+		p.count();
+		const at = p.now();
+		if (writtenAt !== undefined && at - writtenAt < p.everyMs) return;
+		writtenAt = at;
+		p.write();
+	};
+}
+
 /** The checks of one identifier held at once, the one under way among them: a fixed guard. */
 export const queueBound = 4;
 
@@ -83,6 +103,8 @@ export function identifierWaits(
 	timing: Timing,
 	/** The identifiers held at once, so unknown identifiers cannot fill memory. */
 	capacity: number,
+	/** Told of each identifier refused because every one held keeps failures not forgotten. */
+	full: () => void = () => {},
 ): Waits {
 	const runs = new Map<string, Run>();
 	const quiet = (run: Run, at: number) => at - run.lastFailureAt >= rules.forgetMs;
@@ -108,7 +130,10 @@ export function identifierWaits(
 		}
 		if (runs.size >= capacity) {
 			const released = releasable();
-			if (released === undefined) throw new Unavailable("users");
+			if (released === undefined) {
+				full();
+				throw new Unavailable("users");
+			}
 			runs.delete(released);
 		}
 		const run: Run = {

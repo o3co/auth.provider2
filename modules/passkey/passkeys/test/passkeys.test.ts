@@ -13,6 +13,7 @@ import promisesModule from "@mod/promises/module";
 import { softwareAuthenticator } from "@mod/webauthn/testing";
 import { describe, expect, it } from "vitest";
 import {
+	heldKeys,
 	type PasskeyRemoval,
 	passkeyGenerations,
 	passkeyRemovals,
@@ -280,6 +281,56 @@ describe("passkeys", () => {
 			() => [],
 		);
 		expect(await refusedWith([silent])).toMatch(/taken only by a module that contributes/);
+	});
+
+	it("reads a subject's keys' credentials and the witness's mark, writing nothing", async () => {
+		const witnessing = memoryWitnessing();
+		const w = await world({ modules: [witnessing.module] });
+		const held = w.app.get(heldKeys);
+		expect(await held.of("s1")).toEqual({ credentials: [], marked: false });
+		const one = await w.register();
+		expect(await held.of("s1")).toEqual({
+			credentials: [one.credential.id],
+			marked: false,
+		});
+		// No mark is written by the read.
+		expect(witnessing.marks.has("s1")).toBe(false);
+		expect(Object.isFrozen((await held.of("s1")).credentials)).toBe(true);
+		// A mark of a generation before the flow's reads as set until a settle withdraws it.
+		await witnessing.witnessing.mark("s3", 0);
+		w.frames.set("s3", "keys", { keyGeneration: 1, keys: {} });
+		expect(await held.of("s3")).toEqual({ credentials: [], marked: true });
+		expect(await w.keys.settle("s3")).toBe(false);
+		expect(await held.of("s3")).toEqual({ credentials: [], marked: false });
+		// One of this generation stays: a reservation of a first key refuses it.
+		await witnessing.witnessing.mark("s4", 0);
+		expect(await w.keys.settle("s4")).toBe(false);
+		expect((await held.of("s4")).marked).toBe(true);
+	});
+});
+
+describe("heldKeys' pending reservation", () => {
+	it("reads the one reservation waiting for its possession, while it has not lapsed, and none once it took", async () => {
+		const w = await world();
+		const held = w.app.get(heldKeys);
+		const credential = await w.created();
+		const reserved = await w.reserve({ subject: "s1", credential, first: true });
+		if (!("reservation" in reserved)) throw new Error(reserved.refused);
+		const pending = {
+			reservation: reserved.reservation,
+			credential: credential.id,
+			publicKey: credential.publicKey,
+		};
+		expect((await held.of("s1")).pending).toEqual(pending);
+		// Verified, it still waits for its commit.
+		const shown = w.asserting([credential]);
+		await w.regs.verifyPending({ subject: "s1", ...reserved, ...shown });
+		expect((await held.of("s1")).pending).toEqual(pending);
+		w.advance(10 * 60_000 + 1);
+		expect((await held.of("s1")).pending).toBeUndefined();
+		const other = await w.register("s2");
+		expect((await held.of("s2")).pending).toBeUndefined();
+		expect((await held.of("s2")).credentials).toEqual([other.credential.id]);
 	});
 });
 

@@ -9,7 +9,7 @@ Internal module of `approvals`: the screen's continuations, each taken once in o
 - What a continuation's body asks: the ceremony's owner.
 
 ## Offers
-- `continuationsOver` (the store, the clock) → the run of one continuation.
+- `continuationsOver` (the store, the clock) → the run of one continuation, its step handed the creation as its record keeps it (`KeptCreation`: its items as signed, the screen's keys).
 
 ## Invariants
 - Only a creation's statement is continued. The signature is ES256 over the input's UTF-8 bytes, `r‖s` in base64url.

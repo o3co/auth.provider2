@@ -186,6 +186,20 @@ describe("users' import", () => {
 		expect(await u.contactsOf("s-a")).toHaveLength(20);
 	});
 
+	it("counts no import as a verifying: a contact held stays where it is, a new one goes last", async () => {
+		const { importer, u } = await opened();
+		const email = (value: string) => ({ kind: "email", value }) as const;
+		await u.verifiedContact("s-a", email("old@example.com"));
+		await u.verifiedContact("s-a", email("new@example.com"));
+		await importer.record({ subject: "s-a", verifiedEmail: "old@example.com" });
+		await importer.record({ subject: "s-a", verifiedEmail: "brought@example.com" });
+		expect(await u.contactsOf("s-a")).toEqual([
+			email("new@example.com"),
+			email("old@example.com"),
+			email("brought@example.com"),
+		]);
+	});
+
 	it("leaves the identifier kept where the contact store fails after it, and imports the rest when run again", async () => {
 		const held = new Map<string, string>();
 		const down = unavailableSwitch<ContactStore>("contact store");

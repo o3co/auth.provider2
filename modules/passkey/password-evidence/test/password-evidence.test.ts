@@ -1,5 +1,6 @@
 import { assemble, contract, defineModule, kernelConfig, Unavailable } from "@mod/kernel";
 import { type FirstKeyEvidence, firstKeyEvidence } from "@mod/passkey-management";
+import { itemsOf } from "@mod/passkey-management/testing";
 import { evidence } from "@mod/promises";
 import promisesModule from "@mod/promises/module";
 import secretHashModule from "@mod/secret-hash/module";
@@ -54,6 +55,18 @@ describe("passwordEvidence", () => {
 			expect(await e.check(start("2"), "s-alice", items)).toEqual({ kind: "failed" });
 		}
 		expect(asked).toEqual(["carol:pass", ...Array.from({ length: 6 }, () => "alice:")]);
+	});
+
+	it("reads its items as the path hands them from a start's request: the password sent, or none", async () => {
+		const { evidence } = recording();
+		const handed = (password?: string) => itemsOf({ password })[evidence.kind];
+		expect(await evidence.check(start("n1"), "s-alice", handed("pass"))).toEqual({
+			kind: "passed",
+		});
+		expect(await evidence.check(start("n2"), "s-alice", handed("wrong"))).toEqual({
+			kind: "failed",
+		});
+		expect(await evidence.check(start("n3"), "s-alice", handed())).toEqual({ kind: "failed" });
 	});
 
 	it("fails items of another shape even where an empty password is the user's", async () => {

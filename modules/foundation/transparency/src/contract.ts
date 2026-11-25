@@ -291,6 +291,17 @@ export interface Transparency {
 		  >
 	>;
 	/**
+	 * A subject's flow's stage the log placed already, answered again as the log first answered it
+	 * (its receipts): appended after a position no head reaches, which the log reads only after the
+	 * same id, so a stage it does not hold is refused there and never placed (`unplaced`). The same id
+	 * with other content is the log's own refusal, answered as it is. No frame is read or written.
+	 */
+	receiptOf(p: {
+		readonly flow: Flow;
+		readonly op: string;
+		readonly stage: Stage;
+	}): Promise<{ readonly answer: AppendAnswer } | Refused<"notSubject" | "unplaced">>;
+	/**
 	 * An idle replica's turn on a flow: takes it in to its head, claims an orphan, sends an abandonment;
 	 * on a client's flow, so for the next open ops its record lists, going round them turn by turn.
 	 */

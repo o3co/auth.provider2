@@ -1,9 +1,9 @@
 import { isAddress } from "@mod/mail-address";
 import { readSecretHash } from "@mod/secret-hash";
 import {
+	type Contact,
 	type ImportAnswer,
 	isWellFormedSubject,
-	type Users,
 	type UsersImport,
 } from "../contract.ts";
 import { identifierFits, type UserSource } from "../registered.ts";
@@ -40,11 +40,12 @@ function readOf(given: unknown): Read | undefined {
 	};
 }
 
-/** Imports through the ledger's `keep`, where it has one, and users' verified contacts. */
+/** Imports through the ledger's `keep`, where it has one, and users' verified contacts, as brought. */
 export function usersImporter(
-	users: Users,
 	keep: UserSource["keep"],
 	passwordWork: string | undefined,
+	/** Keeps a contact brought from another IdP, which moves none held. */
+	brought: (subject: string, contact: Contact) => Promise<void>,
 ): UsersImport {
 	return {
 		record: async (given): Promise<ImportAnswer> => {
@@ -62,7 +63,7 @@ export function usersImporter(
 			}
 			if (read.verifiedEmail !== undefined) {
 				try {
-					await users.verifiedContact(read.subject, { kind: "email", value: read.verifiedEmail });
+					await brought(read.subject, { kind: "email", value: read.verifiedEmail });
 				} catch (error) {
 					// A subject past its contacts: the record is answered, never the run stopped.
 					if (error instanceof RangeError) return "full";

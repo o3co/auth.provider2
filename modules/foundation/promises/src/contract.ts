@@ -117,6 +117,11 @@ export interface EvidenceKind {
 	 * weakest any living key was bound by, not the weakest composed now. Only for such a kind.
 	 */
 	readonly past?: true;
+	/**
+	 * A key may have been bound by this kind alone, no other kind beside it: one meaning, whatever
+	 * kind carries it. Any kind may.
+	 */
+	readonly alone?: true;
 }
 
 /** Every kind of a first key's evidence declared, one by its name. */
