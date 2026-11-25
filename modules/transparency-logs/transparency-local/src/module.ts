@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import type { Checks, Context } from "@mod/authority-rules";
 import { defineModule, optional } from "@mod/kernel";
 import { type Jwk, keys, publicJwk } from "@mod/keys";
@@ -10,7 +9,7 @@ import { clientRecords, logStore } from "./contract.ts";
 import { localJudging, localSignedJudging } from "./judging.ts";
 import { localLog } from "./log.ts";
 import { section } from "./section.ts";
-import { verifiedByOne } from "./verify.ts";
+import { digestOf, verifiedByOne, verifiedEsig } from "./verify.ts";
 
 // Holds nothing in process: a flow's records are in the store, each placed by one held write.
 export default defineModule(
@@ -75,7 +74,9 @@ export default defineModule(
 					ring.verifyJws(jws, keySet) ??
 					(keySet.length === 1 ? verifiedByOne(jws, keySet) : undefined),
 				verifyAssertion: checking.verifyAssertion,
-				digest: (data) => createHash("sha256").update(data).digest("base64url"),
+				attestedKey: checking.attestedKey,
+				verifyEsig: verifiedEsig,
+				digest: digestOf,
 				keyThumbprint,
 			};
 			// t0 names no version and opens every preimage itself: no window, no retry to wait out.

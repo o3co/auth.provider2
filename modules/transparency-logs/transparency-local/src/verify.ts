@@ -1,4 +1,4 @@
-import { constants, verify } from "node:crypto";
+import { constants, createHash, verify } from "node:crypto";
 import { isCanonicalJws, type Jwk, publicJwk, verifiesUnder } from "@mod/keys";
 
 /** How each JWS algorithm verifies: its digest, and the signature's form or padding. */
@@ -72,4 +72,28 @@ export function verifiedByOne(
 	if (!how || !read || !verifiesUnder(unnamed as Jwk, alg as string)) return undefined;
 	const signed = verifyUnder(Buffer.from(`${h}.${p}`), how, read.key, Buffer.from(s, "base64url"));
 	return signed ? { header, payload } : undefined;
+}
+
+/** SHA-256 of the text's UTF-8 bytes, or of the bytes, base64url: the digest the rules and the screen compute. */
+export const digestOf = (data: string | Uint8Array) =>
+	createHash("sha256").update(data).digest("base64url");
+
+/**
+ * A screen's continuation signature (ES256's raw r||s, base64url) by its E_sig, over the input's UTF-8.
+ * Here until `keys` verifies raw r||s; then it moves there with `approvals`' own (`signedBy`).
+ */
+export function verifiedEsig(
+	key: { readonly x: string; readonly y: string },
+	input: string,
+	signature: string,
+): boolean {
+	const read = publicJwk({ kty: "EC", crv: "P-256", x: key.x, y: key.y } as Jwk);
+	if (!read) return false;
+	const how = { hash: "sha256", dsaEncoding: "ieee-p1363" } as const;
+	return verifyUnder(
+		Buffer.from(input, "utf8"),
+		how,
+		read.key,
+		Buffer.from(signature, "base64url"),
+	);
 }
