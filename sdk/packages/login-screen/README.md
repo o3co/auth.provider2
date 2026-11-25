@@ -4,7 +4,7 @@
 - The login screen's SDK: what the screen runs between the person and the Core, following the screen–Core protocol (`sdk-core-wire`) and the transparency log's (`transparency-wire`).
 
 ## Not here
-- Sending and receiving: the caller fetches each operation (`front-core-wire`'s names and routes), hands the SDK what it read and sends what the SDK gives. Reading an HTTP answer into the SDK's values (`Sealed` among them) has no owner yet: it is settled before M4's joined tests.
+- Sending and receiving: the caller fetches each operation (`front-core-wire`'s names and routes), hands the SDK what it read and sends what the SDK gives. Reading a refusal's body (front-core-wire's `refusals`, by its status and `error`): the page.
 - The ciphertext hash's input as a protocol function, the `create()` response's form (so one `create()` result yields both the continuation's response and the possession's credential, which today the caller keeps together), and reading a new key from `authData`'s COSE where `getPublicKey()` gives none: they land with the protocol packages' change (V22).
 - F1 (sign-up: the credential first), whose creation names the T the screen read as its evidence and no ciphertext: sdk-core-wire holds its form (`basis` `sign-up`, no `ct_hash`); the screen's path is not written yet.
 - A bundle that fixes no log keys (L0) for an authorization's `finish`: no way here yet (a key change's has, `keyChanges.read`'s `L0`); it comes as an explicit choice, never as a missing key list.
@@ -12,6 +12,7 @@
 
 ## Offers
 - `screenKeys()`: a ceremony's fresh screen keys, E_enc (an HPKE P-256 point, `eEnc`) and E_sig (a P-256 signing key, `eSig`, as a statement carries it), their private halves not exportable (`ScreenKeys`).
+- `answers.read` (a form, the success's body as the page parsed it): the SDK's value by sdk-core-wire's `payloads.answers` (`authorization` → T and `create`, its challenge left for the screen to compute; `statement` → the compact JWS; `sealed` → `Sealed`, bytes; `nonce`); none for another shape or a form it does not know. A literal form reads to that form's value, `overHttp`'s text to any form's. Whether `enc` is a point is the opening's to see.
 - `readStatement` (compact, purpose, the Core ring's public keys, the screen keys, the issuer): the statement as its purpose's schema reads it, or why not (`signature`, `typ`, `payload`, `keys`, `issuer`).
 - `challengeOf` (statement, `get` or `create`): the WebAuthn challenge's bytes.
 - `authorization`: an authorization's steps on the screen.

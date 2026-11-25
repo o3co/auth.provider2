@@ -3,6 +3,7 @@
  * screen–Core protocol (`sdk-core-wire`) and the log's receipts (`transparency-wire`). Shipped code
  * runs in a browser, on WebCrypto alone.
  */
+export { type AnswerForm, type Answers, answers } from "./answers.ts";
 export {
 	type AuthorizationError,
 	authorization,
