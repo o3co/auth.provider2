@@ -533,8 +533,8 @@ describe("a key change's envelope digests (proposal 3.13, V22)", () => {
 		);
 	});
 
-	it("refuses a passkey-add's or a passkey-manage's key change as no rule reads it yet, whatever its digests", () => {
-		for (const variant of ["add", "delete"]) {
+	it("refuses a passkey-manage's key change as no rule reads it yet, whatever its digests", () => {
+		for (const variant of ["delete"]) {
 			const step = firstKey(1);
 			const changed = {
 				...step,

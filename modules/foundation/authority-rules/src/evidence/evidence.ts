@@ -1,4 +1,4 @@
-import { challengeInput, payloads, typs } from "@mod/sdk-core-wire";
+import { canonicalText, challengeInput, payloads, typs } from "@mod/sdk-core-wire";
 import { type Preimage, recordKinds, schemas } from "@mod/transparency-wire";
 import { z } from "zod";
 import type { ResetContext } from "../reset/reset.ts";
@@ -34,18 +34,16 @@ export interface Checks {
 	/**
 	 * A `create()` response's JSON as sent: its credential id and the new key (its COSE_Key, base64url)
 	 * read from its attestation's authenticator data; none for one that does not read. Read, never
-	 * verified: what vouches for the key is the chain the rules check (proposal 3.7). Where none is
-	 * given, a key change it is asked for is unchecked, so held.
+	 * verified: what vouches for the key is the chain the rules check (proposal 3.7).
 	 */
-	attestedKey?(
+	attestedKey(
 		response: string,
 	): { readonly credential: string; readonly publicKey: string } | undefined;
 	/**
 	 * Whether a screen's continuation signature (ES256's raw r||s, base64url) is its E_sig's (a P-256
-	 * JWK's x and y) over the input's UTF-8 (`sdk-core-wire`'s `continuation.of`). Where none is given,
-	 * a key change it is asked for is unchecked, so held.
+	 * JWK's x and y) over the input's UTF-8 (`sdk-core-wire`'s `continuation.of`).
 	 */
-	verifyEsig?(
+	verifyEsig(
 		key: { readonly x: string; readonly y: string },
 		input: string,
 		signature: string,
@@ -114,12 +112,14 @@ const clientBundle = z
 export const contents = Object.freeze({
 	approval: empty,
 	/**
-	 * A first-trust key (the first-key path, F1): its credential and its public key, its COSE_Key in
-	 * its one unpadded base64url spelling; the key generation is the signed creation's (`kg`).
+	 * A key registered, by a first-trust key's path (the first-key path, F1) or a live key's approval
+	 * (`add`): its credential and its public key, its COSE_Key in its one unpadded base64url spelling;
+	 * the key generation is the signed creation's (`kg`).
 	 */
-	keyChange: z
-		.object({ variant: z.literal("first"), credential: id, publicKey: canonical })
-		.strict(),
+	keyChange: z.discriminatedUnion("variant", [
+		z.object({ variant: z.literal("first"), credential: id, publicKey: canonical }).strict(),
+		z.object({ variant: z.literal("add"), credential: id, publicKey: canonical }).strict(),
+	]),
 	/** How a start or a bundle roots: an approval's code, a family's refresh at its rotation, or a client. */
 	start: z.discriminatedUnion("via", [codeStart, refresh, clientStart]),
 	bundle: z.discriminatedUnion("via", [code, refresh, clientBundle]),
@@ -177,9 +177,10 @@ export function statementOf<T>(
 	return header.success && payload.success ? payload.data : undefined;
 }
 
-/** The statement T of an authorization, or of a key's creation or possession. */
+/** The statement T of an authorization or a passkey-add, or of a key's creation or possession. */
 export const statements = Object.freeze({
 	authorization: payloads.statement,
+	passkeyAdd: payloads.passkeyAdd,
 	creation: payloads.creation,
 	possession: payloads.possession,
 });
@@ -200,3 +201,20 @@ export function assertedBy(
 /** Whether a statement's times hold the acceptance time: iat ≤ a ≤ exp (the statement in seconds, a in ms). */
 export const within = (statement: { readonly iat: number; readonly exp: number }, at: number) =>
 	statement.iat * 1000 <= at && at <= statement.exp * 1000;
+
+const continued = z
+	.object({ seq: z.number().int().min(1), body: z.string().min(1), signature: canonical })
+	.strict();
+
+/**
+ * A screen's continuation as a key change carries it: the canonical JSON of its sequence number,
+ * its body as sent and E_sig's signature (base64url); none for any other text.
+ */
+export function continuationOf(value: string): z.infer<typeof continued> | undefined {
+	try {
+		const read = continued.safeParse(JSON.parse(value));
+		return read.success && canonicalText(read.data) === value ? read.data : undefined;
+	} catch {
+		return undefined;
+	}
+}

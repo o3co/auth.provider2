@@ -1,3 +1,4 @@
+import { canonicalText, continuation } from "@mod/sdk-core-wire";
 import type { AppendRequest } from "@mod/transparency-wire";
 import {
 	type ClientAt,
@@ -11,6 +12,7 @@ import {
 	type Checks,
 	type Context,
 	type CoreKind,
+	continuationOf,
 	isCoreKind,
 	type Opened,
 	oneOf,
@@ -171,12 +173,84 @@ function firstKeyRefusal(read: Read<"keyChange">): Refusal {
 	return keyChangeBound(ask, possession.jws, asserted);
 }
 
+/** A passkey-add's evidence, in its one order: its root, the creation, the continuation, the possession. */
+const addForms = ["statement", "assertion", "statement", "continuation", "statement", "assertion"];
+
+/** A passkey-add's statements, each verified by the writer generation's ring, and its continuation read. */
+function addOf(read: Read<"keyChange">) {
+	const { ask, preimage } = read;
+	const forms = preimage.evidence.map((e) => e.form);
+	if (forms.length !== addForms.length || forms.some((f, at) => f !== addForms[at]))
+		return {
+			refusal: "a passkey-add carries its root, creation, continuation and possession in order",
+		};
+	const [statement = "", asserted = "", creation = "", sent = "", possession = "", proof = ""] =
+		preimage.evidence.map((e) => e.value);
+	const signed = <T>(jws: string, schema: Parameters<typeof statementOf<T>>[1]) =>
+		statementOf(jws, schema, ask.checks, ask.context);
+	const t = signed(statement, statements.passkeyAdd);
+	const c = signed(creation, statements.creation);
+	const p = signed(possession, statements.possession);
+	if (!t || !c || !p)
+		return { refusal: "a statement is not signed by the writer generation's ring" };
+	const continued = continuationOf(sent);
+	if (!continued) return { refusal: "the continuation does not read" };
+	return { statement, asserted, t, creation, c, continued, possession, p, proof };
+}
+
+const sameScreen = (a: { e_enc: string; e_sig: object }, b: typeof a) =>
+	a.e_enc === b.e_enc && canonicalText(a.e_sig) === canonicalText(b.e_sig);
+
+/**
+ * A key a live key's approval adds (proposal 3.13's order): the approval over its passkey-add, the
+ * creation for it with the same screen's keys, the screen's E_sig over the creation and the new key,
+ * the possession of that key, one key from one passkey-add.
+ */
+function addRefusal(read: Read<"keyChange">): Refusal {
+	const { ask, preimage, content } = read;
+	const { checks } = ask;
+	const of = addOf(read);
+	if ("refusal" in of) return of.refusal;
+	const parent = preimage.parent === undefined ? undefined : own(ask.state.keys, preimage.parent);
+	if (!parent) return "the approving key is not live on the flow";
+	if (Object.values(ask.state.keys).some((k) => k.credential === content.credential))
+		return "the flow holds a live key of that credential";
+	if (!assertedBy(of.asserted, parent, of.statement, checks, ask.context))
+		return "the assertion is not the approving key's over the passkey-add";
+	if (used(ask.state, marks.statement(of.t.sid))) return "the statement is used";
+	const { creation: made } = of.c;
+	if (made.basis !== "passkey-add" || made.evidence !== checks.digest(of.statement))
+		return "the creation is not for its passkey-add";
+	if (made.subject !== ask.record.flow.id) return "the creation is another subject's";
+	if (made.kg !== ask.state.keyGeneration)
+		return "the creation is signed for another key generation than the flow's";
+	if (!sameScreen(of.t, of.c))
+		return "the creation names another screen's keys than its passkey-add";
+	const { seq, body, signature } = of.continued;
+	const input = continuation.of("register", checks.digest(of.creation), seq, checks.digest(body));
+	if (!checks.verifyEsig(of.c.e_sig, input, signature))
+		return "the continuation is not the screen's over the creation";
+	const sent = checks.attestedKey(body);
+	if (sent?.credential !== content.credential || sent.publicKey !== content.publicKey)
+		return "the continuation sends another key than the record's";
+	const p = of.p.possession;
+	const named = newKeyRefusal(checks, made, p, content.publicKey);
+	if (named) return named;
+	if (p.creation_hash !== checks.digest(of.creation) || p.credential_id !== content.credential)
+		return "the signed bytes are not the record's";
+	if (!assertedBy(of.proof, content, of.possession, checks, ask.context))
+		return "the new key does not assert the possession";
+	// Its writer names the digests from the start: the first key's leeway is not a passkey-add's.
+	if (!ask.record.keyChange) return "a passkey-add's envelope names its key change's digests";
+	return keyChangeBound(ask, of.possession, of.proof);
+}
+
 /**
  * A key change's envelope digests, where it names them, the preimage's own (proposal 3.13, V22): its
  * statement's and its evidence's, as a screen checks its receipt by them. Named otherwise, a taken
- * Core could show the screen its own digests over another key's evidence. For now one naming none is
- * not checked (no writer names them yet; a screen with a pinned log takes no such receipt): once the
- * writer names them, one naming none is refused.
+ * Core could show the screen its own digests over another key's evidence. For now a first key's
+ * naming none is not checked (no writer names them yet; a screen with a pinned log takes no such
+ * receipt): once the writer names them, one naming none is refused. A passkey-add's always names them.
  */
 function keyChangeBound(ask: Ask, statement: string, evidence: string): Refusal {
 	const bound = ask.record.keyChange;
@@ -305,7 +379,10 @@ function noEffectRefusal(read: Read<"noEffect">): Refusal {
 type Rule<K extends CoreKind> = (read: Read<K>) => Refusal;
 const rules: { readonly [K in CoreKind]: Rule<K> } = {
 	approval: (read) => onSubject(read.ask) ?? oneStage(read.ask) ?? approvalRefusal(read),
-	keyChange: (read) => onSubject(read.ask) ?? oneStage(read.ask) ?? firstKeyRefusal(read),
+	keyChange: (read) =>
+		onSubject(read.ask) ??
+		oneStage(read.ask) ??
+		(read.content.variant === "add" ? addRefusal(read) : firstKeyRefusal(read)),
 	start: (read) => onRootsFlow(read) ?? startRefusal(read),
 	bundle: (read) => onRootsFlow(read) ?? bundleRefusal(read),
 	noEffect: noEffectRefusal,
@@ -389,6 +466,10 @@ export function timely(ask: Ask, acceptedAt: number): boolean {
 		}
 		case "keyChange": {
 			const read = readOf("keyChange", ask);
+			if (read?.content.variant === "add") {
+				const of = addOf(read);
+				return !("refusal" in of) && [of.t, of.c, of.p].every((s) => within(s, acceptedAt));
+			}
 			const ceremony = read && ceremonyOf(read);
 			return (
 				ceremony !== undefined &&
@@ -436,7 +517,12 @@ export function rootOf(ask: Ask): Root | undefined {
 		const root = item ? (item.chain[0] ?? self) : undefined;
 		return root === undefined ? undefined : { root };
 	};
-	if (kind === "keyChange") return { first: true } as const;
+	if (kind === "keyChange") {
+		const read = readOf("keyChange", ask);
+		if (read?.content.variant !== "add") return { first: true } as const;
+		const parent = read.preimage.parent;
+		return parent === undefined ? undefined : rootOfChain(own(state.keys, parent), parent);
+	}
 	if (kind === "approval") {
 		const parent = readOf("approval", ask)?.preimage.parent;
 		return parent === undefined ? undefined : rootOfChain(own(state.keys, parent), parent);
@@ -471,9 +557,13 @@ export function effectOf(ask: Ask): Changes {
 		}
 		case "keyChange": {
 			const read = readOf("keyChange", ask);
-			return read
-				? { key: { credential: read.content.credential, publicKey: read.content.publicKey } }
-				: {};
+			if (!read) return {};
+			const key = { credential: read.content.credential, publicKey: read.content.publicKey };
+			if (read.content.variant !== "add") return { key };
+			const by = read.preimage.parent;
+			const of = addOf(read);
+			if (by === undefined || "refusal" in of) return {};
+			return { key: { ...key, by }, consume: [marks.statement(of.t.sid)] };
 		}
 		case "bundle": {
 			const read = readOf("bundle", ask);

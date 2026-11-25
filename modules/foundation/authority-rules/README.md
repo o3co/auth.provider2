@@ -28,7 +28,7 @@
 - The verdict is the first row of the table it meets, in the table's order; the chain (J7) is checked before the time, and a forged row before an inherited hold (J9).
 - A Core record is held to the ring of its writer's Core generation, the context's: a statement of another generation's ring is forged. A first key's key generation is the signed creation's.
 - Another writer's record is judged with the body its signature verified (`signedRecord`); a role naming a kind it does not write is forged.
-- What the rules hold no rule for is refused, never passed: a key change other than the first-key path, a person's op off a subject flow, and a client's start or bundle off its own flow.
+- What the rules hold no rule for is refused, never passed: a key change other than the first-key path and a passkey-add, a person's op off a subject flow, and a client's start or bundle off its own flow.
 - A check a client's record needs that the caller does not give (the client's record at its version, the evidence window, the self ceiling) leaves it unchecked: held, never verified nor forged.
 
 ## Depends on

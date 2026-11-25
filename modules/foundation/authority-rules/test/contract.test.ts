@@ -13,6 +13,9 @@ import {
 	ruleSchemas,
 } from "../src/contract.ts";
 import {
+	added,
+	addedKey,
+	addParts,
 	approval,
 	codeBundle,
 	codeStart,
@@ -21,7 +24,15 @@ import {
 	refreshStart,
 	type Step,
 } from "./fixtures/flow.ts";
-import { checks, context, coreRecord, monitorRecord, preimage, subject } from "./fixtures/world.ts";
+import {
+	checks,
+	context,
+	coreRecord,
+	coseKey,
+	monitorRecord,
+	preimage,
+	subject,
+} from "./fixtures/world.ts";
 
 /** An honest Core's flow: each record checked by Allowed before its append, then judged and folded. */
 function run(steps: readonly (Step | { record: FlowRecord; body: unknown })[]) {
@@ -97,5 +108,22 @@ describe("an honest flow through the contract (KP-04, Step023 CoreMonAgree, KP_0
 		expect(state.families).toEqual({});
 		expect(state.consumed).toEqual(["statement:sid-1", "code:r-2"]);
 		for (const e of prior) expect(ruleSchemas.changes.parse(e.changes)).toEqual(e.changes);
+	});
+});
+
+describe("an honest passkey-add through the contract (proposal 3.13, P 356)", () => {
+	const third = { credential: "cred-3", publicKey: coseKey(3) };
+	const steps = [
+		firstKey(1),
+		added(2, "r-1"),
+		{ record: monitorRecord("confirmation", 3), body: { v: 1, registration: "r-1" } },
+		added(4, "r-2", addParts("add-2", third, addedKey)),
+	];
+
+	it("judges an added key as its approving key's root: unsupported before its confirmation, verified after", () => {
+		const { rows, state } = run(steps);
+		expect(rows).toEqual(["J12:unsupported", "J12:unsupported", "J0:verified", "J13:verified"]);
+		expect(Object.keys(state.keys)).toEqual(["r-1", "r-2", "r-4"]);
+		expect(state.consumed).toEqual(["statement:add-1", "statement:add-2"]);
 	});
 });

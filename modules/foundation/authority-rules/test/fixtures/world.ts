@@ -5,7 +5,8 @@ import type { Checks, Context } from "../../src/evidence/evidence.ts";
 
 /**
  * A test world for the rules: a JWS is `header.payload.kid`, verified where its kid is one of the
- * keys'; an assertion is base64url JSON of what it was made with; digests are SHA-256.
+ * keys'; an assertion is base64url JSON of what it was made with; digests are SHA-256; a `create()`
+ * response is the JSON of its credential and key; an E_sig signature is the digest of its key and input.
  */
 
 const b64 = (value: unknown) => Buffer.from(JSON.stringify(value)).toString("base64url");
@@ -33,6 +34,17 @@ export const checks: Checks = {
 		return holds && made.credential ? { credential: made.credential } : undefined;
 	},
 	digest,
+	attestedKey(response) {
+		try {
+			const { credential, publicKey } = JSON.parse(response);
+			return typeof credential === "string" && typeof publicKey === "string"
+				? { credential, publicKey }
+				: undefined;
+		} catch {
+			return undefined;
+		}
+	},
+	verifyEsig: (key, input, signature) => signature === esig(key, input),
 	keyThumbprint(publicKey) {
 		const bytes = Buffer.from(publicKey, "base64url");
 		const alg = bytes[0] === 0xa5 ? algorithms[bytes[1] ?? -1] : undefined;
@@ -69,12 +81,26 @@ export const assertion = (
 		origin: at,
 	});
 
+/** A screen's E_sig signature over a continuation's input, as this world makes it. */
+export const esig = (key: { x: string; y: string }, input: string) =>
+	digest(`esig:${key.x}.${key.y}:${input}`);
+
 export const T0 = 1_700_000_000;
-const screen = {
+export const screen = {
 	v: 1,
 	e_enc: "ZW5j",
 	e_sig: { kty: "EC", crv: "P-256", x: "eA", y: "eQ" },
 };
+/** A passkey-add statement: the common fields alone, the screen's keys, valid for five minutes. */
+export const passkeyAdd = (sid: string, iat = T0, keys = screen) => ({
+	iss: "https://core.example",
+	sid,
+	iat,
+	exp: iat + 300,
+	...keys,
+	nonce: "na",
+	purpose: "passkey-add",
+});
 /** The statement T of an authorization, valid from `iat` (seconds) for five minutes. */
 export const authorization = (sid: string, iat = T0) => ({
 	iss: "https://core.example",
@@ -97,7 +123,14 @@ export const authorization = (sid: string, iat = T0) => ({
 		jar_hash: "jh",
 	},
 });
-export const creation = (subject: string, iat = T0, kg = 0, offered = algorithms) => ({
+/** A creation for the first-key path, or for the basis given (`ct_hash` the first-key path's alone). */
+export const creation = (
+	subject: string,
+	iat = T0,
+	kg = 0,
+	offered = algorithms,
+	basis?: { basis: string; evidence: string },
+) => ({
 	iss: "https://core.example",
 	sid: "creation-1",
 	iat,
@@ -107,8 +140,7 @@ export const creation = (subject: string, iat = T0, kg = 0, offered = algorithms
 	purpose: "creation",
 	creation: {
 		account: "a***@example",
-		evidence: "ev",
-		ct_hash: "ct",
+		...(basis ?? { evidence: "ev", ct_hash: "ct" }),
 		subject,
 		kg,
 		options: {

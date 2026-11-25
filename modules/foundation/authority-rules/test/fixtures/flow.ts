@@ -1,3 +1,4 @@
+import { canonicalText, continuation } from "@mod/sdk-core-wire";
 import type { Ask } from "../../src/chain/chain.ts";
 import { effectOf } from "../../src/chain/chain.ts";
 import {
@@ -16,9 +17,12 @@ import {
 	coseKey,
 	creation,
 	digest,
+	esig,
 	type FlowRecord,
+	passkeyAdd,
 	possession,
 	preimage,
+	screen,
 	sign,
 	subject,
 } from "./world.ts";
@@ -48,6 +52,52 @@ export const firstKey = (position = 1, kg = 0) => {
 		}),
 	};
 };
+
+type Key = { readonly credential: string; readonly publicKey: string };
+export const addedKey = { credential: "cred-2", publicKey: coseKey(2) };
+
+/** A screen's register continuation over a creation and a body, signed by `key` (the screen's E_sig). */
+export const continued = (creationJws: string, body: string, seq = 1, key = screen.e_sig) => {
+	const input = continuation.of("register", digest(creationJws), seq, digest(body));
+	return canonicalText({ seq, body, signature: esig(key, input) });
+};
+
+/** A passkey-add's evidence as an honest Core and screen make it: `approver` approves, `key` is added. */
+export function addParts(sid = "add-1", key: Key = addedKey, approver: Key = newKey) {
+	const statement = sign(passkeyAdd(sid), "ring-1");
+	const basis = { basis: "passkey-add", evidence: digest(statement) };
+	const creationJws = sign(creation(subject.id, undefined, 0, undefined, basis), "ring-1");
+	const possessionJws = sign(possession(creationJws, key), "ring-1");
+	return {
+		statement,
+		asserted: assertion(approver, statement),
+		creation: creationJws,
+		continuation: continued(creationJws, JSON.stringify(key)),
+		possession: possessionJws,
+		proof: assertion(key, possessionJws),
+		key,
+	};
+}
+export type AddParts = ReturnType<typeof addParts>;
+
+/** A key added by the live key `parent`'s approval, its envelope naming its digests. */
+export const added = (position: number, parent: string, parts: AddParts = addParts()) => ({
+	record: coreRecord("keyChange", position, {
+		keyChange: { statement: digest(parts.possession), evidence: digest(parts.proof) },
+	}),
+	preimage: preimage({
+		parent,
+		evidence: [
+			{ form: "statement", value: parts.statement },
+			{ form: "assertion", value: parts.asserted },
+			{ form: "statement", value: parts.creation },
+			{ form: "continuation", value: parts.continuation },
+			{ form: "statement", value: parts.possession },
+			{ form: "assertion", value: parts.proof },
+		],
+		content: { variant: "add", ...parts.key },
+	}),
+});
 
 export const approval = (position: number, key: string, sid = "sid-1") => {
 	const t = sign(authorization(sid), "ring-1");
