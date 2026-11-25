@@ -1,0 +1,58 @@
+import { describe, expect, it } from "vitest";
+import { credentialsOf, keyGenerationOf } from "../src/contract.ts";
+
+const key = (credential: unknown) => ({ credential, publicKey: "pk", chain: [], position: 1 });
+
+describe("credentialsOf", () => {
+	it("reads each live key's credential id once, the state's other parts left unread", () => {
+		const state = {
+			keyGeneration: 1,
+			keys: { r1: key("AQID"), r2: key("BAUG"), r3: key("AQID") },
+			approvals: { a1: { anything: true } },
+			whatever: [1, 2],
+		};
+		expect(credentialsOf(state)).toEqual(["AQID", "BAUG"]);
+		expect(Object.isFrozen(credentialsOf(state))).toBe(true);
+	});
+
+	it("tells a state of no key from one that does not read", () => {
+		expect(credentialsOf({ keys: {} })).toEqual([]);
+		for (const state of [
+			undefined,
+			null,
+			[],
+			"keys",
+			{},
+			{ keys: [] },
+			{ keys: null },
+			{ keys: { r1: key("") } },
+			{ keys: { r1: key(7) } },
+			{ keys: { r1: "AQID" } },
+			{ keys: { r1: {} } },
+		])
+			expect(credentialsOf(state), JSON.stringify(state)).toBeUndefined();
+	});
+
+	it("reads an entry by its own key, one the log named __proto__ too, and none it inherits", () => {
+		const state: unknown = JSON.parse('{"keys":{"__proto__":{"credential":"AQID"}}}');
+		expect(credentialsOf(state)).toEqual(["AQID"]);
+		const inherited = Object.create({ keys: { r1: key("AQID") } });
+		expect(credentialsOf(inherited)).toBeUndefined();
+	});
+});
+
+describe("keyGenerationOf", () => {
+	it("reads the key generation, a whole number from 0, or none", () => {
+		expect(keyGenerationOf({ keyGeneration: 0, keys: {} })).toBe(0);
+		expect(keyGenerationOf({ keyGeneration: 3 })).toBe(3);
+		for (const state of [
+			{},
+			null,
+			{ keyGeneration: -1 },
+			{ keyGeneration: 1.5 },
+			{ keyGeneration: "1" },
+		])
+			expect(keyGenerationOf(state), JSON.stringify(state)).toBeUndefined();
+		expect(keyGenerationOf(Object.create({ keyGeneration: 1 }))).toBeUndefined();
+	});
+});
