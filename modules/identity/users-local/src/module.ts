@@ -14,7 +14,9 @@ import { ledgers } from "@mod/users";
 import { localLedger } from "./ledger.ts";
 import {
 	type Builders,
+	type IdentifierlessRecord,
 	type IdentifierRecord,
+	identifierlessSpace,
 	identifierSpace,
 	localEraser,
 	localMarks,
@@ -41,6 +43,8 @@ export default defineModule(
 		m.contribute(spaces).by(() => indexSpaceOf(identifierSpace)),
 		m.contribute(spaces).by(() => subjectSpace),
 		m.contribute(spaces).by(() => indexSpaceOf(subjectSpace)),
+		m.contribute(spaces).by(() => identifierlessSpace),
+		m.contribute(spaces).by(() => indexSpaceOf(identifierlessSpace)),
 		m.contribute(spaces).by(() => markSpace),
 		m.contribute(spaces).by(() => indexSpaceOf(markSpace)),
 		m.provide(placed).by(async (c): Promise<Builders> => {
@@ -66,8 +70,18 @@ export default defineModule(
 					"users-local",
 					c.refuse,
 				),
+				identifierless: await phasedRecordsIn<IdentifierlessRecord>(
+					at(identifierlessSpace),
+					phase,
+					"users-local",
+					c.refuse,
+				),
 				joint: await phasedJointRecordsIn(
-					{ identifiers: at(identifierSpace), subjects: at(subjectSpace) },
+					{
+						identifiers: at(identifierSpace),
+						subjects: at(subjectSpace),
+						identifierless: at(identifierlessSpace),
+					},
 					phase,
 					"users-local",
 					c.refuse,
@@ -93,12 +107,13 @@ export default defineModule(
 		m.contribute(erasers).by(async (c) => localEraser(await c.get(placed))),
 		// Out of traffic until the phase reads: no call is judged on a phase not read.
 		m.contribute(probes).by(async (c) => {
-			const { identifiers, subjects, joint, marks } = await c.get(placed);
+			const { identifiers, subjects, identifierless, joint, marks } = await c.get(placed);
 			return {
 				name: "users-local.phase",
 				check: async () => {
 					await identifiers.ready();
 					await subjects.ready();
+					await identifierless.ready();
 					await joint.ready();
 					await marks.ready();
 				},

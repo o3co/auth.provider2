@@ -21,7 +21,12 @@ import storeModule from "@mod/store/module";
 import { simulatedStore, storeConfig } from "@mod/store/testing";
 import { type Ledger, ledgers, users, usersImport } from "@mod/users";
 import usersModule from "@mod/users/module";
-import { ledgerContract, memoryUsersStores, testUser } from "@mod/users/testing";
+import {
+	identifierlessKeyOf,
+	ledgerContract,
+	memoryUsersStores,
+	testUser,
+} from "@mod/users/testing";
 import { describe, expect, it } from "vitest";
 import usersLocal from "../src/module.ts";
 import { localRecords, placed } from "../src/records/records.ts";
@@ -113,6 +118,7 @@ for (const phase of ["reader", "indexed"] as const) {
 			return { ledger: open.ledger, checks: open.checks };
 		},
 		creates: true,
+		createsIdentifierless: true,
 	});
 }
 
@@ -257,6 +263,7 @@ describe("users-local", () => {
 		const erased = await eraser.online(subject, signal);
 		expect(erased.reports.map((r) => [r.kind, "space" in r && r.space])).toEqual([
 			["erased", "users-local.identifiers"],
+			["erased", "users-local.identifierless"],
 			["erased", "users-local.subjects"],
 			["erased", "users-local.marks"],
 		]);
@@ -269,10 +276,28 @@ describe("users-local", () => {
 		expect(again?.kind === "created" && again.user.subject).not.toBe(subject);
 	});
 
+	it("erases an identifierless subject's key with its record, so the key makes a new subject after", async () => {
+		const { ledger, eraser } = await opened();
+		const key = identifierlessKeyOf("erin");
+		const made = await ledger.createIdentifierless?.(key);
+		const subject = made?.subject ?? "";
+		expect(await ledger.bySubject(subject)).toEqual({ kind: "user", user: made });
+		const erased = await eraser.online(subject, signal);
+		expect(erased.reports.map((r) => [r.kind, "space" in r && r.space])).toEqual([
+			["erased", "users-local.identifiers"],
+			["erased", "users-local.identifierless"],
+			["erased", "users-local.subjects"],
+			["erased", "users-local.marks"],
+		]);
+		expect(await ledger.bySubject(subject)).toEqual({ kind: "none" });
+		expect((await ledger.createIdentifierless?.(key))?.subject).not.toBe(subject);
+	});
+
 	it("indexes what the reader phase wrote, in the one migration", async () => {
 		const reader = await opened("reader");
 		const made = await reader.ledger.create?.("carol");
 		await reader.witness.enroll(made?.kind === "created" ? made.user.subject : "", "t");
+		await reader.ledger.createIdentifierless?.(identifierlessKeyOf("dave"));
 		reader.simulated.mark("subject-records.phase", "indexed");
 		const shared = defineModule({ name: "store", replicaSafe: true, takes: [] }, (m) => [
 			m.provide(store).by(() => reader.app.get(store)),
@@ -295,7 +320,8 @@ describe("users-local", () => {
 		};
 		expect(await eraser?.migrate(walk, signal)).toEqual([
 			{ kind: "migrated", space: "users-local.identifiers", indexed: 1, removed: 0 },
-			{ kind: "migrated", space: "users-local.subjects", indexed: 1, removed: 0 },
+			{ kind: "migrated", space: "users-local.identifierless", indexed: 1, removed: 0 },
+			{ kind: "migrated", space: "users-local.subjects", indexed: 2, removed: 0 },
 			{ kind: "migrated", space: "users-local.marks", indexed: 1, removed: 0 },
 		]);
 	});

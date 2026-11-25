@@ -35,6 +35,14 @@ export const subjectSpace: Space = {
 	erasedBy: "users-local",
 };
 
+/** Each identifierless subject's record, keyed by its idempotency key: the subject made for it (F1). */
+export const identifierlessSpace: Space = {
+	name: "users-local.identifierless",
+	guarantees,
+	subjectData: "online-indexed",
+	erasedBy: "users-local",
+};
+
 /** The passkey witness's mark of each subject, keyed by the subject: the token that set it. */
 export const markSpace: Space = {
 	name: "users-local.marks",
@@ -44,19 +52,24 @@ export const markSpace: Space = {
 };
 
 export type IdentifierRecord = { readonly subject: string; readonly passwordHash?: string };
-export type SubjectRecord = { readonly identifier: string };
+/** A subject's record: the identifier it was made for, or, for an identifierless one, its idempotency key. */
+export type SubjectRecord =
+	| { readonly identifier: string }
+	| { readonly identifierlessKey: string };
+export type IdentifierlessRecord = { readonly subject: string };
 export type MarkRecord = { readonly token: string };
 
-type Places = "identifiers" | "subjects";
-/** The builders the module makes over its two spaces, at the phase the process reads once. */
+type Places = "identifiers" | "subjects" | "identifierless";
+/** The builders the module makes over its spaces, at the phase the process reads once. */
 export interface Builders {
 	readonly identifiers: Awaited<ReturnType<typeof phasedRecordsIn<IdentifierRecord>>>;
 	readonly subjects: Awaited<ReturnType<typeof phasedRecordsIn<SubjectRecord>>>;
+	readonly identifierless: Awaited<ReturnType<typeof phasedRecordsIn<IdentifierlessRecord>>>;
 	readonly joint: Awaited<ReturnType<typeof phasedJointRecordsIn<Places>>>;
 	readonly marks: Awaited<ReturnType<typeof phasedRecordsIn<MarkRecord>>>;
 }
 
-/** The builders over the three spaces, at the one phase this process reads: the module's own, taken by no other. */
+/** The builders over the four spaces, at the one phase this process reads: the module's own, taken by no other. */
 export const placed = contract<Builders>("users-local.placed");
 
 /** The ledger's records: a user placed by identifier and subject as one, and each read back. */
@@ -70,7 +83,16 @@ export interface LocalRecords {
 		subject: string,
 		passwordHash?: string,
 	): Promise<"placed" | "exists" | "taken" | "erased">;
+	/**
+	 * Places an identifierless subject under its key, the subject's record naming the key, as one, unless
+	 * the key is held (`exists`), else the subject (`taken`), else the subject is erased (`erased`).
+	 */
+	placeIdentifierless(
+		key: string,
+		subject: string,
+	): Promise<"placed" | "exists" | "taken" | "erased">;
 	byIdentifier(identifier: string): Promise<IdentifierRecord | undefined>;
+	byKey(key: string): Promise<IdentifierlessRecord | undefined>;
 	bySubject(subject: string): Promise<SubjectRecord | undefined>;
 }
 
@@ -115,6 +137,29 @@ export function localRecords(builders: Builders): LocalRecords {
 			if (answer.why === "erased") return "erased";
 			throw new Unavailable("users-local");
 		},
+		placeIdentifierless: async (key, subject) => {
+			const answer: JointAnswer = await builders.joint.changeSubjectRecords({
+				targets: [
+					{ place: "identifierless", key },
+					{ place: "subjects", key: subject },
+				],
+				decide: () => ({
+					targets: [
+						{ kind: "create", value: { subject }, lifetimeMs: "endless", subject },
+						{ kind: "create", value: { identifierlessKey: key }, lifetimeMs: "endless", subject },
+					],
+				}),
+			});
+			if (answer.kind === "written") return "placed";
+			// The key's record is the first target, so a held key is told before its subject.
+			if (answer.why === "exists") return answer.at.nth === 0 ? "exists" : "taken";
+			if (answer.why === "erased") return "erased";
+			throw new Unavailable("users-local");
+		},
+		byKey: async (key) =>
+			shaped<IdentifierlessRecord>(await builders.identifierless.read(key), (read) =>
+				isText(read.subject),
+			),
 		byIdentifier: async (identifier) =>
 			shaped<IdentifierRecord>(
 				await builders.identifiers.read(identifier),
@@ -122,8 +167,9 @@ export function localRecords(builders: Builders): LocalRecords {
 					isText(read.subject) && (read.passwordHash === undefined || isText(read.passwordHash)),
 			),
 		bySubject: async (subject) =>
-			shaped<SubjectRecord>(await builders.subjects.read(subject), (read) =>
-				isText(read.identifier),
+			shaped<SubjectRecord>(
+				await builders.subjects.read(subject),
+				(read) => isText(read.identifier) || isText(read.identifierlessKey),
 			),
 	};
 }
@@ -148,7 +194,7 @@ export function localMarks(builders: Pick<Builders, "marks">): LocalMarks {
 	};
 }
 
-/** Whose a record written before indexing is: an identifier's names its subject, a subject's and a mark's are keyed by it. */
+/** Whose a record written before indexing is: an identifier's and an identifierless key's name their subject, a subject's and a mark's are keyed by it. */
 const identifierReading: SubjectReading = async (_key, value): Promise<SubjectOf> => {
 	const subject = (value as { subject?: unknown } | null)?.subject;
 	return isText(subject)
@@ -165,10 +211,11 @@ interface Erasing {
 
 /** The eraser `users-local`, as its spaces' `erasedBy` names it: a subject's records and mark erased, and each space migrated once. */
 export function localEraser(
-	builders: Pick<Builders, "identifiers" | "subjects" | "marks">,
+	builders: Pick<Builders, "identifiers" | "subjects" | "identifierless" | "marks">,
 ): Eraser {
 	const spaces: readonly [Erasing, SubjectReading][] = [
 		[builders.identifiers, identifierReading],
+		[builders.identifierless, identifierReading],
 		[builders.subjects, subjectReading],
 		[builders.marks, subjectReading],
 	];

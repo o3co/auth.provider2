@@ -17,7 +17,7 @@ export interface Passwords {
 	readonly work: string;
 }
 
-/** The ledger over its records; a subject made for an identifier, drawn from `random`; passwords checked with `passwords`. */
+/** The ledger over its records; a subject made for an identifier or an identifierless one for a key, drawn from `random`; passwords checked with `passwords`. */
 export function localLedger(records: LocalRecords, random: Random, passwords: Passwords): Ledger {
 	const { checker, work } = passwords;
 	return {
@@ -45,6 +45,19 @@ export function localLedger(records: LocalRecords, random: Random, passwords: Pa
 			// A drawn subject held already, or erased: no answer for the identifier, which may be free.
 			if (placed !== "placed") throw new Unavailable("users-local");
 			return deepFreeze({ kind: "created", user: userOf(subject) });
+		},
+		// The same key is answered the same subject: placed once, read back after, whoever placed it.
+		createIdentifierless: async (key) => {
+			const held = await records.byKey(key);
+			if (held) return userOf(held.subject);
+			const subject = Buffer.from(random.bytes(subjectBytes)).toString("hex");
+			const placed = await records.placeIdentifierless(key, subject);
+			if (placed === "placed") return userOf(subject);
+			// Placed at once by another: its subject is the key's.
+			const after = placed === "exists" ? await records.byKey(key) : undefined;
+			// A drawn subject held already, or erased: no answer for the key, asked again.
+			if (!after) throw new Unavailable("users-local");
+			return userOf(after.subject);
 		},
 		keep: async (subject, identifier, passwordHash) => {
 			if (passwordHash !== undefined && readSecretHash(passwordHash)?.work !== work) {
