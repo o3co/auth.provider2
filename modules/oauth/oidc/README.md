@@ -2,7 +2,7 @@
 
 ## Responsibilities
 - Makes a redemption's ID token, a part of its bundle (a contribution to `code-grant`'s `idTokens`, for the `openid` scope), signed by the authority's ring (internal module `id-token`).
-- Holds the fixed claim table and maps a subject's attributes through it, and reads the `claims` request parameter for `authorize` (internal module `claims`).
+- Holds the fixed claim table and maps a subject's attributes through it, and reads the `claims` request parameter for `authorize-claims` (internal module `claims`).
 
 ## Not here
 - When an ID token is asked, and the code's facts (`code-grant`, from `authorize` and `approvals`). Recording the bundle (`token-endpoint`). Signing, the rings and their algorithms (`keys`). `c_hash` from the code's digest (`authority-rules`).

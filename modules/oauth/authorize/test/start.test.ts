@@ -11,7 +11,7 @@ import { describe, expect, it } from "vitest";
 import { codeNeedsOver } from "../src/code-needs/code-needs.ts";
 import type { JarReservations, RequestSource, StoredReservation } from "../src/contract.ts";
 import { reserving } from "../src/jar/jar.ts";
-import { byValue, starting } from "../src/start/start.ts";
+import { byValue, claimsUnread, type StartParts, starting } from "../src/start/start.ts";
 
 const now = 1_800_000_000_000;
 const issuer = "https://issuer.example";
@@ -92,6 +92,8 @@ function harness(
 		idTokens?: boolean;
 		/** The rule for the audience asked, as resource-indicators contributes it; none unless told. */
 		rule?: Pick<TargetRule, "target">;
+		/** The claims' reader; one that takes any unless told. */
+		claims?: StartParts["claims"];
 	} = {},
 ) {
 	const asked: IssueAsk[] = [];
@@ -143,6 +145,7 @@ function harness(
 		approvals,
 		withoutPasskey: p.allows === undefined ? undefined : { allows: async () => p.allows === true },
 		signUp: p.signUp ?? false,
+		claims: p.claims ?? { refusal: () => undefined },
 		needs: codeNeedsOver({
 			idTokens: p.idTokens ?? true,
 			targets: p.rule,
@@ -406,23 +409,33 @@ describe("a login's start (②)", () => {
 		expect(h.asked).toHaveLength(0);
 	});
 
-	it("takes an OpenID request's claims into T, refusing before T one malformed or asked without openid", async () => {
-		const h = harness();
+	it("takes an OpenID request's claims into T, refusing before T what their reader refuses", async () => {
+		const read: unknown[][] = [];
+		const h = harness({
+			claims: {
+				refusal: (asked, openid) => {
+					read.push([asked, openid]);
+					return asked !== undefined && !openid ? "asked without openid" : undefined;
+				},
+			},
+		});
 		const asking = { id_token: { email: { essential: true } } };
 		const openid = await h.body(h.fields(jar(claims({ scope: "openid read", claims: asking }))));
 		expect(openid.status).toBe(200);
+		expect(read).toEqual([[asking, true]]);
+		const plain = await h.body(h.fields(jar(claims({ jti: "j9", scope: "read", claims: asking }))));
+		expect(plain).toMatchObject({ status: 400, json: { error: "invalid_request_object" } });
+		expect(read).toContainEqual([asking, false]);
 		expect(h.asked).toHaveLength(1);
-		for (const [jti, asked] of [
-			["j9", { scope: "read", claims: { id_token: {} } }],
-			["j10", { scope: "openid read", claims: { id_token: { email: { values: [] } } } }],
-			["j11", { scope: "openid read", claims: [] }],
-		] as const) {
-			expect(await h.body(h.fields(jar(claims({ jti, ...asked }))))).toMatchObject({
-				status: 400,
-				json: { error: "invalid_request_object" },
-			});
-		}
-		expect(h.asked).toHaveLength(1);
+	});
+
+	it("refuses before T any claims where no module reads them", async () => {
+		const h = harness({ claims: claimsUnread });
+		const asking = { id_token: { email: null } };
+		const asked = await h.body(h.fields(jar(claims({ scope: "openid read", claims: asking }))));
+		expect(asked).toMatchObject({ status: 400, json: { error: "invalid_request_object" } });
+		expect(h.asked).toHaveLength(0);
+		expect(await h.body(h.fields(jar(claims({ jti: "j9" }))))).toMatchObject({ status: 200 });
 	});
 
 	it("refuses, before T, a challenge not of S256's shape and a dpop_jkt out of its form", async () => {

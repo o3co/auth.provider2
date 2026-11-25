@@ -14,7 +14,6 @@
 	"dependencies": {
 		"@mod/acr": "workspace:*",
 		"@mod/approvals": "workspace:*",
-		"@mod/claims-selection": "workspace:*",
 		"@mod/client-allowance": "workspace:*",
 		"@mod/client-assertion": "workspace:*",
 		"@mod/client-documents": "workspace:*",
@@ -24,7 +23,6 @@
 		"@mod/http": "workspace:*",
 		"@mod/issuer": "workspace:*",
 		"@mod/kernel": "workspace:*",
-		"@mod/oidc": "workspace:*",
 		"@mod/promises": "workspace:*",
 		"@mod/rate-limit": "workspace:*",
 		"@mod/redirect-uris": "workspace:*",

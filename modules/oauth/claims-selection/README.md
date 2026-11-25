@@ -4,7 +4,7 @@
 - Decides which claim names a `claims` request parameter may release (OpenID Connect Core §5.5), by the client's allowance and what the person agreed to in the approval the request rests on (O19), and keeps that selection and its value constraints for the code and each access token it gives.
 
 ## Not here
-- Reading the `claims` parameter, which claims a name stands for, and the approval's items (`authorize`, `oidc`, `approvals`): the caller hands what was agreed. Releasing claims and checking values against constraints (`oidc`).
+- Reading the `claims` parameter, which claims a name stands for, and the approval's items (`authorize-claims`, `oidc`, `approvals`): the caller hands what was agreed. Releasing claims and checking values against constraints (`oidc`).
 - Which family a refresh is of, and when it ends (`refresh`): the family's target is kept by the family's id `refresh` names.
 
 ## Offers

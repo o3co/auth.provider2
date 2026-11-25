@@ -44,6 +44,42 @@ export const withoutPasskey = extensionPoint<WithoutPasskey>("authorize.without-
 });
 
 /**
+ * What an OpenID request's `claims` (OIDC Core §5.5) select at the finish: none asked; a selection,
+ * kept for the code by `keep` (its digest, its lifetime, the subject) before the code is rooted; a
+ * `sub` asked that is not the subject; an essential acr the login does not meet.
+ */
+export type ClaimsPicked =
+	| { readonly kind: "none" }
+	| {
+			readonly kind: "selected";
+			keep(digest: string, lifetimeMs: number, subject: string): Promise<void>;
+	  }
+	| { readonly kind: "otherSubject" }
+	| { readonly kind: "acrUnmet" };
+
+/**
+ * An OpenID request's `claims` parameter, read by the module that keeps what they select: at the
+ * start, before T is made, why it is refused (none where it is not); at the finish, before the
+ * session opens, what it selects by the client's allowance and what the person agreed to in T.
+ */
+export interface RequestClaims {
+	refusal(claims: unknown, openid: boolean): string | undefined;
+	select(
+		client: Client,
+		subject: string,
+		scope: readonly string[],
+		claims: unknown,
+		/** The acr the login meets, which an essential acr asked is held to. */
+		acr: string | undefined,
+	): Promise<ClaimsPicked>;
+}
+
+/** At most one; two refuse boot. */
+export const requestClaims = extensionPoint<RequestClaims>("authorize.request-claims", {
+	multiplicity: "many",
+});
+
+/**
  * A person's sign-up (F1), offered by the module that continues it (`/continue`'s stage `sign-up`):
  * its name. With one, a T whose screen may offer `create()` allows its sign-up at its issue.
  */

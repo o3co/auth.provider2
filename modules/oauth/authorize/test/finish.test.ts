@@ -4,9 +4,8 @@ import type { CodeFacts } from "@mod/code-grant";
 import type { HttpRequest } from "@mod/http";
 import { payloads } from "@mod/sdk-core-wire";
 import { describe, expect, it } from "vitest";
-import type { Picked } from "../src/claims/claims.ts";
 import { codeNeedsOver } from "../src/code-needs/code-needs.ts";
-import { type FinishParts, finishing } from "../src/finish/finish.ts";
+import { claimsUnselected, type FinishParts, finishing } from "../src/finish/finish.ts";
 
 const now = 1_800_000_000_000;
 /** The completion sealed as the wire holds it: HPKE's `enc`, an uncompressed P-256 point, and a ciphertext of 16 bytes or more. */
@@ -52,8 +51,12 @@ function harness(
 		scope?: string;
 		claims?: unknown;
 		scopes?: string[];
-		/** What the claims' selection answers. */
-		picked?: Picked;
+		/** What the claims' selection answers: a selection is kept for the code by its `keep`. */
+		picked?:
+			| { kind: "none" }
+			| { kind: "selected"; selection: unknown }
+			| { kind: "otherSubject" }
+			| { kind: "acrUnmet" };
 		/** The acr a passkey's login meets. */
 		acr?: string;
 	} = {},
@@ -164,10 +167,14 @@ function harness(
 				log.push(
 					`select ${subject} ${scope.join(" ")} ${JSON.stringify(claims)}${acr ? ` ${acr}` : ""}`,
 				);
-				return p.picked ?? { kind: "none" };
-			},
-			keep: async (redemption, _selection, lifetimeMs, subject) => {
-				log.push(`keep ${redemption} ${lifetimeMs} ${subject}`);
+				const picked = p.picked ?? { kind: "none" };
+				if (picked.kind !== "selected") return picked;
+				return {
+					kind: "selected",
+					keep: async (redemption, lifetimeMs, subject) => {
+						log.push(`keep ${redemption} ${lifetimeMs} ${subject}`);
+					},
+				};
 			},
 		},
 		needs: codeNeedsOver({
@@ -365,5 +372,17 @@ describe("a login's finish (⑤⑥)", () => {
 			json: { error: "invalid_request" },
 		});
 		expect(h.log).toEqual([]);
+	});
+
+	it("selects no claims where no module reads them, and fails a T that carries some past ②", async () => {
+		const client = { id: "c1" } as Client;
+		expect(
+			await claimsUnselected.select(client, "alice", ["openid"], undefined, undefined),
+		).toEqual({
+			kind: "none",
+		});
+		await expect(
+			claimsUnselected.select(client, "alice", ["openid"], { id_token: {} }, undefined),
+		).rejects.toThrow(TypeError);
 	});
 });

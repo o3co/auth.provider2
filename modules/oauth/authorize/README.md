@@ -14,6 +14,7 @@
 - `POST /login/finish` (`loginFinish`: JSON of `statement` and `assertion`, its JSON text as sent) → `200` `{ sealed: { enc, ct } }`, the completion sealed to the screen; or `invalid_request`, `access_denied`, `invalid_scope`, `invalid_client`, `temporarily_unavailable`. Counted per source as the start is.
 - `POST /login/start` (`front-core-wire`'s `loginStart`: JSON of `clientId`, the request's fields, `eEnc`, `eSigX`, `eSigY`) → `200` `{ statement, challenge, create }`; or an OAuth error: `invalid_client` (`401`), `rate_limited` (`429`), `temporarily_unavailable` (`503`), any other `400` (`invalid_request`, `invalid_request_object`, `invalid_target`, `login_required`, and the word a request source names). Starts are counted per source (`requests` in `window`).
 - Extension points `requestSources` (keyed by name: a start's fields → the JAR, a refusal in its own words, or none; `request`, by value, is its own) and `withoutPasskey` (at most one: whether the screen may offer `create()`, a hint outside T's signature that whoever registers a key judges again; with a sign-up offered, also its permission, kept on T and never judged again; with none, it may not).
+- Extension point `requestClaims` (at most one): an OpenID request's `claims` (`RequestClaims`): why they are refused before T, and what they select at the finish (`ClaimsPicked`, a selection kept for the code by its `keep`). Where none is contributed, any `claims` is refused before T.
 - Extension point `signUpOffers` (at most one, its module's name): with one, a T whose screen may offer `create()` allows its sign-up (F1), which that module continues; with none, no T does.
 - `jarReservations`, the store interface (create unless held, read, change from what it holds), and `jarReservationsNeeds`.
 - Contributions: `redirect-uris`' client metadata section to `clients` and its document copy to `client-documents`; the authorization's items but `dpop_jkt` to `approvals`' `statementItems`; its stance.
@@ -26,8 +27,8 @@
 ## Invariants
 - A login is started only by a JAR its client signed (`typ` `oauth-authz-req+jwt`, under `client-assertion`'s algorithms, clock skew and longest lifetime), its `iss` and `client_id` the client, its `aud` this issuer, with a `jti` and an `exp` not past and at most `jar-max-lifetime` away; exactly one request source answers each start.
 - A JAR starts one login (A20, internal module `jar`): the same JAR with the same screen keys is answered the same T, made by one call at a time; with other keys, or another JAR under its `jti`, it is refused. Its reservation outlives the JAR's expiry by the clock skew, the margin between replicas' clocks.
-- Boot is refused where an item every T carries is filled by no module (`dpop_jkt` with no `approval-binding`), or two modules answer a person with no passkey, or two offer a sign-up, or one does with no answer to a person with no passkey.
-- What a code needs is checked before T is made, and again before the session opens (internal module `code-needs`), so nothing a code needs fails once the person tapped. A JAR whose `claims` is malformed or asked without `openid` is refused before T (`invalid_request_object`, internal module `claims`).
+- Boot is refused where an item every T carries is filled by no module (`dpop_jkt` with no `approval-binding`), or two modules answer a person with no passkey, or two offer a sign-up, or one does with no answer to a person with no passkey, or two read a request's claims.
+- What a code needs is checked before T is made, and again before the session opens (internal module `code-needs`), so nothing a code needs fails once the person tapped. A JAR whose `claims` its reader refuses, or that no module reads, is refused before T (`invalid_request_object`).
 - The redirect URI is one the client registered, by `redirect-uris`' rule, before anything is reserved or signed.
 
 ## Data
@@ -35,7 +36,7 @@
 
 ## Depends on
 - `kernel`, `http` (the routes), `clients` and `client-documents` (the client, its section), `client-assertion` (`verifySignedBy`), `client-allowance`, `grants` (`targetRules`), `redirect-uris`, `approvals`, `code-grant`, `session`, `tokens` (the policies), `sender-binding` (the binding asked for ahead), `issuer`, `rate-limit`, `promises` (its stance), `sdk-core-wire`; `zod`.
-- `oidc` (the `claims` parameter's reading) and `claims-selection`; `acr` (`amrSources`, the acr a passkey's login meets); `refresh` (`delegation`, a session's length), which must be composed.
+- `acr` (`amrSources`, the acr a passkey's login meets); `refresh` (`delegation`, a session's length), which must be composed.
 
 ## Vocabulary
 - start: ②, a login's first request from the screen. JAR: the client's signed request (RFC 9101). reservation: a JAR's one use. source: where a start's JAR comes from.

@@ -5,7 +5,6 @@ import approvalsModule from "@mod/approvals/module";
 import { jarReservations, type StoredReservation } from "@mod/authorize";
 import authorizeModule from "@mod/authorize/module";
 import { authorizeConfig } from "@mod/authorize/testing";
-import { claimsSelections } from "@mod/claims-selection";
 import { clientAssertion } from "@mod/client-assertion";
 import { type Client, clients } from "@mod/clients";
 import { codes } from "@mod/code-grant";
@@ -260,7 +259,6 @@ export async function f1World() {
 					},
 				}) as never,
 		),
-		m.provide(claimsSelections).by(() => ({}) as never),
 		m.provide(acr).by(() => ({ current: () => undefined }) as never),
 		m.provide(delegation).by(() => ({ lifetimeMs: 86_400_000 })),
 	]);

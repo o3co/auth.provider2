@@ -1,0 +1,25 @@
+{
+	"name": "@mod/authorize-claims",
+	"private": true,
+	"license": "Apache-2.0",
+	"type": "module",
+	"kind": "feature",
+	"optIn": true,
+	"joins": [
+		"@mod/authorize",
+		"@mod/claims-selection"
+	],
+	"exports": {
+		"./module": "./src/module.ts"
+	},
+	"dependencies": {
+		"@mod/authorize": "workspace:*",
+		"@mod/claims-selection": "workspace:*",
+		"@mod/kernel": "workspace:*",
+		"@mod/oidc": "workspace:*"
+	},
+	"devDependencies": {
+		"@mod/clients": "workspace:*",
+		"vitest": "5.0.5"
+	}
+}

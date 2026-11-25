@@ -1,6 +1,5 @@
 import { acr } from "@mod/acr";
 import { approvals, statementItems } from "@mod/approvals";
-import { claimsSelections } from "@mod/claims-selection";
 import { clientAssertion } from "@mod/client-assertion";
 import { clients } from "@mod/clients";
 import { codes } from "@mod/code-grant";
@@ -23,7 +22,7 @@ import { senderBinding } from "@mod/sender-binding";
 import { sessions } from "@mod/session";
 import { accessTokenIssuance } from "@mod/tokens";
 import { describe, expect, it } from "vitest";
-import { jarReservations, signUpOffers, withoutPasskey } from "../src/contract.ts";
+import { jarReservations, requestClaims, signUpOffers, withoutPasskey } from "../src/contract.ts";
 import authorize from "../src/module.ts";
 import { authorizeConfig } from "../src/testing.ts";
 
@@ -46,7 +45,6 @@ const fakes = defineModule(
 		m.provide(accessTokenIssuance).by(() => ({}) as never),
 		m.provide(sessions).by(() => ({}) as never),
 		m.provide(codes).by(() => ({ issuesIdTokens: () => false }) as never),
-		m.provide(claimsSelections).by(() => ({}) as never),
 		m.provide(acr).by(() => ({ current: () => undefined }) as never),
 		m.provide(delegation).by(() => ({ lifetimeMs: 86_400_000 })),
 		m.provide(senderBinding).by(() => ({}) as never),
@@ -98,7 +96,6 @@ describe("authorize, composed", () => {
 			m.provide(accessTokenIssuance).by(() => ({}) as never),
 			m.provide(sessions).by(() => ({}) as never),
 			m.provide(codes).by(() => ({ issuesIdTokens: () => false }) as never),
-			m.provide(claimsSelections).by(() => ({}) as never),
 			m.provide(acr).by(() => ({ current: () => undefined }) as never),
 			m.provide(delegation).by(() => ({ lifetimeMs: 86_400_000 })),
 			m.provide(senderBinding).by(() => ({}) as never),
@@ -162,5 +159,15 @@ describe("authorize, composed", () => {
 			expect.stringMatching(/sign-up is offered, but no answer/),
 		]);
 		await expect(boot([offer("s1"), answer("a1")])).resolves.toBeDefined();
+		const reader = (name: string) =>
+			defineModule({ name, replicaSafe: true, takes: [] }, (m) => [
+				m.contribute(requestClaims).by(() => ({
+					refusal: () => undefined,
+					select: async () => ({ kind: "none" as const }),
+				})),
+			]);
+		expect(await refusedOf([reader("r1"), reader("r2")])).toContainEqual(
+			expect.stringMatching(/more than one module reads a request's claims/),
+		);
 	});
 });

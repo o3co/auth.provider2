@@ -6,13 +6,13 @@ import { type BuildContext, Unavailable } from "@mod/kernel";
 import { requestsPerSource, type Window } from "@mod/rate-limit";
 import { type Sessions, sessions } from "@mod/session";
 import { type AccessTokenIssuance, accessTokenIssuance } from "@mod/tokens";
-import { type ClaimsPinning, claimsPinningIn, claimsTakes } from "../claims/claims.ts";
 import {
 	type CodeNeeds,
 	codeNeedsIn,
 	codeNeedsTakes,
 	type Unmet,
 } from "../code-needs/code-needs.ts";
+import { type RequestClaims, requestClaims } from "../contract.ts";
 
 /**
  * How a person's login with a passkey is named in the session and the token (RFC 8176), by what its
@@ -28,7 +28,8 @@ export interface FinishParts {
 	readonly issuance: Pick<AccessTokenIssuance, "admits">;
 	readonly sessions: Pick<Sessions, "open" | "close">;
 	readonly codes: Pick<Codes, "issue" | "root" | "digestOf" | "lifetimeMs">;
-	readonly claims: ClaimsPinning;
+	/** What an OpenID request's `claims` select: the `requestClaims` contributed, else `claimsUnselected`. */
+	readonly claims: Pick<RequestClaims, "select">;
 	/** What a code needs, checked again before the session opens (internal module `code-needs`). */
 	readonly needs: CodeNeeds;
 	/** How long a login's delegation lasts from its statement's issue, in seconds (O27). */
@@ -144,12 +145,7 @@ export function finishing(p: FinishParts) {
 			});
 			// Pinned to the code before its root is set: a code never rooted is never redeemed.
 			if (picked.kind === "selected")
-				await p.claims.keep(
-					p.codes.digestOf(code),
-					picked.selection,
-					p.codes.lifetimeMs(),
-					subject,
-				);
+				await picked.keep(p.codes.digestOf(code), p.codes.lifetimeMs(), subject);
 			const completed = await p.approvals.complete({ hash: approval.hash, code });
 			if (completed.kind === "refused") {
 				await close();
@@ -188,8 +184,19 @@ export const finishTakes = [
 	accessTokenIssuance,
 	sessions,
 	...codeNeedsTakes,
-	...claimsTakes,
+	requestClaims,
 ] as const;
+
+/**
+ * Where no module reads a request's `claims`, none are selected: the start refused any, so a T
+ * carrying them past ② was let through elsewhere, a `TypeError` rather than a code unchecked.
+ */
+export const claimsUnselected: FinishParts["claims"] = {
+	select: async (_client, _subject, _scope, claims) => {
+		if (claims !== undefined) throw new TypeError("authorize: claims past ② that no module reads");
+		return { kind: "none" };
+	},
+};
 
 /** The route of ⑤⑥, its parts taken from the composition, counted per source. */
 export async function finishRoute(
@@ -215,7 +222,7 @@ export async function finishRoute(
 			issuance: await c.get(accessTokenIssuance),
 			sessions: await c.get(sessions),
 			codes: await c.get(codes),
-			claims: await claimsPinningIn(c),
+			claims: (await c.collect(requestClaims))[0] ?? claimsUnselected,
 			needs: await codeNeedsIn(c, p.issuer),
 			delegationS: p.delegationS,
 			...(p.acr === undefined ? {} : { acr: p.acr }),

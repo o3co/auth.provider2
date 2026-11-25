@@ -7,7 +7,6 @@ import type { BuildContext } from "@mod/kernel";
 import { requestsPerSource, sourceKey, type Window } from "@mod/rate-limit";
 import { matches, redirects } from "@mod/redirect-uris";
 import { itemsFromJar, jarClaims, type SigningKey } from "@mod/sdk-core-wire";
-import { claimsRefusal } from "../claims/claims.ts";
 import {
 	type CodeNeeds,
 	codeNeedsIn,
@@ -16,7 +15,9 @@ import {
 } from "../code-needs/code-needs.ts";
 import {
 	jarReservations,
+	type RequestClaims,
 	type RequestSource,
+	requestClaims,
 	requestSources,
 	type StartFields,
 	type WithoutPasskey,
@@ -51,7 +52,14 @@ export interface StartParts {
 	readonly signUp: boolean;
 	/** What a code needs, checked before T (internal module `code-needs`). */
 	readonly needs: CodeNeeds;
+	/** Why an OpenID request's `claims` is refused before T: the `requestClaims` contributed, else `claimsUnread`. */
+	readonly claims: Pick<RequestClaims, "refusal">;
 }
+
+/** Where no module reads a request's `claims`, any is refused before T. */
+export const claimsUnread: StartParts["claims"] = {
+	refusal: (claims) => (claims === undefined ? undefined : "the claims parameter is not supported"),
+};
 
 /** A code's need unmet, as the start answers it before T. */
 const unmetRefusal = (unmet: StartUnmet): Refusal => {
@@ -153,7 +161,7 @@ export function starting(p: StartParts) {
 		if (p.needs.openidUnmet(made.items))
 			return answerOf(400, { error: "invalid_scope", description: "no ID token is issued" });
 		// Its claims, read before T is made: one asked malformed, or without openid, is refused.
-		const claimsRefused = claimsRefusal(made.items.claims, asksOpenid);
+		const claimsRefused = p.claims.refusal(made.items.claims, asksOpenid);
 		if (claimsRefused)
 			return answerOf(400, { error: "invalid_request_object", description: claimsRefused });
 		// What a code needs is checked here, before T, so the finish fails on none of it once the person tapped.
@@ -218,6 +226,7 @@ export const startTakes = [
 	issuer,
 	jarReservations,
 	requestSources,
+	requestClaims,
 	...codeNeedsTakes,
 ] as const;
 
@@ -251,6 +260,7 @@ export async function startRouteIn(
 			withoutPasskey: p.withoutPasskey,
 			signUp: p.signUp,
 			needs: await codeNeedsIn(c, url),
+			claims: (await c.collect(requestClaims))[0] ?? claimsUnread,
 		},
 		{ limit: c.section.requests, ms: c.section.window * 1000 },
 	);

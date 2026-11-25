@@ -20,7 +20,6 @@
 	},
 	"devDependencies": {
 		"@mod/acr": "workspace:*",
-		"@mod/claims-selection": "workspace:*",
 		"@mod/client-assertion": "workspace:*",
 		"@mod/clients": "workspace:*",
 		"@mod/code-grant": "workspace:*",

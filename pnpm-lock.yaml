@@ -1204,9 +1204,6 @@ importers:
       '@mod/approvals':
         specifier: workspace:*
         version: link:../../approval/approvals
-      '@mod/claims-selection':
-        specifier: workspace:*
-        version: link:../claims-selection
       '@mod/client-allowance':
         specifier: workspace:*
         version: link:../client-allowance
@@ -1234,9 +1231,6 @@ importers:
       '@mod/kernel':
         specifier: workspace:*
         version: link:../../foundation/kernel
-      '@mod/oidc':
-        specifier: workspace:*
-        version: link:../oidc
       '@mod/promises':
         specifier: workspace:*
         version: link:../../foundation/promises
@@ -1271,6 +1265,28 @@ importers:
       '@mod/resource-indicators':
         specifier: workspace:*
         version: link:../resource-indicators
+      vitest:
+        specifier: 5.0.5
+        version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(vite@8.3.3(@types/node@26.6.5)(yaml@2.9.1))
+
+  modules/oauth/authorize-claims:
+    dependencies:
+      '@mod/authorize':
+        specifier: workspace:*
+        version: link:../authorize
+      '@mod/claims-selection':
+        specifier: workspace:*
+        version: link:../claims-selection
+      '@mod/kernel':
+        specifier: workspace:*
+        version: link:../../foundation/kernel
+      '@mod/oidc':
+        specifier: workspace:*
+        version: link:../oidc
+    devDependencies:
+      '@mod/clients':
+        specifier: workspace:*
+        version: link:../../identity/clients
       vitest:
         specifier: 5.0.5
         version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(vite@8.3.3(@types/node@26.6.5)(yaml@2.9.1))
@@ -1891,9 +1907,6 @@ importers:
       '@mod/acr':
         specifier: workspace:*
         version: link:../acr
-      '@mod/claims-selection':
-        specifier: workspace:*
-        version: link:../claims-selection
       '@mod/client-assertion':
         specifier: workspace:*
         version: link:../client-assertion

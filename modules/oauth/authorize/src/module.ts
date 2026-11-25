@@ -8,7 +8,7 @@ import { type BuildContext, defineModule } from "@mod/kernel";
 import { promiseNames, stances } from "@mod/promises";
 import { redirects, redirectsCopy } from "@mod/redirect-uris";
 import { targetsIn } from "./code-needs/code-needs.ts";
-import { requestSources, signUpOffers, withoutPasskey } from "./contract.ts";
+import { requestClaims, requestSources, signUpOffers, withoutPasskey } from "./contract.ts";
 import { delegationSecondsIn, delegationTakes } from "./delegation/delegation.ts";
 import { finishRoute, finishTakes, passkeyAmr } from "./finish/finish.ts";
 import { type Settings, section } from "./section.ts";
@@ -71,6 +71,8 @@ export default defineModule(
 					"authorize",
 					"more than one answer to a person with no passkey is contributed",
 				);
+			if ((await c.collect(requestClaims)).length > 1)
+				return c.refuse("authorize", "more than one module reads a request's claims");
 			const offers = await c.collect(signUpOffers);
 			if (offers.length > 1) return c.refuse("authorize", "more than one sign-up is offered");
 			// A sign-up offered with no answer to a person with no passkey would never be allowed.
