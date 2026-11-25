@@ -115,17 +115,33 @@ async function world() {
 			signers,
 			logTyps.stateOf,
 		);
-	/** The completion the Core seals to E_enc under the purpose and the statement's hash. */
-	const sealed = async (purpose: string, h: string, payload: Record<string, unknown>) =>
+	/** A delete's completion padded to its bucket; one past it is the fixture's mistake, said here. */
+	const padded = (jws: string) => {
+		const text = hpke.paddedCompletion(jws, 0);
+		if (text === undefined) throw new Error("a test completion past its bucket");
+		return text;
+	};
+	/**
+	 * The completion the Core seals to E_enc under the purpose and the statement's hash: a delete's
+	 * (passkey-manage) padded to its bucket, unless told how to seal its compact JWS.
+	 */
+	const sealed = async (
+		purpose: string,
+		h: string,
+		payload: Record<string, unknown>,
+		plain: (jws: string) => string = (jws) => (purpose === "passkey-manage" ? padded(jws) : jws),
+	) =>
 		sealTo(
 			Buffer.from(keys.eEnc, "base64url"),
 			utf8(hpke.info.completion),
 			utf8(hpke.completionAad(purpose as "first-key", h)),
 			utf8(
-				await signCompact(
-					ring,
-					{ v: 1, iss: issuer, iat: 1, exp: 2, purpose, ...payload },
-					{ typ: typs.completion },
+				plain(
+					await signCompact(
+						ring,
+						{ v: 1, iss: issuer, iat: 1, exp: 2, purpose, ...payload },
+						{ typ: typs.completion },
+					),
 				),
 			),
 		);
@@ -205,6 +221,95 @@ describe("keyChanges.read: a delete", () => {
 		const d = await deleted();
 		const sealed = await d.sealed("passkey-manage", d.h, { change: d.change });
 		expect(await keyChanges.read(d.source, sealed, d.options({ level: "L0" }))).toEqual({
+			change: d.change,
+		});
+	});
+
+	it("refuses the list's completion of the same statement in a delete's place, naming no delete: same additional data, same bucket", async () => {
+		const d = await deleted();
+		const list = await d.sealed("passkey-manage", d.h, {
+			t_hash: d.h,
+			assertion_hash: d.h,
+			keys: [{ credential_id: "BAUG", label: "Phone", created_at: 1 }],
+		});
+		expect(await keyChanges.read(d.source, list, d.options({ level: "L0" }))).toEqual({
+			error: "continued",
+		});
+	});
+
+	it("answers a delete the Core did not take with the keys as they are and why, the list naming exactly the delete sent", async () => {
+		const d = await deleted();
+		const keys = [{ credential_id: "AQID", label: "Phone", created_at: 1 }];
+		const answer = (continued: Record<string, unknown>, more: Record<string, unknown> = {}) =>
+			d.sealed("passkey-manage", d.h, {
+				t_hash: d.h,
+				assertion_hash: d.h,
+				keys,
+				continued,
+				...more,
+			});
+		const named = {
+			stage: "delete",
+			seq: d.made.sent.seq,
+			body_hash: d.made.sent.bodyHash,
+			refused: "last",
+		};
+		for (const refused of ["last", "used", "unknown"])
+			expect(
+				await keyChanges.read(
+					d.source,
+					await answer({ ...named, refused }),
+					d.options({ level: "L0" }),
+				),
+				refused,
+			).toEqual({ kept: { keys, refused } });
+		for (const [change, error] of [
+			[{ seq: d.made.sent.seq + 1 }, "continued"],
+			[{ body_hash: d.h }, "continued"],
+			[{ stage: "rename", refused: undefined }, "continued"],
+		] as const)
+			expect(
+				await keyChanges.read(
+					d.source,
+					await answer({ ...named, ...change }),
+					d.options({ level: "L0" }),
+				),
+				JSON.stringify(change),
+			).toEqual({ error });
+		expect(
+			await keyChanges.read(
+				d.source,
+				await answer(named, { t_hash: "A".repeat(43) }),
+				d.options({ level: "L0" }),
+			),
+		).toEqual({ error: "statement" });
+		expect(
+			await keyChanges.read(
+				d.source,
+				await answer(named, { iss: "https://other.example" }),
+				d.options({ level: "L0" }),
+			),
+		).toEqual({ error: "issuer" });
+	});
+
+	it("reads a delete's completion only padded to a bucket, so its length tells no key deleted", async () => {
+		const d = await deleted();
+		for (const plain of [
+			(jws: string) => jws,
+			(jws: string) => `${hpke.paddedCompletion(jws, 0)} `,
+		]) {
+			const sealed = await d.sealed("passkey-manage", d.h, { change: d.change }, plain);
+			expect(await keyChanges.read(d.source, sealed, d.options({ level: "L0" }))).toEqual({
+				error: "open",
+			});
+		}
+		const large = await d.sealed(
+			"passkey-manage",
+			d.h,
+			{ change: d.change },
+			(jws) => hpke.paddedCompletion(jws, 1023) ?? "",
+		);
+		expect(await keyChanges.read(d.source, large, d.options({ level: "L0" }))).toEqual({
 			change: d.change,
 		});
 	});

@@ -10,12 +10,12 @@
 
 ## Offers
 - `typs`: the `typ` of a JAR, every statement (T, a creation, a possession: `approval+jwt`), the completion's answer (`completion+jwt`), a client assertion and a DPoP proof. `purposes`: `authorization`, `creation`, `possession`, `passkey-add`, `passkey-manage`.
-- `hpke`: the suite (`DHKEM(P-256, HKDF-SHA256)`, `HKDF-SHA256`, `AES-128-GCM`), each sealing's info (the completion, the first key's request and code, a continuation's body), `completionAad` (purpose, statement's hash), and `completionBuckets`, `paddedCompletion` (by the longest credential ID it carries) and `unpaddedCompletion`: a passkey-add's or passkey-manage's completion padded with spaces to a bucket before it is sealed, read back only at a bucket's length.
+- `hpke`: the suite (`DHKEM(P-256, HKDF-SHA256)`, `HKDF-SHA256`, `AES-128-GCM`), each sealing's info (the completion, the first key's request and code, a continuation's body), `completionAad` (purpose, statement's hash), and `completionBuckets`, `completionLimits`, `paddedCompletion` and `unpaddedCompletion`: how a passkey-add's or passkey-manage's completion is padded before it is sealed (internal module `completions`).
 - `jarClaims`: an authorization's closed set of `items`, those a JAR must carry (`required`), and its `envelope`, the claims that are no item (`prompt` among them, which the Core reads before T is made).
 - `itemsFromJar` (payload, the JAR's hash): T's items, or an error naming the claim unknown or missing, or the value not allowed.
 - `payloads`: the schemas of T, the completion's answer, the `creation`, `possession`, `passkeyAdd` and `passkeyManage` statements, and what the first key's start, mail and answer seal. Types: `StatementPayload`, `CompletionPayload`, `CreationPayload`, `PossessionPayload`, `AuthorizationAnswer`, `AuthorizationItems`, `SigningKey`, `FirstKeyStage`.
 - `payloads.answers`: the answers' forms the Front carries unread, whose names `front-core-wire` gives each operation: `authorization` (②'s), `statement`, `sealed` and `nonce`.
-- `payloads.completions`: `passkeyAdd` (the continued `creation`), `passkeyManage` (the keys' list) and `keyChange` (§C.5; F1's under `sign-up` too). `payloads.completion` is the authorization's, its `purpose` and ⑤'s `receipt` optional.
+- `payloads.completions`: `passkeyAdd`, `passkeyManage` and `keyChange` (internal module `completions`). `payloads.completion` is the authorization's, its `purpose` and ⑤'s `receipt` optional.
 - `versions`: the wire versions a reader speaks (1); every statement and completion names its own as `v`. A creation's `options` name the `algorithms` the ceremony offered, as COSE numbers them, each once, and may name `user_name`, the account's name a passkey shows for a subject with no identifier: a label's text, not blank.
 - `canonicalText` and `challengeInput`: what a challenge covers. `firstKey`: `stages` (`start`, `mail`), `evidenceInput`, `aad` and `recoverInput`: what the evidence's value, a sealed request's additional data and a recovery's signature (the mail's nonce, the request's digest) cover.
 - `continuation`: `stages` (`register`, `delete`, `rename`; `ContinuationStage`), what a signature covers (`of`) and how (`signature`), the `bodies` of a delete and a rename, and the `sealed` stages' `aad`, `plainBytes`, `plainOf` and `readPlain`.
@@ -29,14 +29,14 @@
 - A sealed value is `{ enc, ct }`: a 65-byte uncompressed point and the ciphertext with its 16-byte tag, base64url in one spelling; a nonce is 32 bytes.
 - An approval's completion binds the statement's and assertion's SHA-256, sealed under `completionAad` of the statement answered (a key change's: the `possession` for an add, the `passkey-manage` statement for a delete). A reader parses the form its request expects.
 - A `sealed` stage's body goes sealed to the Core, its signature inside (V24): `{ body, sig }`'s canonical text padded with spaces to `plainBytes`, bound to stage, statement hash and sequence; only the stage shows. The Core opens before verifying, within the rate limit; any failure is one refusal, nothing stored or spent. A credential id is 1023 bytes or less.
-- A rename's list names what it answers (`continued`: stage, sequence, the body's hash its continuation signs); the approval's names none. A list holds each credential once, 16 at most; a label is 1 to 64 code points, no control, format, surrogate or line separator. A key change adds under `first-key`, `passkey-add` or `sign-up`, deletes under `passkey-manage`.
-- A creation excludes 15 credentials at most. A padded completion's bucket is chosen by its longest credential ID alone, the smaller where every ID is 128 bytes or less: it tells only whether some ID is longer, never the count or the labels. Each fits its bucket within `completionLimits` (issuer URL 256 characters, `kid` 128, RSA 8192 bits) and the Core's subject, account and RP id to 255, 320 and 253 bytes once JSON-escaped; past them the sealing side refuses to sign.
+- A label is 1 to 64 code points, no control, format, surrogate or line separator.
+- A creation excludes 15 credentials at most.
 - `basis` and the completion's `purpose` are optional until their writers name them, then required. `prompt` is the Core's to check, before T.
 - A creation names the key generation it is signed for (`kg`): one signed before a reset registers no key after it. A possession names the new key by `key_jkt`, its thumbprint, the base64url SHA-256 of passkey-key-wire's `passkeyThumbprintInput`.
 - A challenge's input names its use, the evidence's its purpose, each apart from the value by a NUL.
 
 ## Depends on
-- Nothing in the workspace; `zod` (a peer).
+- Nothing in the workspace; `zod` (a peer). Its internal module `completions`, over the building blocks in `primitives`.
 
 ## Vocabulary
 - statement: what a person approves with a passkey, signed by the Core's ring; T is an authorization's.

@@ -23,6 +23,7 @@ export {
 export type { Sealed } from "./hpke.ts";
 export type { Jwk } from "./jws.ts";
 export {
+	type KeptDelete,
 	type KeyChangeChecks,
 	type KeyChangeError,
 	type KeyChangeRetry,

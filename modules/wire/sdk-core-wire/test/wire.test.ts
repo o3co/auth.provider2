@@ -273,6 +273,7 @@ describe("the completions' answers", () => {
 		expect(list({ continued })).toBe(true);
 		for (const change of [
 			{ stage: "delete" },
+			{ refused: "last" },
 			{ seq: 0 },
 			{ seq: 17 },
 			{ seq: 1.5 },
@@ -280,6 +281,21 @@ describe("the completions' answers", () => {
 			{ extra: 1 },
 		])
 			expect(list({ continued: { ...continued, ...change } }), JSON.stringify(change)).toBe(false);
+	});
+
+	it("names a delete the Core did not take, its reason sealed in the list: last, used or unknown", () => {
+		const refused = { stage: "delete", seq: 1, body_hash: hash("Q"), refused: "last" };
+		const list = (continued: object) =>
+			payloads.completions.passkeyManage.safeParse({
+				...approved,
+				purpose: "passkey-manage",
+				keys: [],
+				continued,
+			}).success;
+		for (const why of ["last", "used", "unknown"])
+			expect(list({ ...refused, refused: why }), why).toBe(true);
+		for (const change of [{ refused: "other" }, { refused: undefined }, { seq: 17 }, { extra: 1 }])
+			expect(list({ ...refused, ...change }), JSON.stringify(change)).toBe(false);
 	});
 
 	it("reads a key change: a key added under the first key or passkey-add, one deleted under passkey-manage, with what the Core adds", () => {

@@ -1,13 +1,14 @@
 import { z } from "zod";
+import { completions, padding } from "./completions/completions.ts";
+import { bytes32, compactJws, keyJkt, label, purposes, v } from "./primitives.ts";
+
+export { purposes, versions } from "./primitives.ts";
 
 /**
  * The contract between the login screen and the Core, which the Core holds and the screen follows;
  * the Front relays it unread. It holds the words, the payloads' schemas and the inputs a hash or a
  * signature covers; hashing, signing and sealing are each side's own.
  */
-
-/** The wire versions a reader of this protocol speaks; a statement and a completion name one as `v`. */
-export const versions = Object.freeze([1] as const);
 
 /** The `typ` of each signed object. */
 export const typs = Object.freeze({
@@ -19,20 +20,6 @@ export const typs = Object.freeze({
 	clientAssertion: "client-authentication+jwt",
 	dpop: "dpop+jwt",
 });
-
-/** The purposes a statement names. */
-export const purposes = Object.freeze({
-	authorization: "authorization",
-	creation: "creation",
-	possession: "possession",
-	passkeyAdd: "passkey-add",
-	passkeyManage: "passkey-manage",
-});
-
-/** A padded completion's lengths, smallest first. */
-const buckets = Object.freeze([16_384, 45_056] as const);
-/** The longest credential ID, in bytes, whose completion goes in the smaller bucket. */
-const usualIdBytes = 128;
 
 /** The HPKE suite both sides seal with, as RFC 9180 names it, and the info that tells each sealing apart. */
 export const hpke = Object.freeze({
@@ -50,31 +37,10 @@ export const hpke = Object.freeze({
 		purpose: "authorization" | "first-key" | "passkey-add" | "passkey-manage" | "sign-up",
 		statementHash: string,
 	) => canonicalText({ purpose: `completion/${purpose}`, h: statementHash }),
-	/** The lengths a passkey-add's or passkey-manage's completion is padded to before it is sealed. */
-	completionBuckets: buckets,
-	/** The bounds each completion fits its bucket within (ASCII characters, RSA bits), for the sealing side's boot. */
-	completionLimits: Object.freeze({ issuerChars: 256, kidChars: 128, rsaBits: 8192 }),
-	/**
-	 * Its compact JWS padded with spaces to the bucket its longest credential ID (bytes) chooses, the
-	 * smaller where it is 128 or less, so the bucket tells no count or label; none where it does not fit.
-	 */
-	paddedCompletion: (jws: string, longestIdBytes: number): string | undefined => {
-		const bucket = longestIdBytes > usualIdBytes ? buckets[1] : buckets[0];
-		return !Number.isSafeInteger(longestIdBytes) ||
-			longestIdBytes < 0 ||
-			jws.length > bucket ||
-			!compactJws.safeParse(jws).success
-			? undefined
-			: `${jws}${" ".repeat(bucket - jws.length)}`;
-	},
-	/** An opened completion: a bucket's length, a compact JWS then spaces alone; none otherwise. */
-	unpaddedCompletion: (text: string): string | undefined => {
-		if (!(buckets as readonly number[]).includes(text.length)) return undefined;
-		const jws = text.trimEnd();
-		return compactJws.safeParse(jws).success && /^ *$/.test(text.slice(jws.length))
-			? jws
-			: undefined;
-	},
+	completionBuckets: padding.buckets,
+	completionLimits: padding.limits,
+	paddedCompletion: padding.padded,
+	unpaddedCompletion: padding.unpadded,
 });
 
 /** An authorization's items (a closed set): a JAR with any other claim beside its envelope is refused. */
@@ -124,10 +90,6 @@ const signingKey = z
 const passkeyAlgorithm = z.union([z.literal(-7), z.literal(-8), z.literal(-257)]);
 
 const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
-/** 32 bytes in their one unpadded base64url spelling: 43 characters, the last carrying no bit past them. */
-const bytes32 = z.string().regex(/^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$/);
-/** A SHA-256 thumbprint, base64url. */
-const thumbprint = bytes32;
 
 const sextet = (text: string, at: number) => alphabet.indexOf(text.charAt(at));
 
@@ -149,8 +111,6 @@ const approval = z
 		jar_hash: z.string().min(1),
 	})
 	.strict();
-
-const v = z.literal(versions[0]);
 
 /** The fields every statement carries: its version, issuer, id, issue and expiry times, and the screen's two keys. */
 const common = {
@@ -190,7 +150,6 @@ const completion = z
 	})
 	.strict();
 
-const label = z.string().regex(/^[^\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}]{1,64}$/u);
 const userName = label.refine((name) => name.trim() !== "");
 /** A statement of the first key's registration: what a `create()` is for. The identifier stays out, but masked. */
 const creation = z
@@ -258,7 +217,7 @@ const possession = z
 			.object({
 				creation_hash: z.string().min(1),
 				/** The new key's JWK thumbprint (RFC 7638), the SHA-256 of passkey-key-wire's `passkeyThumbprintInput`, base64url. */
-				key_jkt: thumbprint,
+				key_jkt: keyJkt,
 				credential_id: z.string().min(1),
 				reservation_id: z.string().min(1),
 			})
@@ -281,7 +240,6 @@ const mailPlain = z
 /** What the screen opens of the start's answer, which looks alike whether the start went well or not. */
 const codePlain = z.object({ code: z.string().min(1) }).strict();
 
-const compactJws = z.string().regex(/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/);
 /** ②'s answer: T, its get challenge (SHA-256 of `challengeInput(T, "get")`, the screen recomputes it), whether F1 may make a passkey first. */
 const authorizationAnswer = z
 	.object({ statement: compactJws, challenge: bytes32, create: z.boolean() })
@@ -291,75 +249,6 @@ const canonical = (text: string) =>
 	text.length % 4 !== 1 &&
 	sextet(text, text.length - 1) % (text.length % 4 === 2 ? 16 : text.length % 4 === 3 ? 4 : 1) ===
 		0;
-const id = z.string().min(1);
-const times = { iat: z.number().int(), exp: z.number().int() };
-const approved = { v, iss: id, t_hash: bytes32, assertion_hash: bytes32 };
-const keyRow = z
-	.object({
-		credential_id: id,
-		label,
-		/** When the key was added, in seconds since the epoch: a JWT's NumericDate, as `iat` and `exp`. */
-		created_at: z.number().int().nonnegative(),
-	})
-	.strict();
-/** A set's signed object (a status, a stateOf) as JSON text, which transparency-wire's `setSigned` reads. */
-const setSignedText = z.string().refine((text) => {
-	try {
-		const value: unknown = JSON.parse(text);
-		return value !== null && typeof value === "object" && !Array.isArray(value);
-	} catch {
-		return false;
-	}
-});
-const completions = Object.freeze({
-	passkeyAdd: z
-		.object({
-			...approved,
-			purpose: z.literal(purposes.passkeyAdd),
-			creation: compactJws,
-			...times,
-		})
-		.strict(),
-	passkeyManage: z
-		.object({
-			...approved,
-			purpose: z.literal(purposes.passkeyManage),
-			keys: z
-				.array(keyRow)
-				.max(16)
-				.refine((rows) =>
-					rows.every(
-						(row, at) => rows.findIndex((r) => r.credential_id === row.credential_id) === at,
-					),
-				),
-			continued: z
-				.object({
-					stage: z.literal("rename"),
-					seq: z.number().int().min(1).max(16),
-					body_hash: bytes32,
-				})
-				.strict()
-				.optional(),
-			...times,
-		})
-		.strict(),
-	keyChange: z
-		.object({
-			v,
-			iss: id,
-			purpose: z.enum(["first-key", purposes.passkeyAdd, purposes.passkeyManage, "sign-up"]),
-			change: z.discriminatedUnion("op", [
-				z.object({ op: z.literal("add"), credential_id: id, key_jkt: thumbprint }).strict(),
-				z.object({ op: z.literal("delete"), credential_id: id }).strict(),
-			]),
-			receipt: compactJws.optional(),
-			status: setSignedText.optional(),
-			stateOf: setSignedText.optional(),
-			...times,
-		})
-		.strict()
-		.refine((c) => (c.change.op === "add") === (c.purpose !== purposes.passkeyManage)),
-});
 const sealedValue = z
 	.object({
 		enc: z.string().regex(/^B[A-P][A-Za-z0-9_-]{84}[AEIMQUYcgkosw048]$/),

@@ -40,9 +40,17 @@ export type KeyChangeChecks =
 			readonly stateOf?: string;
 	  };
 
+type PasskeyManageList = ReturnType<typeof payloads.completions.passkeyManage.parse>;
+
+/** A delete the Core did not take: the person's keys as they are, and why (`last`, `used`, `unknown`). */
+export interface KeptDelete {
+	readonly keys: PasskeyManageList["keys"];
+	readonly refused: "last" | "used" | "unknown";
+}
+
 /**
  * Why a key change is not taken, none of which a fetch changes: what was waited for, the inputs, the
- * completion (opening, signature, shape, issuer, purpose, the change itself), the receipt (missing
+ * completion (opening, signature, shape, issuer, purpose, the change itself; for a delete not taken, the list's statement and the delete it names), the receipt (missing
  * or not the log's, its kind, digests, flow, age), the status (unread, the record denied), the
  * stateOf (unread, another flow, the record's result, a state that does not read, the key there or not).
  */
@@ -56,6 +64,8 @@ export type KeyChangeError =
 	| "issuer"
 	| "purpose"
 	| "change"
+	| "statement"
+	| "continued"
 	| "receipt"
 	| "kind"
 	| "digest"
@@ -92,6 +102,8 @@ interface Waited {
 	readonly change: KeyChange["change"];
 	/** The receipt's `keyChange.evidence`: the new key's assertion's hash, or the delete's body's. */
 	readonly evidence: string;
+	/** A delete's sequence, read when it was waited for, so the list a delete not taken names is held to it. */
+	readonly seq?: number;
 	/** The subject's flow, where the statement names it (an add); a delete's is the receipt's. */
 	readonly subject?: string;
 }
@@ -117,7 +129,23 @@ async function waited(source: KeyChangeSource): Promise<Waited | undefined> {
 		h: await digest(sent.manage.compact),
 		change: { op: "delete", credential_id: sent.body.credential_id },
 		evidence: sent.bodyHash,
+		seq: sent.seq,
 	};
+}
+
+/** A delete not taken: the list, for the statement answered, naming exactly the delete sent, and why. */
+function keptOf(
+	list: PasskeyManageList,
+	want: Waited,
+	issuer: string,
+): { readonly kept: KeptDelete } | { readonly error: KeyChangeError } {
+	if (list.iss !== issuer) return { error: "issuer" };
+	if (list.t_hash !== want.h) return { error: "statement" };
+	// Held to what was read when the delete was waited for, never to the source as it is now.
+	const named = list.continued;
+	if (named?.stage !== "delete" || named.seq !== want.seq || named.body_hash !== want.evidence)
+		return { error: "continued" };
+	return Object.freeze({ kept: Object.freeze({ keys: list.keys, refused: named.refused }) });
 }
 
 const sameChange = (a: KeyChange["change"], b: KeyChange["change"]) =>
@@ -207,6 +235,7 @@ async function read(
 	},
 ): Promise<
 	| { readonly change: KeyChange["change"]; readonly receipt?: Receipt }
+	| { readonly kept: KeptDelete }
 	| { readonly error: KeyChangeError }
 	| { readonly retry: KeyChangeRetry; readonly receipt: Receipt }
 > {
@@ -226,10 +255,17 @@ async function read(
 		keys: options.keys,
 		ring,
 		aad: utf8(hpke.completionAad(want.purpose, want.h)),
+		// A delete's is padded to a bucket, so its length tells no key deleted (sdk-core-wire).
+		padded: want.purpose === "passkey-manage",
 	});
 	if ("error" in opened) return opened;
 	const parsed = payloads.completions.keyChange.safeParse(opened.payload);
-	if (!parsed.success) return { error: "payload" };
+	if (!parsed.success) {
+		// A delete the Core did not take is answered with the padded list, naming it and why.
+		const list =
+			"delete" in source ? payloads.completions.passkeyManage.safeParse(opened.payload) : undefined;
+		return list?.success ? keptOf(list.data, want, options.issuer) : { error: "payload" };
+	}
 	const done = parsed.data;
 	if (done.iss !== options.issuer) return { error: "issuer" };
 	if (done.purpose !== want.purpose) return { error: "purpose" };

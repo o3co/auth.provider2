@@ -401,6 +401,10 @@ describe("management.renamed", () => {
 			[{ ...listing, continued: { ...named, seq: 1 } }, "an older sequence"],
 			[{ ...listing, continued: { ...named, body_hash: await digest("other") } }, "another body"],
 			[listing, "no rename"],
+			[
+				{ ...listing, continued: { ...named, stage: "delete", refused: "last" } },
+				"a delete's, the same sequence and body",
+			],
 		] as const)
 			expect(await management.renamed(made.sent, await w.sealed(answer), w.options), why).toEqual({
 				error: "continued",

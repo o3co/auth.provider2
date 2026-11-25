@@ -53,10 +53,15 @@ describe("the names front-core-wire, sdk-core-wire and continuation-wire share",
 		expect(wordsOf(texts)).toEqual([purposes.passkeyAdd, purposes.passkeyManage]);
 	});
 
-	it("names a rename's answer by a stage continuation-wire holds", () => {
-		const continued = payloads.completions.passkeyManage.shape.continued.unwrap().shape.stage;
-		expect((continuations.stages as readonly string[]).includes(continued.value)).toBe(true);
-		expect((continuations.sealed as readonly string[]).includes(continued.value)).toBe(true);
+	it("names a list's answer, a rename's or a delete's not taken, by stages continuation-wire holds, sealed", () => {
+		const stages = payloads.completions.passkeyManage.shape.continued
+			.unwrap()
+			.options.map((option) => option.shape.stage.value);
+		expect(stages).toEqual(["rename", "delete"]);
+		for (const stage of stages) {
+			expect((continuations.stages as readonly string[]).includes(stage), stage).toBe(true);
+			expect((continuations.sealed as readonly string[]).includes(stage), stage).toBe(true);
+		}
 	});
 
 	it("holds a rename's label to the rule the keys' list holds a label to", () => {

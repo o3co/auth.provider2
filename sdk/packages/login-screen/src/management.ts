@@ -215,7 +215,7 @@ async function renamed(
 	const { done } = taken;
 	if (done.purpose !== "passkey-manage") return { error: "payload" };
 	const named = done.continued;
-	if (named?.seq !== rename.seq || named.body_hash !== rename.bodyHash)
+	if (named?.stage !== "rename" || named.seq !== rename.seq || named.body_hash !== rename.bodyHash)
 		return { error: "continued" };
 	// The Core answers a rename that did not take (another's key, or a later rename taken first) with
 	// the list too, and keeps a label as sent (no trim, no normalizing), so `===` tells it apart.
