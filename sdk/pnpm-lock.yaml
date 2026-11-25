@@ -29,6 +29,10 @@ importers:
       '@mod/transparency-wire':
         specifier: link:../../../modules/wire/transparency-wire
         version: link:../../../modules/wire/transparency-wire
+    devDependencies:
+      '@mod/front-core-wire':
+        specifier: link:../../../modules/wire/front-core-wire
+        version: link:../../../modules/wire/front-core-wire
 
   packages/rp-kit:
     dependencies:

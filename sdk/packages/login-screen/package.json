@@ -9,5 +9,8 @@
 	"dependencies": {
 		"@mod/sdk-core-wire": "link:../../../modules/wire/sdk-core-wire",
 		"@mod/transparency-wire": "link:../../../modules/wire/transparency-wire"
+	},
+	"devDependencies": {
+		"@mod/front-core-wire": "link:../../../modules/wire/front-core-wire"
 	}
 }
