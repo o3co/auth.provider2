@@ -87,6 +87,15 @@ export interface Ceremonies {
 		publicKey: string,
 		challenge: string,
 	): { readonly credential: string } | undefined;
+	/**
+	 * A `create()` response's JSON as sent, read at once and against no state (authority-rules'
+	 * `Checks.attestedKey`): its credential id and the new key, its COSE_Key in base64url, as `attest`
+	 * reads them from the attestation's authenticator data, the key read whole. Read, not verified: no
+	 * challenge, origin or signature is judged. None for one that does not read, never a throw.
+	 */
+	attestedKey(
+		response: string,
+	): { readonly credential: string; readonly publicKey: string } | undefined;
 }
 
 export const ceremonies = contract<Ceremonies>("webauthn.ceremonies");

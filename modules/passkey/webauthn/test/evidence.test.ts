@@ -291,3 +291,28 @@ describe("the evidence check, state-free and at once", () => {
 		});
 	});
 });
+
+describe("a create() response's key, read at once (Checks.attestedKey)", () => {
+	it("reads the credential id and the new key as attest reads them, and none from a response that does not read", async () => {
+		const authenticator = softwareAuthenticator();
+		const challenge = fresh();
+		const options = ceremonies.creation(challenge, { handle, name: "sam" }, [], "preferred");
+		const response = authenticator.create(options as never, at);
+		const attested = await ceremonies.attest(response, challenge, handle, "preferred");
+		if (attested.kind !== "attested") throw new Error(attested.reason);
+		const text = JSON.stringify(response);
+		expect(ceremonies.attestedKey(text)).toEqual({
+			credential: attested.credential.id,
+			publicKey: attested.credential.publicKey,
+		});
+		const sent = response as { id: string; rawId: string; response: { attestationObject: string } };
+		for (const other of [
+			"not json",
+			JSON.stringify({ ...sent, id: "another", rawId: "another" }),
+			JSON.stringify({ ...sent, rawId: "another" }),
+			JSON.stringify({ ...sent, type: "other" }),
+			JSON.stringify({ ...sent, response: { ...sent.response, attestationObject: "AAAA" } }),
+		])
+			expect(ceremonies.attestedKey(other), other.slice(0, 40)).toBeUndefined();
+	});
+});

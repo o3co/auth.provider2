@@ -183,6 +183,26 @@ function statementDropped(response: unknown): RegistrationResponse {
 	return { ...sent, response: { ...sent.response, attestationObject } };
 }
 
+/** A `create()` response's credential id and new key, read from its authenticator data; none where it does not read. */
+function attestedKey(response: string) {
+	try {
+		const sent = JSON.parse(response);
+		const { id, rawId, type } = sent ?? {};
+		if (typeof id !== "string" || id === "" || id !== rawId || type !== "public-key")
+			return undefined;
+		const attestationObject = isoBase64URL.toBuffer(sent.response.attestationObject);
+		const authData = decodeAttestationObject(attestationObject).get("authData") as Uint8Array;
+		const { credentialID, credentialPublicKey } = parseAuthenticatorData(new Uint8Array(authData));
+		if (!credentialID || !credentialPublicKey) return undefined;
+		if (isoBase64URL.fromBuffer(credentialID) !== id) return undefined;
+		if (!keyReadWhole(attestationObject, credentialPublicKey)) return undefined;
+		return { credential: id, publicKey: Buffer.from(credentialPublicKey).toString("base64url") };
+	} catch {
+		// Anything it cannot read is a response of no key.
+		return undefined;
+	}
+}
+
 /** Whether a new key is in its one COSE_Key form, the very bytes after the credential id (offset 55 + its length). */
 function keyReadWhole(attestationObject: Uint8Array, publicKey: Uint8Array): boolean {
 	const authData = Buffer.from(
@@ -246,6 +266,7 @@ export function ceremoniesFor(rp: RelyingParty): Ceremonies {
 	});
 	const evidence = evidenceCheck(rp);
 	return {
+		attestedKey,
 		verifyAssertion: (assertion, publicKey, challenge, origin) =>
 			evidence(assertion, publicKey, challenge, origin),
 		reverifyAssertion: (assertion, publicKey, challenge) =>
