@@ -28,12 +28,19 @@ export interface CompletionOptions {
 
 /**
  * A completion's sealed answer opened: with the screen's encryption key under the completion's info
- * and the additional data given, signed by the Core's ring as a completion (never a statement's
- * `typ`). Its payload is the caller's to read by the schema its request waits for.
+ * and the additional data given, unpadded where it was padded, signed by the Core's ring as a
+ * completion (never a statement's `typ`). Its payload is the caller's to read by the schema its
+ * request waits for. A padded one off a bucket's length is `open`, as one that does not open.
  */
 export async function openCompletion(
 	sealed: Sealed,
-	options: { readonly keys: ScreenKeys; readonly ring: readonly Jwk[]; readonly aad: Uint8Array },
+	options: {
+		readonly keys: ScreenKeys;
+		readonly ring: readonly Jwk[];
+		readonly aad: Uint8Array;
+		/** Padded to a bucket (a passkey-add's or passkey-manage's): read back only at a bucket's length. */
+		readonly padded?: boolean;
+	},
 ): Promise<{ readonly payload: unknown } | { readonly error: "open" | "signature" | "typ" }> {
 	const opened = await openSealed(
 		options.keys.encryption,
@@ -41,7 +48,8 @@ export async function openCompletion(
 		utf8(hpke.info.completion),
 		options.aad,
 	);
-	const jws = opened && textOf(opened);
+	const text = opened && textOf(opened);
+	const jws = text !== undefined && options.padded ? hpke.unpaddedCompletion(text) : text;
 	if (jws === undefined) return { error: "open" };
 	const verified = await verifyCompact(jws, options.ring);
 	if (!verified) return { error: "signature" };

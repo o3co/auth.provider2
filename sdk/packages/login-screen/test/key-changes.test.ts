@@ -645,20 +645,23 @@ describe("keyChanges.read: a key added", () => {
 			utf8(hpke.info.completion),
 			utf8(hpke.completionAad("passkey-add", ha)),
 			utf8(
-				await signCompact(
-					w.ring,
-					{
-						v: 1,
-						iss: issuer,
-						t_hash: ha,
-						assertion_hash: await digest(approvalAssertion),
-						purpose: purposes.passkeyAdd,
-						creation: creationCompact,
-						iat: 1,
-						exp: 2,
-					},
-					{ typ: typs.completion },
-				),
+				hpke.paddedCompletion(
+					await signCompact(
+						w.ring,
+						{
+							v: 1,
+							iss: issuer,
+							t_hash: ha,
+							assertion_hash: await digest(approvalAssertion),
+							purpose: purposes.passkeyAdd,
+							creation: creationCompact,
+							iat: 1,
+							exp: 2,
+						},
+						{ typ: typs.completion },
+					),
+					0,
+				) ?? "",
 			),
 		);
 		const finished = await management.finish(read.manage, approved, {

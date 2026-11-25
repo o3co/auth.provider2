@@ -36,13 +36,21 @@ async function world(purpose: "passkey-add" | "passkey-manage" = "passkey-manage
 	if ("error" in read) throw new Error(read.error);
 	const assertion = utf8("the assertion's bytes");
 	const h = await digest(statement);
-	/** The completion the Core seals to E_enc, under its purpose and this statement's hash unless told. */
-	const sealed = async (payload: unknown, aad = hpke.completionAad(purpose, h), typ?: string) =>
+	/**
+	 * The completion the Core seals to E_enc, under its purpose and this statement's hash unless told,
+	 * padded to its bucket unless told what to seal of the compact JWS.
+	 */
+	const sealed = async (
+		payload: unknown,
+		aad = hpke.completionAad(purpose, h),
+		typ?: string,
+		plain: (jws: string) => string = (jws) => hpke.paddedCompletion(jws, 0) ?? "",
+	) =>
 		sealTo(
 			Buffer.from(keys.eEnc, "base64url"),
 			utf8(hpke.info.completion),
 			utf8(aad),
-			utf8(await signCompact(ring, payload, { typ: typ ?? typs.completion })),
+			utf8(plain(await signCompact(ring, payload, { typ: typ ?? typs.completion }))),
 		);
 	const approved = {
 		v: 1,
@@ -191,6 +199,27 @@ describe("management.finish", () => {
 		const w = await world();
 		const sealed = await w.sealed({ ...w.approved, purpose: purposes.passkeyManage, keys: rows });
 		expect(await management.finish(w.manage, sealed, w.options)).toEqual({ keys: rows });
+	});
+
+	it("reads a completion only padded to a bucket: one unpadded, or padded off a bucket's length, does not open", async () => {
+		const w = await world();
+		const listing = { ...w.approved, purpose: purposes.passkeyManage, keys: rows };
+		// Either bucket opens: the Core chooses it by the longest credential ID.
+		const large = await w.sealed(
+			listing,
+			undefined,
+			undefined,
+			(jws) => hpke.paddedCompletion(jws, 1023) ?? "",
+		);
+		expect(await management.finish(w.manage, large, w.options)).toEqual({ keys: rows });
+		for (const plain of [
+			(jws: string) => jws,
+			(jws: string) => `${hpke.paddedCompletion(jws, 0)} `,
+			(jws: string) => jws.padEnd(16_383, " "),
+		]) {
+			const sealed = await w.sealed(listing, undefined, undefined, plain);
+			expect(await management.finish(w.manage, sealed, w.options)).toEqual({ error: "open" });
+		}
 	});
 
 	it("refuses a completion of another statement, assertion, issuer, additional data or typ, a rename's for a listing, and a statement it did not read", async () => {

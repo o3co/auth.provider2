@@ -83,9 +83,11 @@ async function completionOf(
 > {
 	const { purpose } = manage.statement;
 	const h = await digest(manage.compact);
+	// Both purposes' completions are padded to a bucket, so their length tells no key count (sdk-core-wire).
 	const opened = await openCompletion(sealed, {
 		...options,
 		aad: utf8(hpke.completionAad(purpose, h)),
+		padded: true,
 	});
 	if ("error" in opened) return opened;
 	const completion = (

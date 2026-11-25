@@ -230,7 +230,7 @@ describe("the completions' answers", () => {
 			);
 	});
 
-	it("reads a passkey-manage's keys, each credential once and 64 at most, each label 1 to 64 code points of no control, format or line separator", () => {
+	it("reads a passkey-manage's keys, each credential once and 16 at most, each label 1 to 64 code points of no control, format or line separator", () => {
 		const row = { credential_id: "c1", label: "Laptop", created_at: 0 };
 		const list = (keys: unknown[], more: object = {}) =>
 			payloads.completions.passkeyManage.safeParse({
@@ -242,8 +242,8 @@ describe("the completions' answers", () => {
 		expect(list([])).toBe(true);
 		expect(list([row, { ...row, credential_id: "c2", label: "鍵".repeat(64) }])).toBe(true);
 		expect(list([row, { ...row, label: "Phone" }])).toBe(false);
-		const many = Array.from({ length: 65 }, (_, i) => ({ ...row, credential_id: `c${i}` }));
-		expect(list(many.slice(0, 64))).toBe(true);
+		const many = Array.from({ length: 17 }, (_, i) => ({ ...row, credential_id: `c${i}` }));
+		expect(list(many.slice(0, 16))).toBe(true);
 		expect(list(many)).toBe(false);
 		for (const label of [
 			"",
@@ -342,6 +342,21 @@ describe("the first key's statements", () => {
 			},
 		},
 	};
+
+	it("excludes 15 credentials at most, a passkey-add's for a subject of 16 keys being refused before", () => {
+		const excluding = (count: number) =>
+			payloads.creation.safeParse({
+				...creation,
+				creation: {
+					...creation.creation,
+					options: {
+						...creation.creation.options,
+						exclude_credentials: Array.from({ length: count }, (_, i) => `c${i}`),
+					},
+				},
+			}).success;
+		expect([excluding(15), excluding(16)]).toEqual([true, false]);
+	});
 
 	it("binds a creation to the key generation it was signed for, a whole number from 0", () => {
 		expect(payloads.creation.safeParse(creation).success).toBe(true);
@@ -457,6 +472,100 @@ describe("the inputs a hash or a signature covers", () => {
 		expect(hpke.completionAad("authorization", "h")).not.toBe(
 			hpke.completionAad("authorization", "g"),
 		);
+	});
+
+	it("pads a passkey-add's or passkey-manage's completion to the bucket its longest credential ID chooses, so its length tells no count or label", () => {
+		const b64 = (text: string) => Buffer.from(text).toString("base64url");
+		const label = "\u{1F600}".repeat(64);
+		const iss = `https://${"x".repeat(248)}`;
+		const times = { iat: 9_999_999_999, exp: 9_999_999_999 };
+		const approvedOf = { v: 1, iss, t_hash: "h".repeat(43), assertion_hash: "a".repeat(43) };
+		/** A compact JWS of the payload, its kid 128 characters and its signature an RSA key's of 8192 bits. */
+		const jws = (typ: string, payload: object) =>
+			`${b64(JSON.stringify({ alg: "PS256", kid: "k".repeat(128), typ }))}.${b64(JSON.stringify(payload))}.${"s".repeat(1366)}`;
+		const id = (bytes: number) => "A".repeat(Math.ceil((bytes * 4) / 3));
+		const list = (count: number, idBytes: number) =>
+			jws(typs.completion, {
+				...approvedOf,
+				purpose: "passkey-manage",
+				keys: Array.from({ length: count }, () => ({
+					credential_id: id(idBytes),
+					label,
+					created_at: 9_999_999_999_999,
+				})),
+				continued: { stage: "rename", seq: 16, body_hash: "b".repeat(43) },
+				...times,
+			});
+		const added = (idBytes: number) =>
+			jws(typs.completion, {
+				...approvedOf,
+				purpose: "passkey-add",
+				creation: jws(typs.statement, {
+					v: 1,
+					iss,
+					sid: "s".repeat(43),
+					...times,
+					e_enc: `B${"A".repeat(86)}`,
+					e_sig: { kty: "EC", crv: "P-256", x: "x".repeat(43), y: "y".repeat(43) },
+					nonce: "n".repeat(43),
+					purpose: "creation",
+					creation: {
+						account: "a".repeat(320),
+						basis: "passkey-add",
+						evidence: "e".repeat(43),
+						subject: "s".repeat(255),
+						kg: 99,
+						options: {
+							user_id: "u".repeat(86),
+							user_name: label,
+							rp_id: "r".repeat(253),
+							exclude_credentials: Array.from({ length: 15 }, () => id(idBytes)),
+							algorithms: [-7, -8, -257, -37],
+						},
+					},
+				}),
+				...times,
+			});
+		expect(hpke.completionBuckets).toEqual([16_384, 45_056]);
+		// The longest ID alone chooses: 128 bytes or less the smaller, whatever the count or labels.
+		for (const [plain, longest, bucket] of [
+			[list(16, 128), 128, 16_384],
+			[list(1, 128), 128, 16_384],
+			[added(128), 128, 16_384],
+			[list(1, 129), 129, 45_056],
+			[list(16, 1023), 1023, 45_056],
+			[added(1023), 1023, 45_056],
+		] as const)
+			expect(hpke.paddedCompletion(plain, longest)?.length, `${longest} ${plain.length}`).toBe(
+				bucket,
+			);
+		// One that does not fit its bucket is none, so the sealing side does not sign it.
+		expect(hpke.paddedCompletion(list(16, 1023), 128)).toBeUndefined();
+		expect(hpke.paddedCompletion("a.b.c".padEnd(45_057, "c"), 1023)).toBeUndefined();
+		expect(hpke.paddedCompletion("not a jws", 0)).toBeUndefined();
+		// A miscount never falls into the smaller bucket: an ID length is a whole number of bytes.
+		for (const miscount of [Number.NaN, -1, 1.5, Number.POSITIVE_INFINITY])
+			expect(hpke.paddedCompletion("a.b.c", miscount), String(miscount)).toBeUndefined();
+		for (const [longest, bucket] of [
+			[0, 16_384],
+			[1023, 45_056],
+		] as const) {
+			const padded = hpke.paddedCompletion("a.b.c", longest) ?? "";
+			expect([padded.length, hpke.unpaddedCompletion(padded)]).toEqual([bucket, "a.b.c"]);
+		}
+		// Read back only at a bucket's length, a JWS then spaces alone.
+		const small = hpke.paddedCompletion("a.b.c", 0) ?? "";
+		for (const text of [
+			"a.b.c",
+			`${small} `,
+			small.slice(1),
+			`a.b .c${" ".repeat(16_378)}`,
+			`a.b.c\t${" ".repeat(16_378)}`,
+			`a.b.c\n${" ".repeat(16_378)}`,
+			`${" ".repeat(16_379)}a.b.c`,
+		])
+			expect(hpke.unpaddedCompletion(text), JSON.stringify(text.slice(0, 8))).toBeUndefined();
+		expect(Object.isFrozen(hpke.completionBuckets)).toBe(true);
 	});
 
 	it("builds JSON canonically, keys sorted and undefined members left out", () => {

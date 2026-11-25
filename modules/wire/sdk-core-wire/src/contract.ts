@@ -29,6 +29,11 @@ export const purposes = Object.freeze({
 	passkeyManage: "passkey-manage",
 });
 
+/** A padded completion's lengths, smallest first. */
+const buckets = Object.freeze([16_384, 45_056] as const);
+/** The longest credential ID, in bytes, whose completion goes in the smaller bucket. */
+const usualIdBytes = 128;
+
 /** The HPKE suite both sides seal with, as RFC 9180 names it, and the info that tells each sealing apart. */
 export const hpke = Object.freeze({
 	kem: "DHKEM(P-256, HKDF-SHA256)",
@@ -45,6 +50,29 @@ export const hpke = Object.freeze({
 		purpose: "authorization" | "first-key" | "passkey-add" | "passkey-manage" | "sign-up",
 		statementHash: string,
 	) => canonicalText({ purpose: `completion/${purpose}`, h: statementHash }),
+	/** The lengths a passkey-add's or passkey-manage's completion is padded to before it is sealed. */
+	completionBuckets: buckets,
+	/**
+	 * Its compact JWS padded with spaces to the bucket its longest credential ID (bytes) chooses, the
+	 * smaller where it is 128 or less, so the bucket tells no count or label; none where it does not fit.
+	 */
+	paddedCompletion: (jws: string, longestIdBytes: number): string | undefined => {
+		const bucket = longestIdBytes > usualIdBytes ? buckets[1] : buckets[0];
+		return !Number.isSafeInteger(longestIdBytes) ||
+			longestIdBytes < 0 ||
+			jws.length > bucket ||
+			!compactJws.safeParse(jws).success
+			? undefined
+			: `${jws}${" ".repeat(bucket - jws.length)}`;
+	},
+	/** An opened completion: a bucket's length, a compact JWS then spaces alone; none otherwise. */
+	unpaddedCompletion: (text: string): string | undefined => {
+		if (!(buckets as readonly number[]).includes(text.length)) return undefined;
+		const jws = text.trimEnd();
+		return compactJws.safeParse(jws).success && /^ *$/.test(text.slice(jws.length))
+			? jws
+			: undefined;
+	},
 });
 
 /** An authorization's items (a closed set): a JAR with any other claim beside its envelope is refused. */
@@ -186,7 +214,7 @@ const creation = z
 						user_id: z.string().min(1),
 						user_name: userName.optional(),
 						rp_id: z.string().min(1),
-						exclude_credentials: z.array(z.string()),
+						exclude_credentials: z.array(z.string()).max(15),
 						/** The algorithms the ceremony offered, as COSE numbers them: those the new key may be of. */
 						algorithms: z
 							.array(passkeyAlgorithm)
@@ -265,7 +293,12 @@ const id = z.string().min(1);
 const times = { iat: z.number().int(), exp: z.number().int() };
 const approved = { v, iss: id, t_hash: bytes32, assertion_hash: bytes32 };
 const keyRow = z
-	.object({ credential_id: id, label, created_at: z.number().int().nonnegative() })
+	.object({
+		credential_id: id,
+		label,
+		/** When the key was added, in seconds since the epoch: a JWT's NumericDate, as `iat` and `exp`. */
+		created_at: z.number().int().nonnegative(),
+	})
 	.strict();
 /** A set's signed object (a status, a stateOf) as JSON text, which transparency-wire's `setSigned` reads. */
 const setSignedText = z.string().refine((text) => {
@@ -291,7 +324,7 @@ const completions = Object.freeze({
 			purpose: z.literal(purposes.passkeyManage),
 			keys: z
 				.array(keyRow)
-				.max(64)
+				.max(16)
 				.refine((rows) =>
 					rows.every(
 						(row, at) => rows.findIndex((r) => r.credential_id === row.credential_id) === at,
