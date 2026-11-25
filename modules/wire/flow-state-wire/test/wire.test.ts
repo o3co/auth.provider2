@@ -38,6 +38,14 @@ describe("credentialsOf", () => {
 		expect(credentialsOf(state)).toEqual(["AQID"]);
 		const inherited = Object.create({ keys: { r1: key("AQID") } });
 		expect(credentialsOf(inherited)).toBeUndefined();
+		// An entry the keys inherit is no entry; a credential an entry inherits is none.
+		expect(credentialsOf({ keys: Object.create({ r1: key("AQID") }) })).toEqual([]);
+		expect(credentialsOf({ keys: { r1: Object.create({ credential: "AQID" }) } })).toBeUndefined();
+	});
+
+	it("reads none where one entry does not read, among entries that do", () => {
+		expect(credentialsOf({ keys: { r1: key("AQID"), r2: {}, r3: key("BAUG") } })).toBeUndefined();
+		expect(credentialsOf({ keys: { r1: key("AQID"), r2: [] } })).toBeUndefined();
 	});
 });
 

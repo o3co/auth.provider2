@@ -12,7 +12,6 @@ import { z } from "zod";
  */
 
 const credential = z.string().min(1);
-const keyEntry = z.looseObject({ credential });
 const keyGeneration = z.number().int().nonnegative();
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
@@ -29,9 +28,11 @@ export function credentialsOf(state: unknown): readonly string[] | undefined {
 	if (!isObject(keys)) return undefined;
 	const ids: string[] = [];
 	for (const [, entry] of Object.entries(keys)) {
-		const read = keyEntry.safeParse(entry);
+		// The entry's own `credential` alone: one it inherits is none.
+		if (!isObject(entry) || !Object.hasOwn(entry, "credential")) return undefined;
+		const read = credential.safeParse(entry.credential);
 		if (!read.success) return undefined;
-		if (!ids.includes(read.data.credential)) ids.push(read.data.credential);
+		if (!ids.includes(read.data)) ids.push(read.data);
 	}
 	return Object.freeze(ids);
 }
