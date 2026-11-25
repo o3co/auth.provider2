@@ -112,6 +112,27 @@ describe("a sign-up's key (F1; P 358: first trust where the subject first appear
 		);
 	});
 
+	it("is refused for a sign-up's creation with an account, or without its name: sdk-core-wire's creation does not read it, though the ring signed it", () => {
+		const parts = signUpParts();
+		const honest = creation(subject.id, undefined, 0, undefined, signUpBasis(parts.t));
+		const { user_name: _, ...unnamed } = honest.creation.options;
+		for (const made of [
+			{ ...honest.creation, account: "a***@example" },
+			{ ...honest.creation, options: unnamed },
+		]) {
+			const c = sign({ ...honest, creation: made }, "ring-1");
+			const held = sign(possession(c, newKey), "ring-1");
+			const step = signedUp(1, {
+				...parts,
+				creation: c,
+				continuation: continued(c, JSON.stringify(newKey)),
+				possession: held,
+				proof: assertion(newKey, held),
+			});
+			expect(verdictOn(step)).toEqual(refused(/not both signed by the writer generation's ring/));
+		}
+	});
+
 	it("is refused unless the screen's continuation is its E_sig's over the creation, sending the record's key", () => {
 		const parts = signUpParts();
 		const forged = continued(parts.creation, JSON.stringify(newKey), 1, {

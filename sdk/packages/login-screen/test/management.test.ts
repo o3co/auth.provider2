@@ -290,7 +290,20 @@ describe("management.finish", () => {
 		);
 		for (const [creation, error] of [
 			[await creationFor(w, { basis: "first-key", ct_hash: w.h }), "basis"],
-			[await creationFor(w, { basis: "sign-up" }), "basis"],
+			[
+				await creationFor(w, {
+					basis: "sign-up",
+					account: undefined,
+					options: {
+						user_id: "dXNlcg",
+						rp_id: "id.example",
+						exclude_credentials: ["AQID"],
+						algorithms: [-7],
+						user_name: "Example 7f3a",
+					},
+				}),
+				"basis",
+			],
 			[await creationFor(w, { evidence: await digest("another") }), "evidence"],
 			[theirs, "creation"],
 		] as const) {

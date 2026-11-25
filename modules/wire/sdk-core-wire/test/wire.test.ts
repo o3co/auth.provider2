@@ -353,16 +353,31 @@ describe("the first key's statements", () => {
 		).toBe(false);
 	});
 
-	it("carries the account's name for the passkey where the Core gives one: a label's text, not blank", () => {
-		const named = (user_name: unknown) =>
-			payloads.creation.safeParse({
-				...creation,
-				creation: { ...creation.creation, options: { ...creation.creation.options, user_name } },
-			}).success;
-		expect(payloads.creation.safeParse(creation).success).toBe(true);
-		expect(named("Example 7f3a")).toBe(true);
+	/** F1's creation: of sign-up's basis, no ciphertext hash and no account, the Core's name for it. */
+	const { ct_hash: _ct, account: _account, ...noAccount } = creation.creation;
+	const signUp = (options: Record<string, unknown> = { user_name: "Example 7f3a" }, more = {}) =>
+		payloads.creation.safeParse({
+			...creation,
+			creation: {
+				...noAccount,
+				basis: "sign-up",
+				options: { ...creation.creation.options, ...options },
+				...more,
+			},
+		}).success;
+
+	it("lets sign-up's creation alone leave its account out, naming it by user_name, a label's text, not blank", () => {
+		expect(signUp()).toBe(true);
 		for (const bad of ["", "   ", "x".repeat(65), "a\nb", "a\u202eb", 7])
-			expect(named(bad), JSON.stringify(bad)).toBe(false);
+			expect(signUp({ user_name: bad }), JSON.stringify(bad)).toBe(false);
+		// Sign-up's has no account and a name; every other path's has an account and no name.
+		expect(signUp({ user_name: undefined })).toBe(false);
+		expect(signUp(undefined, { account: "a***" })).toBe(false);
+		const others = (change: Record<string, unknown>) =>
+			payloads.creation.safeParse({ ...creation, creation: { ...creation.creation, ...change } })
+				.success;
+		expect(others({ options: { ...creation.creation.options, user_name: "N" } })).toBe(false);
+		expect(others({ account: undefined })).toBe(false);
 	});
 
 	it("carries a ciphertext hash on the first key's path alone, by the creation's basis", () => {
@@ -372,10 +387,10 @@ describe("the first key's statements", () => {
 		expect(with_({ basis: "first-key" })).toBe(true);
 		expect(with_({ basis: "first-key" }, bare)).toBe(false);
 		expect(with_({}, bare)).toBe(false);
-		for (const basis of ["passkey-add", "sign-up"]) {
-			expect(with_({ basis }, bare), basis).toBe(true);
-			expect(with_({ basis }), basis).toBe(false);
-		}
+		expect(signUp()).toBe(true);
+		expect(signUp(undefined, { ct_hash: "ct" })).toBe(false);
+		expect(with_({ basis: "passkey-add" }, bare)).toBe(true);
+		expect(with_({ basis: "passkey-add" })).toBe(false);
 		expect(with_({ basis: "other" })).toBe(false);
 	});
 

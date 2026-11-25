@@ -36,6 +36,7 @@ export {
 	management,
 	type ReadManage,
 } from "./management.ts";
+export { type SignUpContinuation, signUp } from "./sign-up.ts";
 export {
 	type Purpose,
 	readStatement,

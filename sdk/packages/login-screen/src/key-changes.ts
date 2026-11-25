@@ -100,7 +100,7 @@ async function waited(source: KeyChangeSource): Promise<Waited | undefined> {
 	if ("add" in source) {
 		const creation = creationOfPossession(source.add);
 		const basis = creation?.statement.creation.basis ?? "first-key";
-		if (!creation || basis === "sign-up") return undefined;
+		if (!creation) return undefined;
 		const { credential_id, key_jkt } = source.add.statement.possession;
 		return {
 			purpose: basis,

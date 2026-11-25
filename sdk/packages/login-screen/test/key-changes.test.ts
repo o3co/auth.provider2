@@ -8,7 +8,8 @@ import { sealTo } from "../src/hpke.ts";
 import { type KeyChangeChecks, keyChanges } from "../src/key-changes.ts";
 import { screenKeys } from "../src/keys.ts";
 import { management } from "../src/management.ts";
-import { signCompact, signingKey } from "./fixtures.ts";
+import { signUp } from "../src/sign-up.ts";
+import { readT, signCompact, signingKey } from "./fixtures.ts";
 
 const issuer = "https://id.example";
 const now = 1_000_000_000;
@@ -708,6 +709,87 @@ describe("keyChanges.read: a key added", () => {
 		expect(await keyChanges.read(source, asFirst, w.options())).toEqual({ error: "open" });
 	});
 
+	it("takes a sign-up's addition through its continuation's creation and possession, under its own purpose", async () => {
+		const w = await world();
+		const options = { ring: [w.ring.jwk], keys: w.keys, issuer };
+		const sign = (payload: unknown) => signCompact(w.ring, payload, { typ: typs.statement });
+		const common = {
+			v: 1,
+			iss: issuer,
+			sid: "st-1",
+			iat: 1,
+			exp: 2,
+			e_enc: w.keys.eEnc,
+			e_sig: w.keys.eSig,
+		};
+		const { tCompact, t } = await readT(w.ring, w.keys);
+		const creationCompact = await sign({
+			...common,
+			nonce: "cn",
+			purpose: purposes.creation,
+			creation: {
+				basis: "sign-up",
+				evidence: await digest(tCompact),
+				subject: "sub-1",
+				kg: 0,
+				options: {
+					user_id: "dXNlcg",
+					user_name: "Example 7f3a",
+					rp_id: "id.example",
+					exclude_credentials: [],
+					algorithms: [-7],
+				},
+			},
+		});
+		const created = await signUp.readCreation(creationCompact, t, options);
+		if ("error" in created) throw new Error(created.error);
+		const pair = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, [
+			"sign",
+		]);
+		const { crv, kty, x, y } = await crypto.subtle.exportKey("jwk", pair.publicKey);
+		const jkt = await digest(passkeyThumbprintInput({ crv, kty, x, y }) ?? "");
+		const possessionCompact = await sign({
+			...common,
+			nonce: "pn",
+			purpose: purposes.possession,
+			possession: {
+				creation_hash: await digest(creationCompact),
+				key_jkt: jkt,
+				credential_id: "BAUG",
+				reservation_id: "r-1",
+			},
+		});
+		const possession = await firstKey.readPossession(
+			possessionCompact,
+			created.creation,
+			{
+				id: "BAUG",
+				spki: new Uint8Array(await crypto.subtle.exportKey("spki", pair.publicKey)),
+				alg: -7,
+			},
+			options,
+		);
+		if ("error" in possession) throw new Error(possession.error);
+		const assertion = utf8("the new key's assertion");
+		const h = await digest(possessionCompact);
+		const change = { op: "add", credential_id: "BAUG", key_jkt: jkt };
+		const completion = async (purpose: string) =>
+			w.sealed(purpose, h, {
+				change,
+				receipt: await w.receiptOf(h, await digest(assertion)),
+				status: await w.statusOf(),
+				stateOf: await w.stateOfOf({ k1: { credential: "BAUG" } }),
+			});
+		const source = { add: possession.possession, assertion };
+		expect(await keyChanges.read(source, await completion("sign-up"), w.options())).toMatchObject({
+			change,
+		});
+		// Under the first key's purpose it does not open: the path is the creation's.
+		expect(await keyChanges.read(source, await completion("first-key"), w.options())).toEqual({
+			error: "open",
+		});
+	});
+
 	it("takes a first key's addition once the log holds it, the state holding the new key", async () => {
 		const a = await added();
 		expect(await keyChanges.read(a.source, await a.completion(), a.options())).toMatchObject({
@@ -719,6 +801,12 @@ describe("keyChanges.read: a key added", () => {
 		const a = await added();
 		const other = await a.completion({ purpose: "passkey-add" });
 		expect(await keyChanges.read(a.source, other, a.options())).toEqual({ error: "purpose" });
+		// Under sign-up's purpose a first key's completion does not open either.
+		expect(await keyChanges.read(a.source, await a.completion({}, "sign-up"), a.options())).toEqual(
+			{
+				error: "open",
+			},
+		);
 		const elsewhere = await a.completion({
 			receipt: await a.receiptOf(a.h, await digest(a.source.assertion), {
 				flow: { of: "subject", id: "sub-2" },

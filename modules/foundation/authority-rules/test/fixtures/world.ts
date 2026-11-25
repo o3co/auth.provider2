@@ -123,7 +123,7 @@ export const authorization = (sid: string, iat = T0) => ({
 		jar_hash: "jh",
 	},
 });
-/** A creation for the first-key path, or for the basis given (`ct_hash` the first-key path's alone). */
+/** A creation for the first-key path, or for the basis given (`ct_hash` the first-key path's alone; sign-up's with no account, its name in `user_name`). */
 export const creation = (
 	subject: string,
 	iat = T0,
@@ -139,12 +139,13 @@ export const creation = (
 	nonce: "n1",
 	purpose: "creation",
 	creation: {
-		account: "a***@example",
+		...(basis?.basis === "sign-up" ? {} : { account: "a***@example" }),
 		...(basis ?? { evidence: "ev", ct_hash: "ct" }),
 		subject,
 		kg,
 		options: {
 			user_id: "u",
+			...(basis?.basis === "sign-up" ? { user_name: "Example 7f3a" } : {}),
 			rp_id: "login.example",
 			exclude_credentials: [],
 			algorithms: offered,

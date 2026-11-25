@@ -35,6 +35,9 @@ export interface ReadT {
 }
 const issued = new WeakSet<ReadT>();
 
+/** Whether `read` gave this T. Not offered: for this package's sign-up path. */
+export const wasRead = (t: ReadT): boolean => issued.has(t);
+
 /**
  * T read before it is shown (§3.4 ③): the statement, and its items exactly the items the JAR the
  * screen holds gives by sdk-core-wire's one rule, its hash included.

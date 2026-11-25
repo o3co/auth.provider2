@@ -192,15 +192,18 @@ async function createOptions(
 > {
 	if (!creations.has(creation)) return { error: "statement" };
 	const { account, options: asked } = creation.statement.creation;
+	// The name the Core made for the account where it gave one (F1: no identifier), else the masked identifier.
+	const name = asked.user_name ?? account;
 	const userId = fromBase64url(asked.user_id);
 	const exclude = credentialsOf(asked.exclude_credentials);
-	// WebAuthn's user handle is 1 to 64 bytes.
-	if (!userId || userId.length === 0 || userId.length > 64 || !exclude) return { error: "options" };
+	// WebAuthn's user handle is 1 to 64 bytes, and the account a name to show.
+	if (!userId || userId.length === 0 || userId.length > 64 || !exclude || !name)
+		return { error: "options" };
 	return {
 		options: {
 			challenge: await challengeOf(creation.compact, "create"),
 			rp: { id: asked.rp_id, name: options.rpName },
-			user: { id: userId, name: account, displayName: account },
+			user: { id: userId, name, displayName: name },
 			pubKeyCredParams: asked.algorithms.map((alg) => ({ type: "public-key" as const, alg })),
 			excludeCredentials: exclude,
 			authenticatorSelection: { residentKey: "required", userVerification: "required" },

@@ -1,4 +1,8 @@
+import { purposes, typs } from "@mod/sdk-core-wire";
+import { authorization } from "../src/authorization.ts";
+import { digest } from "../src/bytes.ts";
 import type { Jwk } from "../src/jws.ts";
+import type { ScreenKeys } from "../src/keys.ts";
 
 /** Test helpers: keys from raw scalars and points, as the vectors give them. */
 const b64url = (bytes: Uint8Array) => Buffer.from(bytes).toString("base64url");
@@ -89,4 +93,51 @@ export async function signCompact(
 		new TextEncoder().encode(input),
 	);
 	return `${input}.${Buffer.from(signature).toString("base64url")}`;
+}
+
+const jarPayload = {
+	iss: "c1",
+	aud: "https://id.example",
+	iat: 1,
+	exp: 9,
+	jti: "j1",
+	client_id: "c1",
+	redirect_uri: "https://rp.example/cb",
+	response_type: "code",
+	response_mode: "form_post",
+	state: "s",
+	scope: "openid",
+	nonce: "n",
+	code_challenge: "cc",
+	code_challenge_method: "S256",
+	dpop_jkt: "jkt",
+};
+
+/** An authorization's T the screen read (issuer https://id.example), for the paths that continue it. */
+export async function readT(ring: Awaited<ReturnType<typeof signingKey>>, keys: ScreenKeys) {
+	const b64 = (value: unknown) => Buffer.from(JSON.stringify(value)).toString("base64url");
+	const jar = `${b64({ alg: "ES256", typ: typs.jar })}.${b64(jarPayload)}.sig`;
+	const { iss: _i, aud: _a, iat: _t, exp: _e, jti: _j, ...items } = jarPayload;
+	const tCompact = await signCompact(
+		ring,
+		{
+			v: 1,
+			iss: jarPayload.aud,
+			sid: "st-1",
+			iat: 1,
+			exp: 2,
+			e_enc: keys.eEnc,
+			e_sig: keys.eSig,
+			purpose: purposes.authorization,
+			approval: { ...items, jar_hash: await digest(jar) },
+		},
+		{ typ: typs.statement },
+	);
+	const read = await authorization.read(tCompact, jar, {
+		ring: [ring.jwk],
+		keys,
+		issuer: jarPayload.aud,
+	});
+	if ("error" in read) throw new Error(read.error);
+	return { tCompact, t: read.t };
 }

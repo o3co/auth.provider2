@@ -170,8 +170,8 @@ const creation = z
 		purpose: z.literal(purposes.creation),
 		creation: z
 			.object({
-				/** The identifier, masked, for display alone. */
-				account: z.string(),
+				/** The identifier, masked, for display alone; F1's has none, its name in `user_name`. */
+				account: z.string().optional(),
 				/** What the evidence is: the first key's mail, an approved `passkey-add`, or a T read before signing up. */
 				basis: z.enum(["first-key", "passkey-add", "sign-up"]).optional(),
 				/** The evidence's value the screen computes for itself, by its basis. */
@@ -201,6 +201,12 @@ const creation = z
 				{
 					message: "a ciphertext hash is the first key's path's alone",
 				},
+			)
+			.refine(
+				(c) =>
+					(c.basis === "sign-up") === (c.account === undefined) &&
+					(c.basis === "sign-up") === (c.options.user_name !== undefined),
+				{ message: "sign-up's creation alone has no account, and a name for it" },
 			),
 	})
 	.strict();

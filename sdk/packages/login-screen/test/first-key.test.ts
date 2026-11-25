@@ -218,8 +218,18 @@ describe("firstKey.readCreation", () => {
 			await firstKey.readCreation(await withBasis({ basis: "first-key" }), mail, options),
 		).toHaveProperty("creation");
 		const { ct_hash: _, ...withoutCiphertext } = creationPayload.creation;
-		for (const basis of ["passkey-add", "sign-up"]) {
-			const compact = await sign({ ...creationPayload, creation: { ...withoutCiphertext, basis } });
+		const { account: _account, ...unnamed } = withoutCiphertext;
+		const others = {
+			"passkey-add": { ...withoutCiphertext, basis: "passkey-add" },
+			// F1's: no account, the passkey's name in user_name.
+			"sign-up": {
+				...unnamed,
+				basis: "sign-up",
+				options: { ...withoutCiphertext.options, user_name: "Example 7f3a" },
+			},
+		};
+		for (const [basis, creation] of Object.entries(others)) {
+			const compact = await sign({ ...creationPayload, creation });
 			expect(await firstKey.readCreation(compact, mail, options), basis).toEqual({
 				error: "basis",
 			});
@@ -245,6 +255,16 @@ async function created() {
 }
 
 describe("firstKey.createOptions", () => {
+	it("refuses a creation that gives the account no name to show: an empty account and no user_name", async () => {
+		const { mail, creationPayload, sign, options } = await mailed();
+		const unnamed = { ...creationPayload, creation: { ...creationPayload.creation, account: "" } };
+		const read = await firstKey.readCreation(await sign(unnamed), mail, options);
+		if ("error" in read) throw new Error(read.error);
+		expect(await firstKey.createOptions(read.creation, { rpName: "Example" })).toEqual({
+			error: "options",
+		});
+	});
+
 	it("asks for a passkey of the algorithms the creation offers, in its order, for its subject, its create challenge, user verification and a resident key required", async () => {
 		const { creation, creationCompact } = await created();
 		const asked = await firstKey.createOptions(creation, { rpName: "Example" });
