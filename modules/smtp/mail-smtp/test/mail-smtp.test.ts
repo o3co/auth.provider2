@@ -157,9 +157,11 @@ describe("delivery", () => {
 	});
 
 	it("keeps sent when QUIT fails or goes unanswered", async () => {
+		// The default deadline: the send's own, which a loaded machine could pass before DATA at 400 ms,
+		// is not what this test holds; an unanswered QUIT still waits only its own second.
 		for (const QUIT of ["drop", "none"]) {
 			const r = await started({ replies: { QUIT } });
-			const sender = await boot(section(r.port, { deadline: "400ms" }));
+			const sender = await boot(section(r.port));
 			await expect(sender.send(notice())).resolves.toBe("sent");
 		}
 	});
