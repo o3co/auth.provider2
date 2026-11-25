@@ -198,14 +198,15 @@ async function continuation(
 /**
  * A rename's answer (`continue`'s rename, sealed): the passkey-manage completion as `finish` takes
  * it, with `continued` naming exactly the rename sent (its stage, sequence and body's hash): one of
- * another sequence or body, or none, is refused. Answers the new keys' list.
+ * another sequence or body, or none, is refused. Answers the new keys' list and `applied`: whether
+ * the key the rename named holds, in that list, the label sent (a rename that did not take is false).
  */
 async function renamed(
 	rename: Continued,
 	sealed: Sealed,
 	options: ReadOptions & { readonly assertion: Uint8Array },
 ): Promise<
-	| { readonly keys: readonly KeyRow[] }
+	| { readonly keys: readonly KeyRow[]; readonly applied: boolean }
 	| { readonly error: "sent" | Exclude<ManagementFinishError, "creation" | "basis" | "evidence"> }
 > {
 	if (!sent.has(rename) || rename.stage !== "rename") return { error: "sent" };
@@ -216,7 +217,10 @@ async function renamed(
 	const named = done.continued;
 	if (named?.seq !== rename.seq || named.body_hash !== rename.bodyHash)
 		return { error: "continued" };
-	return { keys: done.keys };
+	// The Core answers a rename that did not take (another's key, or a later rename taken first) with
+	// the list too, and keeps a label as sent (no trim, no normalizing), so `===` tells it apart.
+	const row = done.keys.find((key) => key.credential_id === rename.body.credential_id);
+	return { keys: done.keys, applied: row !== undefined && row.label === rename.body.label };
 }
 
 /** The keys' management on the screen: read its statement, take its approval's completion, seal a delete's or a rename's continuation, take a rename's answer. */

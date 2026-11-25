@@ -365,7 +365,24 @@ describe("management.renamed", () => {
 			keys: rows,
 			continued,
 		});
-		expect(await management.renamed(made.sent, answer, w.options)).toEqual({ keys: rows });
+		expect(await management.renamed(made.sent, answer, w.options)).toEqual({
+			keys: rows,
+			applied: true,
+		});
+		// The Core answers with the list whether or not the rename took: it took only where the key
+		// named holds the label sent; another's key, or a later rename taken first, does not.
+		const asListed = async (keys: unknown[]) =>
+			management.renamed(
+				made.sent,
+				await w.sealed({ ...w.approved, purpose: purposes.passkeyManage, keys, continued }),
+				w.options,
+			);
+		const desk = { credential_id: "AQID", label: "Desk", created_at: 1 };
+		expect(await asListed([desk])).toEqual({ keys: [desk], applied: true });
+		expect(await asListed([{ ...desk, label: "Desk 2" }])).toMatchObject({ applied: false });
+		expect(await asListed([{ ...desk, credential_id: "BAUG" }])).toMatchObject({ applied: false });
+		// The key named is in no row (deleted, or never the person's): not applied.
+		expect(await asListed([])).toEqual({ keys: [], applied: false });
 	});
 
 	it("refuses an answer naming an older sequence, another body or no rename, and a continuation it did not send or a delete's", async () => {
