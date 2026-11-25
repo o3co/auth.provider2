@@ -7,7 +7,7 @@ import { testServer } from "@mod/http-server/testing";
 import { type MetadataItem, metadata } from "@mod/issuer";
 import issuerModule from "@mod/issuer/module";
 import { issuerConfig } from "@mod/issuer/testing";
-import { assemble, contract, defineModule, kernelConfig } from "@mod/kernel";
+import { assemble, contract, defineModule, kernelConfig, Unavailable } from "@mod/kernel";
 import { quietRuntime, recordingLog } from "@mod/kernel/testing";
 import { keys } from "@mod/keys";
 import keysModule from "@mod/keys/module";
@@ -15,6 +15,7 @@ import { keysConfig, testHolder } from "@mod/keys/testing";
 import { promiseNames, stances } from "@mod/promises";
 import { subjectAttributes } from "@mod/subject-attributes";
 import { afterEach, expect, it } from "vitest";
+import { releasedClaims } from "../src/contract.ts";
 import oidcModule from "../src/module.ts";
 
 /** The bundle's record, as the endpoint hands it on. */
@@ -41,9 +42,19 @@ const reader = defineModule(
 		})),
 	],
 );
+/** What the stand-in for `subject-attributes` answers, and what it was asked. */
+let attributesAnswer: () => Promise<unknown> = async () => ({
+	kind: "known",
+	vouched: true,
+	attributes: { name: "Alice" },
+});
+const attributesAsked: unknown[][] = [];
 const standIns = defineModule({ name: "stand-ins", replicaSafe: true, takes: [] }, (m) => [
 	m.provide(subjectAttributes).by(() => ({
-		of: async () => ({ kind: "known", vouched: true, attributes: { name: "Alice" } }),
+		of: async (...asked: unknown[]) => {
+			attributesAsked.push(asked);
+			return attributesAnswer() as never;
+		},
 	})),
 	m.provide(claimsSelections).by(() => ({ forCode: async () => undefined }) as never),
 ]);
@@ -133,4 +144,28 @@ it("warns at each boot where the ring's next key signs by an algorithm not of SH
 	expect(logged.lines()).toContainEqual(
 		expect.objectContaining({ event: "oidc.next_key_alg_refused", fields: { alg: "EdDSA" } }),
 	);
+});
+
+it("releases userinfo's claims by an ID token's rule: by scope and name, constraints holding back, email_verified only where users vouches", async () => {
+	const app = await serve();
+	const released = app.get(releasedClaims);
+	const attributes = { name: "Alice", email: "a@example.com", email_verified: true };
+	attributesAnswer = async () => ({ kind: "known", vouched: true, attributes });
+	attributesAsked.length = 0;
+	expect(await released.of("alice", ["profile", "email"], "h-1")).toEqual(attributes);
+	expect(attributesAsked).toEqual([["alice", "h-1"]]);
+	attributesAnswer = async () => ({ kind: "known", vouched: false, attributes });
+	expect(await released.of("alice", ["email"], "h-1")).toEqual({ email: "a@example.com" });
+	const asked = {
+		names: [{ name: "email", scope: "email" }],
+		constraints: [{ name: "name", value: "Bob" }],
+	};
+	expect(await released.of("alice", ["profile"], "h-1", asked)).toEqual({ email: "a@example.com" });
+	attributesAnswer = async () => ({ kind: "unknown" });
+	expect(await released.of("alice", ["profile", "email"], "h-1")).toEqual({});
+	attributesAnswer = async () => {
+		throw new Unavailable("subject-attributes");
+	};
+	await expect(released.of("alice", ["profile"], "h-1")).rejects.toBeInstanceOf(Unavailable);
+	attributesAnswer = async () => ({ kind: "known", vouched: true, attributes: { name: "Alice" } });
 });

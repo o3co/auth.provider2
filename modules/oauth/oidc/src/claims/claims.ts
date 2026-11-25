@@ -95,6 +95,25 @@ export function claimsOf(
 	return Object.freeze(released);
 }
 
+/**
+ * The claims released from a subject's attributes as `subject-attributes` answers them (none where
+ * neither source can say, so nothing is released), for the scope words and what is asked by name:
+ * `email_verified` only where `users` vouches for them. The one rule an ID token and userinfo share.
+ */
+export function releasedOver(
+	known:
+		| { readonly vouched: boolean; readonly attributes: Readonly<Record<string, unknown>> }
+		| undefined,
+	scope: readonly string[],
+	asked?: Target,
+): Readonly<Record<string, Claim>> {
+	if (!known) return Object.freeze({});
+	const { email_verified, ...released } = claimsOf(known.attributes, scope, asked);
+	return Object.freeze(
+		known.vouched && email_verified !== undefined ? { ...released, email_verified } : released,
+	);
+}
+
 const isObject = (value: unknown): value is Record<string, unknown> =>
 	typeof value === "object" && value !== null && !Array.isArray(value);
 

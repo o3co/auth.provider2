@@ -17,8 +17,7 @@
   - `follow` (redemption, family, lifetime): the pin's userinfo target kept for the family a redemption founded, for the pin's subject; `forRefreshed` (family, client, subject, token): its target kept for a token refreshed from it, its names cut to what the client is allowed now.
 - `selectionLimits`, `withinLimits` (whether a selection keeps within them) and the types `Agreed`, `Selection`, `Target`, `Named`, `Constraint` and `Scalar`.
 - Extension point `claimScopes` (at most one, from the module releasing claims): `scopeOf(claim)`.
-- Contribution to `code-grant`'s redemption hooks: the pin, for the code's subject, and a redeemed code's token kept the pinned userinfo target, for the pin's subject: a redemption told another subject or none is unavailable.
-- Contribution to `erasure-extensions`' erasers: `claims-selection` (internal module `erasure`), its migration reading each record's own subject.
+- Contributions to `code-grant`'s redemption hooks: the pin, for the code's subject, and a redeemed code's token kept the pinned userinfo target, for the pin's subject: a redemption told another subject or none is unavailable; to `erasure-extensions`' erasers: `claims-selection` (internal module `erasure`), its migration reading each record's own subject.
 - Store interface `selectionRecords`, wired by the assembly: records by name, each created once for its lifetime and its subject (`create`, `erased` past the subject's erasure); `erase` and `migrate` together or neither, a part refusing the boot. Its needs (`selectionRecordsNeeds`): never evicted, survives a crash and a failover, confirmed reads, written by the provider alone.
 - `./testing`: its contract test for every implementation (`selectionRecordsContract`, through faults), and claims-selection composed over records in memory (`claimsSelectionInMemory`), which a test may wrap.
 

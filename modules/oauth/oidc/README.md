@@ -7,10 +7,11 @@
 ## Not here
 - When an ID token is asked, and the code's facts (`code-grant`, from `authorize` and `approvals`). Recording the bundle (`token-endpoint`). Signing, the rings and their algorithms (`keys`). `c_hash` from the code's digest (`authority-rules`).
 - What a subject's attributes hold and where they come from (`subject-attributes`). Which names a client and the approval allow, and the pin (`claims-selection`).
-- An ID token given back as a hint, a client's choice of algorithm (`id_token_signed_response_alg`), the refresh response (which returns no ID token) and userinfo: none here.
+- An ID token given back as a hint, a client's choice of algorithm (`id_token_signed_response_alg`) and the refresh response (which returns no ID token): none here. Accepting a token for userinfo (`userinfo`).
 
 ## Offers
 - `claimsAsked` (a `claims` parameter, a JSON object → the `sub` values each member asks and the selection; or `malformed`); `scopeOfClaim`, `tableScopes`, `tableClaims`; the type `Claim`; `idTokenTyp` (`JWT`).
+- Contract `releasedClaims`: `of` (subject, scope words, the session's handle, what a request asked beyond its scope → the claims released by the ID token's own rule; never `sub`), the one way userinfo reads claims.
 - A contribution to `code-grant`'s `idTokens`; to `claims-selection`'s `claimScopes` (each table claim's scope, none outside the table).
 - `issuer`'s metadata items: `scopes_supported` (`openid` and the table's), `claims_supported` (`sub` and the table's), `claims_parameter_supported`, `subject_types_supported` (`public`), `id_token_signing_alg_values_supported` (the authority's ring's algorithm, as `keys` names it).
 - Its stance: `core-compromise-contained` does not hold, as an ID token carries no receipt of the log yet (`txr`, with `tokens`' at L1).

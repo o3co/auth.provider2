@@ -1,0 +1,324 @@
+import type { Target } from "@mod/claims-selection";
+import { testRequest } from "@mod/http/testing";
+import { isUnavailable, Unavailable } from "@mod/kernel";
+import type { Claim } from "@mod/oidc";
+import type { Admission } from "@mod/sender-binding";
+import type { AuthContext, Entry } from "@mod/session";
+import type { TokenSession } from "@mod/session-tokens";
+import type { AccessCheck, AccessGrant } from "@mod/tokens";
+import { describe, expect, it } from "vitest";
+import { userinfoOver } from "../src/userinfo.ts";
+
+const grant: AccessGrant = {
+	subject: "ann",
+	subjectKind: "user",
+	issuedTo: "app",
+	audience: ["app"],
+	scope: ["openid", "profile"],
+};
+const valid = (
+	tokenType = "Bearer",
+	granted: AccessGrant = grant,
+): Extract<AccessCheck, { kind: "valid" }> & { readonly standingAt?: number } => ({
+	kind: "valid",
+	id: "token-1",
+	grant: granted,
+	expiresAt: 1000,
+	standingAt: 0,
+	tokenType,
+});
+const open: AuthContext = { subject: "ann", amr: ["pwd"], authenticatedAt: 0 };
+const entered = (context: AuthContext): Entry => ({
+	kind: "entered",
+	session: { id: "h1", context },
+	endsAt: 1,
+});
+
+/** The handler over parts that answer as told, keeping the calls in order. */
+function over(
+	told: {
+		admission?: Admission<AccessCheck>;
+		session?: TokenSession;
+		entry?: Entry;
+		claims?: Record<string, Claim>;
+		selection?: Target;
+		/** Runs while the selection is read, as a host that stalls there. */
+		duringSelection?: (clock: { at: number }) => void;
+		failing?: "count" | "admitted" | "session" | "entry" | "selection" | "claims";
+		/** What the per-source count answers. */
+		counted?:
+			| { readonly kind: "allowed" }
+			| { readonly kind: "limited"; readonly retryAfterMs: number };
+	} = {},
+) {
+	const calls: unknown[][] = [];
+	/** The Authorization header of each request handed to sender-binding. */
+	const admittedFrom: (string | undefined)[] = [];
+	const clock = { at: 0 };
+	/** Each per-source count: its name, key and window. */
+	const hits: unknown[][] = [];
+	const fail = (part: string) => {
+		if (told.failing === part) throw new Unavailable(part);
+	};
+	const handle = userinfoOver({
+		now: () => clock.at,
+		senderBinding: {
+			admitted: async (request) => {
+				admittedFrom.push(request.headers.get("authorization"));
+				calls.push(["admitted"]);
+				fail("admitted");
+				return (told.admission ?? { kind: "admitted", access: valid() }) as never;
+			},
+		},
+		// Never asked here: the fake sender-binding admits without it.
+		tokens: { verifyAccess: async () => valid() },
+		sessionTokens: {
+			sessionOf: async (id) => {
+				calls.push(["session", id]);
+				fail("session");
+				return told.session ?? { kind: "bound", handle: "h1" };
+			},
+		},
+		sessions: {
+			entryOf: async (handle) => {
+				calls.push(["entry", handle]);
+				fail("entry");
+				return told.entry ?? entered(open);
+			},
+		},
+		selections: {
+			forToken: async (id) => {
+				calls.push(["selection", id]);
+				fail("selection");
+				told.duringSelection?.(clock);
+				return told.selection;
+			},
+		},
+		claims: {
+			of: async (subject, scope, handle, asked) => {
+				calls.push(["claims", subject, scope, handle, asked]);
+				fail("claims");
+				return told.claims ?? { name: "Ann" };
+			},
+		},
+		counting: {
+			hit: async (name, key, window) => {
+				hits.push([name, key, window]);
+				fail("count");
+				return told.counted ?? { kind: "allowed" };
+			},
+		},
+		window: { limit: 60, ms: 60_000 },
+	});
+	const run = async (request = testRequest()) => {
+		const res = await handle(request);
+		return { status: res.status, headers: res.headers, json: (res.body as { json: unknown }).json };
+	};
+	return { run, calls, admittedFrom, hits };
+}
+
+const noStore = { "cache-control": "no-store", pragma: "no-cache" };
+
+describe("userinfo", () => {
+	it("answers the claims oidc releases for the token's scope, with sub from the token, for its open session [oidc-core-5.3.2-a] [oidc-core-5.3.2-d]", async () => {
+		const o = over({ claims: { name: "Ann", sub: "someone else" } as never });
+		const answer = await o.run();
+		expect(answer).toEqual({ status: 200, headers: noStore, json: { name: "Ann", sub: "ann" } });
+		expect(o.calls).toEqual([
+			["admitted"],
+			["session", "token-1"],
+			["entry", "h1"],
+			["selection", "token-1"],
+			["claims", "ann", ["openid", "profile"], "h1", undefined],
+		]);
+	});
+
+	it("hands oidc the selection kept for the token: the names it asks beyond its scope, and the constraints", async () => {
+		const selection: Target = {
+			names: [{ name: "email", scope: "email" }],
+			constraints: [{ name: "name", value: "Ann" }],
+		};
+		const o = over({ selection });
+		expect((await o.run()).status).toBe(200);
+		expect(o.calls.at(-1)).toEqual(["claims", "ann", ["openid", "profile"], "h1", selection]);
+	});
+
+	it("refuses a token that ends while it is answered, read once its selection is, never answering without it", async () => {
+		const refused = {
+			status: 401,
+			headers: { ...noStore, "www-authenticate": 'Bearer error="invalid_token"' },
+			json: { error: "invalid_token" },
+		};
+		// Checked just before its end; the read of its selection stalls past its end and the two minutes after.
+		const stalled = over({
+			duringSelection: (clock) => {
+				clock.at = 1000 + 120_000 + 1;
+			},
+		});
+		expect(await stalled.run()).toEqual(refused);
+		expect(stalled.calls.map((c) => c[0])).not.toContain("claims");
+		// At its end exactly, it has ended too; a moment before, it is answered.
+		const ended = over({ duringSelection: (clock) => (clock.at = 1000) });
+		expect(await ended.run()).toEqual(refused);
+		const inTime = over({ duringSelection: (clock) => (clock.at = 999) });
+		expect((await inTime.run()).status).toBe(200);
+	});
+
+	it("reads no selection for a token issued in no session, or one whose session ended, and answers 503 when it cannot read one", async () => {
+		expect((await over({ session: { kind: "unbound" } }).run()).status).toBe(401);
+		const unbound = over({ session: { kind: "unbound" } });
+		await unbound.run();
+		const ended = over({ entry: { kind: "absent" } });
+		await ended.run();
+		for (const o of [unbound, ended]) expect(o.calls.map((c) => c[0])).not.toContain("selection");
+		const failing = over({ failing: "selection" });
+		await expect(failing.run()).rejects.toSatisfy(isUnavailable);
+		expect(failing.calls.map((c) => c[0])).not.toContain("claims");
+	});
+
+	// A change from 0.x, which answered such a token its sub alone: no grant but a session's gives a
+	// user's token, and a client's own, its scope naming openid, would be answered the client's id.
+	it("refuses a token issued in no session, whatever grant gave it, telling no sub", async () => {
+		const refused = {
+			status: 401,
+			headers: { ...noStore, "www-authenticate": 'DPoP error="invalid_token"' },
+			json: { error: "invalid_token" },
+		};
+		const o = over({
+			admission: { kind: "admitted", access: valid("DPoP") },
+			session: { kind: "unbound" },
+		});
+		expect(await o.run()).toEqual(refused);
+		expect(o.calls.map((c) => c[0])).toEqual(["admitted", "session"]);
+		// A client's own token (client credentials), its scope naming openid, issued in no session.
+		const own = { ...grant, subject: "app", subjectKind: "client" as const, scope: ["openid"] };
+		const client = over({
+			admission: { kind: "admitted", access: valid("DPoP", own) },
+			session: { kind: "unbound" },
+		});
+		expect(await client.run()).toEqual(refused);
+		expect(client.calls.map((c) => c[0])).toEqual(["admitted", "session"]);
+	});
+
+	it("refuses a token whose session ended or is another subject's, in the token's scheme [rfc9449-7.1-c] [rfc6749-7.2-a]", async () => {
+		const refused = {
+			status: 401,
+			headers: { ...noStore, "www-authenticate": 'DPoP error="invalid_token"' },
+			json: { error: "invalid_token" },
+		};
+		const dpop = { kind: "admitted", access: valid("DPoP") } as const;
+		const ended = over({ admission: dpop, entry: { kind: "absent" } });
+		expect(await ended.run()).toEqual(refused);
+		expect(ended.calls.map((c) => c[0])).not.toContain("claims");
+		const other = over({ admission: dpop, entry: entered({ ...open, subject: "bob" }) });
+		expect(await other.run()).toEqual(refused);
+	});
+
+	// This test's resource item reads "meant for it" as: the issuer's resource tells its own tokens by the openid scope (OIDC Core §5.3.1); see the userinfo card's Invariants.
+	it("refuses a token whose scope lacks openid as insufficient_scope, in the token's scheme, before reading its session [rfc6750-3.1-c] [rfc9449-7.1-c] [rfc9700-2.3-c]", async () => {
+		for (const scope of [[], ["profile"], ["openidx"]]) {
+			const o = over({
+				admission: { kind: "admitted", access: valid("DPoP", { ...grant, scope }) },
+				session: { kind: "unbound" },
+			});
+			expect(await o.run(), scope.join(" ")).toEqual({
+				status: 403,
+				headers: { ...noStore, "www-authenticate": 'DPoP error="insufficient_scope"' },
+				json: { error: "insufficient_scope" },
+			});
+			expect(o.calls).toEqual([["admitted"]]);
+		}
+	});
+
+	it("never reads the token's audience: a token for another audience is answered", async () => {
+		const o = over({
+			admission: {
+				kind: "admitted",
+				access: valid("Bearer", { ...grant, audience: ["elsewhere"] }),
+			},
+		});
+		expect((await o.run()).status).toBe(200);
+	});
+
+	it("passes on sender-binding's refusal, with no error for a request with no token", async () => {
+		const challenge = { "www-authenticate": "Bearer" };
+		const none = over({ admission: { kind: "refused", status: 401, headers: challenge } });
+		// Strict: a refusal with no error has no `error` key at all.
+		expect(await none.run()).toStrictEqual({
+			status: 401,
+			headers: { ...noStore, ...challenge },
+			json: {},
+		});
+		const bad = { "www-authenticate": 'Bearer error="invalid_request"' };
+		const invalid = over({
+			admission: { kind: "refused", status: 400, error: "invalid_request", headers: bad },
+		});
+		expect(await invalid.run()).toEqual({
+			status: 400,
+			headers: { ...noStore, ...bad },
+			json: { error: "invalid_request" },
+		});
+		expect(invalid.calls).toEqual([["admitted"]]);
+	});
+
+	it("hands the token presented to sender-binding alone, the other parts its id, and answers it nowhere [rfc9700-4.9.3-a]", async () => {
+		const presented = new Map([["authorization", "Bearer s3cr3t-token"]]);
+		const short = valid("Bearer", { ...grant, scope: ["profile"] });
+		const seen: unknown[] = [];
+		for (const told of [
+			{},
+			{ session: { kind: "unbound" } as const },
+			{ entry: { kind: "absent" } as const },
+			{ admission: { kind: "admitted", access: short } as const },
+		]) {
+			const o = over(told);
+			seen.push(await o.run(testRequest({ headers: presented })), o.calls);
+			expect(o.admittedFrom).toEqual(["Bearer s3cr3t-token"]);
+		}
+		expect(seen.filter((_, i) => i % 2 === 0).map((a) => (a as { status: number }).status)).toEqual(
+			[200, 401, 401, 403],
+		);
+		expect(JSON.stringify(seen)).not.toContain("s3cr3t");
+	});
+
+	it("counts a request not in the DPoP scheme by its source before reading its token, and leaves one in it to dpop", async () => {
+		const window = { limit: 60, ms: 60_000 };
+		for (const authorization of [undefined, "Bearer t", "bearer t", "Basic x"]) {
+			const o = over();
+			const headers = new Map<string, string>(
+				authorization === undefined ? [] : [["authorization", authorization]],
+			);
+			expect((await o.run(testRequest({ headers, source: { address: "192.0.2.7" } }))).status).toBe(
+				200,
+			);
+			expect(o.hits, String(authorization)).toEqual([["userinfo", "192.0.2.7", window]]);
+		}
+		for (const authorization of ["DPoP t", "dpop t"]) {
+			const o = over({ admission: { kind: "admitted", access: valid("DPoP") } });
+			await o.run(testRequest({ headers: new Map([["authorization", authorization]]) }));
+			expect(o.hits, authorization).toEqual([]);
+		}
+	});
+
+	it("answers 429 with its wait past the window, its token unread, and fails unavailable where the source is not told or the count cannot be made", async () => {
+		const limited = over({ counted: { kind: "limited", retryAfterMs: 1500 } });
+		expect(await limited.run()).toEqual({
+			status: 429,
+			headers: { ...noStore, "retry-after": "2" },
+			json: { error: "rate_limited" },
+		});
+		expect(limited.calls).toEqual([]);
+		const unsaid = over();
+		await expect(unsaid.run(testRequest({ source: { determined: false } }))).rejects.toSatisfy(
+			isUnavailable,
+		);
+		expect([unsaid.hits, unsaid.calls]).toEqual([[], []]);
+		await expect(over({ failing: "count" }).run()).rejects.toSatisfy(isUnavailable);
+	});
+
+	it("fails unavailable when a check or the claims cannot tell, answering no claim", async () => {
+		for (const failing of ["admitted", "session", "entry", "claims"] as const) {
+			await expect(over({ failing }).run(), failing).rejects.toSatisfy(isUnavailable);
+		}
+	});
+});

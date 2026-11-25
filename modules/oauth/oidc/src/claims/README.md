@@ -11,7 +11,7 @@ Internal module of `oidc`: the claim table, mapping a user's attributes through 
 - Where the attributes come from (`subject-attributes`, through `oidc`'s module). Which names a client and the approval allow (`claims-selection`).
 
 ## Offers
-- `claimsOf` (attributes, scope words, optionally a target asked → the released claims, frozen); `scopeOfClaim`, `tableScopes`, `tableClaims`; the type `Claim`.
+- `claimsOf` (attributes, scope words, optionally a target asked → the released claims, frozen); `releasedOver` (`subject-attributes`' answer or none, scope words, a target asked → `claimsOf`'s, `email_verified` only where users vouches, none where neither source can say), the one rule an ID token and userinfo share; `scopeOfClaim`, `tableScopes`, `tableClaims`; the type `Claim`.
 - `claimsAsked` (the parameter, a JSON object → the `sub` values and the `acr` each member asks, kept apart, and the selection; or `malformed`).
 
 ## Invariants

@@ -6,7 +6,7 @@ import type { BundlePart } from "@mod/grants";
 import { Unavailable } from "@mod/kernel";
 import type { Keys, Prepared } from "@mod/keys";
 import { tokens } from "@mod/transparency-wire";
-import { type Claim, claimsOf } from "../claims/claims.ts";
+import { type Claim, releasedOver } from "../claims/claims.ts";
 
 /** An ID token's `typ`: the standard `JWT`. Telling token kinds apart is each receiver's check of its own kind. */
 export const idTokenTyp = "JWT";
@@ -38,16 +38,16 @@ interface Ready {
 
 const sha256 = (text: string) => createHash("sha256").update(text).digest("base64url");
 
-/** The claims released for the code's scope and what its pin asks; `email_verified` only where users vouches. */
-async function releasedFor(p: IdTokenParts, r: IdTokenRequest): Promise<Record<string, Claim>> {
+/** The claims released for the code's scope and what its pin asks, by `claims`' one rule. */
+async function releasedFor(
+	p: IdTokenParts,
+	r: IdTokenRequest,
+): Promise<Readonly<Record<string, Claim>>> {
 	const known = await p.attributes(r.subject, r.session);
-	if (!known) return {};
-	const { email_verified, ...released } = claimsOf(
-		known.attributes,
-		r.scope,
-		await p.asked(r.code),
-	);
-	return known.vouched && email_verified !== undefined ? { ...released, email_verified } : released;
+	// Two calls, not one: the pin is read only where the attributes are known, as before the rule moved.
+	return known
+		? releasedOver(known, r.scope, await p.asked(r.code))
+		: releasedOver(undefined, r.scope);
 }
 
 /**
@@ -57,7 +57,7 @@ async function releasedFor(p: IdTokenParts, r: IdTokenRequest): Promise<Record<s
 function claimsFor(
 	p: IdTokenParts,
 	r: IdTokenRequest,
-	released: Record<string, Claim>,
+	released: Readonly<Record<string, Claim>>,
 	acceptedAt: number,
 ) {
 	const iat = Math.floor(acceptedAt / 1000);

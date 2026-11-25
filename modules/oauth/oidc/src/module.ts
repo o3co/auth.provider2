@@ -5,7 +5,8 @@ import { defineModule } from "@mod/kernel";
 import { keys } from "@mod/keys";
 import { promiseNames, stances } from "@mod/promises";
 import { subjectAttributes } from "@mod/subject-attributes";
-import { scopeOfClaim, tableClaims, tableScopes } from "./claims/claims.ts";
+import { releasedOver, scopeOfClaim, tableClaims, tableScopes } from "./claims/claims.ts";
+import { releasedClaims } from "./contract.ts";
 import { idTokenMaker } from "./id-token/id-token.ts";
 import { section } from "./section.ts";
 
@@ -47,6 +48,15 @@ export default defineModule({ name: "oidc", replicaSafe: true, section, takes },
 			},
 			asked: async (code) => (await selections.forCode(code))?.idToken,
 		});
+	}),
+	m.provide(releasedClaims).by(async (c) => {
+		const attributes = await c.get(subjectAttributes);
+		return {
+			of: async (subject, scope, session, asked) => {
+				const answer = await attributes.of(subject, session);
+				return releasedOver(answer.kind === "known" ? answer : undefined, scope, asked);
+			},
+		};
 	}),
 	m.contribute(claimScopes).by(() => ({ scopeOf: scopeOfClaim })),
 	m.contribute(metadata).by(() => ({ name: "scopes_supported", value: [openid, ...tableScopes] })),
