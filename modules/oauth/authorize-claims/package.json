@@ -15,6 +15,8 @@
 	"dependencies": {
 		"@mod/authorize": "workspace:*",
 		"@mod/claims-selection": "workspace:*",
+		"@mod/code-grant": "workspace:*",
+		"@mod/issuer": "workspace:*",
 		"@mod/kernel": "workspace:*",
 		"@mod/oidc": "workspace:*"
 	},

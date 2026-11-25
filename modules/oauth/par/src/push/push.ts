@@ -1,9 +1,7 @@
-import type { RequestSource } from "@mod/authorize";
-import type { ClientAssertion } from "@mod/client-assertion";
+import { type JarVerifying, jarVerified, type RequestSource } from "@mod/authorize";
 import type { Clients } from "@mod/clients";
 import { type HttpRequest, type HttpResponse, jsonAnswer } from "@mod/http";
 import { Unavailable } from "@mod/kernel";
-import { typs } from "@mod/sdk-core-wire";
 import type { SenderBindings } from "@mod/sender-binding";
 import { z } from "zod";
 import type { PushedRequests, StoredPush } from "../contract.ts";
@@ -23,17 +21,13 @@ const pushOf = (kept: StoredPush | undefined) => {
 	return read.data;
 };
 
-export interface PushParts {
+/** What a push takes: what `authorize`'s check of a JAR is made with (the longest life par's own), and its own parts. */
+export interface PushParts extends JarVerifying {
 	readonly clients: Pick<Clients, "authenticate">;
-	readonly assertion: Pick<ClientAssertion, "verifySignedBy">;
 	readonly bindings: Pick<SenderBindings, "bindingOf" | "requestedOf">;
 	readonly pushed: PushedRequests;
-	readonly issuer: string;
-	/** The longest a pushed JAR may still live, in seconds. */
-	readonly maxLifetimeS: number;
 	/** How long a pushed request is kept past its JAR's expiry, in seconds. */
 	readonly skewS: number;
-	readonly now: () => number;
 	readonly token: () => string;
 }
 
@@ -59,19 +53,10 @@ export function pushing(p: PushParts) {
 			return bad("client_id is not the authenticated client");
 		const jar = field("request");
 		if (jar === undefined) return bad("a pushed request carries its JAR in request");
-		const signed = await p.assertion.verifySignedBy(client, jar, typs.jar);
-		if (signed.kind === "refused") return badObject(signed.reason);
-		const { claims } = signed;
-		if (claims.iss !== client.id || claims.client_id !== client.id)
-			return badObject("the request is not its client's");
-		const { aud, jti, exp } = claims;
-		if (aud !== p.issuer && !(Array.isArray(aud) && aud.includes(p.issuer)))
-			return badObject("the request is not for this issuer");
-		if (typeof jti !== "string" || jti === "" || typeof exp !== "number")
-			return badObject("the request names no jti or exp");
-		if (exp * 1000 <= p.now()) return badObject("the request has expired");
-		if (exp * 1000 - p.now() > p.maxLifetimeS * 1000)
-			return badObject("the request lives longer than is taken");
+		// The JAR is taken as authorize takes it at its start: one check, authorize's.
+		const verified = await jarVerified(p, client, jar);
+		if (verified.kind === "refused") return badObject(verified.reason);
+		const { claims, exp } = verified;
 		// A44: the JAR names the key its tokens are bound to; a proof sent here must be of that key.
 		const asked = p.bindings.requestedOf((name) =>
 			name === "dpop_jkt" && typeof claims.dpop_jkt === "string" ? claims.dpop_jkt : undefined,

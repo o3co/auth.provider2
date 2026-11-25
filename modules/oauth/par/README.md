@@ -17,14 +17,15 @@
 
 ## Invariants
 - A push carries its JAR alone (no parameter but inside it): one sending `request_uri` or `authorization_details` is refused (RFC 9126 §2.1), and a `client_id` beside the authentication must be the client's.
-- The JAR is the authenticated client's (`iss` and `client_id`), for this issuer, with a `jti`, a `dpop_jkt` and an `exp` not past and at most `jar-max-lifetime` away. The header-only way of asking a DPoP binding (RFC 9449 §10.1) is not taken: the JAR names the key, a push with no proof is taken (its tokens are bound to the JAR's key), and a proof of the binding it asks is taken only where it is of that key; its expiry is checked again after the proof.
+- The JAR is taken by `authorize`'s check (`jarVerified`) with `jar-max-lifetime`: the authenticated client's (`iss` and `client_id`), for this issuer, with a `jti` and an `exp` not past and at most `jar-max-lifetime` away; it names a `dpop_jkt` too.
+- The header-only way of asking a DPoP binding (RFC 9449 §10.1) is not taken: the JAR names the key, a push with no proof is taken (its tokens are bound to the JAR's key), and a proof of the binding it asks is taken only where it is of that key; its expiry is checked again after the proof.
 - A `request_uri` is 256 random bits under `urn:ietf:params:oauth:request_uri:`; its record lives the JAR's life and the clock skew. Many pushes of one JAR meet at the one start `authorize` reserves by client and `jti`, so each JAR starts one login however often it is pushed.
 
 ## Data
 - Each pushed request, by its `request_uri`: the client and the JAR's bytes, until the JAR's expiry and the clock skew.
 
 ## Depends on
-- `kernel`, `http` (the route), `rate-limit` (its policy), `clients` (`authenticate`), `client-assertion` (`verifySignedBy`), `sender-binding` (the binding proved and asked), `issuer` (its URL, metadata), `authorize` (`requestSources`), `sdk-core-wire` (the JAR's `typ`); `zod`.
+- `kernel`, `http` (the route), `rate-limit` (its policy), `clients` (`authenticate`), `client-assertion` (`verifySignedBy`, given to `jarVerified`), `sender-binding` (the binding proved and asked), `issuer` (its URL, metadata), `authorize` (`requestSources`, `jarVerified`); `zod`.
 
 ## Vocabulary
 - push: a pushed authorization request. `request_uri`: the name a push is kept under, which a login's start names.

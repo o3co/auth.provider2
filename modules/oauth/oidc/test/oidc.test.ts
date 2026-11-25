@@ -110,16 +110,17 @@ it("makes an ID token the authority's ring verifies under JWT, of the issuer, fo
 	});
 });
 
-it("names itself in the metadata: its scopes and claims, the claims parameter, public subjects, and the ring's algorithm", async () => {
+it("names itself in the metadata: its scopes and claims, public subjects, and the ring's algorithm", async () => {
 	const app = await serve();
 	const items = Object.fromEntries(app.get(seen).items.map((item) => [item.name, item.value]));
 	expect(items).toMatchObject({
 		scopes_supported: ["openid", "profile", "email", "groups"],
 		claims_supported: ["sub", "name", "picture", "email", "email_verified", "groups"],
-		claims_parameter_supported: true,
 		subject_types_supported: ["public"],
 		id_token_signing_alg_values_supported: ["ES256"],
 	});
+	// Whether the claims parameter is read is said by the module reading it (authorize-claims).
+	expect(items).not.toHaveProperty("claims_parameter_supported");
 	expect(app.get(seen).scopes.map((s) => [s.scopeOf("email"), s.scopeOf("phone_number")])).toEqual([
 		["email", undefined],
 	]);

@@ -19,7 +19,6 @@
 		"@mod/issuer": "workspace:*",
 		"@mod/kernel": "workspace:*",
 		"@mod/rate-limit": "workspace:*",
-		"@mod/sdk-core-wire": "workspace:*",
 		"@mod/sender-binding": "workspace:*",
 		"zod": "4.6.7"
 	},
@@ -33,6 +32,7 @@
 	},
 	"devDependencies": {
 		"@mod/front-core-wire": "workspace:*",
+		"@mod/sdk-core-wire": "workspace:*",
 		"vitest": "5.0.5"
 	}
 }

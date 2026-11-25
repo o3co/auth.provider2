@@ -18,4 +18,4 @@ Internal module of `par`: the pushed request's route handler and the `request_ur
 - A record of another shape is a store that cannot tell: unavailable.
 
 ## Depends on
-- `clients`, `client-assertion`, `sender-binding`, `http`, `sdk-core-wire`; `authorize` (the source's shape).
+- `clients`, `sender-binding`, `http`; `authorize` (the source's shape, `jarVerified`, made with `client-assertion`'s check the module gives).

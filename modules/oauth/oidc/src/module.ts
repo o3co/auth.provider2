@@ -61,7 +61,6 @@ export default defineModule({ name: "oidc", replicaSafe: true, section, takes },
 	m.contribute(claimScopes).by(() => ({ scopeOf: scopeOfClaim })),
 	m.contribute(metadata).by(() => ({ name: "scopes_supported", value: [openid, ...tableScopes] })),
 	m.contribute(metadata).by(() => ({ name: "claims_supported", value: ["sub", ...tableClaims] })),
-	m.contribute(metadata).by(() => ({ name: "claims_parameter_supported", value: true })),
 	m.contribute(metadata).by(() => ({ name: "subject_types_supported", value: ["public"] })),
 	m.contribute(metadata).by(async (c) => ({
 		name: "id_token_signing_alg_values_supported",

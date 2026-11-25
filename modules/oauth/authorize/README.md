@@ -16,6 +16,7 @@
 - Extension points `requestSources` (keyed by name: a start's fields → the JAR, a refusal in its own words, or none; `request`, by value, is its own) and `withoutPasskey` (at most one: whether the screen may offer `create()`, a hint outside T's signature that whoever registers a key judges again; with a sign-up offered, also its permission, kept on T and never judged again; with none, it may not).
 - Extension point `requestClaims` (at most one): an OpenID request's `claims` (`RequestClaims`): why they are refused before T, and what they select at the finish (`ClaimsPicked`, a selection kept for the code by its `keep`). Where none is contributed, any `claims` is refused before T.
 - Extension point `signUpOffers` (at most one, its module's name): with one, a T whose screen may offer `create()` allows its sign-up (F1), which that module continues; with none, no T does.
+- `jarVerified` (`JarVerifying`, the client, a JAR's bytes) → `VerifiedJar`: the check below of a JAR as its client's, for a module taking one elsewhere (`par`).
 - `jarReservations`, the store interface (create unless held, read, change from what it holds), and `jarReservationsNeeds`.
 - Contributions: `redirect-uris`' client metadata section to `clients` and its document copy to `client-documents`; the authorization's items but `dpop_jkt` to `approvals`' `statementItems`; its stance.
 - To `acr`'s `amrSources`: `authorize.passkey`, amr `pop` and `user` (internal module `finish`).

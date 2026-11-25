@@ -22,7 +22,7 @@ const refused = (error: string, description: string): { readonly refused: Refusa
 	refused: { error, description },
 });
 
-/** A JAR verified as its client's: its bytes, claims, `jti` and expiry (seconds). */
+/** A login's JAR as its source gave it: its bytes, with what `jarVerified` answered of them. */
 export interface Jar {
 	readonly jar: string;
 	readonly claims: Readonly<Record<string, unknown>>;
@@ -30,13 +30,54 @@ export interface Jar {
 	readonly exp: number;
 }
 
-export interface JarParts {
-	readonly sources: readonly RequestSource[];
+/** What a JAR is verified with: its signature's check, this issuer, its longest life and the clock. */
+export interface JarVerifying {
 	readonly assertion: Pick<ClientAssertion, "verifySignedBy">;
 	readonly issuer: string;
-	/** The longest a JAR may still live when it starts a login, in seconds. */
+	/** The longest a JAR may still live when it is taken, in seconds. */
 	readonly maxLifetimeS: number;
 	readonly now: () => number;
+}
+
+/** A JAR's bytes verified: its claims, `jti` and expiry (seconds), or why it is refused. */
+export type VerifiedJar =
+	| {
+			readonly kind: "verified";
+			readonly claims: Readonly<Record<string, unknown>>;
+			readonly jti: string;
+			readonly exp: number;
+	  }
+	| { readonly kind: "refused"; readonly reason: string };
+
+/**
+ * A JAR taken as its client's: signed by it with the JAR's `typ`, its `iss` and `client_id` the
+ * client, its `aud` this issuer, with a `jti` and an `exp` not past and at most its longest life away.
+ */
+export async function jarVerified(
+	p: JarVerifying,
+	client: Client,
+	jar: string,
+): Promise<VerifiedJar> {
+	const refused = (reason: string) => ({ kind: "refused", reason }) as const;
+	const signed = await p.assertion.verifySignedBy(client, jar, typs.jar);
+	if (signed.kind === "refused") return refused(signed.reason);
+	const { claims } = signed;
+	const { jti, exp } = claims;
+	if (claims.iss !== client.id || claims.client_id !== client.id)
+		return refused("the request is not its client's");
+	if (claims.aud !== p.issuer && !(Array.isArray(claims.aud) && claims.aud.includes(p.issuer)))
+		return refused("the request is not for this issuer");
+	if (typeof jti !== "string" || jti === "" || typeof exp !== "number")
+		return refused("the request names no jti or exp");
+	// Taken only before its expiry: whoever keeps it past then holds it the clock skew longer.
+	if (exp * 1000 <= p.now()) return refused("the request has expired");
+	if (exp * 1000 - p.now() > p.maxLifetimeS * 1000)
+		return refused("the request lives longer than is taken");
+	return { kind: "verified", claims, jti, exp };
+}
+
+export interface JarParts extends JarVerifying {
+	readonly sources: readonly RequestSource[];
 }
 
 /** The request's JAR, from the one source that answers, verified as the client's. */
@@ -52,20 +93,10 @@ export async function jarOf(
 	if (!answer || more.length > 0)
 		return refused("invalid_request", "the request is sent by exactly one of its ways");
 	if ("refused" in answer) return { refused: answer.refused };
-	const signed = await p.assertion.verifySignedBy(client, answer.jar, typs.jar);
-	if (signed.kind === "refused") return refused("invalid_request_object", signed.reason);
-	const { claims } = signed;
-	const { jti, exp } = claims;
-	if (claims.iss !== client.id || claims.client_id !== client.id)
-		return refused("invalid_request_object", "the request is not its client's");
-	if (claims.aud !== p.issuer && !(Array.isArray(claims.aud) && claims.aud.includes(p.issuer)))
-		return refused("invalid_request_object", "the request is not for this issuer");
-	if (typeof jti !== "string" || jti === "" || typeof exp !== "number")
-		return refused("invalid_request_object", "the request names no jti or exp");
-	// Taken only before its expiry: its reservation outlives it by the clock skew, the margin between replicas' clocks.
-	if (exp * 1000 <= p.now()) return refused("invalid_request_object", "the request has expired");
-	if (exp * 1000 - p.now() > p.maxLifetimeS * 1000)
-		return refused("invalid_request_object", "the request lives longer than is taken");
+	const verified = await jarVerified(p, client, answer.jar);
+	if (verified.kind === "refused") return refused("invalid_request_object", verified.reason);
+	// Its reservation outlives its expiry by the clock skew, the margin between replicas' clocks.
+	const { claims, jti, exp } = verified;
 	return { jar: { jar: answer.jar, claims, jti, exp } };
 }
 

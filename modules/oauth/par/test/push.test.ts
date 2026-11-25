@@ -41,11 +41,22 @@ function memoryPushed() {
 	return { pushed, kept };
 }
 
-function harness(p: { proved?: BindingOutcome; authenticated?: boolean } = {}) {
+function harness(
+	p: {
+		proved?: BindingOutcome;
+		authenticated?: boolean;
+		/** How long checking the proof takes, in ms; none unless told. */
+		proofMs?: number;
+	} = {},
+) {
 	const store = memoryPushed();
 	let n = 0;
+	let clock = now;
 	const bindings: Pick<SenderBindings, "bindingOf" | "requestedOf"> = {
-		bindingOf: async () => p.proved ?? { kind: "none" },
+		bindingOf: async () => {
+			clock += p.proofMs ?? 0;
+			return p.proved ?? { kind: "none" };
+		},
 		requestedOf: (param) => {
 			const jkt = param("dpop_jkt");
 			if (jkt === "bad") return { kind: "malformed", parameter: "dpop_jkt" };
@@ -76,7 +87,7 @@ function harness(p: { proved?: BindingOutcome; authenticated?: boolean } = {}) {
 		issuer,
 		maxLifetimeS: 90,
 		skewS: 30,
-		now: () => now,
+		now: () => clock,
 		token: () => {
 			n += 1;
 			return `t${n}`;
@@ -232,5 +243,14 @@ describe("the login's start by request_uri", () => {
 			refused: { error: "invalid_request_uri" },
 		});
 		expect(await source.jarOf({ request }, client)).toBeUndefined();
+	});
+
+	it("refuses, keeping nothing, a JAR that expired while its proof was checked", async () => {
+		const h = harness({ proofMs: 61_000 });
+		expect(await h.send({ request: jar(claims()) })).toMatchObject({
+			status: 400,
+			json: { error: "invalid_request_object", error_description: "the request has expired" },
+		});
+		expect(h.store.kept.size).toBe(0);
 	});
 });

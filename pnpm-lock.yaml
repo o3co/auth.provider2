@@ -1280,6 +1280,12 @@ importers:
       '@mod/claims-selection':
         specifier: workspace:*
         version: link:../claims-selection
+      '@mod/code-grant':
+        specifier: workspace:*
+        version: link:../code-grant
+      '@mod/issuer':
+        specifier: workspace:*
+        version: link:../issuer
       '@mod/kernel':
         specifier: workspace:*
         version: link:../../foundation/kernel
@@ -1711,9 +1717,6 @@ importers:
       '@mod/rate-limit':
         specifier: workspace:*
         version: link:../../foundation/rate-limit
-      '@mod/sdk-core-wire':
-        specifier: workspace:*
-        version: link:../../wire/sdk-core-wire
       '@mod/sender-binding':
         specifier: workspace:*
         version: link:../sender-binding
@@ -1724,6 +1727,9 @@ importers:
       '@mod/front-core-wire':
         specifier: workspace:*
         version: link:../../wire/front-core-wire
+      '@mod/sdk-core-wire':
+        specifier: workspace:*
+        version: link:../../wire/sdk-core-wire
       vitest:
         specifier: 5.0.5
         version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(vite@8.3.3(@types/node@26.6.5)(yaml@2.9.1))

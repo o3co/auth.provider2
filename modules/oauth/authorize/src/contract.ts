@@ -2,6 +2,8 @@ import type { Client } from "@mod/clients";
 import { contract, extensionPoint } from "@mod/kernel";
 import type { AuthorizationItems } from "@mod/sdk-core-wire";
 
+export { type JarVerifying, jarVerified, type VerifiedJar } from "./jar/jar.ts";
+
 /** A login's start as the screen sent it: each field's text, by its name in `front-core-wire`. */
 export type StartFields = Readonly<Record<string, string>>;
 
