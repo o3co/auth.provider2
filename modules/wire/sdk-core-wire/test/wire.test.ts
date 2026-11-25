@@ -301,6 +301,8 @@ describe("the completions' answers", () => {
 		for (const signed of ["d.e.f", "[]", "null", "{"])
 			expect(read("passkey-manage", del, { status: signed }), signed).toBe(false);
 		expect(read("passkey-manage", del, { stateOf: "g.h.i" })).toBe(false);
+		expect(read("sign-up", add)).toBe(true);
+		expect(read("sign-up", del)).toBe(false);
 		expect(read("passkey-manage", add)).toBe(false);
 		expect(read("first-key", del)).toBe(false);
 		expect(read("passkey-add", del)).toBe(false);
@@ -349,6 +351,18 @@ describe("the first key's statements", () => {
 			payloads.creation.safeParse({ ...creation, creation: { ...creation.creation, kg: -1 } })
 				.success,
 		).toBe(false);
+	});
+
+	it("carries the account's name for the passkey where the Core gives one: a label's text, not blank", () => {
+		const named = (user_name: unknown) =>
+			payloads.creation.safeParse({
+				...creation,
+				creation: { ...creation.creation, options: { ...creation.creation.options, user_name } },
+			}).success;
+		expect(payloads.creation.safeParse(creation).success).toBe(true);
+		expect(named("Example 7f3a")).toBe(true);
+		for (const bad of ["", "   ", "x".repeat(65), "a\nb", "a\u202eb", 7])
+			expect(named(bad), JSON.stringify(bad)).toBe(false);
 	});
 
 	it("carries a ciphertext hash on the first key's path alone, by the creation's basis", () => {
@@ -400,8 +414,14 @@ describe("the inputs a hash or a signature covers", () => {
 		expect(hpke.completionAad("authorization", "h")).toBe(
 			'{"h":"h","purpose":"completion/authorization"}',
 		);
-		const purposes = ["authorization", "first-key", "passkey-add", "passkey-manage"] as const;
-		expect(new Set(purposes.map((p) => hpke.completionAad(p, "h"))).size).toBe(4);
+		const purposes = [
+			"authorization",
+			"first-key",
+			"passkey-add",
+			"passkey-manage",
+			"sign-up",
+		] as const;
+		expect(new Set(purposes.map((p) => hpke.completionAad(p, "h"))).size).toBe(5);
 		expect(hpke.completionAad("authorization", "h")).not.toBe(
 			hpke.completionAad("authorization", "g"),
 		);

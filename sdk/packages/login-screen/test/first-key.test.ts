@@ -30,7 +30,7 @@ async function world() {
 	return { ring, keys, core, options };
 }
 
-/** The keys both sides read alike (sdk-core-wire's vectors): each one's SPKI, COSE algorithm and thumbprint. */
+/** The keys both sides read alike (passkey-key-wire's vectors): each one's SPKI, COSE algorithm and thumbprint. */
 const vectors = (
 	JSON.parse(
 		readFileSync(

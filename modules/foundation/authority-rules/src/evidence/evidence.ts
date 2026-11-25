@@ -26,8 +26,8 @@ export interface Checks {
 	 */
 	selfCeiling?(client: string, version: number, audience: string, scope: string): boolean;
 	/**
-	 * A passkey's key (its COSE_Key, base64url) to its thumbprint (RFC 7638, as `sdk-core-wire`'s
-	 * `keyThumbprintInput` builds it) and its algorithm as COSE numbers it; none for a key the
+	 * A passkey's key (its COSE_Key, base64url) to its thumbprint (RFC 7638, as `passkey-key-wire`'s
+	 * `passkeyThumbprintInput` builds it) and its algorithm as COSE numbers it; none for a key the
 	 * protocol does not take.
 	 */
 	keyThumbprint(publicKey: string): { readonly jkt: string; readonly alg: number } | undefined;

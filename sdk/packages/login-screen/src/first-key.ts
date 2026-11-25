@@ -259,7 +259,7 @@ const newKeyForms: Readonly<
 /**
  * The new key's thumbprint, from the SPKI `getPublicKey()` gave (an `ArrayBuffer`, or bytes) and the
  * algorithm `getPublicKeyAlgorithm()` gave: the SPKI read as a key of that algorithm, in its one DER
- * form (it writes back to the same bytes), its members passed by sdk-core-wire's one rule. None for
+ * form (it writes back to the same bytes), its members passed by passkey-key-wire's one rule. None for
  * an algorithm not offered, a SPKI that is not such a key or not in that form, or a key the protocol
  * does not take.
  */

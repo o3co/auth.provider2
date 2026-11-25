@@ -6,6 +6,7 @@
 ## Not here
 - Hashing, signing, sealing and verifying: the screen's SDK and the Core, each its own.
 - How a request crosses the Front: `front-core-wire`.
+- A passkey's public key form (its JWK, its thumbprint's input, the shared vectors): `passkey-key-wire`.
 
 ## Offers
 - `typs`: the `typ` of a JAR, every statement (T, a creation, a possession: `approval+jwt`), the completion's answer (`completion+jwt`), a client assertion and a DPoP proof. `purposes`: `authorization`, `creation`, `possession`, `passkey-add`, `passkey-manage`.
@@ -14,9 +15,8 @@
 - `itemsFromJar` (payload, the JAR's hash): T's items, or an error naming the claim unknown or missing, or the value not allowed.
 - `payloads`: the schemas of T, the completion's answer, the `creation`, `possession`, `passkeyAdd` and `passkeyManage` statements, and what the first key's start, mail and answer seal. Types: `StatementPayload`, `CompletionPayload`, `CreationPayload`, `PossessionPayload`, `AuthorizationAnswer`, `AuthorizationItems`, `SigningKey`, `FirstKeyStage`.
 - `payloads.answers`: the answers' forms the Front carries unread, whose names `front-core-wire` gives each operation: `authorization` (②'s), `statement`, `sealed` and `nonce`.
-- `payloads.completions`: `passkeyAdd` (the continued `creation`), `passkeyManage` (the keys' list) and `keyChange` (§C.5). `payloads.completion` is the authorization's, its `purpose` and ⑤'s `receipt` optional.
-- `versions`: the wire versions a reader speaks (1); every statement and completion names its own as `v`. A creation's `options` name the `algorithms` the ceremony offered, as COSE numbers them, each once.
-- `keyThumbprintInput` (a JWK): what a passkey's thumbprint (RFC 7638, RFC 8037) is the SHA-256 of, the JWK's required members sorted; none for a JWK that is not a passkey's (`PasskeyJwk`).
+- `payloads.completions`: `passkeyAdd` (the continued `creation`), `passkeyManage` (the keys' list) and `keyChange` (§C.5; F1's under `sign-up` too). `payloads.completion` is the authorization's, its `purpose` and ⑤'s `receipt` optional.
+- `versions`: the wire versions a reader speaks (1); every statement and completion names its own as `v`. A creation's `options` name the `algorithms` the ceremony offered, as COSE numbers them, each once, and may name `user_name`, the account's name a passkey shows (F1's creation has no identifier): a label's text, not blank.
 - `canonicalText` and `challengeInput`: what a challenge covers. `firstKey`: `stages` (`start`, `mail`), `evidenceInput`, `aad` and `recoverInput`: what the evidence's value, a sealed request's additional data and a recovery's signature (the mail's nonce, the request's digest) cover.
 - `continuation`: `stages` (`register`, `delete`, `rename`; `ContinuationStage`), what a signature covers (`of`) and how (`signature`), the `bodies` of a delete and a rename, and the `sealed` stages' `aad`, `plainBytes`, `plainOf` and `readPlain`.
 
@@ -29,12 +29,9 @@
 - A sealed value is `{ enc, ct }`: a 65-byte uncompressed point and the ciphertext with its 16-byte tag, base64url in one spelling; a nonce is 32 bytes.
 - An approval's completion binds the statement's and assertion's SHA-256, sealed under `completionAad` of the statement answered (a key change's: the `possession` for an add, the `passkey-manage` statement for a delete). A reader parses the form its request expects.
 - A `sealed` stage's body goes sealed to the Core, its signature inside (V24): `{ body, sig }`'s canonical text padded with spaces to `plainBytes`, bound to stage, statement hash and sequence; only the stage shows. The Core opens before verifying, within the rate limit; any failure is one refusal, nothing stored or spent. A credential id is 1023 bytes or less.
-- A rename's list names what it answers (`continued`: stage, sequence, the body's hash its continuation signs); the approval's names none. A list holds each credential once, 64 at most; a label is 1 to 64 code points, no control, format, surrogate or line separator. A key change adds under `first-key` or `passkey-add`, deletes under `passkey-manage`.
+- A rename's list names what it answers (`continued`: stage, sequence, the body's hash its continuation signs); the approval's names none. A list holds each credential once, 64 at most; a label is 1 to 64 code points, no control, format, surrogate or line separator. A key change adds under `first-key`, `passkey-add` or `sign-up`, deletes under `passkey-manage`.
 - `basis` and the completion's `purpose` are optional until their writers name them, then required. `prompt` is the Core's to check, before T.
-- A creation names the key generation it is signed for (`kg`): one signed before a reset registers no key after it. A possession names the new key by `key_jkt`, its thumbprint, the base64url SHA-256 of `keyThumbprintInput`.
-- A passkey's key is ES256 (P-256), EdDSA (Ed25519 alone) or RS256 (a modulus of 2048 to 4096 bits, exponent 65537). A JWK holds its thumbprint's members alone, each in its one unpadded base64url spelling: x and y 32 bytes, an odd modulus whose first byte is not 0 (refused, never cut). A P-256 point off its curve is refused, each side's crypto checking it; an Ed25519 x is taken as its 32 bytes, one that is no point failing at its signature.
-- A key travels as its COSE_Key bytes: CTAP2's canonical CBOR, a map of its key type's labels alone (1, 3, -1, -2, and -3 for EC2), in order, each once, of definite lengths, its integers shortest; read whole in the authenticator data, after which come only extensions, where flagged. The screen may read the SPKI instead, its algorithm's identifier and lengths checked, and reads the COSE_Key where the browser gives no SPKI.
-- `test/keys.vectors.json` holds each algorithm's key (COSE, SPKI, JWK, thumbprint) and keys refused: every reader runs them.
+- A creation names the key generation it is signed for (`kg`): one signed before a reset registers no key after it. A possession names the new key by `key_jkt`, its thumbprint, the base64url SHA-256 of passkey-key-wire's `passkeyThumbprintInput`.
 - A challenge's input names its use, the evidence's its purpose, each apart from the value by a NUL.
 
 ## Depends on

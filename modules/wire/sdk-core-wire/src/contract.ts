@@ -42,7 +42,7 @@ export const hpke = Object.freeze({
 	}),
 	/** The additional data a completion is sealed under: its purpose and the hash of the statement it answers. */
 	completionAad: (
-		purpose: "authorization" | "first-key" | "passkey-add" | "passkey-manage",
+		purpose: "authorization" | "first-key" | "passkey-add" | "passkey-manage" | "sign-up",
 		statementHash: string,
 	) => canonicalText({ purpose: `completion/${purpose}`, h: statementHash }),
 });
@@ -100,34 +100,6 @@ const bytes32 = z.string().regex(/^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$/);
 const thumbprint = bytes32;
 
 const sextet = (text: string, at: number) => alphabet.indexOf(text.charAt(at));
-
-/**
- * An RSA modulus in its one unpadded base64url spelling, its first byte not 0 (one that is is
- * refused, never cut), of 2048 to 4096 bits, and odd.
- */
-function isModulus(text: string): boolean {
-	const rest = text.length % 4;
-	if (!/^[A-Za-z0-9_-]+$/.test(text) || rest === 1) return false;
-	// The last character's bits past the bytes (4 where a group ends in 2 characters, 2 in 3) are 0,
-	// and the last byte's lowest bit, the one above them, is 1: a modulus is odd.
-	const unit = rest === 2 ? 16 : rest === 3 ? 4 : 1;
-	const last = sextet(text, text.length - 1);
-	if (last % unit !== 0 || (last / unit) % 2 !== 1) return false;
-	const bytes = ((text.length - rest) / 4) * 3 + (rest === 0 ? 0 : rest - 1);
-	const high = sextet(text, 0) * 4 + (sextet(text, 1) - (sextet(text, 1) % 16)) / 16;
-	// 2048 bits are 256 bytes, the first of them 128 or more; 4096 bits are 512 bytes.
-	return high !== 0 && (bytes === 256 ? high >= 128 : bytes > 256 && bytes <= 512);
-}
-
-/** A passkey's public key as a JWK, its thumbprint's members alone, for each algorithm a passkey may be of. */
-const passkeyJwk = z.discriminatedUnion("kty", [
-	z.object({ crv: z.literal("P-256"), kty: z.literal("EC"), x: bytes32, y: bytes32 }).strict(),
-	z.object({ crv: z.literal("Ed25519"), kty: z.literal("OKP"), x: bytes32 }).strict(),
-	z
-		.object({ e: z.literal("AQAB"), kty: z.literal("RSA"), n: z.string().refine(isModulus) })
-		.strict(),
-]);
-export type PasskeyJwk = z.infer<typeof passkeyJwk>;
 
 const approval = z
 	.object({
@@ -188,6 +160,8 @@ const completion = z
 	})
 	.strict();
 
+const label = z.string().regex(/^[^\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}]{1,64}$/u);
+const userName = label.refine((name) => name.trim() !== "");
 /** A statement of the first key's registration: what a `create()` is for. The identifier stays out, but masked. */
 const creation = z
 	.object({
@@ -210,6 +184,7 @@ const creation = z
 				options: z
 					.object({
 						user_id: z.string().min(1),
+						user_name: userName.optional(),
 						rp_id: z.string().min(1),
 						exclude_credentials: z.array(z.string()),
 						/** The algorithms the ceremony offered, as COSE numbers them: those the new key may be of. */
@@ -242,7 +217,7 @@ const possession = z
 		possession: z
 			.object({
 				creation_hash: z.string().min(1),
-				/** The new key's JWK thumbprint (RFC 7638), the SHA-256 of `keyThumbprintInput`, base64url. */
+				/** The new key's JWK thumbprint (RFC 7638), the SHA-256 of passkey-key-wire's `passkeyThumbprintInput`, base64url. */
 				key_jkt: thumbprint,
 				credential_id: z.string().min(1),
 				reservation_id: z.string().min(1),
@@ -279,7 +254,6 @@ const canonical = (text: string) =>
 const id = z.string().min(1);
 const times = { iat: z.number().int(), exp: z.number().int() };
 const approved = { v, iss: id, t_hash: bytes32, assertion_hash: bytes32 };
-const label = z.string().regex(/^[^\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}]{1,64}$/u);
 const keyRow = z
 	.object({ credential_id: id, label, created_at: z.number().int().nonnegative() })
 	.strict();
@@ -328,7 +302,7 @@ const completions = Object.freeze({
 		.object({
 			v,
 			iss: id,
-			purpose: z.enum(["first-key", purposes.passkeyAdd, purposes.passkeyManage]),
+			purpose: z.enum(["first-key", purposes.passkeyAdd, purposes.passkeyManage, "sign-up"]),
 			change: z.discriminatedUnion("op", [
 				z.object({ op: z.literal("add"), credential_id: id, key_jkt: thumbprint }).strict(),
 				z.object({ op: z.literal("delete"), credential_id: id }).strict(),
@@ -387,16 +361,6 @@ export function canonicalText(value: unknown): string {
 		return `{${keys.map((key) => `${JSON.stringify(key)}:${canonicalText(record[key])}`).join(",")}}`;
 	}
 	return JSON.stringify(value);
-}
-
-/**
- * What a passkey's thumbprint (RFC 7638; RFC 8037 for an OKP key) is the SHA-256 of: the JWK's
- * required members, sorted, with no space. A JWK that is not a passkey's as `PasskeyJwk` holds it
- * (another member, another spelling of the same bytes, a value out of its bounds) has none.
- */
-export function keyThumbprintInput(jwk: unknown): string | undefined {
-	const read = passkeyJwk.safeParse(jwk);
-	return read.success ? canonicalText(read.data) : undefined;
 }
 
 /**
