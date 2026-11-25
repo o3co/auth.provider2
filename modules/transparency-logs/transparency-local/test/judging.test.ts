@@ -189,7 +189,13 @@ describe("transparency-local's judgment (j0)", () => {
 			stage: 1,
 			last: false,
 			elements: ["e".repeat(43)],
-			preimage: { v: 1, parent: "a1", evidence: [], content: { via: "code" } },
+			// A code's start as V24 names it, its code and client: forged for its flow, not its shape.
+			preimage: {
+				v: 1,
+				parent: "a1",
+				evidence: [],
+				content: { via: "code", code: "c".repeat(43), client: "c1" },
+			},
 		});
 		if (start.result !== "accepted") throw new Error(start.refusal);
 		const bundle = await world.log.append({

@@ -76,10 +76,8 @@ const canonical = z
 	);
 const empty = z.object({}).strict();
 const code = z.object({ via: z.literal("code") }).strict();
-/** A code exchange's start: the code's digest and its client, which its root approval's record names (V24); each, where named. */
-const codeStart = z
-	.object({ via: z.literal("code"), code: id.optional(), client: id.optional() })
-	.strict();
+/** A code exchange's start: the code's digest and its client, which its root approval's record names (V24). */
+const codeStart = z.object({ via: z.literal("code"), code: id, client: id }).strict();
 const refresh = z
 	.object({ via: z.literal("refresh"), rotation: z.number().int().nonnegative() })
 	.strict();

@@ -223,7 +223,7 @@ describe("a code exchange: start and bundle (J2, J7, BundleEscape023)", () => {
 		expect(verdictOn(codeBundle(4, "login", "r-3", "r-2"), started)).toEqual(ok);
 	});
 
-	it("refuses a start naming another code or client than its approval's record, each held where named (V24, A21)", () => {
+	it("refuses a start naming another code or client than its approval's record, or naming none (V24, A21)", () => {
 		const named = (content: object) => {
 			const step = codeStart(3, "login", "r-2");
 			const opened = step.preimage as { content: object };
@@ -231,8 +231,9 @@ describe("a code exchange: start and bundle (J2, J7, BundleEscape023)", () => {
 		};
 		const code = digest("code-sid-1");
 		expect(verdictOn(named({ code, client: "rp" }), approved())).toEqual(ok);
-		expect(verdictOn(named({ code }), approved())).toEqual(ok);
-		expect(verdictOn(named({ client: "rp" }), approved())).toEqual(ok);
+		// Required from V24: a start naming either alone does not read as a code's start.
+		expect(verdictOn(named({ code }), approved())).toEqual(refused(/does not read/));
+		expect(verdictOn(named({ client: "rp" }), approved())).toEqual(refused(/does not read/));
 		const other = refused(/another code or client/);
 		expect(verdictOn(named({ code: digest("code-other"), client: "rp" }), approved())).toEqual(
 			other,

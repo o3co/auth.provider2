@@ -73,7 +73,11 @@ const tokens = [
 
 export const codeStart = (position: number, op: string, approvalId: string) => ({
 	record: coreRecord("start", position, { op, last: false }),
-	preimage: preimage({ parent: approvalId, content: { via: "code" } }),
+	// The code and the client its approval's record names (`approval`'s, sid-1's code and `rp`).
+	preimage: preimage({
+		parent: approvalId,
+		content: { via: "code", code: digest("code-sid-1"), client: "rp" },
+	}),
 });
 export const codeBundle = (position: number, op: string, start: string, approvalId: string) => ({
 	record: coreRecord("bundle", position, { op, stage: 2, tokens: [...tokens] }),
