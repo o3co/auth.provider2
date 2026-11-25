@@ -90,7 +90,7 @@ export interface BundleRequest {
  */
 export type Rooting =
 	/** By an approval's code: its digest (its SHA-256, base64url, A21), which the start names beside its client (V24). */
-	{ readonly via: "code"; readonly code?: string } | { readonly via: "refresh" };
+	{ readonly via: "code"; readonly code: string } | { readonly via: "refresh" };
 
 /**
  * A token a bundle carries beside its access token (A40), made by its owner: prepared with the
