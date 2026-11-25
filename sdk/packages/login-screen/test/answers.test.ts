@@ -85,6 +85,25 @@ describe("answers.read", () => {
 		}
 	});
 
+	it("reads an enc of the point's form though it is no point of the curve: the opening sees that, not this read", async () => {
+		const b = await bodies();
+		const offCurve = `B${"A".repeat(86)}`;
+		const read = answers.read("sealed", { sealed: { enc: offCurve, ct: b.ct } });
+		expect(read?.enc).toHaveLength(65);
+		// Another first byte is not the point's form at all.
+		expect(
+			answers.read("sealed", { sealed: { enc: `C${"A".repeat(86)}`, ct: b.ct } }),
+		).toBeUndefined();
+	});
+
+	it("reads none for padded base64url anywhere", async () => {
+		const b = await bodies();
+		expect(answers.read("nonce", { nonce: `${b.bytes32}=` })).toBeUndefined();
+		expect(
+			answers.read("authorization", { ...b.of.authorization, challenge: `${b.bytes32}=` }),
+		).toBeUndefined();
+	});
+
 	it("reads none for a form it does not know, an object's own names among them", async () => {
 		const b = await bodies();
 		for (const form of ["constructor", "__proto__", "toString", "hasOwnProperty", "", "Sealed"])
