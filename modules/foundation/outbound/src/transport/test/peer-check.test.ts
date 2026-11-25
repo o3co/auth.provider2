@@ -103,10 +103,20 @@ it("ends the connection at the deadline while the peer is checked, sending nothi
 	const read = readAfterCheck.length;
 	for (const way of [undefined, route()]) {
 		let held: TLSSocket | undefined;
-		const failing = sending(way, 150, (socket, signal) => {
-			held = socket;
-			return new Promise((ended) => signal.addEventListener("abort", () => ended()));
-		});
+		// The deadline comes due while the check runs, however long the handshake took to reach it.
+		const deadline = new AbortController();
+		const failing = sending(
+			way,
+			150,
+			(socket, signal) => {
+				held = socket;
+				deadline.abort(new DOMException("The deadline came due.", "TimeoutError"));
+				return new Promise((ended) =>
+					signal.aborted ? ended() : signal.addEventListener("abort", () => ended()),
+				);
+			},
+			() => deadline.signal,
+		);
 		await expect(failing).rejects.toMatchObject({ failure: "timeout" });
 		expect(held?.destroyed).toBe(true);
 	}
@@ -117,17 +127,18 @@ it("ends the connection at a deadline that came due while the check held its tim
 	const read = readAfterCheck.length;
 	const before = received;
 	let held: TLSSocket | undefined;
-	// The deadline's timer cannot fire while the check holds the loop past it.
+	// The deadline's timer never fires here, as while the check holds the loop past it; the
+	// monotonic time alone passes the deadline, and only once the check runs.
+	let now = 0;
 	const failing = sending(
 		undefined,
 		30,
 		async (socket) => {
 			held = socket;
-			const until = Date.now() + 100;
-			while (Date.now() < until) {}
+			now = 100;
 		},
-		AbortSignal.timeout,
-		() => performance.now(),
+		() => new AbortController().signal,
+		() => now,
 	);
 	await expect(failing).rejects.toMatchObject({ failure: "timeout" });
 	expect(held?.destroyed).toBe(true);
