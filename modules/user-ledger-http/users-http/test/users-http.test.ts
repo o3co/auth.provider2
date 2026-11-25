@@ -452,7 +452,8 @@ describe("users-http", () => {
 		expect(logged).toEqual([["users-http.ledger_failed", { status: 500 }]]);
 	});
 
-	it("logs the kind of each other failure, and nothing it sent", async () => {
+	// One test per failure: each boots its own app, so one test booting all of them ran past its time under load.
+	{
 		const cases: [string, () => Promise<unknown>, Record<string, unknown>][] = [
 			[
 				"a name allowed that resolves to a special address",
@@ -527,12 +528,14 @@ describe("users-http", () => {
 			],
 		];
 		for (const [name, call, fields] of cases) {
-			script = aliceLedger;
-			logged.length = 0;
-			await expect(call(), name).rejects.toSatisfy(isUnavailable);
-			expect(logged, name).toEqual([["users-http.ledger_failed", fields]]);
+			it(`logs the kind of each other failure, and nothing it sent: ${name}`, async () => {
+				script = aliceLedger;
+				logged.length = 0;
+				await expect(call()).rejects.toSatisfy(isUnavailable);
+				expect(logged).toEqual([["users-http.ledger_failed", fields]]);
+			});
 		}
-	});
+	}
 
 	it("answers unavailable past its own time or size, never none", async () => {
 		script = (asked) => ({ ...aliceLedger(asked), delayMs: 300 });
@@ -556,13 +559,13 @@ describe("users-http", () => {
 			"no username": { id: "s-alice" },
 			"username not a string": { ...alice, username: ["alice"] },
 		};
+		// One boot: the ledger asks the scripted server again on each verify.
+		const { ledger } = await open();
 		for (const [name, json] of Object.entries(malformed)) {
 			script = () => ({ status: 200, json });
-			const { ledger } = await open();
 			await expect(ledger.verify("alice", "p"), name).rejects.toSatisfy(isUnavailable);
 		}
 		script = () => ({ status: 200, json: { ...alice, id: "x".repeat(255) } });
-		const { ledger } = await open();
 		expect(await ledger.verify("alice", "p")).toMatchObject({ user: { subject: "x".repeat(255) } });
 	});
 
