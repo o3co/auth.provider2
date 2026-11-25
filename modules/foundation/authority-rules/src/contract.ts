@@ -1,4 +1,4 @@
-import { effectOf } from "./chain/chain.ts";
+import { bundleEffect, effectOf } from "./chain/chain.ts";
 import { lifetimeMs, startOf, within } from "./client/client.ts";
 import { contents } from "./evidence/evidence.ts";
 import { changes, flowState } from "./fold/fold.ts";
@@ -44,10 +44,13 @@ export { effectOf };
  *   elements (Elems), or why not; `within` (its evidence, a time, a window) → whether its times hold
  *   it as TimeOK reads them; `lifetimeMs`, the longest its token lives from its start (15 minutes).
  * - `idToken`: `cHash` (a code's SHA-256 digest) → its `c_hash`, the left half (A21).
+ * - `bundle`: `effect` (its `via`, root and tokens' frames) → its changes, Eff of its record, which the
+ *   Core's intent takes as is.
  */
 export const tokenRules = Object.freeze({
 	client: Object.freeze({ start: startOf, within, lifetimeMs }),
 	idToken: Object.freeze({ cHash }),
+	bundle: Object.freeze({ effect: bundleEffect }),
 });
 
 /** The schemas the rules hold: a flow's state, a record's changes, and a Core writer's preimage content by kind. */

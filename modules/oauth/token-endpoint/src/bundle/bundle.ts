@@ -80,15 +80,15 @@ export interface BundleAsk {
 /** A bundle's answer: the access token's, and each part's token in the order asked. */
 export type BundleIssued =
 	| Issued
-	| (Extract<Issued, { kind: "issued" }> & { readonly parts: readonly string[] });
+	| (Extract<Issued, { kind: "issued" }> & { readonly parts: readonly (string | undefined)[] });
 
-/** What a bundle's op changes, as `authority-rules`' `effectOf` reads its bundle. */
-export function effectOfBundle(ask: Pick<BundleAsk, "root" | "via">, client: unknown): Changes {
-	if (client || ask.root === undefined || !ask.via) return {};
-	return ask.via.via === "code"
-		? { family: { approval: ask.root }, consume: [`code:${ask.root}`] }
-		: { rotate: ask.root };
-}
+/** What a bundle's op changes, by `authority-rules`' own `tokenRules.bundle.effect`: its root, how it roots there, its tokens' frames. */
+const effectOfBundle = (
+	ask: Pick<BundleAsk, "root" | "via">,
+	client: unknown,
+	frames: readonly string[],
+): Changes =>
+	tokenRules.bundle.effect({ via: client ? "client" : ask.via?.via, root: ask.root, frames });
 
 const bundleContentOf = (start: Preimage["content"]) =>
 	start.via === "code" ? { via: "code" } : start;
@@ -153,13 +153,13 @@ export function bundling(deps: BundleParts) {
 		flow: Flow,
 		op: string,
 		make: (state: FlowState) => Stage | undefined,
-		eff: Changes,
+		eff: () => Changes,
 	) {
 		let start: Stage | undefined;
 		const decide = (state: FlowState) => {
 			start = make(state);
 			return start
-				? { digest: deps.digest(start.preimage), eff, records: [] }
+				? { digest: deps.digest(start.preimage), eff: eff(), records: [] }
 				: { refused: noFamily };
 		};
 		for (let tried = 0; tried < decideTries; tried++) {
@@ -210,14 +210,30 @@ export function bundling(deps: BundleParts) {
 			const own = family?.client === ask.request.grant.issuedTo;
 			return family && own ? { via: "refresh", rotation: family.rotation } : undefined;
 		};
+		let kept: readonly (BundlePart | undefined)[] = parts;
+		const familyOnLiveKeyOnly = (state: FlowState) => {
+			if (ask.via?.via !== "code" || ask.root === undefined) return parts;
+			const approval = Object.hasOwn(state.approvals, ask.root)
+				? state.approvals[ask.root]
+				: undefined;
+			const key = approval?.chain.at(-1);
+			const live = key !== undefined && Object.hasOwn(state.keys, key);
+			return live ? parts : parts.map((part) => (part.frame === "family" ? undefined : part));
+		};
 		const startOn = (state: FlowState): Stage | undefined => {
 			const content = contentOn(state);
 			if (!content) return undefined;
+			kept = familyOnLiveKeyOnly(state);
 			const preimage = { v: 1 as const, ...root, ...parent, evidence: ask.evidence, content };
 			return { kind: "start", flow, op, stage: 1, last: false, ...client?.named, preimage };
 		};
-		const decision = await decided(flow, op, startOn, effectOfBundle(ask, client));
+		const framesOf = () => ["accessToken", ...present().map((part) => part.frame)];
+		const present = () => kept.filter((part): part is BundlePart => part !== undefined);
+		const decision = await decided(flow, op, startOn, () =>
+			effectOfBundle(ask, client, framesOf()),
+		);
 		if (!decision) return endedFamily;
+		const carried = present();
 		const { prev, start } = decision;
 		const via = start.preimage.content;
 		const started = await transparency.send({ flow, op, stage: start, prev });
@@ -245,7 +261,7 @@ export function bundling(deps: BundleParts) {
 			await close();
 			return prepared;
 		}
-		const readied = await Promise.all(parts.map((part) => part.prepare(acceptedAt))).catch(
+		const readied = await Promise.all(carried.map((part) => part.prepare(acceptedAt))).catch(
 			async (error: unknown) => {
 				await close();
 				throw error;
@@ -264,7 +280,7 @@ export function bundling(deps: BundleParts) {
 			last: true,
 			tokens: [
 				{ frame: "accessToken", digest: sha256(digested.input) },
-				...parts.map((part, i) => ({ frame: part.frame, digest: readied[i]?.digest ?? "" })),
+				...carried.map((part, i) => ({ frame: part.frame, digest: readied[i]?.digest ?? "" })),
 			],
 			preimage: {
 				v: 1,
@@ -292,7 +308,9 @@ export function bundling(deps: BundleParts) {
 			const signed = await deps.issuance.sign(prepared);
 			if (signed.kind === "refused") return { signed, made: [], placed };
 			const settled = await Promise.allSettled(
-				parts.map((part, i) => part.sign(readied[i]?.prepared, received[i + 1] as string, placed)),
+				carried.map((part, i) =>
+					part.sign(readied[i]?.prepared, received[i + 1] as string, placed),
+				),
 			);
 			const failed = settled.find((one) => one.status === "rejected");
 			if (failed) throw failed.reason;
@@ -308,7 +326,10 @@ export function bundling(deps: BundleParts) {
 		if (signed.kind === "refused") return signed;
 		await takenIn(flow, op);
 		// Taken in: each part commits (V12); one that fails answers no token, the bundle on the log.
-		await Promise.all(parts.map((part, i) => part.commit?.(readied[i]?.prepared, placed)));
-		return parts.length === 0 ? signed : { ...signed, parts: made };
+		await Promise.all(carried.map((part, i) => part.commit?.(readied[i]?.prepared, placed)));
+		if (parts.length === 0) return signed;
+		let next = 0;
+		const answered = kept.map((part) => (part === undefined ? undefined : made[next++]));
+		return { ...signed, parts: answered };
 	};
 }

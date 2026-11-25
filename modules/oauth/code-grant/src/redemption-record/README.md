@@ -13,6 +13,7 @@ Internal module of `code-grant`: each redemption's record, which holds its token
 - `RedemptionRecord` and its stored form (`toStoredRedemptionRecord`, `fromStoredRedemptionRecord`, checked on every read).
 
 ## Invariants
+- A record that vanished during a redemption is refused and never written back (the code would be unused again). A record of a format or shape not known is a code that cannot be used: refused (not unavailable), or logged and removed from the list.
 - Use-up, then the record is created, under its subject's tombstone, then the token is issued, then noted on the record: a reuse that finds no token has nothing yet to revoke, right only by that order. A subject erased meanwhile gets no record, so no token: the code is refused and voided.
 - A record lives `storedRecordMaxMs`: the longest token, then 120 s for clock drift and 120 s from use-up to issue. Its token ends at least 120 s before the record, the creation's time read before its write; it ends no later than its session as well.
 - A note or a mark rewrites what the record holds and keeps its end; a record gone is never written back.

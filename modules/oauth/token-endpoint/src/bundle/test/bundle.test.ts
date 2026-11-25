@@ -67,6 +67,16 @@ const familyAt = (rotation: number) => ({
 	position: 1,
 	acceptedAt: now,
 });
+/** The approval `r-approval` and its key `k1`, live on every subject flow's applied state unless a test takes them. */
+const placed = { position: 1, acceptedAt: now };
+let liveKeys: FlowState["keys"] = {};
+let liveApprovals: FlowState["approvals"] = {};
+const approvedState = () => {
+	liveKeys = { k1: { credential: "c1", publicKey: "pk1", chain: [], ...placed } };
+	liveApprovals = {
+		"r-approval": { chain: ["k1"], code: "code-digest", client: "svc", ...placed },
+	};
+};
 /** The signing input of a JWS as received: all but its signature. */
 const signingInput = (jws: string) => jws.slice(0, jws.lastIndexOf("."));
 
@@ -86,7 +96,11 @@ async function makeWorld(wrap: (log: TransparencyLog) => TransparencyLog = (l) =
 						holds: ["keyGeneration", "keys", "approvals", "families", "consumed"],
 						parts: ["state"],
 						records: () => [{ part: "state", name: "state" }],
-						read: () => ({ families: { ...liveFamilies } }),
+						read: () => ({
+							families: { ...liveFamilies },
+							keys: { ...liveKeys },
+							approvals: { ...liveApprovals },
+						}),
 						write: () => [undefined],
 					})),
 					m.contribute(operationKinds).by(() => bundleKind),
@@ -124,6 +138,7 @@ async function makeWorld(wrap: (log: TransparencyLog) => TransparencyLog = (l) =
 }
 beforeEach(async () => {
 	liveFamilies = {};
+	approvedState();
 	world = await makeWorld();
 	world.book.judgeOnAppend({ verdict: "verified", outcome: "took" });
 });
@@ -404,6 +419,57 @@ describe("a bundle, owned by the token endpoint (A40)", () => {
 			{ frame: "idToken", receipt: "h.p1.s" },
 			{ frame: "family", receipt: "h.p2.s" },
 		]);
+	});
+
+	it("leaves a code's family out where its approval's key is no longer live, its place answered undefined (V24)", async () => {
+		const person = { ...grant, subject: "alice", subjectKind: "user" as const };
+		const made: string[] = [];
+		const part = (frame: "idToken" | "family") => ({
+			frame,
+			prepare: async () => {
+				made.push(`${frame} prepared`);
+				return { prepared: frame, digest: `${frame}-digest` };
+			},
+			sign: async (prepared: unknown) => `${String(prepared)}-signed`,
+			commit: async () => {
+				made.push(`${frame} committed`);
+			},
+		});
+		const asked = {
+			...ask,
+			request: { ...ask.request, grant: person },
+			root: "r-approval",
+			via: { via: "code", code: "code-digest" },
+			parts: [part("idToken"), part("family")],
+		} as const;
+		// Its key deleted: the approval stays on the state, its key does not.
+		liveKeys = {};
+		const t = await world.replica("w1");
+		const effs: unknown[] = [];
+		const decide: typeof t.decide = (q) => {
+			const state = { ...emptyState, approvals: { ...liveApprovals } };
+			const decided = q.decide(state, []);
+			if (!("refused" in decided)) effs.push(decided.eff);
+			return t.decide(q);
+		};
+		expect(await world.run({ ...t, decide })(asked)).toEqual({
+			...issued,
+			parts: ["idToken-signed", undefined],
+		});
+		// Its op decided with the code's mark alone, as the rules read a bundle with no family frame.
+		expect(effs).toEqual([{ consume: ["code:r-approval"] }]);
+		const subject = { of: "subject", id: "alice" } as const;
+		const bundle = world.book.records(subject).at(-1)?.record;
+		expect(bundle?.tokens?.map((token) => token.frame)).toEqual(["accessToken", "idToken"]);
+		expect(made).toEqual(["idToken prepared", "idToken committed"]);
+		// The approval itself gone from the state: no family either.
+		liveKeys = { k1: { credential: "c1", publicKey: "pk1", chain: [], ...placed } };
+		liveApprovals = {};
+		const again = await world.run(await world.replica("w1"))({
+			...asked,
+			evidence: [{ form: "dpopProof" as const, value: jws(claimed("p-again")) }],
+		});
+		expect(again).toMatchObject({ parts: ["idToken-signed", undefined] });
 	});
 
 	it("signs no part, closing its op, when a part cannot be prepared; and none where the log answers its receipts otherwise", async () => {

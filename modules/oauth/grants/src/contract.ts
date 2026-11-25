@@ -152,8 +152,12 @@ export interface GrantInput {
 		| {
 				readonly kind: "issued";
 				readonly access: IssuedAccess;
-				/** Each part's token, as its owner signed it, in the order asked; none where none was asked. */
-				readonly parts?: readonly string[];
+				/**
+				 * Each part's token, as its owner signed it, in the order asked; none where none was asked.
+				 * A `family` part the token endpoint left out, its approval's key no longer live (V24), is
+				 * answered undefined at its place.
+				 */
+				readonly parts?: readonly (string | undefined)[];
 		  }
 		| Refused
 	>;

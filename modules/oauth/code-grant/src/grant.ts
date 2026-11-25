@@ -211,7 +211,12 @@ export function codeGrant(parts: {
 				idParts.length > 0 ? allowed.parts?.[0] : undefined,
 				founded ? allowed.parts?.[idParts.length] : undefined,
 			];
-			if ((idParts.length > 0 && !idTokenIssued) || (founded && !refreshIssued))
+			// A family left out, its approval's key no longer live (V24), answers no refresh_token: its
+			// place is undefined, but every place asked is answered.
+			if (
+				(parts.length > 0 && allowed.parts?.length !== parts.length) ||
+				(idParts.length > 0 && !idTokenIssued)
+			)
 				throw new TypeError("code-grant: a bundle answered without a part it asked");
 			const issued = allowed.access;
 			// Noted on its record, which keeps its end; one gone meanwhile (erased) gets no token answered.

@@ -568,6 +568,62 @@ describe("a refresh family, founded with a redemption", () => {
 		]);
 	});
 
+	it("answers no refresh_token, the access token all the same, where the bundle left the family out (V24)", async () => {
+		const s = await serve({
+			extra: [familyMaker([], [])],
+			grants: ["authorization_code", "refresh_token"],
+		});
+		const binding = { member: "jkt", confirmation: "k1", tokenType: "DPoP" } as const;
+		const code = await rootedIssue(s, { ...s.facts, binding }, founding);
+		const answer = await handleDirectly(
+			s,
+			code,
+			{
+				binding,
+				// The approval's key is no longer live: the token endpoint answers the family's place as none.
+				issue: async (bundle) => ({ ...(await issuedNow(s, bundle)), parts: [undefined] }),
+			},
+			refreshing,
+		);
+		expect(answer).toMatchObject({ kind: "issued", body: { access_token: expect.any(String) } });
+		expect((answer as { body: object }).body).not.toHaveProperty("refresh_token");
+		// With its ID token: the ID token answered, at its place before the family's.
+		const both = await serve({
+			extra: [familyMaker([], []), idTokenMaker([])],
+			grants: ["authorization_code", "refresh_token"],
+		});
+		const openid = {
+			...refreshing,
+			section: <T>() => ({ ...allowances, scopes: ["openid", "read"] }) as T,
+		};
+		const withId = await handleDirectly(
+			both,
+			await rootedIssue(
+				both,
+				{ ...both.facts, scope: ["openid", "read"], nonce: "n-0S6_WzA2Mj", binding },
+				founding,
+			),
+			{
+				binding,
+				issue: async (bundle) => ({ ...(await issuedNow(both, bundle)), parts: ["id", undefined] }),
+			},
+			openid,
+		);
+		expect(withId).toMatchObject({ kind: "issued", body: { id_token: "id" } });
+		expect((withId as { body: object }).body).not.toHaveProperty("refresh_token");
+		// A bundle answering fewer places than asked is the endpoint's fault, not a family left out.
+		const short = await handleDirectly(
+			s,
+			await rootedIssue(s, { ...s.facts, binding }, founding),
+			{ binding, issue: async (bundle) => ({ ...(await issuedNow(s, bundle)), parts: [] }) },
+			refreshing,
+		).then(
+			() => "answered",
+			(error: unknown) => (error instanceof TypeError ? "TypeError" : String(error)),
+		);
+		expect(short).toBe("TypeError");
+	});
+
 	it("is founded for no client not allowed to refresh, and none of a code rooted without its statement", async () => {
 		const asked: FamilyRequest[] = [];
 		const s = await serve({ extra: [familyMaker(asked, [])] });

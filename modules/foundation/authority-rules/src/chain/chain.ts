@@ -383,8 +383,19 @@ function startRefusal(read: Read<"start">): Refusal {
 	}
 	const family = own(ask.state.families, parent);
 	if (!family) return "the family is not live on the flow";
+	if (!rootKeyLive(ask.state, family.chain)) return "the family's root key is not live";
 	return content.rotation === family.rotation ? undefined : "the refresh is of another rotation";
 }
+
+/**
+ * Whether the key a chain ends in, an approval's or a family's root key, is live on the state just
+ * before the record (V24): a family is made, and refreshed, only while it is. The state is the prefix's
+ * (`StateOf(f, p)`), whatever an honest Core read when it decided.
+ */
+const rootKeyLive = (state: FlowState, chain: readonly string[]) => {
+	const key = chain.at(-1);
+	return key !== undefined && own(state.keys, key) !== undefined;
+};
 
 function bundleRefusal(read: Read<"bundle">): Refusal {
 	const { ask, preimage, content } = read;
@@ -407,9 +418,13 @@ function bundleRefusal(read: Read<"bundle">): Refusal {
 		if (used(ask.state, marks.code(root))) return "the approval's code is exchanged";
 		if (start.envelope.acceptedAt > approval.acceptedAt + ask.context.limits.codeLifetime)
 			return "the start came after the code's lifetime";
+		const founds = (ask.record.tokens ?? []).some((token) => token.frame === "family");
+		if (founds && !rootKeyLive(ask.state, approval.chain))
+			return "the bundle founds a family on an approval whose key is not live";
 	} else {
 		const family = own(ask.state.families, root);
 		if (!family) return "the family is not live on the flow";
+		if (!rootKeyLive(ask.state, family.chain)) return "the family's root key is not live";
 		if (content.rotation !== family.rotation) return "the refresh is of another rotation";
 	}
 	if (acceptable(start.judgment.verdict) && start.judgment.outcome === "didNotTake")
@@ -619,6 +634,22 @@ export function rootOf(ask: Ask): Root | undefined {
 	return undefined;
 }
 
+/**
+ * A bundle's changes, Eff of its record, the Core's intent and `effectOf` alike: a code's consumes its
+ * code, and makes the family of its approval only where it carries a `family` frame (V24); a refresh's
+ * rotates its family; a client's, or one of no root, none. `frames` are its tokens' frames, in order.
+ */
+export function bundleEffect(b: {
+	readonly via: "code" | "refresh" | "client" | undefined;
+	readonly root: string | undefined;
+	readonly frames: readonly string[];
+}): Changes {
+	if (b.root === undefined || b.via === undefined || b.via === "client") return {};
+	if (b.via === "refresh") return { rotate: b.root };
+	const family = b.frames.includes("family") ? { family: { approval: b.root } } : {};
+	return { ...family, consume: [marks.code(b.root)] };
+}
+
 /** Eff(r): a Core writer's record's changes, from its preimage; the Core's intent holds the same. */
 export function effectOf(ask: Ask): Changes {
 	const kind = ask.record.kind;
@@ -647,11 +678,9 @@ export function effectOf(ask: Ask): Changes {
 		}
 		case "bundle": {
 			const read = readOf("bundle", ask);
-			const root = read?.preimage.root;
-			if (!read || root === undefined || read.content.via === "client") return {};
-			return read.content.via === "code"
-				? { family: { approval: root }, consume: [marks.code(root)] }
-				: { rotate: root };
+			if (!read) return {};
+			const frames = (ask.record.tokens ?? []).map((token) => token.frame);
+			return bundleEffect({ via: read.content.via, root: read.preimage.root, frames });
 		}
 		case "abandonment": {
 			const op = ask.record.abandons?.op;

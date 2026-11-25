@@ -31,7 +31,7 @@ import {
 	subject,
 } from "../../../test/fixtures/world.ts";
 import { emptyState, type Finding, type FlowState } from "../../fold/fold.ts";
-import { allowed, effectOf, timely } from "../chain.ts";
+import { allowed, bundleEffect, effectOf, timely } from "../chain.ts";
 
 // Each case names the model definition or judgment row it is taken from: Rules023e.tla `Allowed`
 // (ft: no live key, the writer's ring, the boundary; add/fam: par ∈ Keys(M); ref: par ∈ Fams(M)),
@@ -487,6 +487,57 @@ describe("effectOf: a Core record's changes, Eff(r), the same for the Core's int
 		});
 		expect(of(refreshBundle(6, "rf", "r-5", "r-4"))).toEqual({ rotate: "r-4" });
 		expect(of({ record: coreRecord("approval", 2), preimage: { broken: true } })).toEqual({});
+	});
+
+	it("gives a bundle's by `bundleEffect`, which the Core's intent takes as is", () => {
+		const p = on(login().slice(0, 3));
+		const step = codeBundle(4, "login", "r-3", "r-2");
+		const frames = (step.record.tokens ?? []).map((token) => token.frame);
+		expect(effectOf(askOf(step, p.state, p.prior))).toEqual(
+			bundleEffect({ via: "code", root: "r-2", frames }),
+		);
+		expect(bundleEffect({ via: "refresh", root: "r-4", frames })).toEqual({ rotate: "r-4" });
+		for (const via of ["client", undefined] as const)
+			expect(bundleEffect({ via, root: "r-2", frames })).toEqual({});
+		expect(bundleEffect({ via: "code", root: undefined, frames })).toEqual({});
+	});
+});
+
+describe("a family rests on its root key, live on the state just before the record (V24, KP-23)", () => {
+	const keyless = (p: Prefix): Prefix => ({ ...p, state: { ...p.state, keys: {} } });
+	const withoutFamily = (step: Step) => ({
+		...step,
+		record: {
+			...step.record,
+			tokens: (step.record.tokens ?? []).filter((token) => token.frame !== "family"),
+		},
+	});
+
+	it("refuses a code's bundle founding a family on an approval whose key is not live; one founding none passes, making none", () => {
+		const started = on(login().slice(0, 3));
+		const bundle = codeBundle(4, "login", "r-3", "r-2");
+		expect(verdictOn(bundle, started)).toEqual(ok);
+		expect(verdictOn(bundle, keyless(started))).toEqual(
+			refused(/founds a family on an approval whose key is not live/),
+		);
+		expect(verdictOn(withoutFamily(bundle), keyless(started))).toEqual(ok);
+		const dead = keyless(started);
+		expect(effectOf(askOf(withoutFamily(bundle), dead.state, dead.prior))).toEqual({
+			consume: ["code:r-2"],
+		});
+	});
+
+	it("refuses a refresh's start and bundle where its family's root key is not live", () => {
+		const loggedIn = on(login());
+		expect(verdictOn(refreshStart(5, "rf", "r-4"), loggedIn)).toEqual(ok);
+		expect(verdictOn(refreshStart(5, "rf", "r-4"), keyless(loggedIn))).toEqual(
+			refused(/root key is not live/),
+		);
+		const started = on([...login(), refreshStart(5, "rf", "r-4")]);
+		expect(verdictOn(refreshBundle(6, "rf", "r-5", "r-4"), started)).toEqual(ok);
+		expect(verdictOn(refreshBundle(6, "rf", "r-5", "r-4"), keyless(started))).toEqual(
+			refused(/root key is not live/),
+		);
 	});
 });
 

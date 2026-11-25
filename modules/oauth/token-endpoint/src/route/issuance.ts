@@ -42,7 +42,8 @@ export interface Issuing {
 		readonly via?: Rooting;
 		readonly parts?: readonly BundlePart[];
 	}): Promise<
-		Issued | (Extract<Issued, { kind: "issued" }> & { readonly parts?: readonly string[] })
+		| Issued
+		| (Extract<Issued, { kind: "issued" }> & { readonly parts?: readonly (string | undefined)[] })
 	>;
 	readonly revokeReferenced: Tokens["revokeReferenced"];
 }
