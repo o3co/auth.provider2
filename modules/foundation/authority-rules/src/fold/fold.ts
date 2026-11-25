@@ -1,11 +1,4 @@
-import {
-	type Flow,
-	type recordKinds,
-	type StageOutcome,
-	type StateOf,
-	speaks,
-	type Verdict,
-} from "@mod/transparency-wire";
+import type { recordKinds, StageOutcome, Verdict } from "@mod/transparency-wire";
 import { z } from "zod";
 
 /** The kinds a flow's record may be, by any writer role but the log's. */
@@ -143,11 +136,8 @@ const under = (itemId: string, item: Item, x: string) => itemId === x || item.ch
 const keep = <T extends Item>(items: Readonly<Record<string, T>>, x: string) =>
 	Object.fromEntries(Object.entries(items).filter(([k, item]) => !under(k, item, x)));
 
-/**
- * The state without `x` and everything rooted at it: Revoke. A caller asking what a denial leaves
- * reads it here rather than repeating the rule.
- */
-export function withoutRooted(s: FlowState, x: string): FlowState {
+/** The state without `x` and everything rooted at it: Revoke, the rule a denial takes. */
+function withoutRooted(s: FlowState, x: string): FlowState {
 	return {
 		...s,
 		keys: keep(s.keys, x),
@@ -256,20 +246,4 @@ export function fold(state: FlowState, envelope: Envelope, e: Changes, j: Findin
 		default:
 			return update(state, envelope, e);
 	}
-}
-
-/**
- * A flow's stateOf at its last entry, as transparency-wire's `stateOf` holds it: the fold over the
- * entries from position 1, and each position's result. Entries out of that order are a TypeError.
- */
-export function foldFlow(flow: Flow, entries: readonly FlowEntry[]): StateOf {
-	let state = emptyState;
-	const results = entries.map((entry, i) => {
-		if (entry.envelope.position !== i + 1)
-			throw new TypeError(`entry ${i} is at position ${entry.envelope.position}, not ${i + 1}`);
-		state = fold(state, entry.envelope, entry.changes, entry.judgment);
-		const { verdict, outcome } = entry.judgment;
-		return { position: i + 1, id: entry.envelope.id, verdict, outcome };
-	});
-	return { v: speaks[0], flow, position: entries.length, state, results };
 }

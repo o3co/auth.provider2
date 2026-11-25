@@ -1,7 +1,7 @@
 # authority-rules
 
 ## Responsibilities
-- Holds the transparency core's judgment rules as one library the Core's local check and the monitor run alike, so both give one answer: Allowed (the chain rules), the one fold and stateOf over a flow, the verdict by the judgment table and the outcome.
+- Holds the transparency core's judgment rules as one library the Core's local check and the monitor run alike, so both give one answer: Allowed (the chain rules), the one fold, the verdict by the judgment table and the outcome.
 - Owns the schemas transparency-wire leaves to it: a flow's state, a record's changes, and a Core writer's preimage content by kind.
 
 ## Not here
@@ -15,7 +15,7 @@
 - `timely` (an `Ask`, the acceptance time): TimeOK. `effectOf` (an `Ask`): Eff(r), the changes a Core record makes, the same in the Core's intent and the monitor's fold.
 - `judge` (a `Reading`: the placed record, what opening its preimage gave or another writer's verified body, the key sets, the versions' windows, the prefix) → `Ruling`: the flow entry with its verdict and outcome, the row J0–J13 or J0r, whether counted; or a wait (internal module `judgment`).
 - `resetFinding` (a reset boundary's body, its flow's state before it, the `Checks`, the `Context` with its `reset`: `ResetContext`, the acceptance time) → `ResetFinding`: verdict, outcome and `reset-wire`'s fault (internal module `reset`), which the monitor runs before placing a reset and `judge` again.
-- `fold` (state, `Envelope`, `Changes`, `Finding`) → the state; `foldFlow` (flow, entries) → transparency-wire's stateOf; `emptyState`; `abandonedFamily` (a bundle's envelope and changes) → the family an abandonment of its op drops, for the Core's intent and `effectOf` alike; `withoutRooted` (state, an item's id) → what a denial of it leaves (internal module `fold`).
+- `fold` (state, `Envelope`, `Changes`, `Finding`) → the state; `emptyState`; `abandonedFamily` (a bundle's envelope and changes) → the family an abandonment of its op drops, for the Core's intent and `effectOf` alike (internal module `fold`).
 - `ruleSchemas`: `flowState`, `changes`, and `contents`, each Core kind's preimage content (internal module `evidence`).
 - `tokenRules`, by kind of token:
   - `client` (internal module `client`): `start` (a client's start's evidence, a digest) → its op id (OpIdOf) and evidence elements (Elems), or why not, for the Core to derive them as the rules check them; `within`, whether its evidence's times hold an acceptance time, as TimeOK reads them; `lifetimeMs`, the longest a client's own token lives from its start: 15 minutes, a constant the Core narrows within..
@@ -24,7 +24,7 @@
 - Types: `Ask`, `Named`, `Allowance`, `Checks`, `Context`, `RuleTimes`, `ClientAt`, `ClientEvidence`, `StartOf`, `Reading`, `Opening`, `Window`, `Ruling`, `Row`, `FlowRecord`, `FlowEntry`, `FlowState`, `Changes`, `Envelope`, `Finding`, `RecordKind`.
 
 ## Invariants
-- Pure: no I/O, clock, randomness, crypto or state. A record's fields, its flow's judged prefix (the entries from position 1 and the state they fold to) and the caller's functions in; a value out. A caller's error of shape (entries out of order, a Core record without its opening) is a TypeError.
+- Pure: no I/O, clock, randomness, crypto or state. A record's fields, its flow's judged prefix (the entries from position 1 and the state they fold to) and the caller's functions in; a value out. A caller's error of shape (a Core record without its opening) is a TypeError; the prefix's order, from position 1 with none skipped, is the caller's to keep: nothing here checks it.
 - The one fold (PR-ONE-FOLD) changes the state only for a record verified or unsupported that took, and picks one effect by kind; nothing else changes a state. A reset is a monitor's boundary, which moves the key generation on only where it took.
 - The verdict is the first row of the table it meets, in the table's order; the chain (J7) is checked before the time, and a forged row before an inherited hold (J9).
 - A Core record is held to the ring of its writer's Core generation, the context's: a statement of another generation's ring is forged. A first key's key generation is the signed creation's.

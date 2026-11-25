@@ -1,4 +1,3 @@
-import { schemas } from "@mod/transparency-wire";
 import { describe, expect, it } from "vitest";
 import {
 	allowed,
@@ -8,7 +7,6 @@ import {
 	type FlowRecord,
 	type FlowState,
 	fold,
-	foldFlow,
 	judge,
 	ruleSchemas,
 } from "../src/contract.ts";
@@ -26,15 +24,7 @@ import {
 	refreshStart,
 	type Step,
 } from "./fixtures/flow.ts";
-import {
-	checks,
-	context,
-	coreRecord,
-	coseKey,
-	monitorRecord,
-	preimage,
-	subject,
-} from "./fixtures/world.ts";
+import { checks, context, coreRecord, coseKey, monitorRecord, preimage } from "./fixtures/world.ts";
 
 /** An honest Core's flow: each record checked by Allowed before its append, then judged and folded. */
 function run(steps: readonly (Step | { record: FlowRecord; body: unknown })[]) {
@@ -101,11 +91,9 @@ describe("an honest flow through the contract (KP-04, Step023 CoreMonAgree, KP_0
 		]);
 	});
 
-	it("folds to the stateOf the monitor signs, in transparency-wire's shape and these rules' state schema", () => {
+	it("folds to a state in these rules' state schema, as a stateOf carries it", () => {
 		const { state, prior } = run(steps);
-		const s = foldFlow(subject, prior);
-		expect(schemas.stateOf.safeParse(s).success).toBe(true);
-		expect(ruleSchemas.flowState.parse(s.state)).toEqual(state);
+		expect(ruleSchemas.flowState.parse(JSON.parse(JSON.stringify(state)))).toEqual(state);
 		expect(Object.keys(state.keys)).toEqual(["r-1"]);
 		expect(state.families).toEqual({});
 		expect(state.consumed).toEqual(["statement:sid-1", "code:r-2"]);

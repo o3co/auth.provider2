@@ -6,8 +6,8 @@ import { cHash } from "./id-token/id-token.ts";
 
 /**
  * The transparency core's judgment rules, one library the Core's local check and the monitor both
- * run: Allowed, the one fold and stateOf, the verdict and the outcome. No I/O, clock, crypto or
- * state: a record's fields, its flow's judged prefix and the caller's verification functions in.
+ * run: Allowed, the one fold, the verdict and the outcome. No I/O, clock, crypto or state: a
+ * record's fields, its flow's judged prefix and the caller's verification functions in.
  */
 
 export { type Allowance, type Ask, allowed, type Named, timely } from "./chain/chain.ts";
@@ -22,9 +22,7 @@ export {
 	type FlowEntry,
 	type FlowState,
 	fold,
-	foldFlow,
 	type RecordKind,
-	withoutRooted,
 } from "./fold/fold.ts";
 export {
 	type FlowRecord,

@@ -1,4 +1,3 @@
-import { schemas } from "@mod/transparency-wire";
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import {
@@ -12,8 +11,6 @@ import {
 	type FlowState,
 	flowState,
 	fold,
-	foldFlow,
-	withoutRooted,
 } from "../fold.ts";
 
 // Each case names the model definition it is taken from: kernel-spec §6.3 (Fold, Revoke, Abandon,
@@ -197,13 +194,6 @@ describe("Revoke, Abandon and NextGen (kernel-spec §6.3)", () => {
 		expect(step(same, env("keyChange"), { removeKey: "none" })).toEqual(same);
 	});
 
-	it("tells what a denial of an item leaves, as the fold takes it (Rules023 Fold `rev`: Under)", () => {
-		const s = chained();
-		expect(withoutRooted(s, "k1")).toEqual(step(s, env("denial"), { revoke: "k1" }));
-		expect(Object.keys(withoutRooted(s, "k1").keys)).toEqual(["other"]);
-		expect(withoutRooted(s, "none")).toEqual(s);
-	});
-
 	it("drops the abandoned op's family and keeps the marks; a family already gone is no change (Step023 Fold `abn`, W_RevBetween; OI-02)", () => {
 		const s = chained();
 		const a = step(s, env("abandonment"), { abandon: "b1" });
@@ -243,40 +233,7 @@ describe("Revoke, Abandon and NextGen (kernel-spec §6.3)", () => {
 	});
 });
 
-describe("foldFlow: stateOf over a flow (Step023 StateOf; transparency-wire's stateOf)", () => {
-	const flow = { of: "subject", id: "sub-1" } as const;
-	const entries = (): FlowEntry[] => {
-		at = 0;
-		const k = env("keyChange", { id: "k1" });
-		const a = env("approval", { id: "a1" });
-		const held = env("start", { id: "s1", last: false });
-		return [
-			{ envelope: k, changes: { key: { credential: "c1", publicKey: "pk1" } }, judgment: took },
-			{
-				envelope: a,
-				changes: { approval: { key: "k1", code: "x", client: "rp" } },
-				judgment: { verdict: "unsupported", outcome: "took" },
-				parent: "k1",
-			},
-			{ envelope: held, changes: {}, judgment: { verdict: "held", outcome: "didNotTake" } },
-		];
-	};
-
-	it("gives every position's result and the state the one fold makes, in transparency-wire's shape", () => {
-		const s = foldFlow(flow, entries());
-		expect(schemas.stateOf.safeParse(s).success).toBe(true);
-		expect(s.position).toBe(3);
-		expect(s.results.map((r) => [r.position, r.id, r.verdict, r.outcome])).toEqual([
-			[1, "k1", "verified", "took"],
-			[2, "a1", "unsupported", "took"],
-			[3, "s1", "held", "didNotTake"],
-		]);
-		expect(flowState.parse(s.state)).toEqual(
-			entries().reduce((x, e) => fold(x, e.envelope, e.changes, e.judgment), emptyState),
-		);
-		expect(foldFlow(flow, [])).toEqual({ v: 1, flow, position: 0, state: emptyState, results: [] });
-	});
-
+describe("a flow's state and its schema", () => {
 	it("reads a state's items from an object alone, refusing a list in its place", () => {
 		const key = { credential: "c", publicKey: "p", chain: [], position: 1, acceptedAt: 0 };
 		expect(flowState.safeParse({ ...emptyState, keys: [["k1", key]] }).success).toBe(false);
@@ -286,13 +243,7 @@ describe("foldFlow: stateOf over a flow (Step023 StateOf; transparency-wire's st
 		);
 	});
 
-	it("refuses entries that are not the flow's positions from 1 in order (StateOf is defined over the whole prefix)", () => {
-		const [first, second] = entries();
-		expect(() => foldFlow(flow, [second as FlowEntry])).toThrow(TypeError);
-		expect(() => foldFlow(flow, [first as FlowEntry, first as FlowEntry])).toThrow(TypeError);
-	});
-
-	it("steps one record at a time to stateOf at every position, and the state stays in its schema (Step023 KP_06, NoSkip)", () => {
+	it("stays in its schema, read back as it is, after every record folded one at a time", () => {
 		const kinds = [
 			"keyChange",
 			"approval",
@@ -345,11 +296,10 @@ describe("foldFlow: stateOf over a flow (Step023 StateOf; transparency-wire's st
 					judgment,
 				}));
 				let s = emptyState;
-				es.forEach((e, i) => {
+				for (const e of es) {
 					s = fold(s, e.envelope, e.changes, e.judgment);
 					expect(flowState.parse(s)).toEqual(s);
-					expect(foldFlow(flow, es.slice(0, i + 1)).state).toEqual(s);
-				});
+				}
 			}),
 		);
 	});
