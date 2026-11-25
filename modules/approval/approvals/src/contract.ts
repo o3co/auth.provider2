@@ -139,6 +139,8 @@ export interface KeptCreation {
 export interface KeptSignUp {
 	readonly hash: string;
 	readonly statement: string;
+	/** When T was issued, in ms, as its signed `iat` says: a revocation of the subject since refuses the creation. */
+	readonly issuedAt: number;
 	readonly items: ItemsOf["authorization"];
 	readonly screen: Screen;
 }

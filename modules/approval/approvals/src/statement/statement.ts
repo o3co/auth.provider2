@@ -442,7 +442,7 @@ const esigOf = (key: unknown): string => {
 };
 
 /** When a statement was issued, in ms, as its signed `iat` says. */
-const issuedAtOf = (jws: string): number =>
+export const issuedAtOf = (jws: string): number =>
 	(
 		JSON.parse(Buffer.from(jws.split(".")[1] ?? "", "base64url").toString("utf8")) as {
 			iat: number;

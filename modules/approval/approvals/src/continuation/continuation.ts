@@ -12,6 +12,7 @@ import type {
 } from "../contract.ts";
 import {
 	current,
+	issuedAtOf,
 	itemsIn,
 	recordOf,
 	type StatementRecord,
@@ -158,6 +159,7 @@ export function continuationsOver(p: {
 				? await q.step({
 						hash: q.hash,
 						statement: r.jws,
+						issuedAt: issuedAtOf(r.jws),
 						items: itemsIn(r.jws, "authorization") as ItemsOf["authorization"],
 						screen,
 					})

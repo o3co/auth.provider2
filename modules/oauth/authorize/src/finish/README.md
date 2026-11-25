@@ -12,6 +12,7 @@ Internal module of `authorize`: the route of a login's finish (⑤⑥).
 - `finishing` (`FinishParts`) → the handler; `finishRoute` (the parts taken from the composition, the issuer, the delegation's length, the window) → the route; `finishTakes`, the contracts it takes.
 
 ## Invariants
+- The amr a passkey's login carries (`passkeyAmr`, to `acr`'s `amrSources` as `authorize.passkey`): `pop` and `user`, what a passkey's assertion proves (a key held, the person present); not `hwk`, as no attestation is taken, nor `mfa`, as user verification is the authenticator's own word.
 - The steps run in this order:
   - the approval used, the scope and audience within the client's allowance, the policies, an OpenID request's claims selected (`claims`; a `sub` asked of another subject, or an essential acr the login does not meet, is `access_denied`, no session opened);
   - the session (from the statement's issue: `provenSince`, and `endsAt` that and the delegation's length), the code made with no root, carrying the acr a passkey's login meets (`acr`'s table, given by the module), its claims pinned to it;

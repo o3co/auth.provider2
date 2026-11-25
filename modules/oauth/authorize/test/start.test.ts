@@ -74,6 +74,8 @@ const challengeOf = (n: number) => Buffer.alloc(32, n).toString("base64url");
 function harness(
 	p: {
 		allows?: boolean;
+		/** Whether sign-up (F1) is composed; not unless told. */
+		signUp?: boolean;
 		refuse?: () => string | undefined;
 		sources?: readonly RequestSource[];
 		slow?: () => Promise<void>;
@@ -129,6 +131,7 @@ function harness(
 		}),
 		approvals,
 		withoutPasskey: p.allows === undefined ? undefined : { allows: async () => p.allows === true },
+		signUp: p.signUp ?? false,
 		idTokens: p.idTokens ?? true,
 		bindings: {
 			requestedOf: (param) => {
@@ -253,6 +256,18 @@ describe("a login's start (②)", () => {
 		expect(await h.body(h.fields(jar(claims({ jti: "j4" }))))).toMatchObject({
 			json: { create: true },
 		});
+	});
+
+	it("allows T's sign-up (F1) at its issue only where a person with no passkey may create one and a sign-up is offered", async () => {
+		const continues = async (p: { allows?: boolean; signUp?: boolean }) => {
+			const h = harness(p);
+			expect(await h.body(h.fields(jar(claims())))).toMatchObject({ status: 200 });
+			return h.asked[0]?.continues;
+		};
+		expect(await continues({ allows: true, signUp: true })).toEqual(["sign-up"]);
+		expect(await continues({ allows: true, signUp: false })).toBeUndefined();
+		expect(await continues({ allows: false, signUp: true })).toBeUndefined();
+		expect(await continues({ signUp: true })).toBeUndefined();
 	});
 
 	it("takes a JAR only before its expiry, a resend of its start too", async () => {

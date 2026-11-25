@@ -31,6 +31,11 @@ export interface StartParts {
 	) => Promise<StartAnswer | { readonly refused: Refusal }>;
 	readonly approvals: Pick<Approvals, "issue">;
 	readonly withoutPasskey: WithoutPasskey | undefined;
+	/**
+	 * Whether a person with no passkey may sign up (F1): a module offers it (`signUpOffers`). Without,
+	 * T allows no sign-up.
+	 */
+	readonly signUp: boolean;
 	readonly bindings: Pick<SenderBindings, "requestedOf">;
 	/** Whether an ID token is made (`code-grant`'s `issuesIdTokens`): without, an OpenID request is refused. */
 	readonly idTokens: boolean;
@@ -140,14 +145,16 @@ export function starting(p: StartParts) {
 				description: "dpop_jkt is out of its form",
 			});
 		const answer = await p.reserve(client.id, jar, startDigest(jar.jar, eEnc, eSig), async () => {
+			// Decided before T is signed, and kept on its record: the answer's `create` is only its copy.
+			const create = (await p.withoutPasskey?.allows({ client, items: made.items })) ?? false;
 			const issued = await p.approvals.issue({
 				purpose: "authorization",
 				items: made.items,
 				screen: { eEnc, eSig },
 				by: sourceKey(request.source.address),
+				...(create && p.signUp ? { continues: ["sign-up"] as const } : {}),
 			});
 			if (issued.kind === "refused") return { refused: issueRefusal(issued.reason) };
-			const create = (await p.withoutPasskey?.allows({ client, items: made.items })) ?? false;
 			return { statement: issued.statement, challenge: issued.challenge, create };
 		});
 		if ("refused" in answer) return answerOf(statusOf[answer.refused.error] ?? 400, answer.refused);

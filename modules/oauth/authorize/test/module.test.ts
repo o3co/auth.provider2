@@ -21,7 +21,7 @@ import { senderBinding } from "@mod/sender-binding";
 import { sessions } from "@mod/session";
 import { accessTokenIssuance } from "@mod/tokens";
 import { describe, expect, it } from "vitest";
-import { jarReservations, withoutPasskey } from "../src/contract.ts";
+import { jarReservations, signUpOffers, withoutPasskey } from "../src/contract.ts";
 import authorize from "../src/module.ts";
 import { authorizeConfig } from "../src/testing.ts";
 
@@ -121,12 +121,27 @@ describe("authorize, composed", () => {
 		]);
 	});
 
-	it("refuses boot with two answers to a person with no passkey", async () => {
-		const refused = await boot([answer("a1"), answer("a2")]).then(
-			() => [],
-			(error: unknown) =>
-				BootRefused.is(error) ? error.refusals.map((r) => r.reason) : [String(error)],
-		);
-		expect(refused).toEqual([expect.stringMatching(/more than one answer/)]);
+	it("refuses boot with two answers to a person with no passkey, or two sign-ups offered", async () => {
+		const refusedOf = (more: readonly Module[]) =>
+			boot(more).then(
+				() => [],
+				(error: unknown) =>
+					BootRefused.is(error) ? error.refusals.map((r) => r.reason) : [String(error)],
+			);
+		expect(await refusedOf([answer("a1"), answer("a2")])).toEqual([
+			expect.stringMatching(/more than one answer/),
+		]);
+		const offer = (name: string) =>
+			defineModule({ name, replicaSafe: true, takes: [] }, (m) => [
+				m.contribute(signUpOffers).by(() => ({ by: name })),
+			]);
+		expect(await refusedOf([offer("s1"), offer("s2")])).toEqual([
+			expect.stringMatching(/more than one sign-up is offered/),
+		]);
+		// Offered, a sign-up needs an answer to a person with no passkey, which allows it per T.
+		expect(await refusedOf([offer("s1")])).toEqual([
+			expect.stringMatching(/sign-up is offered, but no answer/),
+		]);
+		await expect(boot([offer("s1"), answer("a1")])).resolves.toBeDefined();
 	});
 });

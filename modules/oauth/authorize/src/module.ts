@@ -8,7 +8,7 @@ import { issuer, metadata } from "@mod/issuer";
 import { type BuildContext, defineModule } from "@mod/kernel";
 import { promiseNames, stances } from "@mod/promises";
 import { redirects, redirectsCopy } from "@mod/redirect-uris";
-import { jarReservations, requestSources, withoutPasskey } from "./contract.ts";
+import { jarReservations, requestSources, signUpOffers, withoutPasskey } from "./contract.ts";
 import { delegationSecondsIn, delegationTakes } from "./delegation/delegation.ts";
 import { finishRoute, finishTakes, passkeyAmr } from "./finish/finish.ts";
 import { reserving } from "./jar/jar.ts";
@@ -39,6 +39,7 @@ export default defineModule(
 			jarReservations,
 			requestSources,
 			withoutPasskey,
+			signUpOffers,
 			statementItems,
 			acr,
 			...delegationTakes,
@@ -75,6 +76,14 @@ export default defineModule(
 					"authorize",
 					"more than one answer to a person with no passkey is contributed",
 				);
+			const offers = await c.collect(signUpOffers);
+			if (offers.length > 1) return c.refuse("authorize", "more than one sign-up is offered");
+			// A sign-up offered with no answer to a person with no passkey would never be allowed.
+			if (offers.length === 1 && passkeyless.length === 0)
+				return c.refuse(
+					"authorize",
+					"a sign-up is offered, but no answer to a person with no passkey",
+				);
 			// An item every T carries that no module fills would refuse every start: dpop_jkt's bridge left out.
 			const missing = unfilled(await c.collect(statementItems));
 			if (missing.length > 0)
@@ -98,6 +107,7 @@ export default defineModule(
 					}),
 					approvals: await c.get(approvals),
 					withoutPasskey: passkeyless[0],
+					signUp: offers.length === 1,
 					bindings: await bindingsIn(c),
 					idTokens: await idTokensIn(c),
 				},

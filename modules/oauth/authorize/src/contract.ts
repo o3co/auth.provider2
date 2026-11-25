@@ -29,8 +29,10 @@ export const requestSources = extensionPoint<RequestSource>("authorize.request-s
 
 /**
  * How to answer a person with no passkey: whether this authorization may lead the screen to offer
- * `create()`. A hint for the screen's display alone, outside T's signature: whoever registers a key
- * judges again whether it may.
+ * `create()`. With no sign-up offered, a hint for the screen's display alone, outside T's signature:
+ * whoever registers a key judges again whether it may. With one offered (`signUpOffers`), it is the
+ * sign-up's permission too: kept on T's record at its issue, never judged again, a new subject made
+ * on it.
  */
 export interface WithoutPasskey {
 	allows(p: { readonly client: Client; readonly items: AuthorizationItems }): Promise<boolean>;
@@ -38,6 +40,19 @@ export interface WithoutPasskey {
 
 /** At most one; with none, a person with no passkey is refused. */
 export const withoutPasskey = extensionPoint<WithoutPasskey>("authorize.without-passkey", {
+	multiplicity: "many",
+});
+
+/**
+ * A person's sign-up (F1), offered by the module that continues it (`/continue`'s stage `sign-up`):
+ * its name. With one, a T whose screen may offer `create()` allows its sign-up at its issue.
+ */
+export interface SignUpOffer {
+	readonly by: string;
+}
+
+/** At most one; with none, no T allows a sign-up. */
+export const signUpOffers = extensionPoint<SignUpOffer>("authorize.sign-up-offers", {
 	multiplicity: "many",
 });
 

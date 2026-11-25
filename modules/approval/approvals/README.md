@@ -8,7 +8,7 @@
 - The statements' schemas, the challenge's and a continuation's inputs, the completion's form and the HPKE suite: `sdk-core-wire`. Signing, verifying and sealing: `keys`.
 - The assertion's ceremony, the keys and a pending key's verification: `passkeys`. The frame, leases, takers and abandonments: `transparency`. What a record changes, and its judgment: `authority-rules`.
 - What an item means and who asked it: the module that fills it. The code: the authorization's owner, which gives it to `complete`.
-- Statements `passkey-manage`, and a continuation of any stage but `register`: no purpose here takes them, so none is signed. The completion's receipt of its record (A35): not in the completion's schema, so the completion carries none.
+- Statements `passkey-manage`, and a continuation of any stage but `register` and a T's `sign-up`: no purpose here takes them, so none is signed. The completion's receipt of its record (A35): not in the completion's schema, so the completion carries none.
 
 ## Offers
 - `approvals`, taken only by a module standing on the promises (`promises`' `stances`); each offer's asks and answers are its internal module's:

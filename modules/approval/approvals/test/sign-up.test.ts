@@ -114,7 +114,14 @@ describe("a T's sign-up (F1)", () => {
 			result: { creation: c.statement },
 		});
 		expect(handed).toEqual([
-			{ hash: t.hash, statement: t.statement, items, screen: t.keys.screen },
+			// T's issue time, as its signed `iat` says (the world's clock at its issue).
+			{
+				hash: t.hash,
+				statement: t.statement,
+				issuedAt: 1_800_000_000_000,
+				items,
+				screen: t.keys.screen,
+			},
 		]);
 		// The same continuation again answers what was kept, its step not run again, even past T's expiry.
 		w.advance(5 * 60_000 + 1000);
