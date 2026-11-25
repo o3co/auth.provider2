@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { issuer, metadata } from "@mod/issuer";
 import { defineModule, setting } from "@mod/kernel";
-import { rs256Deprecated, secretBytes } from "@mod/keys";
+import { pkcs1v15Deprecated, secretBytes } from "@mod/keys";
 import { rateLimit } from "@mod/rate-limit";
 import { senderBindings } from "@mod/sender-binding";
 import { z } from "zod";
@@ -107,7 +107,7 @@ export default defineModule(
 			}
 			// The operator's choice, yet said at every start, in keys' words.
 			if (c.section.algorithms.includes("RS256")) {
-				c.log.warn("dpop.rs256_deprecated", { reason: rs256Deprecated });
+				c.log.warn("dpop.rs256_deprecated", { reason: pkcs1v15Deprecated });
 			}
 			// The section holds a secret wherever a nonce is asked.
 			const asked =

@@ -30,9 +30,12 @@ export const verifyAlgorithms: readonly VerifyAlgorithm[] = Object.freeze(
 export const isVerifyAlgorithm = (value: unknown): value is VerifyAlgorithm =>
 	typeof value === "string" && Object.hasOwn(fits, value);
 
-/** Why RS256 is deprecated, in the words every module that warns of it at start says. */
-export const rs256Deprecated =
-	"RS256 is deprecated: a 2048-bit RSA key gives about 112 bits of strength, padded by PKCS#1 v1.5, and it is outside FAPI 2.0, which takes PS256, ES256 and EdDSA; ES256 is recommended";
+/**
+ * Why the algorithms of PKCS#1 v1.5 (RS256, RS384, RS512) are deprecated, in the words every module
+ * that warns of one at start says.
+ */
+export const pkcs1v15Deprecated =
+	"RS256, RS384 and RS512 are deprecated: they pad by PKCS#1 v1.5, a 2048-bit RSA key gives about 112 bits of strength, and they are outside FAPI 2.0, which takes PS256, ES256 and EdDSA; ES256 is recommended";
 
 /** The members of each public key type. A Map, so no inherited name is a type. */
 const membersOf: ReadonlyMap<unknown, readonly string[]> = new Map([

@@ -3,10 +3,10 @@ import { describe, expect, it } from "vitest";
 import {
 	isCanonicalJws,
 	type Jwk,
+	pkcs1v15Deprecated,
 	publicJwk,
 	publicMembers,
 	publicPem,
-	rs256Deprecated,
 	thumbprint,
 	verifiesUnder,
 	verifyAlgorithms,
@@ -198,9 +198,11 @@ it("tells an algorithm it verifies under from any other name, an inherited one t
 	}
 });
 
-it("says in one text why RS256 is deprecated, for each module that warns of it", () => {
-	expect(rs256Deprecated).toMatch(/^RS256 is deprecated: .*112 bits.*PKCS#1 v1\.5.*FAPI 2\.0/);
-	expect(rs256Deprecated).toMatch(/ES256 is recommended$/);
+it("says in one text why PKCS#1 v1.5's algorithms are deprecated, for each module that warns of one", () => {
+	expect(pkcs1v15Deprecated).toMatch(
+		/^RS256, RS384 and RS512 are deprecated: .*PKCS#1 v1\.5.*112 bits.*FAPI 2\.0/,
+	);
+	expect(pkcs1v15Deprecated).toMatch(/ES256 is recommended$/);
 });
 
 describe("thumbprint", () => {

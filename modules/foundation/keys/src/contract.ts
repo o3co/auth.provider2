@@ -159,10 +159,10 @@ export { isCanonicalJws } from "./material/jws.ts";
 export {
 	type Jwk,
 	type PemForm,
+	pkcs1v15Deprecated,
 	publicJwk,
 	publicMembers,
 	publicPem,
-	rs256Deprecated,
 	thumbprint,
 	type VerifyAlgorithm,
 	verifiesUnder,

@@ -15,7 +15,7 @@ import issuerModule from "@mod/issuer/module";
 import { issuerConfig } from "@mod/issuer/testing";
 import { assemble, BootRefused, defineModule, isUnavailable, kernelConfig } from "@mod/kernel";
 import { quietRuntime, recordingLog, takesUnused, unavailableSwitch } from "@mod/kernel/testing";
-import { rs256Deprecated } from "@mod/keys";
+import { pkcs1v15Deprecated } from "@mod/keys";
 import outboundModule from "@mod/outbound/module";
 import { memoryRecords } from "@mod/records/testing";
 import secretHashModule from "@mod/secret-hash/module";
@@ -394,21 +394,37 @@ describe("private_key_jwt", () => {
 		expect(await at({ jti: "j\ud800" })).toBe("bad_credentials");
 	});
 
-	it("warns at every start where RS256 is named, in keys' words, and not where it is not", async () => {
+	it("warns at every start where RS256, RS384 or RS512 is named, naming them, in keys' words, and not where none is", async () => {
 		const warned = () =>
-			recorded.lines().filter((line) => line.event === "client-assertion.rs256_deprecated");
+			recorded.lines().filter((line) => line.event === "client-assertion.pkcs1v15_deprecated");
 		const before = warned().length;
 		await boot();
-		await boot({ settings: { algorithms: ["ES256", "PS256"] } });
+		await boot({ settings: { algorithms: ["ES256", "PS256", "PS384", "PS512"] } });
+		await boot({ settings: { algorithms: ["ES384", "ES512", "EdDSA"] } });
 		expect(warned()).toHaveLength(before);
-		await boot({ settings: { algorithms: ["ES256", "RS256"] } });
-		expect(warned().slice(before)).toEqual([
-			{
-				level: "warn",
-				event: "client-assertion.rs256_deprecated",
-				fields: { reason: rs256Deprecated },
-			},
+		for (const algorithms of [
+			["ES256", "RS256"],
+			["RS384"],
+			["PS256", "RS512", "RS256"],
+			["RS256", "RS384", "RS512", "RS384"],
+		] as const)
+			await boot({ settings: { algorithms: [...algorithms] } });
+		expect(
+			warned()
+				.slice(before)
+				.map((line) => line.fields),
+		).toEqual([
+			{ algorithms: "RS256", reason: pkcs1v15Deprecated },
+			{ algorithms: "RS384", reason: pkcs1v15Deprecated },
+			{ algorithms: "RS512 RS256", reason: pkcs1v15Deprecated },
+			// All three, one written twice: each once, as the section keeps them.
+			{ algorithms: "RS256 RS384 RS512", reason: pkcs1v15Deprecated },
 		]);
+		expect(
+			warned()
+				.slice(before)
+				.every((line) => line.level === "warn"),
+		).toBe(true);
 	});
 
 	it("verifies with the one key the header picks, by asymmetric algorithms only [rfc7523-3-u] [rfc7521-5.2-n] [rfc8414-2-i]", async () => {

@@ -26,6 +26,6 @@ export const section = z.strictObject({
 		.prefault(["ES256", "PS256", "EdDSA"])
 		.transform((named) => [...new Set(named)])
 		.describe(
-			"The algorithms a client's assertion or request object may be signed with: asymmetric ones only, by default FAPI 2.0's; any other only where named, RS256 deprecated.",
+			"The algorithms a client's assertion or request object may be signed with: asymmetric ones only, by default FAPI 2.0's; any other only where named, RS256, RS384 and RS512 deprecated.",
 		),
 });

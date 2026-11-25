@@ -3,7 +3,7 @@ import { externalJwt } from "@mod/external-jwt";
 import { site } from "@mod/http";
 import { issuer } from "@mod/issuer";
 import { defineModule } from "@mod/kernel";
-import { rs256Deprecated } from "@mod/keys";
+import { pkcs1v15Deprecated } from "@mod/keys";
 import { tokenEndpointLocation } from "@mod/token-endpoint";
 import { clientAssertion } from "./contract.ts";
 import { clientKeys, clientKeysIn, keysTakes, unreadKeys } from "./keys/keys.ts";
@@ -23,14 +23,20 @@ const takes = [
 	clients,
 ];
 
+const pkcs1v15: ReadonlySet<string> = new Set(["RS256", "RS384", "RS512"]);
+
 export default defineModule(
 	{ name: "client-assertion", replicaSafe: true, section, takes },
 	(m) => [
 		m.contribute(metadataSections).by((c) => clientKeysIn(c)),
 		m.provide(clientAssertion).by(async (c) => {
-			// The operator's choice, yet said at every start, in keys' words.
-			if (c.section.algorithms.includes("RS256")) {
-				c.log.warn("client-assertion.rs256_deprecated", { reason: rs256Deprecated });
+			// The operator's choice, yet said at every start, in keys' words: PKCS#1 v1.5's three alike.
+			const pkcs1 = c.section.algorithms.filter((alg) => pkcs1v15.has(alg));
+			if (pkcs1.length > 0) {
+				c.log.warn("client-assertion.pkcs1v15_deprecated", {
+					algorithms: pkcs1.join(" "),
+					reason: pkcs1v15Deprecated,
+				});
 			}
 			return signedBy({
 				jwt: await c.get(externalJwt),

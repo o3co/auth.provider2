@@ -1,7 +1,7 @@
 import { contract, defineModule } from "@mod/kernel";
 import { accessTokenSigning, type KeyHolder, keys, type Ring } from "./contract.ts";
 import { keyHolders } from "./holder.ts";
-import { rs256Deprecated } from "./material/public.ts";
+import { pkcs1v15Deprecated } from "./material/public.ts";
 import { allCoreJwks, coreJwks, publish } from "./publishing/publishing.ts";
 import { verifiedBy } from "./rings/given.ts";
 import { type Rings, readRings } from "./rings/ring.ts";
@@ -23,7 +23,7 @@ export default defineModule(
 			// The operator's choice, yet said at every start, as RS256 is weaker and outside FAPI 2.0.
 			const rs256 = rs256Named(c.section);
 			if (rs256.length > 0)
-				c.log.warn("keys.rs256_deprecated", { keys: rs256.join(" "), reason: rs256Deprecated });
+				c.log.warn("keys.rs256_deprecated", { keys: rs256.join(" "), reason: pkcs1v15Deprecated });
 			return { ...read, holder };
 		}),
 		m.provide(keys).by(async (c) => {
