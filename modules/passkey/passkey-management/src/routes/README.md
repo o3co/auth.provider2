@@ -10,7 +10,7 @@ Internal module of `passkey-management`: the first key's path and a key's regist
 
 ## Offers
 - `firstKeyRoutes` (the nonces, the start, the mail's side, the recovery, the window) → `nonce` (`POST /first-key/nonce`: a stage, `start` or `mail` → `{ nonce }`), `start` (`POST /first-key/start`: the nonce and the screen's keys and sealing, base64url → `{ sealed }`), `mail` (`POST /first-key/mail`: as the start → `{ statement }`) and `recover` (`POST /first-key/recover`: the mail's nonce, its request's digest and E_sig's signature → `{ statement }`).
-- `continueRoute` (the stages by their word, the window, where a refusal is told) → `POST /continue`: the statement, a stage `continuation-wire` names, a sequence number 1 to 16, and the body and E_sig's signature in the clear, or `enc` and `ct` for a stage `continuation-wire` seals.
+- `continueRoute` (the stages by their word, the window, where a refusal is told) → `POST /continue`: the statement, a stage `continuation-wire` names, a sequence number 1 to 16, and the body and E_sig's signature in the clear, or `enc` and `ct` for a stage `continuation-wire` seals, `ct` exactly its padded plaintext and the tag long (2064 bytes).
   - It is handed with the statement's hash and the source's key to the stage contributed; its answer is `{ statement }` or `{ sealed }` as the stage is clear or sealed, as `front-core-wire`'s forms give it.
 - `stagesOf` (the stages contributed, a refusal) → them by their word, boot refused where two continue one stage.
 - `keyRoutes` (the registration's finish, the window) → `keyFinish` (`POST /key/finish`: the possession and the assertion → `{ sealed: { enc, ct } }`).

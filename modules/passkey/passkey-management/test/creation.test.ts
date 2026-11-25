@@ -15,7 +15,7 @@ const ask = {
 	since: 1000,
 };
 
-function creation(revoked = false, odd = false) {
+function creation(revoked = false, odd = false, full = false) {
 	const asked: IssueAsk[] = [];
 	const checked: [string, number][] = [];
 	const handles: string[] = [];
@@ -40,7 +40,13 @@ function creation(revoked = false, odd = false) {
 				};
 			},
 		},
-		held: { of: async () => ({ credentials: ["c1"], marked: false }) },
+		held: {
+			of: async () => ({
+				credentials: ["c1"],
+				marked: false,
+				...(full ? { full: true as const } : {}),
+			}),
+		},
 		generations: { generation: async () => 2 },
 		revocation: {
 			check: async (subject, since) => {
@@ -133,4 +139,17 @@ it("signs a sign-up's creation for its T, its account named in `user_name` alone
 	});
 	expect(asked?.items).not.toHaveProperty("account");
 	expect(payloads.creation.shape.creation.safeParse(asked?.items).success).toBe(true);
+});
+
+it("refuses a creation of any basis for a subject full, asking nothing", async () => {
+	const c = creation(false, false, true);
+	expect(await c.create({ ...ask, basis: "passkey-add" })).toEqual({
+		kind: "refused",
+		reason: "full",
+	});
+	expect(await c.create(ask)).toEqual({ kind: "refused", reason: "full" });
+	const { account: _, ctHash: __, ...rest } = ask;
+	const signUp = { ...rest, userName: "Example", basis: "sign-up" as const };
+	expect(await c.create(signUp)).toEqual({ kind: "refused", reason: "full" });
+	expect(c.asked).toEqual([]);
 });

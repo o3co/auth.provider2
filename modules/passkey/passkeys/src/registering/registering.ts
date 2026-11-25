@@ -77,7 +77,7 @@ export function registeringOver(p: RegisteringParts): Registrations {
 	 * Binds the credential to the subject under the reservation `version`, unless another subject's
 	 * binding or other details name it, or another reservation of the subject's, unfinished, holds it
 	 * (any but the one `replacing`, before its lapse). Never lowers a count nor overwrites the details
-	 * kept. Answers the binding it took over, to hand back where the reservation is not written.
+	 * kept; details made, or kept with no time, take this reservation's time. Answers the binding it took over, to hand back where the reservation is not written.
 	 */
 	const bound = async (subject: string, c: Credential, version: string, replacing?: string) => {
 		const details = {
@@ -85,6 +85,7 @@ export function registeringOver(p: RegisteringParts): Registrations {
 			backupEligible: c.backupEligible,
 			backedUp: c.backedUp,
 			...(c.transports ? { transports: [...c.transports] } : {}),
+			createdAt: p.now(),
 		};
 		const until = p.now() + p.lifetimeMs;
 		const made = { subject, version, until, signCount: c.signCount, details };
@@ -111,7 +112,10 @@ export function registeringOver(p: RegisteringParts): Registrations {
 					version,
 					until,
 					signCount,
-					details: now.details ?? details,
+					// Details kept keep their time; a record from before times gets this reservation's.
+					details: now.details
+						? { ...now.details, createdAt: now.details.createdAt ?? details.createdAt }
+						: details,
 				}),
 			};
 		});

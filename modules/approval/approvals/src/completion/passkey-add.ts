@@ -10,6 +10,7 @@ import {
 	stored,
 	wireVersion,
 } from "../statement/statement.ts";
+import { paddedFor } from "./padded.ts";
 
 const refused = (reason: Extract<PasskeyAddCompleted, { kind: "refused" }>["reason"]) =>
 	({ kind: "refused", reason }) as const;
@@ -74,11 +75,14 @@ export function passkeyAddCompletionsOver(p: {
 		const prepared = p.keys.prepare("core", typs.completion);
 		const signed = await p.keys.sign(prepared, new TextEncoder().encode(canonicalText(payload)));
 		if (signed.kind !== "signed") return refused("withdrawn");
+		const excluded = (itemsIn(ask.creation, "creation") as ItemsOf["creation"]).options;
+		const padded = paddedFor(signed.jws, excluded.exclude_credentials);
+		if (padded === undefined) return refused("form");
 		const box = await p.keys.seal(
 			new Uint8Array(Buffer.from(r.e_enc, "base64url")),
 			hpke.info.completion,
 			new TextEncoder().encode(hpke.completionAad("passkey-add", ask.hash)),
-			new TextEncoder().encode(signed.jws),
+			new TextEncoder().encode(padded),
 		);
 		const enc = Buffer.from(box.enc).toString("base64url");
 		const ct = Buffer.from(box.ct).toString("base64url");

@@ -151,16 +151,17 @@ describe("declaring the items", () => {
 		);
 	});
 
-	it("refuses boot for any item of a passkey-add, which names none", async () => {
-		const filling = defineModule({ name: "odd", replicaSafe: true, takes: [] }, (m) => [
-			m
-				.contribute(statementItems)
-				.by(() => ({ purpose: "passkey-add", names: ["amount"], by: "odd" })),
-		]);
-		await expect(world({ items: filling })).rejects.toMatchObject(
-			refusal(/fills passkey-add\/amount/),
-		);
-	});
+	it.each(["passkey-add", "passkey-manage"] as const)(
+		"refuses boot for any item of a %s, which names none",
+		async (purpose) => {
+			const filling = defineModule({ name: "odd", replicaSafe: true, takes: [] }, (m) => [
+				m.contribute(statementItems).by(() => ({ purpose, names: ["amount"], by: "odd" })),
+			]);
+			await expect(world({ items: filling })).rejects.toMatchObject(
+				refusal(new RegExp(`fills ${purpose}/amount`)),
+			);
+		},
+	);
 
 	it("refuses boot for an item two modules fill", async () => {
 		await expect(world({ modules: [declaring("second", ["scope"])] })).rejects.toMatchObject(
@@ -539,12 +540,15 @@ describe("a passkey-add's completion", () => {
 		const { keys, a, assertion, creation, creationFor } = await approved(w);
 		const done = await w.approvals.completePasskeyAdd({ hash: a.hash, assertion, creation });
 		if (done.kind !== "completed") throw new Error(done.reason);
-		const jws = openSealed(
+		const opened = openSealed(
 			keys.encKey,
 			done,
 			hpke.info.completion,
 			hpke.completionAad("passkey-add", a.hash),
 		);
+		// Padded to the smaller bucket: none of its excluded keys is longer than 128 bytes.
+		expect(opened).toHaveLength(hpke.completionBuckets[0]);
+		const jws = hpke.unpaddedCompletion(opened) as string;
 		expect(await w.keys.verify("core", jws, typs.completion)).toMatchObject({ kind: "valid" });
 		const payload = payloadOf(jws);
 		expect(payloads.completions.passkeyAdd.safeParse(payload).success).toBe(true);

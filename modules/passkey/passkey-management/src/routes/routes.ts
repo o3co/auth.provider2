@@ -128,6 +128,9 @@ export function firstKeyRoutes(p: {
 	};
 }
 
+/** A sealed continuation's ciphertext: its padded plaintext and the AEAD's tag, one length for every body. */
+const sealedBytes = continuations.plainBytes + 16;
+
 /** A compact JWS of at most `max` characters; none for any other text. */
 const jwsOf = (text: string | undefined, max: number) =>
 	text !== undefined &&
@@ -151,7 +154,8 @@ function continuationOf(fields: HttpRequest["fields"]) {
 	);
 	// A sealed stage's body and signature come in its sealing alone; any other's in the clear, unsealed.
 	if ((continuations.sealed as readonly string[]).includes(stage)) {
-		if (body !== "" || sig !== "" || !bytesOf(enc, 65) || !bytesOf(ct, 1, 2064)) return undefined;
+		if (body !== "" || sig !== "" || !bytesOf(enc, 65) || !bytesOf(ct, sealedBytes))
+			return undefined;
 		return { stage, statement, seq: Number(seq), sealed: { enc: enc as string, ct: ct as string } };
 	}
 	if (!utf8Of(body, 8192) || !bytesOf(sig, 64) || enc !== "" || ct !== "") return undefined;

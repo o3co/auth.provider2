@@ -2,13 +2,14 @@ import { setTimeout as sleep } from "node:timers/promises";
 import { issuer } from "@mod/issuer";
 import { type BuildContext, defineModule } from "@mod/kernel";
 import { keys } from "@mod/keys";
-import { passkeys } from "@mod/passkeys";
+import { keyList, passkeys } from "@mod/passkeys";
 import { promiseNames, stances } from "@mod/promises";
 import { rateLimit } from "@mod/rate-limit";
 import { operationKinds, stateOwners, transparency, transparencyLog } from "@mod/transparency";
 import { approvalKind, approvalsOwner, completionsOver } from "./completion/completion.ts";
 import { keyChangeCompletionsOver } from "./completion/key-change.ts";
 import { passkeyAddCompletionsOver } from "./completion/passkey-add.ts";
+import { passkeyManageCompletionsOver } from "./completion/passkey-manage.ts";
 import { continuationsOver } from "./continuation/continuation.ts";
 import { approvalStore, approvals, statementItems } from "./contract.ts";
 import { type Settings, section } from "./section.ts";
@@ -27,6 +28,7 @@ export default defineModule(
 		takes: [
 			keys,
 			passkeys,
+			keyList,
 			approvalStore,
 			rateLimit,
 			issuer,
@@ -85,6 +87,13 @@ export default defineModule(
 				}),
 				completeKeyChange: keyChangeCompletionsOver({ keys: signer, store, issuer: iss, now }),
 				completePasskeyAdd: passkeyAddCompletionsOver({ keys: signer, store, issuer: iss, now }),
+				completePasskeyManage: passkeyManageCompletionsOver({
+					keys: signer,
+					store,
+					list: await c.get(keyList),
+					issuer: iss,
+					now,
+				}),
 			};
 		}),
 	],

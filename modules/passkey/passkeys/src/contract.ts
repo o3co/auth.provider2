@@ -88,6 +88,8 @@ export interface Held {
 	 * alone. A first key's reservation takes a subject holding no key and no mark.
 	 */
 	readonly marked: boolean;
+	/** Set where it holds `max-credentials` keys: a key added to them is refused (`full`). */
+	readonly full?: true;
 	/** Its one reservation waiting for its key's possession, unlapsed; none otherwise. */
 	readonly pending?: {
 		readonly reservation: string;
@@ -102,6 +104,34 @@ export interface Held {
  * reads for a subject no flow holds. Anyone may take it.
  */
 export const heldKeys = contract<{ of(subject: string): Promise<Held> }>("passkeys.held");
+
+/** An active key as the keys' list shows it: its label and reservation time, where its record holds them. */
+export interface KeyRow {
+	readonly credential: string;
+	readonly label?: string;
+	readonly createdAt?: number;
+}
+
+/** A subject's keys listed, and a key renamed; nothing here bears on what a key may approve. */
+export interface KeyList {
+	/** Each active key of the subject's, in the applied state's order. */
+	listOf(subject: string): Promise<readonly KeyRow[]>;
+	/**
+	 * Gives an active key of the subject's a label, by a statement's continuation (`by`: the
+	 * statement's hash, the continuation's number, and `until`, past which no step of that statement
+	 * runs): `stale` past `until`, or for a number of a statement still running below the last it
+	 * renamed by, or its own number with another label; that number with that label again is `renamed`.
+	 */
+	rename(p: {
+		readonly subject: string;
+		readonly credential: string;
+		readonly label: string;
+		readonly by: { readonly statement: string; readonly seq: number; readonly until: number };
+	}): Promise<"renamed" | "unknown" | "stale" | "label">;
+}
+
+/** Taken only by a module that declares where it stands on the promises: a label guides a person's choice of key. */
+export const keyList = contract<KeyList>("passkeys.keyList", { takersContribute: stances });
 
 export type ReserveRefusal = "pending" | "held" | "taken" | "fenced" | "unknown" | "state" | "open";
 export type VerifyRefusal = CeremonyRefusal | "unknown" | "state" | "expired" | "open";

@@ -29,7 +29,14 @@ import {
 import passkeysModule from "@mod/passkeys/module";
 import promisesModule from "@mod/promises/module";
 import { rateLimitStandIn } from "@mod/rate-limit/testing";
-import { type FirstKeyStage, firstKey, hpke, payloads } from "@mod/sdk-core-wire";
+import {
+	challengeInput,
+	continuation,
+	type FirstKeyStage,
+	firstKey,
+	hpke,
+	payloads,
+} from "@mod/sdk-core-wire";
 import { type SubjectRevocation, subjectRevocation } from "@mod/subject-revocation";
 import {
 	frameStore,
@@ -41,9 +48,9 @@ import {
 import transparencyModule from "@mod/transparency/module";
 import { logBook, memoryFrames } from "@mod/transparency/testing";
 import { type Users, users } from "@mod/users";
-import { ceremonies, keyThumbprint } from "@mod/webauthn";
+import { type Credential, ceremonies, keyThumbprint } from "@mod/webauthn";
 import webauthnModule from "@mod/webauthn/module";
-import { testOrigin, webauthnConfig } from "@mod/webauthn/testing";
+import { softwareAuthenticator, testOrigin, webauthnConfig } from "@mod/webauthn/testing";
 import { memoryKept } from "../../../test/fixtures/kept.ts";
 import {
 	firstKeyNonces,
@@ -68,6 +75,8 @@ export const pointOf = (key: KeyObject) => {
 /** Records in memory under a clock, each living as long as it was given. */
 function memoryRecords<T>(now: () => number) {
 	const kept = new Map<string, { value: T; until: number }>();
+	/** Changes to let through before the next one to a record throws, as a call that fell. */
+	const falls = new Map<string, number>();
 	const live = (key: string) => {
 		const entry = kept.get(key);
 		return entry && now() < entry.until ? entry : undefined;
@@ -80,11 +89,21 @@ function memoryRecords<T>(now: () => number) {
 		},
 		read: async (key: string) => structuredClone(live(key)?.value),
 		async change(key: string, change: (value: T) => { value: T } | undefined) {
+			const left = falls.get(key);
+			if (left !== undefined) {
+				if (left === 0) falls.delete(key);
+				else falls.set(key, left - 1);
+				if (left === 0) throw new Error("fell");
+			}
 			const entry = live(key);
 			if (!entry) return undefined;
 			const next = change(structuredClone(entry.value));
 			if (next) kept.set(key, { value: structuredClone(next.value), until: entry.until });
 			return { before: entry.value, after: (kept.get(key) as { value: T }).value };
+		},
+		/** The change to `key` after `through` more throws, writing nothing. */
+		fallAfter: (key: string, through: number) => {
+			falls.set(key, through);
 		},
 	};
 }
@@ -145,12 +164,13 @@ export async function firstKeyWorld() {
 	const sent: Message[] = [];
 	let mailed: (m: Message) => void = () => {};
 	const user = { subject: "s1", attributes: {} };
+	const statements = memoryRecords<StoredStatement>(now);
 	const standIns = defineModule({ name: "stand-ins", replicaSafe: true, takes: [routes] }, (m) => [
 		m.provide(seen).by((c) => c.collect(routes)),
 		m.provide(frameStore).by(() => frames.frames),
 		m.provide(transparencyLog).by(() => book.as("w1")),
 		m.provide(passkeyStore).by(() => memoryRecords<StoredCredential>(now) as PasskeyStore),
-		m.provide(approvalStore).by(() => memoryRecords<StoredStatement>(now)),
+		m.provide(approvalStore).by(() => statements),
 		m.provide(firstKeyNonces).by(() => memoryKept<StoredNonce>().store),
 		m.provide(firstKeyTokens).by(() => memoryKept<StoredToken>().store),
 		m
@@ -236,6 +256,7 @@ export async function firstKeyWorld() {
 		now,
 		sent,
 		recorded,
+		statements,
 		corePoint: pointOf(core),
 		/** The next mail sent, once its job ran. */
 		nextMail: () =>
@@ -331,4 +352,71 @@ export async function rulesOf(w: World) {
 		checks,
 		context,
 	});
+}
+
+const client = { origin: testOrigin };
+
+/** `alice` (`s1`) holding one key, made through her first key's path over the routes. */
+export async function withFirstKey() {
+	const w = await firstKeyWorld();
+	await w.app.start();
+	const s = await screen();
+	const mailing = w.nextMail();
+	const start = await sealed(w, s, "start", { identifier: "alice" });
+	const started = await w.post("/first-key/start", start);
+	const aad = firstKey.aad("start", start.nonce, s.eEnc, s.eSig);
+	const sealedCode = started.json.sealed as never;
+	const code = JSON.parse((await opened(s, sealedCode, hpke.info.firstKeyCode, aad)) ?? "{}").code;
+	const token = ((await mailing).values.link as string).split("#")[1];
+	const side = await screen();
+	const mail = await sealed(w, side, "mail", { token, identifier: "alice", code });
+	const creation = (await w.post("/first-key/mail", mail)).json.statement as string;
+	const cer = await w.app.get(ceremonies);
+	const auth = softwareAuthenticator();
+	const registered = await register(w, side, creation, auth);
+	await w.post("/key/finish", {
+		statement: registered.possession,
+		assertion: registered.assertion,
+	});
+	return { w, cer, auth, key: registered.key };
+}
+
+/** A new key made by `auth` over `creation`, registered as continuation `seq`, and its assertion. */
+export async function register(
+	w: World,
+	s: Screen,
+	creation: string,
+	auth: ReturnType<typeof softwareAuthenticator>,
+	seq = 1,
+) {
+	const cer = await w.app.get(ceremonies);
+	const items = payloadOf(creation).creation;
+	const options = cer.creation(
+		sha256(challengeInput(creation, "create")),
+		{ handle: items.options.user_id, name: "alice" },
+		[],
+		"required",
+	);
+	const body = JSON.stringify(auth.create(options as never, client));
+	const sig = s.signs(continuation.of("register", sha256(creation), seq, sha256(body)));
+	const answered = await w.post("/continue", {
+		statement: creation,
+		stage: "register",
+		seq: String(seq),
+		body,
+		sig,
+	});
+	const possession = answered.json.statement as string;
+	const named = payloadOf(possession).possession;
+	const key: Credential = {
+		id: named.credential_id,
+		publicKey: JSON.parse(body).response.publicKey ?? "",
+		signCount: 0,
+		userHandle: items.options.user_id,
+		backupEligible: false,
+		backedUp: false,
+	};
+	const request = cer.request(sha256(challengeInput(possession, "get")), [key], "required");
+	const assertion = JSON.stringify(auth.get(request as never, client, {}));
+	return { possession, assertion, key };
 }

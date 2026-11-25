@@ -1,7 +1,7 @@
 import { setTimeout as sleep } from "node:timers/promises";
 import { approvals } from "@mod/approvals";
 import { type BuildContext, Unavailable } from "@mod/kernel";
-import { heldKeys, passkeyGenerations, passkeys, registrations } from "@mod/passkeys";
+import { heldKeys, keyList, passkeyGenerations, passkeys, registrations } from "@mod/passkeys";
 import { subjectRevocation } from "@mod/subject-revocation";
 import { transparency, transparencyLog } from "@mod/transparency";
 import { users } from "@mod/users";
@@ -11,6 +11,7 @@ import { approvalOver, type Finished, type Started } from "../approval/approval.
 import type { ContinueStage, SignUpAsk, SignUpCreated } from "../contract.ts";
 import { creationOver } from "../creation/creation.ts";
 import { keyChangesOver } from "../key-change/key-change.ts";
+import { renameStageOver } from "../managing/managing.ts";
 import { type Registered, registrationOver } from "../registration/registration.ts";
 import { approvalRoutes, keyRoutes } from "../routes/routes.ts";
 import type { Settings } from "../section.ts";
@@ -29,6 +30,7 @@ export const keyingTakes = [
 	transparencyLog,
 	users,
 	passkeyGenerations,
+	keyList,
 ] as const;
 
 /** A look for a key change's end again: soon at first, then every 200 ms, as approvals' writer looks. */
@@ -96,9 +98,10 @@ export async function keyingOf(c: Context) {
 				screen: ask.screen,
 				since: ask.since,
 			});
-			if (made.kind === "issued" || made.reason === "revoked") return made;
-			// Items the schema refuses are a fault; a count reached, busy or withdrawn passes: thrown, never kept.
-			if (made.reason === "items")
+			if (made.kind === "issued") return made;
+			if (made.reason === "revoked") return { kind: "refused", reason: "revoked" };
+			// Items the schema refuses, or a new subject full, are a fault; a count reached, busy or withdrawn passes: thrown, never kept.
+			if (made.reason === "items" || made.reason === "full")
 				throw new TypeError("passkey-management: a sign-up's creation refused");
 			throw new Unavailable("passkey-management");
 		},
@@ -132,6 +135,11 @@ export async function keyingOf(c: Context) {
 				throw new TypeError("passkey-management: a register answered a completion");
 			},
 		} satisfies ContinueStage,
+		renameStage: renameStageOver({
+			approvals: await c.get(approvals),
+			passkeys: settling,
+			keys: await c.get(keyList),
+		}),
 		signUp,
 	};
 }

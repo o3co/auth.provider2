@@ -7,6 +7,8 @@ import { type Mail, type Message, mail } from "@mod/mail";
 import { passkeyWitnessStandIn } from "@mod/passkey-witness/testing";
 import {
 	heldKeys,
+	type KeyList,
+	keyList,
 	type Passkeys,
 	passkeyGenerations,
 	passkeys,
@@ -64,6 +66,7 @@ export async function composed(given: Given = {}) {
 		m.provide(passkeys).by(() => ({ settle: async () => false, ...given.passkeys }) as Passkeys),
 		m.provide(heldKeys).by(() => ({ of: async () => ({ credentials: [], marked: false }) })),
 		m.provide(passkeyGenerations).by(() => ({ generation: async () => 0 })),
+		m.provide(keyList).by(() => ({}) as KeyList),
 		m.provide(mail).by(
 			() =>
 				given.mail ?? {

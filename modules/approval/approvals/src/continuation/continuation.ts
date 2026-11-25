@@ -1,19 +1,23 @@
 import { createPublicKey, verify, type webcrypto } from "node:crypto";
 import { continuations } from "@mod/continuation-wire";
+import { Unavailable } from "@mod/kernel";
 import type { Keys } from "@mod/keys";
-import { continuation, type SigningKey } from "@mod/sdk-core-wire";
+import { continuation, hpke, type SigningKey } from "@mod/sdk-core-wire";
 import type {
 	ApprovalStore,
 	Approvals,
 	Continued,
 	ItemsOf,
+	KeptManage,
 	LastContinuation,
+	OpenedBody,
 	StepResult,
 } from "../contract.ts";
 import {
 	current,
 	issuedAtOf,
 	itemsIn,
+	recordEnd,
 	recordOf,
 	type StatementRecord,
 	sha256,
@@ -48,6 +52,19 @@ const maxBodyBytes = 8192;
 /** A signature's one spelling: 64 bytes (`r‖s`), base64url without padding, its last bits zero. */
 const canonicalSignature = /^[A-Za-z0-9_-]{85}[AQgw]$/;
 
+/** A sealed continuation's ciphertext: its padded plaintext and the AEAD's tag. */
+const sealedBytes = continuations.plainBytes + 16;
+
+/** The most continuations a statement takes. */
+const maxSeq = 16;
+
+/** Base64url bytes in their one spelling; none for any other text. */
+const bytesOf = (text: string) => {
+	if (!/^[A-Za-z0-9_-]*$/.test(text)) return undefined;
+	const bytes = Buffer.from(text, "base64url");
+	return bytes.toString("base64url") === text ? new Uint8Array(bytes) : undefined;
+};
+
 /** A continuation asked: a creation's (`continue`), or a T's sign-up (`continueSignUp`). */
 type Ask =
 	| (Parameters<Approvals["continue"]>[0] & { readonly stage: "register" })
@@ -66,7 +83,7 @@ const signUpRefusal = (r: StatementRecord, now: number): Refusal | undefined => 
 
 /** Continuations: each the next sequence number, verified and taken in one write, its step run by one call and its answer kept. */
 export function continuationsOver(p: {
-	readonly keys: Pick<Keys, "verify">;
+	readonly keys: Pick<Keys, "verify" | "open">;
 	readonly store: ApprovalStore;
 	readonly now: () => number;
 	readonly token: () => string;
@@ -79,7 +96,7 @@ export function continuationsOver(p: {
 		hash: string,
 		seq: number,
 		body: string,
-		sent: NonNullable<StatementRecord["sent"]>,
+		sent: StatementRecord["sent"],
 		by: string,
 		signUp: boolean,
 	) => {
@@ -93,13 +110,20 @@ export function continuationsOver(p: {
 			const same = now.seq === seq && now.body === body && now.result === undefined;
 			if (!next && !(same && free)) return undefined;
 			// A sign-up is taken only while its T may begin one, on either path; its taking marks it begun.
-			refused = signUp ? signUpRefusal(now, p.now()) : undefined;
+			// Another stage's new number only before its statement expires, one taken again only before its record's end.
+			refused = signUp
+				? signUpRefusal(now, p.now())
+				: p.now() > (next ? now.exp : recordEnd(now))
+					? "expired"
+					: undefined;
 			if (refused) return undefined;
 			const begun = signUp ? { signUp: now.signUp ?? {} } : {};
 			if (next) {
 				// The body and signature as sent are written with the number they took, never again for it.
 				const { result: _kept, ...rest } = now;
-				return { value: stored({ ...rest, ...begun, seq, body, sent, claimed }) };
+				return {
+					value: stored({ ...rest, ...begun, seq, body, ...(sent ? { sent } : {}), claimed }),
+				};
 			}
 			return { value: stored({ ...now, ...begun, claimed }) };
 		});
@@ -115,6 +139,41 @@ export function continuationsOver(p: {
 			return { value: stored({ ...rest, result: result as StatementRecord["result"] }) };
 		});
 		return recordOf(changed?.after);
+	};
+
+	/**
+	 * After its checks: what was kept for this continuation, or its number taken (a new one before
+	 * `exp` alone) and its step run under this call's hold, its answer kept.
+	 */
+	const proceed = async (
+		q: { readonly hash: string; readonly seq: number },
+		r: StatementRecord,
+		body: string,
+		sent: StatementRecord["sent"],
+		signUp: boolean,
+		step: () => Promise<StepResult>,
+	): Promise<Continued> => {
+		const answered = (x: StatementRecord | undefined, again: boolean): Continued | undefined =>
+			x?.seq === q.seq && x.body === body && x.result !== undefined
+				? { kind: "continued", seq: q.seq, again, result: x.result }
+				: undefined;
+		const before = answered(r, true);
+		if (before) return before;
+		if (!signUp && r.seq !== q.seq && p.now() > r.exp)
+			return { kind: "refused", reason: "expired" };
+		const by = p.token();
+		const held = await claim(q.hash, q.seq, body, sent, by, signUp);
+		if (held.refused) return { kind: "refused", reason: held.refused };
+		if (held.after?.claimed?.by !== by) {
+			const now = recordOf(await p.store.read(q.hash));
+			const same = now?.seq === q.seq && now.body === body;
+			return answered(now, true) ?? { kind: "refused", reason: same ? "pending" : "seq" };
+		}
+		const after = await kept(q.hash, q.seq, by, await step());
+		return (
+			answered(after, r.seq === q.seq) ??
+			answered(recordOf(await p.store.read(q.hash)), true) ?? { kind: "refused", reason: "pending" }
+		);
 	};
 
 	const run = async (q: Ask): Promise<Continued> => {
@@ -135,39 +194,76 @@ export function continuationsOver(p: {
 			? continuations.of("sign-up", q.hash, q.seq, body)
 			: continuation.of("register", q.hash, q.seq, body);
 		if (!signedBy(r.e_sig, input, q.signature)) return { kind: "refused", reason: "signature" };
-		const answered = (x: StatementRecord | undefined, again: boolean): Continued | undefined =>
-			x?.seq === q.seq && x.body === body && x.result !== undefined
-				? { kind: "continued", seq: q.seq, again, result: x.result }
-				: undefined;
-		const before = answered(r, true);
-		if (before) return before;
-		if (!signUp && r.seq !== q.seq && p.now() > r.exp)
-			return { kind: "refused", reason: "expired" };
-		const by = p.token();
 		const sent = { body: q.body, signature: q.signature };
-		const held = await claim(q.hash, q.seq, body, sent, by, signUp);
-		if (held.refused) return { kind: "refused", reason: held.refused };
-		if (held.after?.claimed?.by !== by) {
-			const now = recordOf(await p.store.read(q.hash));
-			const same = now?.seq === q.seq && now.body === body;
-			return answered(now, true) ?? { kind: "refused", reason: same ? "pending" : "seq" };
-		}
 		// Its items read from its bytes, the screen's keys from its record.
 		const screen = { eEnc: r.e_enc, eSig: r.e_sig };
-		const result: StepResult =
+		return proceed(q, r, body, sent, signUp, () =>
 			q.stage === "sign-up"
-				? await q.step({
+				? q.step({
 						hash: q.hash,
 						statement: r.jws,
 						issuedAt: issuedAtOf(r.jws),
 						items: itemsIn(r.jws, "authorization") as ItemsOf["authorization"],
 						screen,
 					})
-				: await q.step({ items: itemsIn(r.jws, "creation") as ItemsOf["creation"], screen });
-		const after = await kept(q.hash, q.seq, by, result);
-		return (
-			answered(after, r.seq === q.seq) ??
-			answered(recordOf(await p.store.read(q.hash)), true) ?? { kind: "refused", reason: "pending" }
+				: q.step({ items: itemsIn(r.jws, "creation") as ItemsOf["creation"], screen }),
+		);
+	};
+
+	/** The used passkey-manage a sealed continuation goes on from, and its body opened; none for any failure. */
+	const openedFor = async (
+		q: Parameters<Approvals["continueSealed"]>[0],
+	): Promise<
+		{ kept: KeptManage; opened: OpenedBody; r: StatementRecord } | "expired" | undefined
+	> => {
+		const enc = bytesOf(q.sealed.enc);
+		const ct = bytesOf(q.sealed.ct);
+		if (enc?.length !== 65 || ct?.length !== sealedBytes) return undefined;
+		const r = recordOf(await p.store.read(q.hash));
+		if (r?.purpose !== "passkey-manage" || r.state === "issued") return undefined;
+		if (!r.subject || !r.credential || !r.registration) return undefined;
+		if (!(await current(p.keys, r.jws))) return undefined;
+		// A new number past expiry is refused before the holder is asked to open it.
+		if (r.seq !== q.seq && p.now() > r.exp) return "expired";
+		const aad = new TextEncoder().encode(continuations.aad(q.stage, q.hash, q.seq));
+		const opened = await p.keys.open({ enc, ct }, hpke.info.continuation, aad);
+		if (opened.kind === "withdrawn") throw new Unavailable("approvals");
+		if (opened.kind !== "opened") return undefined;
+		let text: string;
+		try {
+			text = new TextDecoder("utf-8", { fatal: true }).decode(opened.plaintext);
+		} catch {
+			return undefined;
+		}
+		const read = continuations.readPlain(q.stage, text);
+		const bodyText = read && continuations.bodyText(q.stage, read.body);
+		if (!read || bodyText === undefined) return undefined;
+		const bodyHash = sha256(bodyText);
+		const input = continuations.of(q.stage, q.hash, q.seq, bodyHash);
+		if (!signedBy(r.e_sig, input, read.sig)) return undefined;
+		const kept = {
+			hash: q.hash,
+			subject: r.subject,
+			credential: r.credential,
+			registration: r.registration,
+			screen: { eEnc: r.e_enc, eSig: r.e_sig },
+			until: recordEnd(r),
+		};
+		return { kept, opened: { stage: q.stage, body: read.body as OpenedBody["body"], bodyHash }, r };
+	};
+
+	const continueSealed = async (
+		q: Parameters<Approvals["continueSealed"]>[0],
+	): Promise<Continued> => {
+		if (!Number.isInteger(q.seq) || q.seq < 1 || q.seq > maxSeq)
+			return { kind: "refused", reason: "seq" };
+		const found = await openedFor(q);
+		if (found === "expired") return { kind: "refused", reason: "expired" };
+		if (!found) return { kind: "refused", reason: "sealed" };
+		// The body's hash alone is kept, never the opened text; a rename's carries a label and a
+		// delete's none, so the two stages' hashes never meet.
+		return proceed(q, found.r, found.opened.bodyHash, undefined, false, () =>
+			q.step(found.kept, found.opened),
 		);
 	};
 
@@ -184,6 +280,7 @@ export function continuationsOver(p: {
 		continue: (q: Parameters<Approvals["continue"]>[0]) => run({ ...q, stage: "register" }),
 		continueSignUp: (q: Parameters<Approvals["continueSignUp"]>[0]) =>
 			run({ ...q, stage: "sign-up" }),
+		continueSealed,
 		continuationOf,
 	};
 }

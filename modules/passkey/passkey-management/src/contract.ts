@@ -179,7 +179,7 @@ export const continueStages = extensionPoint<ContinueStage>("passkey-management.
 });
 
 /**
- * A sign-up's (F1) creation asked, by the authorization's flow once the ledger made its subject: T's
+ * A sign-up's (F1) creation asked, by the `sign-up` package once the ledger made its subject: T's
  * hash (the creation's evidence), the new subject, T's screen keys as approvals keeps them, and
  * when T was issued (a revocation of the subject since refuses it).
  */

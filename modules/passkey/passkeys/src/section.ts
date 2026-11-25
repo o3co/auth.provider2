@@ -17,9 +17,11 @@ export const section = z.strictObject({
 		.number()
 		.int()
 		.min(1)
-		.max(100)
+		.max(16)
 		.prefault(10)
-		.describe("The most passkeys a subject may hold, from 1 to 100."),
+		.describe(
+			"The most passkeys a subject may hold, from 1 to 16: the most a list of keys answers in its one padded length.",
+		),
 });
 
 export type Settings = z.output<typeof section>;

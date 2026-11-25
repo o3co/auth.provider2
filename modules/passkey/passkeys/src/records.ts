@@ -81,6 +81,18 @@ const credentialShape = z
 				backupEligible: z.boolean(),
 				backedUp: z.boolean(),
 				transports: z.array(z.string()).optional(),
+				/** When the credential was reserved to the subject (kernel clock); none on a record before it. */
+				createdAt: z.number().int().nonnegative().optional(),
+				/** The label its person gave it. */
+				label: z.string().min(1).optional(),
+				/** Each statement that renamed it whose steps may still run: its hash, last number and end (kernel clock). */
+				renames: z
+					.array(
+						z
+							.object({ statement: id, seq: z.number().int().positive(), until: z.number() })
+							.strict(),
+					)
+					.optional(),
 			})
 			.strict()
 			.optional(),

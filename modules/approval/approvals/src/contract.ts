@@ -1,3 +1,4 @@
+import type { SealedStageName } from "@mod/continuation-wire";
 import { contract, extensionPoint } from "@mod/kernel";
 import type { AssertRefusal } from "@mod/passkeys";
 import { stances } from "@mod/promises";
@@ -10,13 +11,20 @@ import type {
 import { part } from "./completion/completion.ts";
 
 /** The purposes a statement is signed for: the IdP's own operations, a closed set. */
-export type Purpose = "authorization" | "passkey-add" | "creation" | "possession";
+export type Purpose =
+	| "authorization"
+	| "passkey-add"
+	| "passkey-manage"
+	| "creation"
+	| "possession";
 
 /** Each purpose's items, as sdk-core-wire fixes them. */
 export interface ItemsOf {
 	readonly authorization: AuthorizationItems;
 	/** A passkey-add names no items: only the common fields and the screen's keys. */
 	readonly "passkey-add": Readonly<Record<string, never>>;
+	/** A passkey-manage, as a passkey-add: no items. */
+	readonly "passkey-manage": Readonly<Record<string, never>>;
 	readonly creation: CreationPayload["creation"];
 	readonly possession: PossessionPayload["possession"];
 }
@@ -154,6 +162,27 @@ export interface KeptSignUp {
 export type SignUpResult = { readonly creation: string } | { readonly refused: string };
 
 /**
+ * A used passkey-manage as its record keeps it, for a sealed continuation's step: its hash, the
+ * subject, the approving key's credential and registration, and the screen's keys.
+ */
+export interface KeptManage {
+	readonly hash: string;
+	readonly subject: string;
+	readonly credential: string;
+	readonly registration: string;
+	readonly screen: Screen;
+	/** When its record is gone (kernel clock, ms): no step of it runs past it. */
+	readonly until: number;
+}
+
+/** A sealed continuation's body as opened and read by its stage's shape, and the hash E_sig signed over it. */
+export interface OpenedBody {
+	readonly stage: SealedStageName;
+	readonly body: { readonly credential_id: string; readonly label?: string };
+	readonly bodyHash: string;
+}
+
+/**
  * A T's sign-up as its record keeps it (F1): its bytes as signed, the subject made for it, the creation
  * its step answered (a compact JWS) and the credential its key change registered, each once kept.
  */
@@ -173,6 +202,46 @@ export interface PasskeyAddAsk {
 	readonly assertion: string;
 	readonly creation?: string;
 }
+
+/** A passkey-manage's completion asked: by the assertion that used it, or for a continuation's step. */
+export type PasskeyManageAsk =
+	| {
+			readonly hash: string;
+			readonly assertion: string;
+			/** To make one where none is kept: its caller checked the approving key first. Else the kept one alone. */
+			readonly make?: true;
+	  }
+	| {
+			readonly hash: string;
+			/** The rename it answers, the one its record took and holds unanswered: its number and body hash. */
+			readonly continued: {
+				readonly stage: "rename";
+				readonly seq: number;
+				readonly bodyHash: string;
+			};
+	  };
+
+export type PasskeyManageCompleted =
+	| { readonly kind: "completed"; readonly enc: string; readonly ct: string }
+	| {
+			readonly kind: "refused";
+			/**
+			 * `unknown`: no record, one this generation's ring does not verify, or, asked with no `make`,
+			 * none kept. `purpose`: no passkey-manage. `unused`: not used. `assertion`: another than the
+			 * one that used it. `continued`: no continuation of that number and body taken, unanswered, its step's hold live.
+			 * `expired`: the approval's past expiry with none kept, a continuation's past the record's end.
+			 * `form`: one sdk-core-wire's `passkeyManage` or its buckets refuse. `withdrawn`: the ring signs no more.
+			 */
+			readonly reason:
+				| "unknown"
+				| "purpose"
+				| "unused"
+				| "assertion"
+				| "continued"
+				| "expired"
+				| "form"
+				| "withdrawn";
+	  };
 
 export type PasskeyAddCompleted =
 	| {
@@ -246,6 +315,8 @@ export type Continued =
 			 * bytes, or a sign-up's other than `{}`. `signature`: one not the screen's, or not in its one
 			 * spelling. `purpose`: a statement its stage does not continue, or a T whose owner did not allow
 			 * it. `used`: a T no longer issued. `seq`: a number not the next, or a sign-up's other than 1.
+			 * `sealed`: a sealed continuation of another length, of no used passkey-manage this
+			 * generation's ring verifies, or that does not open, read or verify as its stage's.
 			 */
 			readonly reason:
 				| "unknown"
@@ -255,7 +326,8 @@ export type Continued =
 				| "signature"
 				| "seq"
 				| "pending"
-				| "used";
+				| "used"
+				| "sealed";
 	  };
 
 /**
@@ -300,7 +372,7 @@ export interface Approvals {
 	/** Signs a statement of `purpose` over its items, as the declared modules fill them, and records it. */
 	issue(ask: IssueAsk): Promise<Issued>;
 	/**
-	 * Uses a statement once: an authorization's or a passkey-add's by an assertion over its challenge,
+	 * Uses a statement once: an authorization's, a passkey-add's or a passkey-manage's by an assertion over its challenge,
 	 * its user verified; a possession's by the verification of its pending key. The same evidence again
 	 * answers alike. A T whose sign-up began is used only once its key change kept the credential it
 	 * registered, and only by an assertion of that credential (`used` otherwise).
@@ -342,6 +414,23 @@ export interface Approvals {
 		readonly step: (kept: KeptSignUp) => Promise<SignUpResult>;
 	}): Promise<Continued>;
 	/**
+	 * A used passkey-manage's sealed continuation (continuation-wire's `delete` or `rename`), a number 1
+	 * to 16: its sealing exactly `plainBytes` and the tag long, opened under its stage, statement hash
+	 * and number, its text read by its stage's shape and its signature the screen's `eSig`'s, all before
+	 * anything is written, each failure `sealed` alike. Then as `continue`'s: a new number only before
+	 * the statement's expiry, a number taken run to its end after it. Its step is handed the
+	 * passkey-manage as its record keeps it and the body opened; the opened text is never kept, only its
+	 * hash. A holder that withdrew this Core's opening throws.
+	 */
+	continueSealed(p: {
+		readonly hash: string;
+		readonly stage: SealedStageName;
+		readonly seq: number;
+		/** HPKE's `enc` and ciphertext, base64url, in their one spelling. */
+		readonly sealed: { readonly enc: string; readonly ct: string };
+		readonly step: (kept: KeptManage, opened: OpenedBody) => Promise<StepResult>;
+	}): Promise<Continued>;
+	/**
 	 * Keeps the subject made for a T's begun sign-up, unless one is kept: the one kept is answered; none
 	 * where no sign-up of it began.
 	 */
@@ -374,6 +463,15 @@ export interface Approvals {
 	 * generation's ring verifies, and a creation issued here for it.
 	 */
 	completePasskeyAdd(ask: PasskeyAddAsk): Promise<PasskeyAddCompleted>;
+	/**
+	 * A passkey-manage's completion: its subject's keys as passkeys lists them, signed, padded to the
+	 * bucket their longest credential ID chooses and sealed to its screen. The approval's (by the
+	 * assertion that used it) is kept on its record whole in one write, the first kept answered to
+	 * every call after, whatever has lapsed since; one is made only when asked to (`make`), and kept
+	 * only unexpired. A continuation's (`continued`, by its step) only for the number and body its
+	 * record took and holds unanswered, up to the record's end, and is kept by no one here.
+	 */
+	completePasskeyManage(ask: PasskeyManageAsk): Promise<PasskeyManageCompleted>;
 	/** A used statement's approval; none for any other. */
 	usedOf(hash: string): Promise<Approval | undefined>;
 	/**

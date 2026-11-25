@@ -5,6 +5,7 @@ import { frameStore, operationKinds, stateOwners, transparency } from "@mod/tran
 import { ceremonies } from "@mod/webauthn";
 import {
 	heldKeys,
+	keyList,
 	passkeyGenerations,
 	passkeyRemovals,
 	passkeyStore,
@@ -13,6 +14,7 @@ import {
 	registrations,
 } from "./contract.ts";
 import { heldOf, type KeptParts, keptOver, keysHeld } from "./kept/kept.ts";
+import { listingOver } from "./listing/listing.ts";
 import { keyChanges, keysOwner } from "./records.ts";
 import { registeringOver } from "./registering/registering.ts";
 import { type Settings, section } from "./section.ts";
@@ -73,7 +75,8 @@ export default defineModule(
 		m.provide(heldKeys).by(async (c) => {
 			const { frames } = await c.get(kept);
 			const witnessing = await witnessingOf(c);
-			return { of: (subject: string) => heldOf(frames, witnessing, subject, c.clock.now()) };
+			const max = c.section["max-credentials"];
+			return { of: (subject: string) => heldOf(frames, witnessing, subject, c.clock.now(), max) };
 		}),
 		m.provide(passkeys).by(async (c) =>
 			keptOver({
@@ -83,6 +86,7 @@ export default defineModule(
 				removals: await c.collect(passkeyRemovals),
 			}),
 		),
+		m.provide(keyList).by(async (c) => listingOver({ ...(await c.get(kept)), now: c.clock.now })),
 		m.provide(passkeyGenerations).by(async (c) => {
 			const { frames } = await c.get(kept);
 			return { generation: async (subject) => (await keysHeld(frames, subject)).keyGeneration };

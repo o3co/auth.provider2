@@ -158,6 +158,10 @@ const beside = defineModule({ name: "beside", replicaSafe: true, takes: [] }, (m
 	m.contribute(operationKinds).by(() => ({ ...passkeyChanges, bundle: false })),
 ]);
 
+/** A P-256 key's uncompressed point: the last 65 bytes of its SPKI. */
+const pointOf = (key: KeyObject) =>
+	new Uint8Array(key.export({ format: "der", type: "spki" }).subarray(-65));
+
 /** The screen's two keys, their private halves kept for the test. */
 export function screenKeys() {
 	const enc = generateKeyPairSync("ec", { namedCurve: "P-256" });
@@ -191,6 +195,8 @@ export async function world(
 ) {
 	let clock = 1_800_000_000_000;
 	const now = () => clock;
+	// The Core's sealing key, its point known to the test as a screen knows it.
+	const core = generateKeyPairSync("ec", { namedCurve: "P-256" });
 	const frames = memoryFrames(["passkeys", approvalPart, "families"]);
 	const book = logBook(now);
 	const log = book.as("w1");
@@ -212,7 +218,7 @@ export async function world(
 			beside,
 			rateLimitStandIn,
 			keysModule,
-			testHolder(),
+			testHolder({ "seal-test": core.privateKey }),
 			transparencyModule,
 			webauthnModule,
 			passkeysModule,
@@ -262,9 +268,11 @@ export async function world(
 		app,
 		approvals: await app.get(approvals),
 		keys: await app.get(keys),
+		corePoint: pointOf(core.publicKey),
 		frames,
 		book,
 		statements,
+		credentials,
 		plant,
 		assert,
 		advance: (ms: number) => {

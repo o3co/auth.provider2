@@ -110,9 +110,20 @@ describe("`/continue`, each stage to the module that continues it", () => {
 
 	it("hands a sealed stage its sealing, and answers its sealed value", async () => {
 		const { asked, post } = continueOver({ delete: { kind: "sealed", enc: "E", ct: "C" } });
-		const sealed = { statement: jws, stage: "delete", seq: "1", enc: b64(65), ct: b64(40) };
+		const sealed = { statement: jws, stage: "delete", seq: "1", enc: b64(65), ct: b64(2064) };
 		expect((await post(sealed)).body).toEqual({ json: { sealed: { enc: "E", ct: "C" } } });
 		expect(asked).toMatchObject([{ stage: "delete", sealed: { enc: sealed.enc, ct: sealed.ct } }]);
+	});
+
+	it("refuses a sealing of any length but the padded plaintext's and its tag, before any stage", async () => {
+		const { asked, post } = continueOver({ delete: { kind: "sealed", enc: "E", ct: "C" } });
+		for (const size of [1, 40, 2063, 2065]) {
+			const sealed = { statement: jws, stage: "delete", seq: "1", enc: b64(65), ct: b64(size) };
+			const answered = await post(sealed);
+			expect(answered.status).toBe(400);
+			expect((answered.body as { json: { error: string } }).json.error).toBe("invalid_request");
+		}
+		expect(asked).toEqual([]);
 	});
 
 	it("refuses fields of another size or spelling, and a stage none continues, as invalid", async () => {

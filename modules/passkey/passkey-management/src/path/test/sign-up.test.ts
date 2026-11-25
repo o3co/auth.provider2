@@ -10,7 +10,7 @@ import { nameOf } from "../../account.ts";
 import { signUpCreations } from "../../contract.ts";
 import { firstKeyWorld, opened, payloadOf, rulesOf, screen, sha256 } from "./world.ts";
 
-describe("a sign-up's creation, as the authorization's flow asks it", () => {
+describe("a sign-up's creation, as the sign-up package asks it", () => {
 	it("is made for T and the new subject, named by the deployment and a mark of the subject", async () => {
 		const w = await firstKeyWorld();
 		const s = await screen();
@@ -54,7 +54,7 @@ type World = Awaited<ReturnType<typeof firstKeyWorld>>;
 type Screen = Awaited<ReturnType<typeof screen>>;
 const client = { origin: testOrigin };
 
-/** A T allowing a sign-up, issued to a screen, and its sign-up begun as authorize's step runs it. */
+/** A T allowing a sign-up, issued to a screen, and its sign-up begun as the sign-up package's step runs it. */
 async function begun() {
 	const w = await firstKeyWorld();
 	await w.app.start();

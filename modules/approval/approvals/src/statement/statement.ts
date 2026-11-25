@@ -31,7 +31,7 @@ const id = z.string().min(1);
 /** A statement's record: what it was signed as, and how far it went. */
 const recordShape = z
 	.object({
-		purpose: z.enum(["authorization", "passkey-add", "creation", "possession"]),
+		purpose: z.enum(["authorization", "passkey-add", "passkey-manage", "creation", "possession"]),
 		jws: id,
 		sid: id,
 		/** Its expiry, in ms. */
@@ -102,9 +102,12 @@ export const stored = (r: StatementRecord) => r as unknown as StoredStatement;
 const itemSchemas = {
 	authorization: payloads.statement.shape.approval,
 	"passkey-add": z.object({}).strict(),
+	"passkey-manage": z.object({}).strict(),
 	creation: payloads.creation.shape.creation,
 	possession: payloads.possession.shape.possession,
 } as const;
+/** The purposes a key's management approves: no items, used by an assertion. */
+const itemless = (purpose: Purpose) => purpose === "passkey-add" || purpose === "passkey-manage";
 /** The names a purpose's items may carry. */
 export const itemNames = (purpose: Purpose): readonly string[] =>
 	Object.keys(itemSchemas[purpose].shape);
@@ -131,7 +134,7 @@ export function declaredOf(items: readonly StatementItems[], refuse: (reason: st
 /** The items a statement's payload carries, under its purpose's member. */
 export const itemsIn = (jws: string, purpose: Purpose): ItemsOf[Purpose] => {
 	const payload = JSON.parse(Buffer.from(jws.split(".")[1] ?? "", "base64url").toString("utf8"));
-	if (purpose === "passkey-add") return {};
+	if (itemless(purpose)) return {};
 	return payload[purpose === "authorization" ? "approval" : purpose];
 };
 
@@ -157,6 +160,7 @@ export const statementMark = (sid: string) => `statement:${sid}`;
 
 /** How long a statement's record outlives the statement, in seconds. */
 const keptPastS = 60;
+export const recordEnd = (r: StatementRecord) => r.exp + keptPastS * 1000;
 
 /** Issuing statements, and using each once. */
 export function statementsOver(p: StatementParts) {
@@ -181,12 +185,13 @@ export function statementsOver(p: StatementParts) {
 						...screen,
 						nonce: p.token(),
 						purpose: ask.purpose,
-						// A passkey-add carries no member of items.
-						...(ask.purpose === "passkey-add" ? {} : { [ask.purpose]: ask.items }),
+						// A passkey-add or a passkey-manage carries no member of items.
+						...(itemless(ask.purpose) ? {} : { [ask.purpose]: ask.items }),
 					};
 		const schema = {
 			authorization: payloads.statement,
 			"passkey-add": payloads.passkeyAdd,
+			"passkey-manage": payloads.passkeyManage,
 			creation: payloads.creation,
 			possession: payloads.possession,
 		}[ask.purpose];
@@ -294,7 +299,7 @@ export function statementsOver(p: StatementParts) {
 			if (r.purpose !== "possession") return { kind: "refused", reason: "purpose" };
 			return marked(hash, { verification: q.verification });
 		}
-		if (r.purpose !== "authorization" && r.purpose !== "passkey-add")
+		if (r.purpose !== "authorization" && !itemless(r.purpose))
 			return { kind: "refused", reason: "purpose" };
 		const assertion = q.assertion;
 		if (r.state !== "issued")

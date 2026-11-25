@@ -1,79 +1,11 @@
 import { allowed, effectOf, emptyState, type FlowState, timely } from "@mod/authority-rules";
-import { challengeInput, continuation, firstKey, hpke } from "@mod/sdk-core-wire";
+import { challengeInput, hpke } from "@mod/sdk-core-wire";
 import type { Stage } from "@mod/transparency";
-import { type Credential, ceremonies } from "@mod/webauthn";
 import { softwareAuthenticator, testOrigin } from "@mod/webauthn/testing";
 import { describe, expect, it } from "vitest";
-import { firstKeyWorld, opened, payloadOf, rulesOf, screen, sealed, sha256 } from "./world.ts";
+import { opened, payloadOf, register, rulesOf, screen, sha256, withFirstKey } from "./world.ts";
 
-type World = Awaited<ReturnType<typeof firstKeyWorld>>;
-type Screen = Awaited<ReturnType<typeof screen>>;
 const client = { origin: testOrigin };
-
-/** `alice` (`s1`) holding one key, made through her first key's path over the routes. */
-async function withFirstKey() {
-	const w = await firstKeyWorld();
-	await w.app.start();
-	const s = await screen();
-	const mailing = w.nextMail();
-	const start = await sealed(w, s, "start", { identifier: "alice" });
-	const started = await w.post("/first-key/start", start);
-	const aad = firstKey.aad("start", start.nonce, s.eEnc, s.eSig);
-	const sealedCode = started.json.sealed as never;
-	const code = JSON.parse((await opened(s, sealedCode, hpke.info.firstKeyCode, aad)) ?? "{}").code;
-	const token = ((await mailing).values.link as string).split("#")[1];
-	const side = await screen();
-	const mail = await sealed(w, side, "mail", { token, identifier: "alice", code });
-	const creation = (await w.post("/first-key/mail", mail)).json.statement as string;
-	const cer = await w.app.get(ceremonies);
-	const auth = softwareAuthenticator();
-	const registered = await register(w, side, creation, auth);
-	await w.post("/key/finish", {
-		statement: registered.possession,
-		assertion: registered.assertion,
-	});
-	return { w, cer, auth, key: registered.key };
-}
-
-/** A new key made by `auth` over `creation`, registered as continuation `seq`, and its assertion. */
-async function register(
-	w: World,
-	s: Screen,
-	creation: string,
-	auth: ReturnType<typeof softwareAuthenticator>,
-	seq = 1,
-) {
-	const cer = await w.app.get(ceremonies);
-	const items = payloadOf(creation).creation;
-	const options = cer.creation(
-		sha256(challengeInput(creation, "create")),
-		{ handle: items.options.user_id, name: "alice" },
-		[],
-		"required",
-	);
-	const body = JSON.stringify(auth.create(options as never, client));
-	const sig = s.signs(continuation.of("register", sha256(creation), seq, sha256(body)));
-	const answered = await w.post("/continue", {
-		statement: creation,
-		stage: "register",
-		seq: String(seq),
-		body,
-		sig,
-	});
-	const possession = answered.json.statement as string;
-	const named = payloadOf(possession).possession;
-	const key: Credential = {
-		id: named.credential_id,
-		publicKey: JSON.parse(body).response.publicKey ?? "",
-		signCount: 0,
-		userHandle: items.options.user_id,
-		backupEligible: false,
-		backedUp: false,
-	};
-	const request = cer.request(sha256(challengeInput(possession, "get")), [key], "required");
-	const assertion = JSON.stringify(auth.get(request as never, client, {}));
-	return { possession, assertion, key };
-}
 
 describe("a key a passkey-add approves, from its approval to its completion, over real sealing", () => {
 	it("approves, creates, registers and completes the key, each answer opened by the screen, and the rules allow its record", async () => {

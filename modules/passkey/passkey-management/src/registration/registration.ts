@@ -179,7 +179,8 @@ export function registrationOver(p: RegistrationParts) {
 		const result = continued.result as { statement?: string; refused?: string } | null;
 		if (typeof result?.statement === "string")
 			return { kind: "possession", statement: result.statement };
-		return refused(result?.refused ?? "step");
+		if (typeof result?.refused === "string") return refused(result.refused);
+		throw new TypeError("passkey-management: a register's step answered neither");
 	}
 
 	/** The passkey-add a creation bases while it lives, its approving key active as it approved; none otherwise. */

@@ -7,7 +7,7 @@ Internal module of `passkey-management`: a key's registration after its creation
 
 ## Not here
 - The continuation's signature, sequence and kept answer, the statements and completions: `approvals`. The reservation, its verification and the keys: `passkeys`. The change on the flow and its receipt: internal module `key-change`.
-- A sign-up's step, its subject and its creation: authorize's, through `approvals`; the creation's making: `signUpCreations`. Deleting and renaming a key: passkey-manage.
+- A sign-up's step, its subject and its creation: the `sign-up` package's, through `approvals`; the creation's making: `signUpCreations`. Renaming a key: internal module `managing`.
 - `sdk-core-wire`'s keyChange `receipt?` is for a bundle that pins no log key (L0), never for a change another replica took in first: that one is completed with the log's first receipt, asked again.
 
 ## Offers

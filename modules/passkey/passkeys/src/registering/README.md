@@ -18,7 +18,7 @@ Internal module of `passkeys`: registering and removing keys, over the reservati
 - `remove` refuses a removal after which the subject holds no key, each key whose chain holds the removed one counted (`authority-rules`' `withoutRooted`), and the reservation's op.
 - `verifyPending` answers the response and challenge that verified a reservation alike again, saving its count first; any other is checked anew. A count is never lowered.
 - A binding carries the version of the reservation that made it, and its lapse; another reservation of the subject's takes it over only where it replaces that one, or once it lapsed, and a reservation not written hands it back as it found it.
-- A release (a cancel, a replacement, a lost reserve that made the binding) unbinds only while the binding carries its version, and never a credential active now or found active by a settle. `reserve` refuses another subject's binding, or other details, and never rewrites the details kept.
+- A release (a cancel, a replacement, a lost reserve that made the binding) unbinds only while the binding carries its version, and never a credential active now or found active by a settle. `reserve` refuses another subject's binding, or other details, and never rewrites the details kept; details it makes, or kept with no time, take its time (kernel clock): when the credential was first reserved to the subject.
 
 ## Depends on
 - `webauthn` (the credential's form), `transparency`; the package's contract and records, and the internal module `kept`.

@@ -14,7 +14,7 @@ Internal module of `passkeys`: reading the keys a subject's flow holds, assertin
   - `publicKeyOf` (credential) → an active key's subject, public key and registration's record id.
   - `settle` (subject) → whether it holds a key.
 - `keysHeld`, `credentialRecord`, `credentialOf`, `counted` and `stored`, for `registering`.
-- `heldOf` → the package's `heldKeys`, which any module may take: `of` (subject) → its keys' credentials, its pending reservation unlapsed (`pending`: the reservation, credential and public key; read with the keys in one read), and whether the witness's mark is set, of whatever generation (after a `settle`, this generation's alone), frozen; nothing written, and the same reads for a subject no flow holds.
+- `heldOf` → the package's `heldKeys`, which any module may take: `of` (subject) → its keys' credentials, whether it holds `max-credentials` keys (`full`), its pending reservation unlapsed (`pending`: the reservation, credential and public key; read with the keys in one read), and whether the witness's mark is set, of whatever generation (after a `settle`, this generation's alone), frozen; nothing written, and the same reads for a subject no flow holds.
 
 ## Invariants
 - Reads are of the applied state: a removal on the log but not taken in still reads active. A key is asserted only while its record binds its subject and keeps its details.

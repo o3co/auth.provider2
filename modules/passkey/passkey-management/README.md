@@ -4,27 +4,28 @@
 - Owns the kinds of a first key's evidence beside the email's token: what a kind's module is given and answers, on one contract every kind sits on.
 - Owns a first key's nonces and mail tokens, and the answers of its mail's side: their store interfaces and needs, and its mail's purpose and the values its wording is given.
 - Runs a first key's path: its nonces, its start (§3.13's step 1), its mail's side and its creation (step 3, registration's step 2), and a creation's recovery (§C.4), as the Core's routes.
-- Runs a passkey-add (§3.13's step 1): its approval by a live key, the creation it bases, then the registration every path shares (steps 4 to 6), as the Core's routes.
+- Runs a passkey-add (§3.13's step 1): its approval by a live key, the creation it bases, then the shared registration (steps 4 to 6); and a passkey-manage: its approval's list of keys, a rename by `/continue`. As the Core's routes.
 
 ## Not here
 - A subject's revocation boundary at the start: its creation is refused once one followed the evidence (internal module `creation`).
-- Checking one kind, and its record of who holds it: its own module, which declares what it trusts and its strength to `promises`' `evidenceKinds` under the same name.
+- Checking one kind, and its record of who holds it: its own module, declaring its trust and strength to `promises`' `evidenceKinds` under the same name.
 - The waits of a password: `users`' `verifyAsPart`, which the password's module asks and hands each start's end.
 - Its mail's wording: a template for `mail`'s `mailTemplates`, in a module a deployment replaces (`passkey-management-mail`).
 - A start's answer signed by the Core: `sdk-core-wire`'s code carries none, so a Front can hand a person a false code, which spends the token's tries; no key is bound so.
 
 ## Offers
 - Extension point `firstKeyEvidence` (keyed by kind): a `FirstKeyEvidence`'s `prepare`, `check` and `settled`, as internal module `evidence` asks them.
-- Extension point `continueStages`: a stage of `/continue` (its word as `continuation-wire` names it) and how it goes on, one module each; `register` is this package's own (internal module `routes`).
+- Extension point `continueStages`: a stage of `/continue` (its word as `continuation-wire` names it) and how it goes on, one module each; `register` and `rename` are its own (`routes`, `managing`).
 - `firstKeyNonces` and `firstKeyTokens`, the stores' interfaces, and their needs `firstKeyNoncesNeeds` and `firstKeyTokensNeeds`, as internal modules `nonces` and `tokens` run on them.
 - `firstKeyMail`: its mail's purpose, `first-key`, declared to `mail`'s `mailPurposes`, and the values its wording is given: `link`, `account`, `minutes`.
-- `signUpCreations`: a sign-up's creation (F1), for the authorization's flow (internal module `keying`).
-- `keyChangePart`: its part of a subject's flow, a key change's preimage kept for a resend; a store binds it.
-- Operator section: `mail-link` (https), `token-lifetime` (default 15 minutes), `code-tries` (default 3), `nonce-lifetime` (default 2 minutes), `requests` and `window` (default 30 a minute per source), `inbox-only-when-absent` (default off), `account-name` (default the mail link's host).
-- Routes `POST /first-key/nonce`, `/first-key/start`, `/first-key/mail`, `/first-key/recover` (internal modules `routes`, `start`, `mail-side`), `/continue`, `/key/finish`, `/approval/start` and `/approval/finish` (internal modules `registration`, `approval`, `keying`). Metric `auth_first_key_jobs_dropped_total`; lines `passkey-management.start_ended`, `job_dropped`, `job_failed`, `mail_refused`, `recovery_refused`, `continue_refused`, naming no address, identifier or subject.
-- Declares to `promises`' `evidenceKinds` the inbox, the path's own kind (internal module `evidence`).
+- `signUpCreations`: a sign-up's creation (F1), for the `sign-up` package (internal module `keying`).
+- `keyChangePart`: its part of a subject's flow, a key change's preimage kept for a resend, bound by a store.
+- Operator section: `mail-link` (https), `token-lifetime` (default 15 minutes), `code-tries` (default 3), `nonce-lifetime` (default 2 minutes), `requests` and `window` (default 30/min per source), `inbox-only-when-absent` (default off), `account-name` (default the mail link's host).
+- Routes `POST /first-key/nonce`, `/first-key/start`, `/first-key/mail`, `/first-key/recover` (internal modules `routes`, `start`, `mail-side`), `/continue`, `/key/finish`, `/approval/start` and `/approval/finish` (`registration`, `approval`, `keying`).
+- Metric `auth_first_key_jobs_dropped_total`; lines `passkey-management.start_ended`, `job_dropped`, `job_failed`, `mail_refused`, `recovery_refused`, `continue_refused`, `approval_refused`, `registration_refused`, naming no address, identifier or subject.
+- Declares to `promises`' `evidenceKinds` the inbox, the path's own kind (`evidence`).
 - `./testing`: `passkeyManagementConfig`, `firstKeyStoreContract` (the stores' contract test), `itemsOf` (each kind's items of a start).
-- `FirstKeyStart`: the start's nonce, which the path owns, gives a short life and uses up before any check, and the identifier asked for. `EvidenceAnswer`; `StartOutcome`, how the path ended the start: `passed`, `failed` (its own refusals too) or `unavailable` (a kind's fault or its own).
+- `FirstKeyStart`: the start's nonce (the path's: short-lived, used up before any check) and the identifier asked for. `EvidenceAnswer`; `StartOutcome`, how the path ended the start: `passed`, `failed` (its own refusals too) or `unavailable` (a kind's fault or its own).
 
 ## Invariants
 - Where no identifier is asked, a creation's `account` is the address its subject verified last, masked as a first key's mail shows its identifier; with none, its `user_name` is `account-name` and a short mark of the subject, as F1's is (`accountOf`, `nameOf`). Where identifiers are not addresses, a subject's first key and a later one may show apart.

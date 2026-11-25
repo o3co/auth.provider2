@@ -26,7 +26,7 @@ export type CreationAsk = {
 		| { readonly basis: "sign-up" }
 	);
 
-export type Created = Issued | { readonly kind: "refused"; readonly reason: "revoked" };
+export type Created = Issued | { readonly kind: "refused"; readonly reason: "revoked" | "full" };
 
 /** The parts of webauthn's options a creation names, read as they must be: webauthn's contract types them `unknown`. */
 const options = z.object({
@@ -58,6 +58,9 @@ export function creationOver(p: {
 		if ((await p.revocation.check(ask.subject, ask.since)) === "revoked")
 			return { kind: "refused", reason: "revoked" };
 		const held = await p.held.of(ask.subject);
+		// A key past the most the subject may hold is never asked of the person, nor named in more
+		// excluded keys than a creation carries.
+		if (held.full) return { kind: "refused", reason: "full" };
 		// A generation moved on before the key change is decided is refused there: read apart, it may lag.
 		const generation = await p.generations.generation(ask.subject);
 		const handle = freshHandle(p.random);

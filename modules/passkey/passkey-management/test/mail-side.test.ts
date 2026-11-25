@@ -170,6 +170,12 @@ describe("a first key's mail's side", () => {
 		const t2 = (await revoked.tokens.issue("s-alice", right, 0)).token;
 		const r2 = await revoked.request({ token: t2, identifier: "alice", code: right });
 		expect(await revoked.side.mail(r2)).toEqual(refused("revoked"));
+		// Holding the most keys it may: refused for good, never a passing unavailable.
+		const full = await world({ created: () => ({ kind: "refused", reason: "full" }) });
+		const t3 = (await full.tokens.issue("s-alice", right, 0)).token;
+		const r3 = await full.request({ token: t3, identifier: "alice", code: right });
+		expect(await full.side.mail(r3)).toEqual(refused("full"));
+		expect(await full.side.mail(r3)).toEqual(refused("full"));
 	});
 
 	it("gives nothing once the token ended, an answer kept or not", async () => {

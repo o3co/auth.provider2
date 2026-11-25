@@ -50,6 +50,7 @@ export async function heldOf(
 	witnessing: PasskeyWitnessing | undefined,
 	subject: string,
 	now: number,
+	max: number,
 ): Promise<Held> {
 	const unit = unitOf(subject);
 	const records = keysRecords(unit.flow);
@@ -64,6 +65,7 @@ export async function heldOf(
 	return Object.freeze({
 		credentials: Object.freeze(credentialsOf(keys)),
 		marked,
+		...(credentialsOf(keys).length >= max ? { full: true as const } : {}),
 		...(pending ? { pending: Object.freeze(pending) } : {}),
 	});
 }

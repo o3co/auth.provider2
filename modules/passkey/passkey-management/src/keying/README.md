@@ -10,7 +10,8 @@ Internal module of `passkey-management`: a passkey-add's approval, and a key's r
 
 ## Offers
 - `keyingTakes`, which its package names among its own takes.
-- `keyingOf` (a build) → `registerStage`, the stage `register` of `/continue` the package contributes; `signUp`, the package's `signUpCreations` (a creation of basis `sign-up` for T's hash, the new subject, T's screen, its account named by `nameOf` in `user_name` alone), and the routes `keyFinish`, `approvalStart` and `approvalFinish`, counted per source in the first key's path's window; lines `passkey-management.registration_refused` (a finish's) and `approval_refused` with its reason.
+- `keyingOf` (a build) → `registerStage` and `renameStage` (internal module `managing`), the stages `register` and `rename` of `/continue` the package contributes.
+- `keyingOf` also gives `signUp`, the package's `signUpCreations` (a creation of basis `sign-up` for T's hash, the new subject, T's screen, its account named by `nameOf` in `user_name` alone), and the routes `keyFinish`, `approvalStart` and `approvalFinish`, counted per source in the first key's path's window; lines `passkey-management.registration_refused` (a finish's) and `approval_refused` with its reason.
 - A sign-up's creation refused for a passing failure (a count reached, busy, withdrawn) throws Unavailable, so its T keeps none.
 
 ## Invariants
@@ -18,4 +19,4 @@ Internal module of `passkey-management`: a passkey-add's approval, and a key's r
 - A key change's end is looked for up to 18 times, soon at first, then every 200 ms, as `approvals`' writer looks.
 
 ## Depends on
-- `approvals`, `passkeys`, `webauthn`, `subject-revocation`, `transparency`, `users`, `kernel`; internal modules `registration`, `key-change`, `approval`, `creation`, `routes`.
+- `approvals`, `passkeys`, `webauthn`, `subject-revocation`, `transparency`, `users`, `kernel`; internal modules `registration`, `key-change`, `approval`, `creation`, `managing`, `routes`.

@@ -9,7 +9,7 @@ import { digestOf, openSealed, type SealedRequest } from "../sealed/sealed.ts";
 import type { Tokens } from "../tokens/tokens.ts";
 
 /** Why the mail's side refused, for the path's log alone: the screen is answered one word for all. */
-export type Refusal = "nonce" | "unopened" | "token" | "revoked" | "answer" | "recovery";
+export type Refusal = "nonce" | "unopened" | "token" | "revoked" | "full" | "answer" | "recovery";
 
 /**
  * The mail's side answered: the creation statement kept for its request; refused, with why; a
@@ -88,8 +88,8 @@ export function mailSideOver(p: {
 				since: tried.since,
 			});
 			if (created.kind === "refused")
-				return created.reason === "revoked"
-					? refused("revoked")
+				return created.reason === "revoked" || created.reason === "full"
+					? refused(created.reason)
 					: { kind: "unavailable", reason: created.reason };
 			await p.tokens.keep(q, token, { eSig: opened.screen.eSig, statement: created.statement });
 			const given = await p.tokens.answered(q);

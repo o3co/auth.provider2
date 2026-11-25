@@ -18,7 +18,10 @@ export type Finished =
 	| { readonly kind: "refused"; readonly reason: string };
 
 export interface ApprovalParts {
-	readonly approvals: Pick<Approvals, "issue" | "use" | "passkeyAddOf" | "completePasskeyAdd">;
+	readonly approvals: Pick<
+		Approvals,
+		"issue" | "use" | "passkeyAddOf" | "completePasskeyAdd" | "completePasskeyManage"
+	>;
 	readonly passkeys: Pick<Passkeys, "publicKeyOf">;
 	readonly users: Pick<Users, "contactsOf">;
 	readonly create: (ask: CreationAsk) => Promise<Created>;
@@ -27,15 +30,24 @@ export interface ApprovalParts {
 }
 
 const sha256 = (text: string) => createHash("sha256").update(text).digest("base64url");
+/** A statement's purpose as its payload names it, unverified; none for one that does not read. */
+const purposeOf = (statement: string): unknown => {
+	try {
+		return JSON.parse(Buffer.from(statement.split(".")[1] ?? "", "base64url").toString("utf8"))
+			?.purpose;
+	} catch {
+		return undefined;
+	}
+};
 const refused = (reason: string) => ({ kind: "refused", reason }) as const;
 const unavailable = (): never => {
 	throw new Unavailable("passkey-management");
 };
 
 /**
- * A passkey-add's approval (§3.13's registration, step 1, and step 2): `start` signs the passkey-add
- * for the screen; `finish` uses it by the approving key's assertion and answers the completion
- * carrying the creation it bases, made for the subject that key holds.
+ * A passkey-add's or a passkey-manage's approval: `start` signs it for the screen; `finish` uses it by
+ * the approving key's assertion and answers a passkey-add's completion carrying the creation it bases
+ * (§3.13's registration, steps 1 and 2), or a passkey-manage's list of that key's subject's keys.
  */
 export function approvalOver(p: ApprovalParts) {
 	async function start(q: {
@@ -43,10 +55,8 @@ export function approvalOver(p: ApprovalParts) {
 		readonly screen: Screen;
 		readonly by: string;
 	}): Promise<Started> {
-		// A passkey-manage is signed by no purpose here yet.
-		if (q.purpose !== "passkey-add") return refused("purpose");
 		const issued = await p.approvals.issue({
-			purpose: "passkey-add",
+			purpose: q.purpose,
 			items: {},
 			screen: q.screen,
 			by: q.by,
@@ -67,11 +77,41 @@ export function approvalOver(p: ApprovalParts) {
 		return done.reason === "withdrawn" ? unavailable() : refused(done.reason);
 	}
 
+	/** A passkey-manage's: the list of its subject's keys, by the approving key as it was when it approved. */
+	async function manage(
+		hash: string,
+		q: { readonly statement: string; readonly assertion: string },
+	) {
+		const answered = async (make?: true): Promise<Finished> => {
+			const done = await p.approvals.completePasskeyManage({
+				hash,
+				assertion: q.assertion,
+				...(make ? { make } : {}),
+			});
+			if (done.kind === "completed") return { kind: "completed", enc: done.enc, ct: done.ct };
+			return done.reason === "withdrawn" ? unavailable() : refused(done.reason);
+		};
+		// A completion kept is answered as kept, whatever has lapsed since; with none kept, every finish
+		// is used and its approving key checked again before one is made.
+		const before = await answered();
+		if (before.kind === "completed" || (before.reason !== "unused" && before.reason !== "unknown"))
+			return before;
+		const used = await p.approvals.use({ statement: q.statement, assertion: q.assertion });
+		if (used.kind === "refused") return refused(used.reason);
+		const { purpose, credential, registration } = used.approval;
+		if (purpose !== "passkey-manage" || !credential || !registration) return refused("purpose");
+		if ((await p.passkeys.publicKeyOf(credential))?.registration !== registration)
+			return refused("approver");
+		return answered(true);
+	}
+
 	async function finish(q: {
 		readonly statement: string;
 		readonly assertion: string;
 	}): Promise<Finished> {
 		const hash = sha256(q.statement);
+		// Its purpose as signed picks the path alone: approvals checks the statement itself.
+		if (purposeOf(q.statement) === "passkey-manage") return manage(hash, q);
 		// A completion kept is answered as kept, whatever has lapsed since; none of another purpose is used.
 		const before = await kept(hash, q.assertion);
 		if (before.kind === "completed" || before.reason !== "unknown") return before;
@@ -98,6 +138,7 @@ export function approvalOver(p: ApprovalParts) {
 		});
 		if (created.kind === "refused" && created.reason === "items") return refused("items");
 		if (created.kind === "refused" && created.reason === "revoked") return refused("revoked");
+		if (created.kind === "refused" && created.reason === "full") return refused("full");
 		// Counted out, busy or withdrawn: nothing kept, asked again later.
 		if (created.kind === "refused") return unavailable();
 		return kept(hash, q.assertion, created.statement);
