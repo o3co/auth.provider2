@@ -1,13 +1,14 @@
 import { credentialsOf } from "@mod/flow-state-wire";
 import { hpke, payloads } from "@mod/sdk-core-wire";
-import { judgments, logTyps, type Receipt, schemas } from "@mod/transparency-wire";
+import { type Receipt, schemas } from "@mod/transparency-wire";
 import { digest, utf8 } from "./bytes.ts";
 import { openCompletion } from "./completion.ts";
 import { creationOfPossession, type ReadPossession } from "./first-key.ts";
 import type { Sealed } from "./hpke.ts";
-import { type Jwk, keyIdentity, verifyCompact } from "./jws.ts";
+import { type Jwk, keyIdentity } from "./jws.ts";
 import type { ScreenKeys } from "./keys.ts";
 import { type Continued, wasSent } from "./management.ts";
+import { readLogReceipt } from "./receipt.ts";
 import { readSetSigned, setIdentities } from "./signed-set.ts";
 
 type KeyChange = ReturnType<typeof payloads.completions.keyChange.parse>;
@@ -68,12 +69,23 @@ export type KeyChangeError =
 	| "key";
 
 /**
- * What a fetch may change: no status or stateOf at all (`missing`), the record past the status's
- * watermark (`notYetChecked`), a stateOf before the record (`stateBehind`). The caller fetches the
- * status or the stateOf from the log's source again and reads once more, success never shown before.
+ * What a fetch may change, with the receipt read (its flow, position, shard and n name what to
+ * fetch): no status, or the attached one not read (`status`); no stateOf, or the attached one not
+ * read (`stateOf`); the record past the status's watermark (`notYetChecked`); a stateOf before the
+ * record (`stateBehind`); a status or stateOf older than one this page already read for the same
+ * change (`stale`). The caller fetches the one named from the log's source and reads again with it
+ * in the checks, success never shown before.
  */
-export type KeyChangeRetry = "missing" | "notYetChecked" | "stateBehind";
+export type KeyChangeRetry = "status" | "stateOf" | "notYetChecked" | "stateBehind" | "stale";
 
+/** Refusals the log's own objects gave: they stay with the change, whatever is given later. */
+const final: readonly KeyChangeError[] = ["denied", "result", "state", "key"];
+
+/** What this page has read for each change (its purpose, statement, op and credential): a final refusal, the newest status version and stateOf position. */
+const seen = new Map<
+	string,
+	{ refused?: KeyChangeError; statusVersion: number; stateOfPosition: number }
+>();
 interface Waited {
 	readonly purpose: KeyChange["purpose"];
 	/** The statement's hash: the completion's additional data's `h` and the receipt's `keyChange.statement`. */
@@ -137,7 +149,9 @@ function inputsHold(checks: Extract<KeyChangeChecks, { level: "log" }>, ring: re
  * now; (2) no older than `maxAge`; (3) a status its set signed covering the record, not denying it;
  * (4) a stateOf its set signed, of that flow, at or past the record, the record's result verified
  * or unsupported and took, its state (flow-state-wire's read) holding the key added, or not the one
- * deleted.
+ * deleted. The checks are copied before anything is awaited. A refusal the log's objects gave stays
+ * with the change, and a status or stateOf older than one read before for it is `stale`, so no older
+ * object, nor a source made again, undoes what was read.
  */
 async function read(
 	source: KeyChangeSource,
@@ -151,14 +165,31 @@ async function read(
 ): Promise<
 	| { readonly change: KeyChange["change"]; readonly receipt?: Receipt }
 	| { readonly error: KeyChangeError }
-	| { readonly retry: KeyChangeRetry }
+	| { readonly retry: KeyChangeRetry; readonly receipt: Receipt }
 > {
+	const given = options.checks;
+	if (given?.level !== "L0" && given?.level !== "log") return { error: "checks" };
+	const checks: KeyChangeChecks =
+		given.level === "L0"
+			? { level: "L0" }
+			: {
+					level: "log",
+					log: [...given.log],
+					statusSigners: given.statusSigners,
+					stateOfSigners: given.stateOfSigners,
+					maxAge: given.maxAge,
+					now: given.now,
+					skew: given.skew,
+					...(given.status === undefined ? {} : { status: given.status }),
+					...(given.stateOf === undefined ? {} : { stateOf: given.stateOf }),
+				};
+	const ring = [...options.ring];
+	if (checks.level === "log" && !inputsHold(checks, ring)) return { error: "checks" };
 	const want = await waited(source);
 	if (!want) return { error: "source" };
-	const { checks } = options;
-	if (checks.level === "log" && !inputsHold(checks, options.ring)) return { error: "checks" };
 	const opened = await openCompletion(sealed, {
-		...options,
+		keys: options.keys,
+		ring,
 		aad: utf8(hpke.completionAad(want.purpose, want.h)),
 	});
 	if ("error" in opened) return opened;
@@ -170,15 +201,17 @@ async function read(
 	if (!sameChange(done.change, want.change)) return { error: "change" };
 	if (checks.level === "L0") return { change: done.change };
 
+	const name = `${want.purpose}|${want.h}|${want.change.op}|${want.change.credential_id}`;
+	const before = seen.get(name) ?? { statusVersion: 0, stateOfPosition: 0 };
+	if (before.refused) return { error: before.refused };
+	const refuse = (error: KeyChangeError) => {
+		if (final.includes(error)) seen.set(name, { ...before, refused: error });
+		return { error };
+	};
+
 	// (1) The receipt.
-	const verified =
-		done.receipt === undefined ? undefined : await verifyCompact(done.receipt, checks.log);
-	const readReceipt =
-		verified?.header.typ === logTyps.receipt
-			? schemas.receipt.safeParse(verified.payload)
-			: undefined;
-	if (!readReceipt?.success) return { error: "receipt" };
-	const receipt = readReceipt.data;
+	const receipt = done.receipt && (await readLogReceipt(done.receipt, checks.log));
+	if (!receipt) return { error: "receipt" };
 	if (receipt.acceptedAt > checks.now + checks.skew) return { error: "receipt" };
 	if (receipt.kind !== "keyChange" || !receipt.keyChange) return { error: "kind" };
 	if (receipt.keyChange.statement !== want.h || receipt.keyChange.evidence !== want.evidence)
@@ -187,36 +220,44 @@ async function read(
 	if (want.subject !== undefined && receipt.flow.id !== want.subject) return { error: "flow" };
 	// (2) Its age.
 	if (checks.now - checks.skew > receipt.acceptedAt + checks.maxAge) return { error: "tooOld" };
-	// (3) The status.
+	// (3) The status: one fetched and not read is refused, one attached and not read is fetched again.
 	const statusText = checks.status ?? done.status;
-	if (statusText === undefined) return { retry: "missing" };
-	const status = schemas.status.safeParse(
-		await readSetSigned(statusText, checks.statusSigners, "status"),
-	);
-	if (!status.success) return { error: "status" };
-	const shard = Object.hasOwn(status.data.shards, receipt.shard)
-		? status.data.shards[receipt.shard]
+	const statusRead =
+		statusText === undefined
+			? undefined
+			: schemas.status.safeParse(await readSetSigned(statusText, checks.statusSigners, "status"));
+	if (!statusRead?.success)
+		return checks.status === undefined ? { retry: "status", receipt } : { error: "status" };
+	const status = statusRead.data;
+	if (status.version < before.statusVersion) return { retry: "stale", receipt };
+	const shard = Object.hasOwn(status.shards, receipt.shard)
+		? status.shards[receipt.shard]
 		: undefined;
-	if (!shard || receipt.n > shard.watermark) return { retry: "notYetChecked" };
-	if (status.data.deny.includes(receipt.id)) return { error: "denied" };
-	// (4) The stateOf.
+	if (!shard || receipt.n > shard.watermark) return { retry: "notYetChecked", receipt };
+	seen.set(name, { ...before, statusVersion: status.version });
+	if (status.deny.includes(receipt.id)) return refuse("denied");
+	// (4) The stateOf, as the status.
 	const stateOfText = checks.stateOf ?? done.stateOf;
-	if (stateOfText === undefined) return { retry: "missing" };
-	const stateOf = schemas.stateOf.safeParse(
-		await readSetSigned(stateOfText, checks.stateOfSigners, "stateOf"),
-	);
-	if (!stateOf.success) return { error: "stateOf" };
-	const at = stateOf.data;
+	const stateOfRead =
+		stateOfText === undefined
+			? undefined
+			: schemas.stateOf.safeParse(
+					await readSetSigned(stateOfText, checks.stateOfSigners, "stateOf"),
+				);
+	if (!stateOfRead?.success)
+		return checks.stateOf === undefined ? { retry: "stateOf", receipt } : { error: "stateOf" };
+	const at = stateOfRead.data;
 	if (at.flow.of !== receipt.flow.of || at.flow.id !== receipt.flow.id) return { error: "flow" };
-	if (at.position < receipt.position) return { retry: "stateBehind" };
+	if (at.position < before.stateOfPosition) return { retry: "stale", receipt };
+	if (at.position < receipt.position) return { retry: "stateBehind", receipt };
+	seen.set(name, { ...before, statusVersion: status.version, stateOfPosition: at.position });
 	const result = at.results[receipt.position - 1];
-	const verdicts: readonly string[] = [judgments.verdicts[0], judgments.verdicts[3]];
+	const verdicts: readonly string[] = ["verified", "unsupported"];
 	if (result?.id !== receipt.id || !verdicts.includes(result.verdict) || result.outcome !== "took")
-		return { error: "result" };
+		return refuse("result");
 	const held = credentialsOf(at.state);
-	if (held === undefined) return { error: "state" };
-	if (held.includes(want.change.credential_id) !== (want.change.op === "add"))
-		return { error: "key" };
+	if (held === undefined) return refuse("state");
+	if (held.includes(want.change.credential_id) !== (want.change.op === "add")) return refuse("key");
 	return { change: done.change, receipt };
 }
 

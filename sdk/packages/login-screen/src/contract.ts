@@ -28,7 +28,13 @@ export {
 	keyChanges,
 } from "./key-changes.ts";
 export { type ScreenKeys, screenKeys } from "./keys.ts";
-export { management, type ReadManage } from "./management.ts";
+export {
+	type Continued,
+	type ManagementFinishError,
+	type ManagementPurpose,
+	management,
+	type ReadManage,
+} from "./management.ts";
 export {
 	type Purpose,
 	readStatement,

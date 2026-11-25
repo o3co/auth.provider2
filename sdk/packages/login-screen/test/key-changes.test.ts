@@ -268,16 +268,32 @@ describe("keyChanges.read: a delete", () => {
 		).toEqual({ error: "receipt" });
 	});
 
-	it("asks for a fetch where the status or the stateOf is missing or behind, and takes the one fetched", async () => {
+	it("asks for a fetch, with the receipt, where the status or the stateOf is missing, unread or behind, and takes the one fetched", async () => {
 		const d = await deleted();
 		const bare = await d.completion({ status: undefined, stateOf: undefined });
-		expect(await keyChanges.read(d.source, bare, d.options())).toEqual({ retry: "missing" });
+		expect(await keyChanges.read(d.source, bare, d.options())).toMatchObject({
+			retry: "status",
+			receipt: { id: "rec-3", flow: { of: "subject", id: "sub-1" }, position: 3 },
+		});
+		const stranger = await signingKey("ES256", "status-1");
+		const unread = await d.completion({ status: await d.statusOf({}, [stranger]) });
+		expect(await keyChanges.read(d.source, unread, d.options())).toMatchObject({ retry: "status" });
+		const noState = await d.completion({ stateOf: undefined });
+		expect(await keyChanges.read(d.source, noState, d.options())).toMatchObject({
+			retry: "stateOf",
+		});
+		const unsigned = await d.completion({
+			stateOf: await d.stateOfOf({ k2: { credential: "BAUG" } }, {}, [d.statusKey]),
+		});
+		expect(await keyChanges.read(d.source, unsigned, d.options())).toMatchObject({
+			retry: "stateOf",
+		});
 		const behind = await d.completion({
 			status: await d.statusOf({
 				shards: { s1: { watermark: 4, generation: 1, state: "running" } },
 			}),
 		});
-		expect(await keyChanges.read(d.source, behind, d.options())).toEqual({
+		expect(await keyChanges.read(d.source, behind, d.options())).toMatchObject({
 			retry: "notYetChecked",
 		});
 		const early = await d.completion({
@@ -286,7 +302,9 @@ describe("keyChanges.read: a delete", () => {
 				{ position: 2, results: [d.result(1, "rec-1"), d.result(2, "rec-2")] },
 			),
 		});
-		expect(await keyChanges.read(d.source, early, d.options())).toEqual({ retry: "stateBehind" });
+		expect(await keyChanges.read(d.source, early, d.options())).toMatchObject({
+			retry: "stateBehind",
+		});
 		const fetched = {
 			...d.checks,
 			status: await d.statusOf(),
@@ -297,41 +315,91 @@ describe("keyChanges.read: a delete", () => {
 		});
 	});
 
-	it("refuses a status its set did not sign or that denies the record", async () => {
+	it("refuses a status or a stateOf fetched and not read, rather than asking again", async () => {
 		const d = await deleted();
-		const stranger = await signingKey("ES256", "status-1");
-		for (const [status, error] of [
-			[await d.statusOf({}, [stranger]), "status"],
-			[await d.statusOf({ deny: ["rec-3"] }), "denied"],
-			["{}", "status"],
-		] as const) {
-			const sealed = await d.completion({ status });
-			expect(await keyChanges.read(d.source, sealed, d.options()), error).toEqual({ error });
-		}
+		const sealed = await d.completion();
+		expect(
+			await keyChanges.read(d.source, sealed, d.options({ ...d.checks, status: "{}" })),
+		).toEqual({ error: "status" });
+		expect(
+			await keyChanges.read(d.source, sealed, d.options({ ...d.checks, stateOf: "{}" })),
+		).toEqual({ error: "stateOf" });
 	});
 
-	it("refuses a stateOf unsigned, of another flow, where the record did not take, of a state unread, or still holding the key", async () => {
+	it("refuses a record the status denies, and keeps refusing it whatever older status is given", async () => {
 		const d = await deleted();
+		const denying = await d.completion({
+			status: await d.statusOf({ version: 2, deny: ["rec-3"] }),
+		});
+		expect(await keyChanges.read(d.source, denying, d.options())).toEqual({ error: "denied" });
+		expect(await keyChanges.read(d.source, await d.completion(), d.options())).toEqual({
+			error: "denied",
+		});
+	});
+
+	it("takes no status or stateOf older than one read before for the same change", async () => {
+		const d = await deleted();
+		const newer = await d.completion({
+			status: await d.statusOf({ version: 3 }),
+			stateOf: await d.stateOfOf(
+				{ k2: { credential: "BAUG" } },
+				{
+					position: 4,
+					results: [d.result(1, "r1"), d.result(2, "r2"), d.result(3, "rec-3"), d.result(4, "r4")],
+				},
+			),
+		});
+		expect(await keyChanges.read(d.source, newer, d.options())).toHaveProperty("change");
+		expect(await keyChanges.read(d.source, await d.completion(), d.options())).toMatchObject({
+			retry: "stale",
+		});
+	});
+
+	it("refuses a stateOf of another flow, where the record did not take, of a state unread, or still holding the key, and keeps refusing what the log's objects gave", async () => {
 		const held = { k2: { credential: "BAUG" } };
-		const results = (last: Record<string, unknown>) => ({
+		const results = (d: Awaited<ReturnType<typeof deleted>>, last: Record<string, unknown>) => ({
 			results: [d.result(1, "rec-1"), d.result(2, "rec-2"), { ...d.result(3, "rec-3"), ...last }],
 		});
-		for (const [stateOf, error] of [
-			[await d.stateOfOf(held, {}, [d.statusKey]), "stateOf"],
-			[await d.stateOfOf(held, { flow: { of: "subject", id: "sub-2" } }), "flow"],
-			[await d.stateOfOf(held, results({ id: "rec-x" })), "result"],
-			[await d.stateOfOf(held, results({ verdict: "held" })), "result"],
-			[await d.stateOfOf(held, results({ outcome: "didNotTake" })), "result"],
-			[await d.stateOfOf({ k2: {} }), "state"],
-			[await d.stateOfOf({ k1: { credential: "AQID" } }), "key"],
-		] as const) {
-			const sealed = await d.completion({ stateOf });
+		const cases: readonly (readonly [
+			(d: Awaited<ReturnType<typeof deleted>>) => Promise<string>,
+			string,
+		])[] = [
+			[(d) => d.stateOfOf(held, { flow: { of: "subject", id: "sub-2" } }), "flow"],
+			[(d) => d.stateOfOf(held, results(d, { id: "rec-x" })), "result"],
+			[(d) => d.stateOfOf(held, results(d, { verdict: "held" })), "result"],
+			[(d) => d.stateOfOf(held, results(d, { outcome: "didNotTake" })), "result"],
+			[(d) => d.stateOfOf({ k2: {} }), "state"],
+			[(d) => d.stateOfOf({ k1: { credential: "AQID" } }), "key"],
+		];
+		for (const [make, error] of cases) {
+			const d = await deleted();
+			const sealed = await d.completion({ stateOf: await make(d) });
 			expect(await keyChanges.read(d.source, sealed, d.options()), error).toEqual({ error });
+			if (error !== "flow")
+				expect(
+					await keyChanges.read(d.source, await d.completion(), d.options()),
+					`${error} again`,
+				).toEqual({ error });
 		}
+		const d = await deleted();
 		const unsupported = await d.completion({
-			stateOf: await d.stateOfOf(held, results({ verdict: "unsupported" })),
+			stateOf: await d.stateOfOf(held, results(d, { verdict: "unsupported" })),
 		});
 		expect(await keyChanges.read(d.source, unsupported, d.options())).toHaveProperty("change");
+	});
+
+	it("refuses checks of no level it knows, before reading anything", async () => {
+		const d = await deleted();
+		const sealed = await d.completion();
+		for (const checks of [
+			{ ...d.checks, level: "L1" },
+			{ ...d.checks, level: undefined, now: Number.NaN },
+			undefined,
+		])
+			expect(
+				await keyChanges.read(d.source, sealed, { ...d.options(), checks: checks as never }),
+				JSON.stringify(checks),
+			).toEqual({ error: "checks" });
 	});
 });
 
@@ -417,6 +485,111 @@ describe("keyChanges.read: a key added", () => {
 		const source = { add: possession.possession, assertion } as const;
 		return { ...w, h, change, completion, source };
 	}
+
+	it("takes a passkey-add's addition through its approval, creation and possession, under its own purpose", async () => {
+		const w = await world();
+		const common = {
+			v: 1,
+			iss: issuer,
+			sid: "st-1",
+			iat: 1,
+			exp: 2,
+			e_enc: w.keys.eEnc,
+			e_sig: w.keys.eSig,
+		};
+		const sign = (payload: unknown) => signCompact(w.ring, payload, { typ: typs.statement });
+		const statement = await sign({ ...common, nonce: "an", purpose: purposes.passkeyAdd });
+		const options = { ring: [w.ring.jwk], keys: w.keys, issuer };
+		const read = await management.read(statement, { ...options, purpose: "passkey-add" });
+		if ("error" in read) throw new Error(read.error);
+		const approvalAssertion = utf8("the approving assertion");
+		const ha = await digest(statement);
+		const creationCompact = await sign({
+			...common,
+			nonce: "cn",
+			purpose: purposes.creation,
+			creation: {
+				account: "a***@example",
+				basis: "passkey-add",
+				evidence: ha,
+				subject: "sub-1",
+				kg: 0,
+				options: {
+					user_id: "dXNlcg",
+					rp_id: "id.example",
+					exclude_credentials: [],
+					algorithms: [-7],
+				},
+			},
+		});
+		const approved = await sealTo(
+			Buffer.from(w.keys.eEnc, "base64url"),
+			utf8(hpke.info.completion),
+			utf8(hpke.completionAad("passkey-add", ha)),
+			utf8(
+				await signCompact(
+					w.ring,
+					{
+						v: 1,
+						iss: issuer,
+						t_hash: ha,
+						assertion_hash: await digest(approvalAssertion),
+						purpose: purposes.passkeyAdd,
+						creation: creationCompact,
+						iat: 1,
+						exp: 2,
+					},
+					{ typ: typs.completion },
+				),
+			),
+		);
+		const finished = await management.finish(read.manage, approved, {
+			...options,
+			assertion: approvalAssertion,
+		});
+		if (!("creation" in finished)) throw new Error(JSON.stringify(finished));
+		const pair = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, [
+			"sign",
+		]);
+		const { crv, kty, x, y } = await crypto.subtle.exportKey("jwk", pair.publicKey);
+		const jkt = await digest(keyThumbprintInput({ crv, kty, x, y }) ?? "");
+		const possessionCompact = await sign({
+			...common,
+			nonce: "pn",
+			purpose: purposes.possession,
+			possession: {
+				creation_hash: await digest(creationCompact),
+				key_jkt: jkt,
+				credential_id: "BAUG",
+				reservation_id: "r-1",
+			},
+		});
+		const possession = await firstKey.readPossession(
+			possessionCompact,
+			finished.creation,
+			{
+				id: "BAUG",
+				spki: new Uint8Array(await crypto.subtle.exportKey("spki", pair.publicKey)),
+				alg: -7,
+			},
+			options,
+		);
+		if ("error" in possession) throw new Error(possession.error);
+		const assertion = utf8("the new key's assertion");
+		const h = await digest(possessionCompact);
+		const change = { op: "add", credential_id: "BAUG", key_jkt: jkt };
+		const sealed = await w.sealed("passkey-add", h, {
+			change,
+			receipt: await w.receiptOf(h, await digest(assertion)),
+			status: await w.statusOf(),
+			stateOf: await w.stateOfOf({ k1: { credential: "BAUG" } }),
+		});
+		const source = { add: possession.possession, assertion };
+		expect(await keyChanges.read(source, sealed, w.options())).toMatchObject({ change });
+		// Under the first key's purpose it does not open: the path is the creation's.
+		const asFirst = await w.sealed("first-key", h, { change });
+		expect(await keyChanges.read(source, asFirst, w.options())).toEqual({ error: "open" });
+	});
 
 	it("takes a first key's addition once the log holds it, the state holding the new key", async () => {
 		const a = await added();
