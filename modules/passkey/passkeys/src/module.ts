@@ -15,7 +15,7 @@ import {
 } from "./contract.ts";
 import { heldOf, type KeptParts, keptOver, keysHeld } from "./kept/kept.ts";
 import { listingOver } from "./listing/listing.ts";
-import { keyChanges, keysOwner } from "./records.ts";
+import { keyChanges, keysOwner } from "./records/records.ts";
 import { registeringOver } from "./registering/registering.ts";
 import { type Settings, section } from "./section.ts";
 

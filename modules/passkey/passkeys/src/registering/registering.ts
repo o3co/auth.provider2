@@ -18,7 +18,7 @@ import {
 	reservationOf,
 	reservationRecords,
 	unitOf,
-} from "../records.ts";
+} from "../records/records.ts";
 
 /** How many times a change held to a reservation read is tried before it is unavailable. */
 const tries = 3;

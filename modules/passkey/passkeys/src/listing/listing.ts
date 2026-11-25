@@ -1,7 +1,7 @@
 import type { FrameStore } from "@mod/transparency";
 import type { KeyList, KeyRow, PasskeyStore } from "../contract.ts";
 import { credentialRecord, keysHeld, stored } from "../kept/kept.ts";
-import { activeKey, credentialRecordOf, credentialsOf } from "../records.ts";
+import { activeKey, credentialRecordOf, credentialsOf } from "../records/records.ts";
 
 /**
  * A key's label as the keys' list carries it: 1 to 64 code points, none a control, format, surrogate

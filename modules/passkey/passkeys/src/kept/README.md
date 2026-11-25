@@ -6,7 +6,7 @@ Internal module of `passkeys`: reading the keys a subject's flow holds, assertin
 - Answers `assert`, `publicKeyOf` and `settle` from the applied state and the credential records; moves counts on; tells removals and the witnessing.
 
 ## Not here
-- Changing a reservation or a binding: the internal module `registering`. What a Step writes to the keys and the notices: the package's records (its owner of state).
+- Changing a reservation or a binding: the internal module `registering`. What a Step writes to the keys and the notices: the internal module `records` (its owner of state).
 
 ## Offers
 - `keptOver` (the frames, the credential store, the ceremonies, the verification, `transparency`, the witnessing, the removals) → the package's `Passkeys`:
@@ -25,4 +25,4 @@ Internal module of `passkeys`: reading the keys a subject's flow holds, assertin
 - Keys missing or behind what a settle told of (a generation or a notice before it) are a loss or a rollback: `settle` tells nothing and is unavailable.
 
 ## Depends on
-- `kernel` (`Unavailable`), `webauthn` (the ceremonies' types), `transparency`; the package's contract and records.
+- `kernel` (`Unavailable`), `webauthn` (the ceremonies' types), `transparency`; the package's contract, and the internal module `records`.

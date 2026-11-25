@@ -1,7 +1,7 @@
 import { emptyState, type FlowState } from "@mod/authority-rules";
 import type { Ending, Json } from "@mod/transparency";
 import { describe, expect, it } from "vitest";
-import { committing, keyChanges, keysOwner, type Reservation, removing } from "../src/records.ts";
+import { committing, keyChanges, keysOwner, type Reservation, removing } from "../records.ts";
 
 const reservation: Reservation = {
 	version: "v1",

@@ -22,4 +22,4 @@ Internal module of `passkeys`: the list of a subject's keys, with the label its 
 - The label and the time go with the details: dropped once the key is gone (the package's `settle`), released with the binding.
 
 ## Depends on
-- `transparency` (the frames' types); the package's contract, records and the internal module `kept`.
+- `transparency` (the frames' types); the package's contract, and the internal modules `records` and `kept`.

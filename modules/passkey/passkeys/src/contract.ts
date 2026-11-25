@@ -2,7 +2,7 @@ import { contract, extensionPoint } from "@mod/kernel";
 import { stances } from "@mod/promises";
 import type { Deciding, Refused } from "@mod/transparency";
 import type { CeremonyRefusal, Credential } from "@mod/webauthn";
-import { keyChanges, part } from "./records.ts";
+import { keyChanges, part } from "./records/records.ts";
 
 /**
  * Passkeys: each subject's keys as its flow's state holds them, the reservation of a key being

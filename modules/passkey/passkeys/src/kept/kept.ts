@@ -25,7 +25,7 @@ import {
 	settledOf,
 	settledRecords,
 	unitOf,
-} from "../records.ts";
+} from "../records/records.ts";
 
 /** What reads and asserts the keys kept: the frames, the credential records, the ceremonies. */
 export interface KeptParts {

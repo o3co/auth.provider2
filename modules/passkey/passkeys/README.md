@@ -24,7 +24,7 @@
 - `./testing`: `passkeysConfig` (`PasskeysSettings`); `passkeyStoreContract`, the store interface's contract test.
 
 ## Invariants
-- A key is usable only once active: reserved, its possession shown by an assertion over a request naming it alone (`verifyPending`), its key change committed and taken in with `took`. The reservation's states, `commit`'s and `remove`'s rules and the bindings: `registering`'s card.
+- A key is usable only once active: reserved, its possession shown by an assertion over a request naming it alone (`verifyPending`), its key change committed and taken in with `took`. The reservation's states and the bindings: `registering`'s card; `commit`'s and `remove`'s rules: `records`'.
 - No op of passkeys empties a subject's keys: `remove` refuses, in the write deciding it, a removal after which the subject holds no key.
 - `settle` is run by whoever took in an end of a key change: its writer, or a replica whose tending ended one; a boundary's take-in is no such end, so a replica runs it whenever its `tend` stepped one record or more (for `passkey-reset` and the key management package). From the applied state alone and idempotent (`kept`'s card). Until it runs after a `took`, a new key carries no mark.
 - The witness's mark is set for a key generation, replacing one of a generation before. Every settle withdraws marks of generations before the current; one that sets a mark reads the keys again after, and withdraws below a generation moved meanwhile. So a mark a late settle set across a boundary goes by that settle's read again, and one a settle stopped before that read goes at the next settle.
@@ -37,7 +37,7 @@
 - Credential records by credential id, kept without end in the passkey store. After a subject's erasure, the binding to its subject and the count remain, as the log keeps the key on the subject's flow; the details (handle, transports, backup state, label, time) go at the settle that tells of the key gone, so of the latest 64 keys taken off between two settles alone: an older one keeps its details.
 
 ## Depends on
-- `kernel`, `promises` (the stances its takers declare), `transparency` and `transparency-wire` (the frame, the kinds, the owners, flows), `authority-rules` (the state's schema), `webauthn` (the ceremonies, the credential's form), `passkey-witness` (whether a witness is composed).
+- `kernel`, `promises` (the stances its takers declare), `transparency` and `transparency-wire` (the frame, the kinds, the owners, flows), `authority-rules` (the state's schema, taken by internal module `records`), `webauthn` (the ceremonies, the credential's form), `passkey-witness` (whether a witness is composed).
 
 ## Vocabulary
 - key: a credential the subject's flow state holds active. reservation: a key's registration in progress, one per subject. version: a reservation's op id; a retry makes a new one. binding: a credential record's subject.
