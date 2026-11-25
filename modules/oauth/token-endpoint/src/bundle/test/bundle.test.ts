@@ -269,7 +269,10 @@ describe("a bundle, owned by the token endpoint (A40)", () => {
 	it("roots a person's start at its approval, by its code or by its family's refresh, the start naming the root as its parent", async () => {
 		const person = { ...grant, subject: "alice", subjectKind: "user" as const };
 		const asked = { ...ask, request: { ...ask.request, grant: person }, root: "r-approval" };
-		await world.run(await world.replica("w1"))({ ...asked, via: { via: "code" } });
+		await world.run(await world.replica("w1"))({
+			...asked,
+			via: { via: "code", code: "code-digest" },
+		});
 		const subject = { of: "subject", id: "alice" } as const;
 		const [start, bundle] = world.book.records(subject).map((p) => p.record);
 		expect(world.book.sent[0]?.stage.preimage).toEqual({
@@ -277,7 +280,7 @@ describe("a bundle, owned by the token endpoint (A40)", () => {
 			root: "r-approval",
 			parent: "r-approval",
 			evidence,
-			content: { via: "code" },
+			content: { via: "code", code: "code-digest", client: "svc" },
 		});
 		expect(world.book.sent[1]?.stage.preimage).toEqual({
 			v: 1,

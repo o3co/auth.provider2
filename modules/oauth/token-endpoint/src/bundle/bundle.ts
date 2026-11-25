@@ -90,6 +90,9 @@ export function effectOfBundle(ask: Pick<BundleAsk, "root" | "via">, client: unk
 		: { rotate: ask.root };
 }
 
+const bundleContentOf = (start: Record<string, unknown>) =>
+	start.via === "code" ? { via: "code" } : start;
+
 /** A client's own token refused before its op is decided, or once its evidence is found used. */
 const refusedFor = (reason: string, description: string): IssuanceRefused => ({
 	kind: "refused",
@@ -200,7 +203,11 @@ export function bundling(deps: BundleParts) {
 		// A refresh's rotation is its family's on the applied state: none there, the family is not live.
 		const contentOn = (state: FlowState) => {
 			if (client) return { via: "client" };
-			if (ask.via?.via !== "refresh") return ask.via ? { ...ask.via } : {};
+			if (ask.via?.via === "code") {
+				const code = ask.via.code === undefined ? {} : { code: ask.via.code };
+				return { via: "code", ...code, client: ask.request.grant.issuedTo };
+			}
+			if (ask.via?.via !== "refresh") return {};
 			const family = ask.root === undefined ? undefined : ownFamily(state, ask.root);
 			const own = family?.client === ask.request.grant.issuedTo;
 			return family && own ? { via: "refresh", rotation: family.rotation } : undefined;
@@ -266,7 +273,7 @@ export function bundling(deps: BundleParts) {
 				...root,
 				parent: id,
 				evidence: [],
-				content: client ? { via: "client", token } : via,
+				content: client ? { via: "client", token } : bundleContentOf(via),
 			},
 		};
 		const append = async () => {
