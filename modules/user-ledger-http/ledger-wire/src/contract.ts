@@ -24,7 +24,16 @@ export const usersWire = Object.freeze({
 	byIdentifier: (identifier: string) => ({ email: identifier }),
 	/** A create's body: the identifier a new subject is made for. */
 	create: (identifier: string) => ({ email: identifier }),
-	/** A create's answer, with the user made. */
+	/**
+	 * An identifierless create's body: a new subject made for no identifier, under an idempotency key (a
+	 * SHA-256, base64url) the caller derives from what the subject is made for. The same key is
+	 * answered the same subject, however often and however many at once: a create whose answer was
+	 * lost is asked again and makes no second subject.
+	 */
+	createIdentifierless: (key: string) => ({ key }),
+	/** An identifierless create's key: a SHA-256, base64url without padding. */
+	identifierlessKey: z.string().regex(/^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$/),
+	/** A create's answer, with the user made (an identifierless create's: the subject its key names, made now or before). */
 	created: 201,
 	/** What a create's `409` says in `error` to mean the identifier has a subject already; unsaid, it means nothing. */
 	taken: Object.freeze({ 409: "exists" }) as Readonly<Record<number, string>>,
@@ -59,6 +68,7 @@ export const ledgerRoutes = Object.freeze({
 		subject: "/subject",
 		identifier: "/identifier",
 		create: "/create",
+		createIdentifierless: "/create-identifierless",
 	}),
 	passkeyWitness: Object.freeze({
 		read: "/passkey-witness/read",

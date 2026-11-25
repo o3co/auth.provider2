@@ -11,6 +11,7 @@
 
 ## Offers
 - `usersWire`: the password call's body (`verify`, the identifier as `email`), a lookup's (`bySubject`, `byIdentifier`), a create's (`create`, a new subject for an identifier) and its answer (`created`, `201`), what a create's `409` says to mean the identifier is taken (`taken`), and what a `404` and `410` say to mean no such user, for the lookups and the password call (`noUser`).
+- `usersWire.createIdentifierless` (F1): a new subject for no identifier, under an idempotency key (`identifierlessKey`, a SHA-256 in base64url), answered as a create (`created`); the same key is answered the same subject.
 - `LedgerUserAnswer`: a user as the ledger answers it, to a lookup, the password call or a create, `id` the subject.
 - `witnessWire`: each call's body (`read`, `enroll`, `withdraw`, `clear`, a write naming its `deadline`), the answers' schemas (`readAnswer`, `markAnswer` where withdraw is offered, `enrollAnswer`) and a write's answer once done (`written`, `204`).
 - `ledgerRoutes`: the route of each call, as a fake ledger and the examples serve it.
@@ -19,6 +20,7 @@
 - A protocol (G33): types, frozen constants, fixed schemas and the functions that build a body; no I/O, clock, randomness or state.
 - A `404` or `410` means no such user, and a create's `409` that the identifier is taken, only with its `error` word; unsaid, it means nothing.
 - A marked answer names a token of one character or more.
+- An identifierless create is idempotent by its key alone: the same key, sent again or at once, is answered the same subject; a ledger keeps a key as long as the subject it names.
 
 ## Depends on
 - Nothing in the workspace; `zod` (a peer).

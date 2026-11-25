@@ -14,13 +14,31 @@ describe("the user ledger's calls", () => {
 		expect(usersWire.taken).toEqual({ 409: "exists" });
 	});
 
+	it("asks the ledger for an identifierless subject under an idempotency key, a SHA-256 in base64url", () => {
+		const key = "47DEQpj8HBSa-_TImW-5JCeuQeRkm5NMpJWZG3hSuFU";
+		expect(usersWire.createIdentifierless(key)).toEqual({ key });
+		expect(usersWire.identifierlessKey.safeParse(key).success).toBe(true);
+		for (const bad of ["", "short", `${key}=`, `${key.slice(0, 42)}V`, key.replace("4", "+")])
+			expect(usersWire.identifierlessKey.safeParse(bad).success, bad).toBe(false);
+	});
+
 	it("says no such user only by a 404 or a 410 naming it", () => {
 		expect(usersWire.noUser).toEqual({ 404: "not_found", 410: "gone" });
 	});
 
 	it("keeps no word a caller of auth.provider2 does not speak", () => {
 		expect(Object.keys(usersWire).sort()).toEqual(
-			["byIdentifier", "bySubject", "create", "created", "noUser", "taken", "verify"].sort(),
+			[
+				"byIdentifier",
+				"bySubject",
+				"create",
+				"createIdentifierless",
+				"created",
+				"noUser",
+				"taken",
+				"identifierlessKey",
+				"verify",
+			].sort(),
 		);
 	});
 });
@@ -48,7 +66,13 @@ describe("a witness ledger's calls", () => {
 it("serves each call at a route of its own, the same for a fake ledger and the examples", () => {
 	const routes = Object.values(ledgerRoutes).flatMap((calls) => Object.values(calls));
 	expect(new Set(routes).size).toBe(routes.length);
-	expect(Object.keys(ledgerRoutes.users)).toEqual(["verify", "subject", "identifier", "create"]);
+	expect(Object.keys(ledgerRoutes.users)).toEqual([
+		"verify",
+		"subject",
+		"identifier",
+		"create",
+		"createIdentifierless",
+	]);
 	expect(Object.keys(ledgerRoutes.passkeyWitness)).toEqual(["read", "enroll", "withdraw"]);
 	expect(Object.keys(ledgerRoutes)).toEqual(["users", "passkeyWitness"]);
 });
