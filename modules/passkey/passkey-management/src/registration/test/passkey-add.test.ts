@@ -89,7 +89,7 @@ describe("a key a passkey-add approves", () => {
 		});
 		expect(finished).toMatchObject({ kind: "completed" });
 		const stage = w.book.sent.at(-1)?.stage;
-		const sent = await w.parts.approvals.continuationOf(creation.hash);
+		const sent = (await w.parts.approvals.keptChangeOf(sha256(k.possession)))?.continuation;
 		expect(stage?.preimage).toEqual({
 			v: 1,
 			parent: registration,
@@ -153,6 +153,27 @@ describe("a key a passkey-add approves", () => {
 		// Another passkey-add's key is reserved meanwhile: the first's finish, asked again, still completes.
 		const next = await approved();
 		await registered(1, softwareAuthenticator(), next.creation);
+		expect(
+			await w.registration.finish({ statement: one.possession, assertion: one.assertion }),
+		).toMatchObject({ kind: "completed" });
+	});
+
+	it("completes a change placed whose completion was lost, asked again past its passkey-add's and creation's expiry", async () => {
+		const { w, registered } = await added();
+		const one = await registered();
+		const lost = registrationOver({
+			...w.parts,
+			approvals: {
+				...w.parts.approvals,
+				completeKeyChange: async () => {
+					throw new Unavailable("approvals");
+				},
+			},
+		});
+		await expect(
+			lost.finish({ statement: one.possession, assertion: one.assertion }),
+		).rejects.toThrow(Unavailable);
+		w.advance(5 * 60_000 + 1000);
 		expect(
 			await w.registration.finish({ statement: one.possession, assertion: one.assertion }),
 		).toMatchObject({ kind: "completed" });

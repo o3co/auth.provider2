@@ -496,9 +496,12 @@ describe("a key change's completion", () => {
 		expect(await w.approvals.completionOf(p.hash)).toBeUndefined();
 		expect(await w.approvals.usedOf(p.hash)).toMatchObject({ completed: true });
 		const late = await usedPossession(w);
-		// Past its expiry, kept a minute more, then gone.
+		// Past its expiry, kept a minute more, a change placed late completed then; then gone.
 		w.advance(5 * 60_000 + 1000);
-		expect(await ask(late.p.hash)).toEqual({ kind: "refused", reason: "expired" });
+		expect(await ask(late.p.hash)).toMatchObject({ kind: "completed" });
+		const later = await usedPossession(w);
+		w.advance(5 * 60_000 + 60_000);
+		expect(await ask(later.p.hash)).toEqual({ kind: "refused", reason: "unknown" });
 		w.advance(60_000);
 		expect(await ask(late.p.hash)).toEqual({ kind: "refused", reason: "unknown" });
 	});
@@ -844,46 +847,6 @@ describe("a continuation", () => {
 		).toEqual({ kind: "refused", reason: "purpose" });
 	});
 
-	it("gives a creation's last continuation as taken, with what its step answered, in one read", async () => {
-		const w = await world();
-		const keys = screenKeys();
-		const c = await w.approvals.issue({
-			purpose: "creation",
-			items: creationItems,
-			screen: keys.screen,
-			by: "s",
-		});
-		if (c.kind !== "issued") throw new Error(c.reason);
-		const signed = (seq: number, body: string) =>
-			keys.signs(continuation.of("register", c.hash, seq, sha256(body)));
-		const step = (seq: number, body: string, signature: string, run = async () => ({ seq })) =>
-			w.approvals.continue({ hash: c.hash, seq, body, signature, step: run });
-		expect(await w.approvals.continuationOf(c.hash)).toBeUndefined();
-		const first = signed(1, "b1");
-		await step(1, "b1", first);
-		expect(await w.approvals.continuationOf(c.hash)).toEqual({
-			seq: 1,
-			body: "b1",
-			signature: first,
-			result: { seq: 1 },
-		});
-		// Sent again under another signature of the same body: answered as kept, the first bytes kept.
-		await step(1, "b1", signed(1, "b1"));
-		expect(await w.approvals.continuationOf(c.hash)).toMatchObject({ signature: first });
-		const second = signed(2, "b2");
-		await step(2, "b2", second);
-		expect(await w.approvals.continuationOf(c.hash)).toEqual({
-			seq: 2,
-			body: "b2",
-			signature: second,
-			result: { seq: 2 },
-		});
-		const t = await issued(w);
-		expect(await w.approvals.continuationOf(t.hash)).toBeUndefined();
-		w.advance(5 * 60_000 + 1000);
-		expect(await w.approvals.continuationOf(c.hash)).toBeUndefined();
-	});
-
 	it("keeps the bytes of the call that took a number when another takes its lapsed hold", async () => {
 		const w = await world();
 		const keys = screenKeys();
@@ -906,12 +869,12 @@ describe("a continuation", () => {
 			},
 		});
 		await expect(fell).rejects.toThrow("fell");
-		// Taken, its answer not kept yet: what was sent is read, with no answer.
-		expect(await w.approvals.continuationOf(c.hash)).toEqual({
+		// Taken, its answer not kept yet: what was sent is kept, with no answer.
+		expect(w.statements.value(c.hash)).toMatchObject({
 			seq: 1,
-			body: "b1",
-			signature: first,
+			sent: { body: "b1", signature: first },
 		});
+		expect(w.statements.value(c.hash)).not.toHaveProperty("result");
 		w.advance(31_000);
 		await w.approvals.continue({
 			hash: c.hash,
@@ -920,10 +883,9 @@ describe("a continuation", () => {
 			signature: signed(),
 			step: async () => "kept",
 		});
-		expect(await w.approvals.continuationOf(c.hash)).toEqual({
+		expect(w.statements.value(c.hash)).toMatchObject({
 			seq: 1,
-			body: "b1",
-			signature: first,
+			sent: { body: "b1", signature: first },
 			result: "kept",
 		});
 	});
@@ -966,7 +928,7 @@ describe("a continuation", () => {
 			reason: "body",
 		});
 		expect(await ask(wide, signedWide(wide))).toMatchObject({ kind: "continued", seq: 1 });
-		expect(await w.approvals.continuationOf(c.hash)).toMatchObject({ seq: 1 });
+		expect(w.statements.value(c.hash)).toMatchObject({ seq: 1 });
 	});
 
 	it("runs a step once for two calls at once, and again only once the call that held it let go", async () => {

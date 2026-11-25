@@ -52,7 +52,7 @@ describe("a first key's registration after its creation", () => {
 		expect((await w.parts.held.of("s1")).pending).toBeUndefined();
 		expect(w.settled).toContain("s1");
 		// The register continuation the screen sent, as approvals kept it, after the creation.
-		const sent = await w.parts.approvals.continuationOf(c.hash);
+		const sent = (await w.parts.approvals.keptChangeOf(sha256(possession)))?.continuation;
 		expect(w.book.sent[0]?.stage.preimage?.evidence).toEqual([
 			{ form: "statement", value: c.statement },
 			{
@@ -229,6 +229,46 @@ describe("a first key's registration after its creation", () => {
 			kind: "completed",
 		});
 		// Asked again of the log, nothing new placed.
+		expect(w.book.records({ of: "subject", id: "s1" })).toHaveLength(appended);
+	});
+
+	it("completes a change placed whose completion was lost, asked again past its creation's expiry", async () => {
+		const w = await stack();
+		const c = await w.created();
+		const possession = possessionOf(await w.registration.register(w.continued(c, w.made(c))));
+		const assertion = w.asserted(possession, await pendingKey(w, possession, c.handle));
+		const lost = registrationOver({
+			...w.parts,
+			approvals: {
+				...w.parts.approvals,
+				completeKeyChange: async () => {
+					throw new Unavailable("approvals");
+				},
+			},
+		});
+		await expect(lost.finish({ statement: possession, assertion })).rejects.toThrow(Unavailable);
+		const appended = w.book.records({ of: "subject", id: "s1" }).length;
+		// Past the creation's and the possession's expiry, their records still kept.
+		w.advance(5 * 60_000 + 1000);
+		// Another assertion is not the change the log placed: none.
+		const other = w.asserted(possession, await pendingKeyOf(w, possession, c.handle));
+		expect(await w.registration.finish({ statement: possession, assertion: other })).toEqual({
+			kind: "refused",
+			reason: "ended",
+		});
+		// Its subject revoked since: refused.
+		w.revoke();
+		expect(await w.registration.finish({ statement: possession, assertion })).toEqual({
+			kind: "refused",
+			reason: "revoked",
+		});
+		w.revoke(false);
+		expect(
+			await w.parts.approvals.creationOf(payloadOf(possession).possession.creation_hash),
+		).toBeUndefined();
+		expect(await w.registration.finish({ statement: possession, assertion })).toMatchObject({
+			kind: "completed",
+		});
 		expect(w.book.records({ of: "subject", id: "s1" })).toHaveLength(appended);
 	});
 

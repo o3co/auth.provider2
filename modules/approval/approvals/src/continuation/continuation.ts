@@ -9,7 +9,6 @@ import type {
 	Continued,
 	ItemsOf,
 	KeptManage,
-	LastContinuation,
 	OpenedBody,
 	StepResult,
 } from "../contract.ts";
@@ -267,20 +266,10 @@ export function continuationsOver(p: {
 		);
 	};
 
-	/** A creation's last continuation as taken, with what its step answered, in one read. */
-	async function continuationOf(hash: string): Promise<LastContinuation | undefined> {
-		const r = recordOf(await p.store.read(hash));
-		if (r?.purpose !== "creation" || r.sent === undefined || p.now() > r.exp) return undefined;
-		if (!(await current(p.keys, r.jws))) return undefined;
-		const { body, signature } = r.sent;
-		return { seq: r.seq, body, signature, ...(r.result === undefined ? {} : { result: r.result }) };
-	}
-
 	return {
 		continue: (q: Parameters<Approvals["continue"]>[0]) => run({ ...q, stage: "register" }),
 		continueSignUp: (q: Parameters<Approvals["continueSignUp"]>[0]) =>
 			run({ ...q, stage: "sign-up" }),
 		continueSealed,
-		continuationOf,
 	};
 }

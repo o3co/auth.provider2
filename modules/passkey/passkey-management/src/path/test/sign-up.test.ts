@@ -200,12 +200,15 @@ describe("a sign-up's first key (F1), from its T to its completion, over real se
 	it("registers no second key over the same creation, its subject holding one", async () => {
 		const { w, s, creation } = await begun();
 		const one = await registered(w, s, creation);
-		await w.post("/key/finish", { statement: one.possession, assertion: one.assertion });
+		const finish = { statement: one.possession, assertion: one.assertion };
+		const first = await w.post("/key/finish", finish);
 		const placed = w.book.sent.length;
 		const two = await registered(w, s, creation, 2);
 		expect(two.answered).toEqual({ status: 400, json: { error: "access_denied" } });
 		expect(continueRefusal(w)).toEqual({ stage: "register", reason: "held" });
 		expect(w.book.sent).toHaveLength(placed);
+		// The first finish asked again: its completion kept, alike.
+		expect(await w.post("/key/finish", finish)).toEqual(first);
 		await w.app.stop();
 	});
 
@@ -224,6 +227,20 @@ describe("a sign-up's first key (F1), from its T to its completion, over real se
 			expect(continueRefusal(w)).toEqual({ stage: "register", reason: "sign-up" });
 		}
 		expect(w.book.sent).toHaveLength(0);
+		await w.app.stop();
+	});
+
+	it("completes a change placed whose completion was lost, past its creation's expiry, alike from then on", async () => {
+		const { w, s, creation } = await begun();
+		const k = await registered(w, s, creation);
+		const finish = { statement: k.possession, assertion: k.assertion };
+		// The possession used, then its completion's keeping falls: the key change took.
+		w.statements.fallAfter(sha256(k.possession as string), 1);
+		await expect(w.post("/key/finish", finish)).rejects.toThrow("fell");
+		w.advance(5 * 60_000 + 1000);
+		const again = await w.post("/key/finish", finish);
+		expect(again.status).toBe(200);
+		expect(await w.post("/key/finish", finish)).toEqual(again);
 		await w.app.stop();
 	});
 

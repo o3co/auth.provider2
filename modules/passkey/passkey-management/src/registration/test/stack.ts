@@ -254,8 +254,8 @@ export async function stack(given: { readonly passkeys?: Record<string, unknown>
 		made,
 		continued,
 		asserted,
-		revoke: () => {
-			revoked = true;
+		revoke: (on = true) => {
+			revoked = on;
 		},
 		advance: (ms: number) => {
 			clock += ms;

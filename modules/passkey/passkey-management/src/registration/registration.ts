@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { Approval, Approvals, KeptCreation, StepResult } from "@mod/approvals";
+import type { Approval, Approvals, KeptCreation, StepResult, UsedPasskeyAdd } from "@mod/approvals";
 import { Unavailable } from "@mod/kernel";
 import type { Held, Passkeys, Registrations } from "@mod/passkeys";
 import { challengeInput, payloads } from "@mod/sdk-core-wire";
@@ -38,7 +38,7 @@ export interface RegistrationParts {
 		| "usedOf"
 		| "completeKeyChange"
 		| "passkeyAddOf"
-		| "continuationOf"
+		| "keptChangeOf"
 		| "signUpOf"
 	>;
 	readonly registrations: Pick<Registrations, "reserve" | "verifyPending">;
@@ -78,6 +78,10 @@ const payloadOf = (jws: string): unknown =>
 const issuedAt = (jws: string) =>
 	((payloadOf(jws) as { iat?: number } | undefined)?.iat ?? 0) * 1000;
 type Path = "first-key" | "passkey-add" | "sign-up";
+const pickApproved = (a: UsedPasskeyAdd) => {
+	const { statement, assertion, credential, registration, mark } = a;
+	return { statement, assertion, credential, registration, mark };
+};
 const pathOf = (c: KeptCreation["items"]): Path =>
 	c.basis === undefined || c.basis === "first-key" ? "first-key" : c.basis;
 
@@ -210,7 +214,10 @@ export function registrationOver(p: RegistrationParts) {
 		}
 		const used = await p.approvals.usedOf(hash);
 		const named = used?.items as { creation_hash?: string } | undefined;
-		const creation = named?.creation_hash && (await p.approvals.creationOf(named.creation_hash));
+		const creation =
+			named?.creation_hash &&
+			((await p.approvals.creationOf(named.creation_hash)) ??
+				(await p.approvals.keptChangeOf(hash))?.creation);
 		if (!creation || !(await signedUp(creation.items, named.creation_hash as string)))
 			return refused("expired");
 		return completion(hash, "sign-up");
@@ -228,13 +235,44 @@ export function registrationOver(p: RegistrationParts) {
 		return receipt === undefined ? unavailable() : completion(hash, path, receipt);
 	};
 
-	/** The creation's last continuation, which must be the one that made this possession; none otherwise. */
-	async function sentFor(creationHash: string, possession: string) {
-		const sent = await p.approvals.continuationOf(creationHash);
-		const made = (sent?.result as { statement?: unknown } | undefined)?.statement;
-		return sent && made === possession
-			? { seq: sent.seq, body: sent.body, signature: sent.signature }
-			: undefined;
+	async function sentFor(possessionHash: string) {
+		return (await p.approvals.keptChangeOf(possessionHash))?.continuation;
+	}
+
+	/** A finish asked again of a change placed, its key active: made again from the records kept. */
+	async function placedAgain(
+		hash: string,
+		q: { readonly statement: string; readonly assertion: string },
+		named: {
+			readonly credential_id: string;
+			readonly reservation_id: string;
+			readonly key_jkt: string;
+		},
+		verification: string,
+	) {
+		const kept = await p.approvals.keptChangeOf(hash);
+		if (!kept) return undefined;
+		const { items, statement } = kept.creation;
+		if (!(await p.held.of(items.subject)).credentials.includes(named.credential_id))
+			return undefined;
+		if ((await p.revocation.check(items.subject, issuedAt(statement))) === "revoked")
+			return refused("revoked");
+		const e = kept.evidence;
+		if ((items.basis === "passkey-add") !== (typeof e === "object")) return undefined;
+		if ((items.basis === "sign-up") !== (typeof e === "string")) return undefined;
+		const k = {
+			subject: items.subject,
+			reservation: named.reservation_id,
+			verification,
+			credential: named.credential_id,
+			creation: statement,
+			possession: q.statement,
+			assertion: q.assertion,
+			continuation: kept.continuation,
+			...(typeof e === "object" ? { approved: { ...pickApproved(e), generation: items.kg } } : {}),
+			...(typeof e === "string" ? { signUp: { statement: e } } : {}),
+		};
+		return placed(hash, pathOf(items), k, named.key_jkt);
 	}
 
 	async function approvedFor(c: KeptCreation["items"]) {
@@ -268,6 +306,10 @@ export function registrationOver(p: RegistrationParts) {
 		const read = payloads.possession.safeParse(payloadOf(q.statement));
 		if (!read.success) return refused("unknown");
 		const named = read.data.possession;
+		if (used?.purpose === "possession" && used.verification !== undefined) {
+			const again = await placedAgain(hash, q, named, used.verification);
+			if (again) return again;
+		}
 		const creation = await p.approvals.creationOf(named.creation_hash);
 		if (!creation) return refused("unknown");
 		const path = pathOf(creation.items);
@@ -302,7 +344,7 @@ export function registrationOver(p: RegistrationParts) {
 			return refused("revoked");
 		const approved = path === "passkey-add" ? await approvedFor(creation.items) : undefined;
 		if (approved && "refused" in approved) return refused(approved.refused);
-		const continuation = await sentFor(named.creation_hash, q.statement);
+		const continuation = await sentFor(hash);
 		if (!continuation) return refused("continuation");
 		const up = path === "sign-up" ? await signedUp(creation.items, named.creation_hash) : undefined;
 		if (path === "sign-up" && !up) return refused("sign-up");

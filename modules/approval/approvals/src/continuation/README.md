@@ -9,11 +9,10 @@ Internal module of `approvals`: the screen's continuations, each taken once in o
 - What a continuation's body asks: the ceremony's owner.
 
 ## Offers
-- `continuationsOver` (the ring's verifying and opening, the store, the clock) → `continue`, `continueSignUp`, `continueSealed` and `continuationOf`. `continue`: the run of one continuation, its step handed the creation as its record keeps it (`KeptCreation`: its items as signed, the screen's keys).
+- `continuationsOver` (the ring's verifying and opening, the store, the clock) → `continue`, `continueSignUp` and `continueSealed`. `continue`: the run of one continuation, its step handed the creation as its record keeps it (`KeptCreation`: its items as signed, the screen's keys).
   - `continue` (hash, sequence number, body, the screen's signature, its step, handed the creation as kept) → continued with what the step answered (`again` where another call took it first); or refused, `pending` while another call holds its step.
 - `continueSignUp` (T's hash, 1, the body `{}`, the screen's signature, its step, handed the T as kept: `KeptSignUp`, its hash, bytes, items and the screen's keys) → as `continue`, the step's `SignUpResult` (`{ creation }` or `{ refused }`); or refused, also `purpose` (no T, or one whose owner did not allow it), `used` (T no longer issued), `expired`.
 - `continueSealed` (a passkey-manage's hash, stage, number 1 to 16, the sealing, its step, handed `KeptManage`: the hash, subject, approving key's credential and registration, the screen's keys, and `until`, when its record is gone (60 seconds past the statement's expiry), past which none of its steps runs; and `OpenedBody`: the stage, the body read, its hash) → as `continue`; or refused, also `sealed`.
-- `continuationOf` (hash) → a creation's last continuation as taken: its sequence number, body as received, signature and, once kept, what its step answered, in one read; none before one is taken, past the statement's expiry, or where this generation's ring does not verify it.
 
 ## Invariants
 - A creation's statement is continued by `register`, a T by `sign-up` alone (F1): only a T its owner allowed it at its issue (`continues`), number 1, the body `{}`.

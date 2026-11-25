@@ -14,6 +14,7 @@ import type {
 	IssueAsk,
 	Issued,
 	ItemsOf,
+	KeptChange,
 	Purpose,
 	SignUp,
 	StatementItems,
@@ -359,6 +360,48 @@ export function statementsOver(p: StatementParts) {
 		return { statement: r.jws, items, screen: { eEnc: r.e_enc, eSig: r.e_sig } };
 	}
 
+	async function keptChangeOf(hash: string): Promise<KeptChange | undefined> {
+		const r = recordOf(await p.store.read(hash));
+		if (r?.purpose !== "possession" || r.state === "issued") return undefined;
+		if (!(await current(p.keys, r.jws))) return undefined;
+		const named = itemsIn(r.jws, "possession") as ItemsOf["possession"];
+		const c = recordOf(await p.store.read(named.creation_hash));
+		if (c?.purpose !== "creation" || c.sent === undefined) return undefined;
+		// The continuation that made this possession, its body and signature as received.
+		if ((c.result as { statement?: unknown } | undefined)?.statement !== r.jws) return undefined;
+		const items = itemsIn(c.jws, "creation") as ItemsOf["creation"];
+		const creation = { statement: c.jws, items, screen: { eEnc: c.e_enc, eSig: c.e_sig } };
+		const continuation = { seq: c.seq, ...c.sent };
+		if (items.basis !== "passkey-add" && items.basis !== "sign-up")
+			return { creation, continuation };
+		const base = recordOf(await p.store.read(items.evidence));
+		if (items.basis === "sign-up")
+			return base?.purpose === "authorization"
+				? { creation, continuation, evidence: base.jws }
+				: undefined;
+		const { subject, credential, registration, assertion } = base ?? {};
+		if (
+			base?.purpose !== "passkey-add" ||
+			subject !== items.subject ||
+			!credential ||
+			!registration ||
+			!assertion
+		)
+			return undefined;
+		const screen = { eEnc: base.e_enc, eSig: base.e_sig };
+		const mark = statementMark(base.sid);
+		const used = {
+			statement: base.jws,
+			assertion,
+			subject,
+			credential,
+			registration,
+			screen,
+			mark,
+		};
+		return { creation, continuation, evidence: used };
+	}
+
 	async function signUpOf(hash: string): Promise<SignUp | undefined> {
 		const r = recordOf(await p.store.read(hash));
 		if (r?.purpose !== "authorization" || !r.signUp) return undefined;
@@ -411,6 +454,7 @@ export function statementsOver(p: StatementParts) {
 		usedOf,
 		rootOf,
 		passkeyAddOf,
+		keptChangeOf,
 		creationOf,
 		signUpOf,
 		signUpSubject,

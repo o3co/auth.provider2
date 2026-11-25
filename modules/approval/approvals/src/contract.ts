@@ -270,6 +270,14 @@ export type PasskeyAddCompleted =
 				| "withdrawn";
 	  };
 
+/** A used possession's key change, as `keptChangeOf` reads its records. */
+export interface KeptChange {
+	readonly creation: CreationRecord;
+	readonly continuation: LastContinuation;
+	/** What the creation's evidence names, by its basis: a passkey-add's, used by its subject; a sign-up's T as signed; none. */
+	readonly evidence?: UsedPasskeyAdd | string;
+}
+
 /**
  * A used passkey-add as the key change it approves takes it: its statement as signed, the assertion's
  * JSON text as received, the subject, credential and registration of the key that made it, the screen's
@@ -330,15 +338,11 @@ export type Continued =
 				| "sealed";
 	  };
 
-/**
- * A creation's last continuation as taken: its sequence number, its body as received, the screen's
- * signature (`r‖s`, base64url) and, once kept, what its step answered, all from one read.
- */
+/** A creation's last continuation as taken: its sequence number, its body as received, the screen's signature (`r‖s`, base64url). */
 export interface LastContinuation {
 	readonly seq: number;
 	readonly body: string;
 	readonly signature: string;
-	readonly result?: StepResult;
 }
 
 export type Completed =
@@ -440,19 +444,14 @@ export interface Approvals {
 	 * whose sign-up did not begin, or any other statement.
 	 */
 	signUpOf(hash: string): Promise<SignUp | undefined>;
-	/**
-	 * A creation's last continuation as taken, with what its step answered, from one read: while its
-	 * statement lives and this generation's ring verifies it; none before one is taken, or for any
-	 * other purpose.
-	 */
-	continuationOf(hash: string): Promise<LastContinuation | undefined>;
 	/** An authorization's completion: its approval taken in on the subject's flow, then signed and sealed. */
 	complete(p: { readonly hash: string; readonly code: string }): Promise<Completed>;
 	/**
 	 * A key change's completion, asked once its change took on the subject's flow (its caller's to
 	 * know): the key its used possession names, signed and sealed to its screen, and kept on its
 	 * record. Asked again for the same purpose, the one kept, with what the log gave as first asked;
-	 * for another, `other`. The record lives a minute past the statement's expiry, `unknown` after.
+	 * for another, `other`. One is made up to the record's end, a minute past the statement's expiry
+	 * (a change placed late is completed then), `unknown` after.
 	 * A sign-up's (F1) first keeps its credential on its T, unless the T kept another.
 	 */
 	completeKeyChange(ask: KeyChangeAsk): Promise<KeyChangeCompleted>;
@@ -491,6 +490,13 @@ export interface Approvals {
 	 * registration was kept. The whole ceremony it approves lives within its statement's life.
 	 */
 	passkeyAddOf(hash: string): Promise<UsedPasskeyAdd | undefined>;
+	/**
+	 * What a used possession's key change was made of, to make its stage again once placed: its
+	 * creation, the continuation that made the possession, and the passkey-add or the sign-up's T it
+	 * rests on. Read while their records are kept, to a minute past each statement's expiry, whatever
+	 * has expired, while this generation's ring verifies the possession; none for any other statement.
+	 */
+	keptChangeOf(hash: string): Promise<KeptChange | undefined>;
 	/**
 	 * A creation's record, whatever its continuations, until its statement expires and while the Core's
 	 * ring of this generation verifies it; none for any other purpose. What its caller holds is its own

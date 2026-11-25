@@ -5,6 +5,7 @@ import {
 	creationIn,
 	current,
 	itemsIn,
+	recordEnd,
 	recordOf,
 	type StatementRecord,
 	sha256,
@@ -67,7 +68,7 @@ const basisOf = async (store: ApprovalStore, possession: ItemsOf["possession"]) 
 /**
  * A key change's completions: the key a used possession names, signed by the Core's ring and sealed to
  * its screen under `completionAad` of the purpose and the possession's hash, then kept on its record.
- * One is made only for a possession unexpired that this generation's ring verifies; once kept, it is
+ * One is made only for a used possession, to its record's end, that this generation's ring verifies; once kept, it is
  * given again alike for the same purpose, as authorizations' are.
  */
 export function keyChangeCompletionsOver(p: {
@@ -84,7 +85,7 @@ export function keyChangeCompletionsOver(p: {
 		if (r.purpose !== "possession") return refused("purpose");
 		if (r.state === "completed") return keptFor(r, asked) ?? refused("other");
 		if (r.state !== "used") return refused("unused");
-		if (p.now() > r.exp) return refused("expired");
+		if (p.now() > recordEnd(r)) return refused("expired");
 		if (!(await current(p.keys, r.jws))) return refused("unknown");
 		const named = itemsIn(r.jws, "possession") as ItemsOf["possession"];
 		// A sign-up's key is kept on its T before its completion: asked again, the same write answers alike.
