@@ -8,6 +8,7 @@ import { redirects } from "@mod/redirect-uris";
 import resourceIndicators from "@mod/resource-indicators/module";
 import { payloads, typs } from "@mod/sdk-core-wire";
 import { describe, expect, it } from "vitest";
+import { codeNeedsOver } from "../src/code-needs/code-needs.ts";
 import type { JarReservations, RequestSource, StoredReservation } from "../src/contract.ts";
 import { reserving } from "../src/jar/jar.ts";
 import { byValue, starting } from "../src/start/start.ts";
@@ -142,18 +143,23 @@ function harness(
 		approvals,
 		withoutPasskey: p.allows === undefined ? undefined : { allows: async () => p.allows === true },
 		signUp: p.signUp ?? false,
-		idTokens: p.idTokens ?? true,
-		targets: p.rule,
-		issuer,
-		bindings: {
-			requestedOf: (param) => {
-				const jkt = param("dpop_jkt");
-				if (jkt === "bad") return { kind: "malformed", parameter: "dpop_jkt" };
-				return jkt === undefined
-					? { kind: "none" }
-					: { kind: "requested", binding: { member: "jkt", confirmation: jkt, tokenType: "DPoP" } };
+		needs: codeNeedsOver({
+			idTokens: p.idTokens ?? true,
+			targets: p.rule,
+			issuer,
+			bindings: {
+				requestedOf: (param) => {
+					const jkt = param("dpop_jkt");
+					if (jkt === "bad") return { kind: "malformed", parameter: "dpop_jkt" };
+					return jkt === undefined
+						? { kind: "none" }
+						: {
+								kind: "requested",
+								binding: { member: "jkt", confirmation: jkt, tokenType: "DPoP" },
+							};
+				},
 			},
-		},
+		}),
 	});
 	const send = (fields: Record<string, string>) =>
 		start({ json: fields, source: { address: "192.0.2.1" } } as unknown as HttpRequest);

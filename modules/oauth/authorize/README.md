@@ -27,7 +27,7 @@
 - A login is started only by a JAR its client signed (`typ` `oauth-authz-req+jwt`, under `client-assertion`'s algorithms, clock skew and longest lifetime), its `iss` and `client_id` the client, its `aud` this issuer, with a `jti` and an `exp` not past and at most `jar-max-lifetime` away; exactly one request source answers each start.
 - A JAR starts one login (A20, internal module `jar`): the same JAR with the same screen keys is answered the same T, made by one call at a time; with other keys, or another JAR under its `jti`, it is refused. Its reservation outlives the JAR's expiry by the clock skew, the margin between replicas' clocks.
 - Boot is refused where an item every T carries is filled by no module (`dpop_jkt` with no `approval-binding`), or two modules answer a person with no passkey, or two offer a sign-up, or one does with no answer to a person with no passkey.
-- A JAR asking `openid` where `code-grant` makes no ID token is refused before T is made (`invalid_scope`), and one whose `claims` is malformed or asked without `openid` (`invalid_request_object`, internal module `claims`); so is one whose client may not use the code grant, whose challenge is not S256's shape, or whose `dpop_jkt` is out of its form, so nothing a code needs fails once the person tapped.
+- What a code needs is checked before T is made, and again before the session opens (internal module `code-needs`), so nothing a code needs fails once the person tapped. A JAR whose `claims` is malformed or asked without `openid` is refused before T (`invalid_request_object`, internal module `claims`).
 - The redirect URI is one the client registered, by `redirect-uris`' rule, before anything is reserved or signed.
 
 ## Data

@@ -1,25 +1,37 @@
-import type { Approvals } from "@mod/approvals";
-import { clientAllowance } from "@mod/client-allowance";
-import type { Clients } from "@mod/clients";
-import { challengeShape, codeGrantType, codes, openid } from "@mod/code-grant";
-import { type TargetRule, targetRules } from "@mod/grants";
+import { type Approvals, approvals } from "@mod/approvals";
+import { clientAssertion } from "@mod/client-assertion";
+import { type Clients, clients } from "@mod/clients";
 import { type HttpRequest, type HttpResponse, jsonAnswer, use } from "@mod/http";
+import { issuer } from "@mod/issuer";
 import type { BuildContext } from "@mod/kernel";
 import { requestsPerSource, sourceKey, type Window } from "@mod/rate-limit";
 import { matches, redirects } from "@mod/redirect-uris";
 import { itemsFromJar, jarClaims, type SigningKey } from "@mod/sdk-core-wire";
-import { type SenderBindings, senderBinding } from "@mod/sender-binding";
 import { claimsRefusal } from "../claims/claims.ts";
-import type { RequestSource, StartFields, WithoutPasskey } from "../contract.ts";
+import {
+	type CodeNeeds,
+	codeNeedsIn,
+	codeNeedsTakes,
+	type StartUnmet,
+} from "../code-needs/code-needs.ts";
+import {
+	jarReservations,
+	type RequestSource,
+	requestSources,
+	type StartFields,
+	type WithoutPasskey,
+} from "../contract.ts";
 import {
 	type Jar,
 	type JarParts,
 	jarOf,
 	type Refusal,
+	reserving,
 	type StartAnswer,
 	sha256,
 	startDigest,
 } from "../jar/jar.ts";
+import type { Settings } from "../section.ts";
 
 export interface StartParts {
 	readonly clients: Pick<Clients, "find">;
@@ -37,14 +49,28 @@ export interface StartParts {
 	 * T allows no sign-up.
 	 */
 	readonly signUp: boolean;
-	readonly bindings: Pick<SenderBindings, "requestedOf">;
-	/** Whether an ID token is made (`code-grant`'s `issuesIdTokens`): without, an OpenID request is refused. */
-	readonly idTokens: boolean;
-	/** The rule for the audience asked (`grants`' `targetRules`, resource-indicators'): `resource` is read by it alone. */
-	readonly targets: Pick<TargetRule, "target"> | undefined;
-	/** `issuer`'s URL: a client's audience where its allowance names none (`allowsAudience`). */
-	readonly issuer: string;
+	/** What a code needs, checked before T (internal module `code-needs`). */
+	readonly needs: CodeNeeds;
 }
+
+/** A code's need unmet, as the start answers it before T. */
+const unmetRefusal = (unmet: StartUnmet): Refusal => {
+	switch (unmet.need) {
+		case "grant":
+			return { error: "invalid_request", description: "the client may not use the code grant" };
+		case "resource":
+			return {
+				error: "invalid_target",
+				description: unmet.description ?? "resource is not the audience asked",
+			};
+		case "challenge":
+			return { error: "invalid_request_object", description: "code_challenge is malformed" };
+		case "binding":
+			return { error: "invalid_request_object", description: "dpop_jkt is out of its form" };
+		default:
+			return unmet satisfies never;
+	}
+};
 
 /** The statuses `front-core-wire` answers these refusals with; any other is 400. */
 const statusOf: Readonly<Record<string, number>> = {
@@ -122,59 +148,17 @@ export function starting(p: StartParts) {
 		const made = itemsFromJar(prompted.claims, sha256(jar.jar));
 		if ("error" in made)
 			return answerOf(400, { error: "invalid_request_object", description: made.error });
-		const asksOpenid = made.items.scope.split(" ").includes(openid);
+		const asksOpenid = p.needs.asksOpenid(made.items.scope);
 		// Where no ID token is made, an OpenID request is refused before T, never once the person tapped.
-		if (asksOpenid && !p.idTokens)
+		if (p.needs.openidUnmet(made.items))
 			return answerOf(400, { error: "invalid_scope", description: "no ID token is issued" });
 		// Its claims, read before T is made: one asked malformed, or without openid, is refused.
 		const claimsRefused = claimsRefusal(made.items.claims, asksOpenid);
 		if (claimsRefused)
 			return answerOf(400, { error: "invalid_request_object", description: claimsRefused });
 		// What a code needs is checked here, before T, so the finish fails on none of it once the person tapped.
-		if (!clientAllowance.allowsGrant(client, codeGrantType))
-			return answerOf(400, {
-				error: "invalid_request",
-				description: "the client may not use the code grant",
-			});
-		// The resource asked is read by the one rule (resource-indicators), within the client's audiences:
-		// unless it answers that resource alone (none composed answers none), it is refused before T,
-		// never shown to the person for a token of another audience.
-		const resource = made.items.resource;
-		if (resource !== undefined) {
-			if (!p.targets)
-				return answerOf(400, {
-					error: "invalid_target",
-					description: "resource is read by no rule here",
-				});
-			const verdict = p.targets.target({
-				param: (name) => (name === "resource" ? resource : undefined),
-				audience: [],
-				within: (audience) => clientAllowance.allowsAudience(client, audience, p.issuer),
-			});
-			if (
-				verdict.kind === "error" ||
-				verdict.audience.length !== 1 ||
-				verdict.audience[0] !== resource
-			)
-				return answerOf(400, {
-					error: "invalid_target",
-					description:
-						verdict.kind === "error" ? verdict.description : "resource is not the audience asked",
-				});
-		}
-		if (!challengeShape.test(made.items.code_challenge))
-			return answerOf(400, {
-				error: "invalid_request_object",
-				description: "code_challenge is malformed",
-			});
-		const bound = p.bindings.requestedOf((name) =>
-			name === "dpop_jkt" ? made.items.dpop_jkt : undefined,
-		);
-		if (bound.kind !== "requested")
-			return answerOf(400, {
-				error: "invalid_request_object",
-				description: "dpop_jkt is out of its form",
-			});
+		const unmet = p.needs.atStart(client, made.items);
+		if (unmet) return answerOf(400, unmetRefusal(unmet));
 		const answer = await p.reserve(client.id, jar, startDigest(jar.jar, eEnc, eSig), async () => {
 			// Decided before T is signed, and kept on its record: the answer's `create` is only its copy.
 			const create = (await p.withoutPasskey?.allows({ client, items: made.items })) ?? false;
@@ -203,19 +187,6 @@ export const unfilled = (
 		(name) => !declared.some((d) => d.purpose === "authorization" && d.names.includes(name)),
 	);
 
-/** The binding kinds' reading of what a request asks for ahead, taken from the composition. */
-export const bindingsIn = (c: Pick<BuildContext<unknown>, "get">) => c.get(senderBinding);
-/** What the start takes beside the rest: the rule for the audience asked, contributed or not. */
-export const startTakes = [targetRules];
-/**
- * The rules themselves (resource-indicators'), not the token endpoint's `targets`, so the start needs
- * no endpoint composed: none where none is; more than one, which refuse boot here too.
- */
-export const targetsIn = (c: Pick<BuildContext<unknown>, "collect">) => c.collect(targetRules);
-/** Whether `code-grant` makes an ID token, for the start to refuse an OpenID request without. */
-export const idTokensIn = async (c: Pick<BuildContext<unknown>, "get">) =>
-	(await c.get(codes)).issuesIdTokens();
-
 /** The JAR sent by value, in the start's `request`: `authorize`'s own source. */
 export const byValue: RequestSource = {
 	name: "request",
@@ -238,6 +209,52 @@ export const issuerMetadata = Object.freeze({
 	requestParameter: { name: "request_parameter_supported", value: true },
 	issParameter: { name: "authorization_response_iss_parameter_supported", value: true },
 });
+
+/** What the start takes from the composition. */
+export const startTakes = [
+	clients,
+	clientAssertion,
+	approvals,
+	issuer,
+	jarReservations,
+	requestSources,
+	...codeNeedsTakes,
+] as const;
+
+/**
+ * The route of ②, its parts taken from the composition, counted per source: the JAR's sources and
+ * reservation, `approvals`, what a code needs. The answer to a person with no passkey and whether a
+ * sign-up is offered come from the module, whose boot checks them.
+ */
+export async function startRouteIn(
+	c: BuildContext<Settings>,
+	p: { readonly withoutPasskey: WithoutPasskey | undefined; readonly signUp: boolean },
+) {
+	const url = (await c.get(issuer)).url;
+	return startRoute(
+		{
+			clients: await c.get(clients),
+			jar: {
+				sources: await c.collect(requestSources),
+				assertion: await c.get(clientAssertion),
+				issuer: url,
+				maxLifetimeS: c.section["jar-max-lifetime"],
+				now: c.clock.now,
+			},
+			reserve: reserving({
+				reservations: await c.get(jarReservations),
+				skewS: c.section["clock-skew"],
+				now: c.clock.now,
+				token: () => Buffer.from(c.random.bytes(16)).toString("base64url"),
+			}),
+			approvals: await c.get(approvals),
+			withoutPasskey: p.withoutPasskey,
+			signUp: p.signUp,
+			needs: await codeNeedsIn(c, url),
+		},
+		{ limit: c.section.requests, ms: c.section.window * 1000 },
+	);
+}
 
 /** The route of ②: the screen's JSON, from any origin the Front relays it from, counted per source. */
 export const startRoute = (p: StartParts, window: Window) => ({

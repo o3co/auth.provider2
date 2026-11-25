@@ -1,27 +1,23 @@
 import { acr, amrSources } from "@mod/acr";
-import { approvals, statementItems } from "@mod/approvals";
-import { clientAssertion } from "@mod/client-assertion";
+import { statementItems } from "@mod/approvals";
 import { documentCopies } from "@mod/client-documents";
-import { clients, metadataSections } from "@mod/clients";
+import { metadataSections } from "@mod/clients";
 import { routes } from "@mod/http";
 import { issuer, metadata } from "@mod/issuer";
 import { type BuildContext, defineModule } from "@mod/kernel";
 import { promiseNames, stances } from "@mod/promises";
 import { redirects, redirectsCopy } from "@mod/redirect-uris";
-import { jarReservations, requestSources, signUpOffers, withoutPasskey } from "./contract.ts";
+import { targetsIn } from "./code-needs/code-needs.ts";
+import { requestSources, signUpOffers, withoutPasskey } from "./contract.ts";
 import { delegationSecondsIn, delegationTakes } from "./delegation/delegation.ts";
 import { finishRoute, finishTakes, passkeyAmr } from "./finish/finish.ts";
-import { reserving } from "./jar/jar.ts";
 import { type Settings, section } from "./section.ts";
 import {
-	bindingsIn,
 	byValue,
 	filledItems,
-	idTokensIn,
 	issuerMetadata,
-	startRoute,
+	startRouteIn,
 	startTakes,
-	targetsIn,
 	unfilled,
 } from "./start/start.ts";
 
@@ -34,19 +30,15 @@ export default defineModule(
 		section,
 		replicaSafe: true,
 		takes: [
-			clients,
-			clientAssertion,
-			approvals,
-			issuer,
-			jarReservations,
-			requestSources,
-			withoutPasskey,
-			signUpOffers,
-			statementItems,
-			acr,
-			...startTakes,
-			...delegationTakes,
-			...finishTakes,
+			...new Set([
+				...startTakes,
+				withoutPasskey,
+				signUpOffers,
+				statementItems,
+				acr,
+				...delegationTakes,
+				...finishTakes,
+			]),
 		],
 	},
 	(m) => [
@@ -95,33 +87,7 @@ export default defineModule(
 			const rules = await targetsIn(c);
 			if (rules.length > 1)
 				return c.refuse("authorize", "more than one rule reads the audience asked (resource)");
-			const window = { limit: c.section.requests, ms: c.section.window * 1000 };
-			return startRoute(
-				{
-					clients: await c.get(clients),
-					jar: {
-						sources: await c.collect(requestSources),
-						assertion: await c.get(clientAssertion),
-						issuer: (await c.get(issuer)).url,
-						maxLifetimeS: c.section["jar-max-lifetime"],
-						now: c.clock.now,
-					},
-					reserve: reserving({
-						reservations: await c.get(jarReservations),
-						skewS: c.section["clock-skew"],
-						now: c.clock.now,
-						token: () => Buffer.from(c.random.bytes(16)).toString("base64url"),
-					}),
-					approvals: await c.get(approvals),
-					withoutPasskey: passkeyless[0],
-					signUp: offers.length === 1,
-					bindings: await bindingsIn(c),
-					idTokens: await idTokensIn(c),
-					targets: rules[0],
-					issuer: (await c.get(issuer)).url,
-				},
-				window,
-			);
+			return startRouteIn(c, { withoutPasskey: passkeyless[0], signUp: offers.length === 1 });
 		}),
 		m.contribute(routes).by(async (c: Context) =>
 			finishRoute(c, {

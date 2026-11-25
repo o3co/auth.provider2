@@ -5,6 +5,7 @@ import type { HttpRequest } from "@mod/http";
 import { payloads } from "@mod/sdk-core-wire";
 import { describe, expect, it } from "vitest";
 import type { Picked } from "../src/claims/claims.ts";
+import { codeNeedsOver } from "../src/code-needs/code-needs.ts";
 import { type FinishParts, finishing } from "../src/finish/finish.ts";
 
 const now = 1_800_000_000_000;
@@ -169,15 +170,22 @@ function harness(
 				log.push(`keep ${redemption} ${lifetimeMs} ${subject}`);
 			},
 		},
-		bindings: {
-			requestedOf: (param) => {
-				const jkt = param("dpop_jkt");
-				return jkt === undefined
-					? { kind: "none" }
-					: { kind: "requested", binding: { member: "jkt", confirmation: jkt, tokenType: "DPoP" } };
+		needs: codeNeedsOver({
+			idTokens: true,
+			targets: undefined,
+			issuer,
+			bindings: {
+				requestedOf: (param) => {
+					const jkt = param("dpop_jkt");
+					return jkt === undefined
+						? { kind: "none" }
+						: {
+								kind: "requested",
+								binding: { member: "jkt", confirmation: jkt, tokenType: "DPoP" },
+							};
+				},
 			},
-		},
-		issuer,
+		}),
 		delegationS: 3600,
 		...(p.acr === undefined ? {} : { acr: p.acr }),
 	};

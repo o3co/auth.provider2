@@ -1,14 +1,18 @@
 import { type Approvals, approvals, type ItemsOf } from "@mod/approvals";
-import { clientAllowance } from "@mod/client-allowance";
 import { type Clients, clients } from "@mod/clients";
-import { type Codes, challengeShape, codeGrantType, codes, openid } from "@mod/code-grant";
+import { type Codes, codeGrantType, codes } from "@mod/code-grant";
 import { type HttpRequest, type HttpResponse, jsonAnswer, use } from "@mod/http";
 import { type BuildContext, Unavailable } from "@mod/kernel";
 import { requestsPerSource, type Window } from "@mod/rate-limit";
-import { type SenderBindings, senderBinding } from "@mod/sender-binding";
 import { type Sessions, sessions } from "@mod/session";
 import { type AccessTokenIssuance, accessTokenIssuance } from "@mod/tokens";
 import { type ClaimsPinning, claimsPinningIn, claimsTakes } from "../claims/claims.ts";
+import {
+	type CodeNeeds,
+	codeNeedsIn,
+	codeNeedsTakes,
+	type Unmet,
+} from "../code-needs/code-needs.ts";
 
 /**
  * How a person's login with a passkey is named in the session and the token (RFC 8176), by what its
@@ -25,8 +29,8 @@ export interface FinishParts {
 	readonly sessions: Pick<Sessions, "open" | "close">;
 	readonly codes: Pick<Codes, "issue" | "root" | "digestOf" | "lifetimeMs">;
 	readonly claims: ClaimsPinning;
-	readonly bindings: Pick<SenderBindings, "requestedOf">;
-	readonly issuer: string;
+	/** What a code needs, checked again before the session opens (internal module `code-needs`). */
+	readonly needs: CodeNeeds;
 	/** How long a login's delegation lasts from its statement's issue, in seconds (O27). */
 	readonly delegationS: number;
 	/** The acr a passkey's login meets, by `acr`'s table; none where it meets none. */
@@ -37,6 +41,24 @@ const refused = (status: number, error: string, description: string): HttpRespon
 	jsonAnswer(status, { error, error_description: description });
 const bad = (description: string) => refused(400, "invalid_request", description);
 const denied = (description: string) => refused(400, "access_denied", description);
+
+/** A code's need unmet, as the finish answers it before the session opens. */
+const unmetAnswer = (unmet: Unmet): HttpResponse => {
+	switch (unmet.need) {
+		case "grant":
+			return bad("the client may not use the code grant");
+		case "challenge":
+			return bad("the code challenge is malformed");
+		case "scope":
+			return refused(400, "invalid_scope", "the scope is not allowed");
+		case "resource":
+			return bad("the resource is not one the client may be issued for");
+		case "binding":
+			return bad("the statement names no binding asked for ahead");
+		default:
+			return unmet satisfies never;
+	}
+};
 
 /** The approval's refusals that are the request's own fault; any other is the person's passkey refused. */
 const malformed = new Set(["unknown", "expired", "used", "purpose", "malformed"]);
@@ -72,19 +94,9 @@ export function finishing(p: FinishParts) {
 		const client = await p.clients.find(items.client_id);
 		if (!client) return refused(401, "invalid_client", "no such client");
 		// Checked before the session opens, so nothing a code needs fails once the person tapped.
-		if (!clientAllowance.allowsGrant(client, codeGrantType))
-			return bad("the client may not use the code grant");
-		if (!challengeShape.test(items.code_challenge)) return bad("the code challenge is malformed");
-		const allowed = clientAllowance.allowedIssuance(client, items.scope, p.issuer);
-		if (allowed.kind === "error") return refused(400, "invalid_scope", "the scope is not allowed");
-		const resource = items.resource;
-		if (resource !== undefined && !clientAllowance.allowsAudience(client, resource, p.issuer))
-			return bad("the resource is not one the client may be issued for");
-		const audience = resource === undefined ? allowed.audience : [resource];
-		const asked = p.bindings.requestedOf((name) =>
-			name === "dpop_jkt" ? items.dpop_jkt : undefined,
-		);
-		if (asked.kind !== "requested") return bad("the statement names no binding asked for ahead");
+		const met = p.needs.atFinish(client, items);
+		if ("need" in met) return unmetAnswer(met);
+		const { scope, audience, binding } = met;
 		const begunMs = approval.issuedAt;
 		const authenticatedAt = approval.usedAt ?? begunMs;
 		const grant = {
@@ -92,14 +104,14 @@ export function finishing(p: FinishParts) {
 			subjectKind: "user" as const,
 			issuedTo: client.id,
 			audience,
-			scope: allowed.scope,
+			scope,
 			amr: passkeyAmr,
 			authenticatedAt,
 		};
 		const admitted = await p.issuance.admits({ grant, grantType: codeGrantType });
 		if (admitted.kind === "refused") return denied("the login was not approved");
 		// An OpenID request's claims, selected before the session opens; a `sub` asked of another refuses it.
-		const picked = allowed.scope.includes(openid)
+		const picked = p.needs.asksOpenid(scope)
 			? await p.claims.select(client, subject, items.scope.split(" "), items.claims, p.acr)
 			: ({ kind: "none" } as const);
 		if (picked.kind === "otherSubject") return denied("the login is not of the subject asked");
@@ -123,11 +135,11 @@ export function finishing(p: FinishParts) {
 				redirectUri: items.redirect_uri,
 				challenge: items.code_challenge,
 				nonce: items.nonce,
-				scope: allowed.scope,
+				scope,
 				audience,
 				session: handle,
 				subject,
-				binding: asked.binding,
+				binding,
 				...(p.acr === undefined ? {} : { acr: p.acr }),
 			});
 			// Pinned to the code before its root is set: a code never rooted is never redeemed.
@@ -171,16 +183,17 @@ export function finishing(p: FinishParts) {
 
 /** The contracts the finish takes, for the module to declare. */
 export const finishTakes = [
+	approvals,
+	clients,
 	accessTokenIssuance,
 	sessions,
-	codes,
-	senderBinding,
+	...codeNeedsTakes,
 	...claimsTakes,
 ] as const;
 
 /** The route of ⑤⑥, its parts taken from the composition, counted per source. */
 export async function finishRoute(
-	c: Pick<BuildContext<unknown>, "get">,
+	c: Pick<BuildContext<unknown>, "get" | "collect">,
 	p: {
 		readonly issuer: string;
 		readonly delegationS: number;
@@ -202,9 +215,8 @@ export async function finishRoute(
 			issuance: await c.get(accessTokenIssuance),
 			sessions: await c.get(sessions),
 			codes: await c.get(codes),
-			bindings: await c.get(senderBinding),
 			claims: await claimsPinningIn(c),
-			issuer: p.issuer,
+			needs: await codeNeedsIn(c, p.issuer),
 			delegationS: p.delegationS,
 			...(p.acr === undefined ? {} : { acr: p.acr }),
 		}),
