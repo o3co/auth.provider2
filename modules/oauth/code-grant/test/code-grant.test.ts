@@ -422,15 +422,17 @@ it("gives the access token the code's amr, authentication time and acr, issued f
 it("issues one bundle rooted in the code's approval, carrying the root's reference unread", async () => {
 	const s = await serve();
 	const bundles: BundleRequest[] = [];
-	const answer = await handleDirectly(s, await s.issue(), {
+	const code = await s.issue();
+	const answer = await handleDirectly(s, code, {
 		issue: async (bundle) => {
 			bundles.push(bundle);
 			return issuedNow(s, bundle);
 		},
 	});
 	expect(answer.kind).toBe("issued");
+	// Rooted by its code, named by its digest, as its approval's record names it (V24).
 	expect(bundles.map((bundle) => [bundle.root, bundle.via, bundle.parts])).toEqual([
-		["root-of-the-approval", { via: "code" }, []],
+		["root-of-the-approval", { via: "code", code: digestOf(code) }, []],
 	]);
 });
 
@@ -657,7 +659,7 @@ describe("an ID token, for a code whose scope has openid", () => {
 		});
 		expect(answer).toMatchObject({ kind: "issued", body: { id_token: "id" } });
 		expect(bundles.map((b) => [b.via, b.parts?.map((p) => p.frame)])).toEqual([
-			[{ via: "code" }, ["idToken"]],
+			[{ via: "code", code: expect.any(String) }, ["idToken"]],
 		]);
 	});
 

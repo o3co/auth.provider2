@@ -198,7 +198,12 @@ export function codeGrant(parts: {
 			// One bundle, rooted in the code's approval by its code. The token ends no later than its
 			// session, nor later than the allowance before its record's end.
 			const allowed = await issue(
-				{ root, via: { via: "code" }, access: accessOf(record, client.id), parts },
+				{
+					root,
+					via: { via: "code", code: redemption },
+					access: accessOf(record, client.id),
+					parts,
+				},
 				{ session: record.session, notAfter: Math.min(entry.endsAt, tokenEnd) },
 			);
 			if (allowed.kind === "refused") return allowed;
