@@ -11,7 +11,7 @@ const kept: KeptSignUp = {
 	hash: "t-hash",
 	statement: "t-jws",
 	issuedAt: T0 * 1000,
-	items: {} as KeptSignUp["items"],
+	items: { client_id: "c1" } as KeptSignUp["items"],
 	screen: { eEnc: "enc", eSig: { kty: "EC", crv: "P-256", x: "x", y: "y" } },
 };
 
@@ -19,7 +19,9 @@ function parts(over: Partial<SignUpParts> = {}) {
 	const made: string[] = [];
 	const asked: unknown[] = [];
 	const hits: [string, string][] = [];
+	const windows: unknown[] = [];
 	const limited: string[] = [];
+	const limitedClients: (string | undefined)[] = [];
 	const subjects = new Map<string, string>();
 	const p: SignUpParts = {
 		approvals: {
@@ -42,19 +44,22 @@ function parts(over: Partial<SignUpParts> = {}) {
 			},
 		},
 		limit: {
-			hit: async (name, key) => {
+			hit: async (name, key, window) => {
 				hits.push([name, key]);
+				windows.push(window);
 				return { kind: "counted" } as never;
 			},
 		},
 		window: { limit: 5, ms: 60_000 },
+		perClient: 50,
 		total: 100,
-		limited: (count) => {
+		limited: (count, client) => {
 			limited.push(count);
+			limitedClients.push(client);
 		},
 		...over,
 	};
-	return { p, made, asked, hits, subjects, limited };
+	return { p, made, asked, hits, windows, subjects, limited, limitedClients };
 }
 
 describe("a sign-up's step (F1)", () => {
@@ -68,7 +73,14 @@ describe("a sign-up's step (F1)", () => {
 		]);
 		expect(w.hits).toEqual([
 			["sign-up.per-source", "src-1"],
+			["sign-up.per-client", "c1"],
 			["sign-up.total", "all"],
+		]);
+		// Each count its own limit, over the one window.
+		expect(w.windows).toEqual([
+			{ limit: 5, ms: 60_000 },
+			{ limit: 50, ms: 60_000 },
+			{ limit: 100, ms: 60_000 },
 		]);
 	});
 
@@ -96,10 +108,11 @@ describe("a sign-up's step (F1)", () => {
 		await expect(signUpStep(passing.p)(kept, "s")).rejects.toBeInstanceOf(Unavailable);
 	});
 
-	it("throws, making no subject and telling which count, past its source's or every source's count", async () => {
+	it("throws, making no subject and telling which count, past its source's, its client's or every one's count", async () => {
 		for (const [limitedOn, hit] of [
 			["sign-up.per-source", ["sign-up.per-source"]],
-			["sign-up.total", ["sign-up.per-source", "sign-up.total"]],
+			["sign-up.per-client", ["sign-up.per-source", "sign-up.per-client"]],
+			["sign-up.total", ["sign-up.per-source", "sign-up.per-client", "sign-up.total"]],
 		] as const) {
 			const w = parts();
 			const hits: string[] = [];
@@ -114,9 +127,10 @@ describe("a sign-up's step (F1)", () => {
 			};
 			await expect(signUpStep(p)(kept, "s")).rejects.toBeInstanceOf(Unavailable);
 			expect(w.made).toEqual([]);
-			// A source past its own count spends none of every source's.
+			// A source or client past its own count spends none of the next.
 			expect(hits).toEqual(hit);
 			expect(w.limited).toEqual([limitedOn.slice("sign-up.".length)]);
+			expect(w.limitedClients).toEqual([limitedOn === "sign-up.per-client" ? "c1" : undefined]);
 		}
 	});
 

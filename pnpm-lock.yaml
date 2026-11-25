@@ -1866,6 +1866,72 @@ importers:
         specifier: 4.6.7
         version: 4.6.7
     devDependencies:
+      '@mod/acr':
+        specifier: workspace:*
+        version: link:../acr
+      '@mod/claims-selection':
+        specifier: workspace:*
+        version: link:../claims-selection
+      '@mod/client-assertion':
+        specifier: workspace:*
+        version: link:../client-assertion
+      '@mod/clients':
+        specifier: workspace:*
+        version: link:../../identity/clients
+      '@mod/code-grant':
+        specifier: workspace:*
+        version: link:../code-grant
+      '@mod/continuation-wire':
+        specifier: workspace:*
+        version: link:../../wire/continuation-wire
+      '@mod/front-core-wire':
+        specifier: workspace:*
+        version: link:../../wire/front-core-wire
+      '@mod/http':
+        specifier: workspace:*
+        version: link:../../foundation/http
+      '@mod/issuer':
+        specifier: workspace:*
+        version: link:../issuer
+      '@mod/keys':
+        specifier: workspace:*
+        version: link:../../foundation/keys
+      '@mod/mail':
+        specifier: workspace:*
+        version: link:../../foundation/mail
+      '@mod/passkey-witness':
+        specifier: workspace:*
+        version: link:../../passkey/passkey-witness
+      '@mod/passkeys':
+        specifier: workspace:*
+        version: link:../../passkey/passkeys
+      '@mod/redirect-uris':
+        specifier: workspace:*
+        version: link:../redirect-uris
+      '@mod/refresh':
+        specifier: workspace:*
+        version: link:../refresh
+      '@mod/sdk-core-wire':
+        specifier: workspace:*
+        version: link:../../wire/sdk-core-wire
+      '@mod/sender-binding':
+        specifier: workspace:*
+        version: link:../sender-binding
+      '@mod/session':
+        specifier: workspace:*
+        version: link:../../identity/session
+      '@mod/subject-revocation':
+        specifier: workspace:*
+        version: link:../../identity/subject-revocation
+      '@mod/tokens':
+        specifier: workspace:*
+        version: link:../tokens
+      '@mod/transparency':
+        specifier: workspace:*
+        version: link:../../foundation/transparency
+      '@mod/webauthn':
+        specifier: workspace:*
+        version: link:../../passkey/webauthn
       vitest:
         specifier: 5.0.5
         version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(vite@8.3.3(@types/node@26.6.5)(yaml@2.9.1))

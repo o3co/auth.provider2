@@ -17,12 +17,14 @@ export interface SignUpParts {
 	readonly createIdentifierless: (key: string) => Promise<{ readonly subject: string }>;
 	readonly creations: SignUpCreations;
 	readonly limit: Pick<RateLimit, "hit">;
-	/** Step runs counted per source in each window. */
+	/** Step runs counted per source in each window: a first, cheap count while the Front is honest. */
 	readonly window: Window;
-	/** Step runs counted from every source together in the same window. */
+	/** Step runs counted per T's client (its signed JAR's) in the same window. */
+	readonly perClient: number;
+	/** Step runs counted from every source and client together in the same window. */
 	readonly total: number;
-	/** Told which count a step met past its limit, before it throws: no source, no subject. */
-	readonly limited: (count: "per-source" | "total") => void;
+	/** Told which count a step met past its limit, before it throws: its client where it is that one's, never a source or subject. */
+	readonly limited: (count: "per-source" | "per-client" | "total", client?: string) => void;
 }
 
 /** A sign-up's continuation as the route reads it: T's hash, its number, body and E_sig's signature, and its source's key. */
@@ -35,8 +37,10 @@ export interface SignUpContinuation {
 }
 
 /**
- * A sign-up's step (F1, f1-shape r3): each run counted, per source first and then, only one its source
- * still allows, from every source, so a source past its own count spends none of the total; the subject made by the ledger
+ * A sign-up's step (F1, f1-shape r3): each run counted, per source first, then per T's client, then
+ * in all, each only where the one before allows it (a source or client past its own count spends none
+ * of the next): the source is the Front's word, a first count alone; what the counts rest on is the
+ * client's, from its signed JAR, and the total (§4.3, proposal 936). The subject made by the ledger
  * under T's hash as its idempotency key, so a step run again makes none second; that subject kept on T
  * (the first kept answers); its creation made by the key management package. Its refusal for good,
  * `revoked`, is kept; a passing failure is thrown on (the package's Unavailable), so the step runs
@@ -47,6 +51,15 @@ export function signUpStep(p: SignUpParts) {
 		const counted = await p.limit.hit("sign-up.per-source", source, p.window);
 		if (counted.kind === "limited") {
 			p.limited("per-source");
+			throw new Unavailable("sign-up");
+		}
+		const client = kept.items.client_id;
+		const byClient = await p.limit.hit("sign-up.per-client", client, {
+			...p.window,
+			limit: p.perClient,
+		});
+		if (byClient.kind === "limited") {
+			p.limited("per-client", client);
 			throw new Unavailable("sign-up");
 		}
 		const all = await p.limit.hit("sign-up.total", "all", { ...p.window, limit: p.total });

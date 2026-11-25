@@ -19,6 +19,28 @@
 		"zod": "4.6.7"
 	},
 	"devDependencies": {
+		"@mod/acr": "workspace:*",
+		"@mod/claims-selection": "workspace:*",
+		"@mod/client-assertion": "workspace:*",
+		"@mod/clients": "workspace:*",
+		"@mod/code-grant": "workspace:*",
+		"@mod/continuation-wire": "workspace:*",
+		"@mod/front-core-wire": "workspace:*",
+		"@mod/http": "workspace:*",
+		"@mod/issuer": "workspace:*",
+		"@mod/keys": "workspace:*",
+		"@mod/mail": "workspace:*",
+		"@mod/passkey-witness": "workspace:*",
+		"@mod/passkeys": "workspace:*",
+		"@mod/redirect-uris": "workspace:*",
+		"@mod/refresh": "workspace:*",
+		"@mod/sdk-core-wire": "workspace:*",
+		"@mod/sender-binding": "workspace:*",
+		"@mod/session": "workspace:*",
+		"@mod/subject-revocation": "workspace:*",
+		"@mod/tokens": "workspace:*",
+		"@mod/transparency": "workspace:*",
+		"@mod/webauthn": "workspace:*",
 		"vitest": "5.0.5"
 	}
 }
