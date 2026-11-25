@@ -52,6 +52,8 @@ export const hpke = Object.freeze({
 	) => canonicalText({ purpose: `completion/${purpose}`, h: statementHash }),
 	/** The lengths a passkey-add's or passkey-manage's completion is padded to before it is sealed. */
 	completionBuckets: buckets,
+	/** The bounds each completion fits its bucket within (ASCII characters, RSA bits), for the sealing side's boot. */
+	completionLimits: Object.freeze({ issuerChars: 256, kidChars: 128, rsaBits: 8192 }),
 	/**
 	 * Its compact JWS padded with spaces to the bucket its longest credential ID (bytes) chooses, the
 	 * smaller where it is 128 or less, so the bucket tells no count or label; none where it does not fit.

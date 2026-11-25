@@ -477,12 +477,12 @@ describe("the inputs a hash or a signature covers", () => {
 	it("pads a passkey-add's or passkey-manage's completion to the bucket its longest credential ID chooses, so its length tells no count or label", () => {
 		const b64 = (text: string) => Buffer.from(text).toString("base64url");
 		const label = "\u{1F600}".repeat(64);
-		const iss = `https://${"x".repeat(248)}`;
+		const iss = `https://${"x".repeat(hpke.completionLimits.issuerChars - 8)}`;
 		const times = { iat: 9_999_999_999, exp: 9_999_999_999 };
 		const approvedOf = { v: 1, iss, t_hash: "h".repeat(43), assertion_hash: "a".repeat(43) };
 		/** A compact JWS of the payload, its kid 128 characters and its signature an RSA key's of 8192 bits. */
 		const jws = (typ: string, payload: object) =>
-			`${b64(JSON.stringify({ alg: "PS256", kid: "k".repeat(128), typ }))}.${b64(JSON.stringify(payload))}.${"s".repeat(1366)}`;
+			`${b64(JSON.stringify({ alg: "PS256", kid: "k".repeat(hpke.completionLimits.kidChars), typ }))}.${b64(JSON.stringify(payload))}.${"s".repeat(Math.ceil(hpke.completionLimits.rsaBits / 6))}`;
 		const id = (bytes: number) => "A".repeat(Math.ceil((bytes * 4) / 3));
 		const list = (count: number, idBytes: number) =>
 			jws(typs.completion, {
@@ -527,6 +527,8 @@ describe("the inputs a hash or a signature covers", () => {
 				...times,
 			});
 		expect(hpke.completionBuckets).toEqual([16_384, 45_056]);
+		expect(hpke.completionLimits).toEqual({ issuerChars: 256, kidChars: 128, rsaBits: 8192 });
+		expect(Object.isFrozen(hpke.completionLimits)).toBe(true);
 		// The longest ID alone chooses: 128 bytes or less the smaller, whatever the count or labels.
 		for (const [plain, longest, bucket] of [
 			[list(16, 128), 128, 16_384],
