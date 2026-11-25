@@ -1,0 +1,41 @@
+{
+	"name": "@mod/session-tokens",
+	"private": true,
+	"license": "Apache-2.0",
+	"type": "module",
+	"kind": "feature",
+	"storeWiring": true,
+	"joins": [
+		"@mod/session",
+		"@mod/tokens",
+		"@mod/code-grant"
+	],
+	"exports": {
+		".": "./src/contract.ts",
+		"./testing": "./src/testing.ts",
+		"./module": "./src/module.ts"
+	},
+	"dependencies": {
+		"@mod/grants": "workspace:*",
+		"@mod/kernel": "workspace:*",
+		"@mod/session-participants": "workspace:*",
+		"@mod/tokens": "workspace:*",
+		"zod": "4.6.7"
+	},
+	"peerDependencies": {
+		"vitest": "5.0.5"
+	},
+	"peerDependenciesMeta": {
+		"vitest": {
+			"optional": true
+		}
+	},
+	"devDependencies": {
+		"@mod/http": "workspace:*",
+		"@mod/http-server": "workspace:*",
+		"@mod/records": "workspace:*",
+		"@mod/session": "workspace:*",
+		"@mod/subject-revocation": "workspace:*",
+		"vitest": "5.0.5"
+	}
+}

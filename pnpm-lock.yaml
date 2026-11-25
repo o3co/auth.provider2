@@ -1799,6 +1799,43 @@ importers:
         specifier: workspace:*
         version: link:../../foundation/secret-hash
 
+  modules/oauth/session-tokens:
+    dependencies:
+      '@mod/grants':
+        specifier: workspace:*
+        version: link:../grants
+      '@mod/kernel':
+        specifier: workspace:*
+        version: link:../../foundation/kernel
+      '@mod/session-participants':
+        specifier: workspace:*
+        version: link:../../identity/session-participants
+      '@mod/tokens':
+        specifier: workspace:*
+        version: link:../tokens
+      zod:
+        specifier: 4.6.7
+        version: 4.6.7
+    devDependencies:
+      '@mod/http':
+        specifier: workspace:*
+        version: link:../../foundation/http
+      '@mod/http-server':
+        specifier: workspace:*
+        version: link:../../foundation/http-server
+      '@mod/records':
+        specifier: workspace:*
+        version: link:../../foundation/records
+      '@mod/session':
+        specifier: workspace:*
+        version: link:../../identity/session
+      '@mod/subject-revocation':
+        specifier: workspace:*
+        version: link:../../identity/subject-revocation
+      vitest:
+        specifier: 5.0.5
+        version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(vite@8.3.3(@types/node@26.6.5)(yaml@2.9.1))
+
   modules/oauth/subject-tokens:
     dependencies:
       '@mod/kernel':
@@ -2670,6 +2707,24 @@ importers:
       '@mod/subject-revocation':
         specifier: workspace:*
         version: link:../../identity/subject-revocation
+
+  modules/templates/session-tokens-store:
+    dependencies:
+      '@mod/kernel':
+        specifier: workspace:*
+        version: link:../../foundation/kernel
+      '@mod/records':
+        specifier: workspace:*
+        version: link:../../foundation/records
+      '@mod/session-tokens':
+        specifier: workspace:*
+        version: link:../../oauth/session-tokens
+      '@mod/store':
+        specifier: workspace:*
+        version: link:../../foundation/store
+      zod:
+        specifier: 4.6.7
+        version: 4.6.7
 
   modules/templates/subject-revocation-store:
     dependencies:
