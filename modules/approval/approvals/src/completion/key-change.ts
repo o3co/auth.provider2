@@ -2,10 +2,12 @@ import type { Keys } from "@mod/keys";
 import { canonicalText, hpke, payloads, typs } from "@mod/sdk-core-wire";
 import type { ApprovalStore, ItemsOf, KeyChangeAsk, KeyChangeCompleted } from "../contract.ts";
 import {
+	creationIn,
 	current,
 	itemsIn,
 	recordOf,
 	type StatementRecord,
+	sha256,
 	stored,
 	wireVersion,
 } from "../statement/statement.ts";
@@ -21,6 +23,46 @@ const keptFor = (
 	r?.state === "completed" && r.asked === asked && r.enc && r.ct
 		? { kind: "completed", enc: r.enc, ct: r.ct }
 		: undefined;
+
+/**
+ * A sign-up's key kept on its T (F1): the possession's creation one of basis `sign-up`, the creation
+ * its T's sign-up step answered, and the T's `signUp.credential` then kept as the possession's unless
+ * another is kept. The T's use waits for it (`statement`). Why not, where it may not.
+ */
+async function signedUp(
+	p: { readonly keys: Keys; readonly store: ApprovalStore },
+	possession: ItemsOf["possession"],
+): Promise<"creation" | "other" | undefined> {
+	const { store } = p;
+	const creation = recordOf(await store.read(possession.creation_hash));
+	if (creation?.purpose !== "creation" || !(await current(p.keys, creation.jws))) return "creation";
+	const made = itemsIn(creation.jws, "creation") as ItemsOf["creation"];
+	if (made.basis !== "sign-up") return "creation";
+	const held = recordOf(await store.read(made.evidence));
+	if (!held || !(await current(p.keys, held.jws))) return "creation";
+	const credential = possession.credential_id;
+	const kept = (t: StatementRecord | undefined) =>
+		t?.purpose === "authorization" &&
+		t.signUp !== undefined &&
+		creationIn(t.result) !== undefined &&
+		sha256(creationIn(t.result) ?? "") === possession.creation_hash;
+	const changed = await store.change(made.evidence, (held) => {
+		const t = recordOf(held);
+		if (!kept(t) || !t?.signUp || t.signUp.credential !== undefined) return undefined;
+		return { value: stored({ ...t, signUp: { ...t.signUp, credential } }) };
+	});
+	const t = recordOf(changed?.after);
+	if (!kept(t)) return "creation";
+	return t?.signUp?.credential === credential ? undefined : "other";
+}
+
+/** The basis of the creation a possession names, where its record is kept. */
+const basisOf = async (store: ApprovalStore, possession: ItemsOf["possession"]) => {
+	const creation = recordOf(await store.read(possession.creation_hash));
+	return creation?.purpose === "creation"
+		? (itemsIn(creation.jws, "creation") as ItemsOf["creation"]).basis
+		: undefined;
+};
 
 /**
  * A key change's completions: the key a used possession names, signed by the Core's ring and sealed to
@@ -45,6 +87,11 @@ export function keyChangeCompletionsOver(p: {
 		if (p.now() > r.exp) return refused("expired");
 		if (!(await current(p.keys, r.jws))) return refused("unknown");
 		const named = itemsIn(r.jws, "possession") as ItemsOf["possession"];
+		// A sign-up's key is kept on its T before its completion: asked again, the same write answers alike.
+		if (asked === "sign-up") {
+			const why = await signedUp(p, named);
+			if (why) return refused(why);
+		} else if ((await basisOf(p.store, named)) === "sign-up") return refused("creation");
 		const { purpose, receipt, status, stateOf } = ask;
 		// What the log gave, named one by one: nothing else the caller hands is carried.
 		const log = {

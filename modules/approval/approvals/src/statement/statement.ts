@@ -15,6 +15,7 @@ import type {
 	Issued,
 	ItemsOf,
 	Purpose,
+	SignUp,
 	StatementItems,
 	StoredStatement,
 	Used,
@@ -38,6 +39,9 @@ const recordShape = z
 		e_enc: id,
 		e_sig: payloads.statement.shape.e_sig,
 		state: z.enum(["issued", "used", "completed"]),
+		/** A T's: the stages its owner allowed at its issue; its sign-up once begun (F1). */
+		continues: z.array(z.literal("sign-up")).min(1).optional(),
+		signUp: z.object({ subject: id.optional(), credential: id.optional() }).strict().optional(),
 		subject: id.optional(),
 		credential: id.optional(),
 		/** The id of the asserting key's registration's record on the subject's flow. */
@@ -59,7 +63,7 @@ const recordShape = z
 		/** The digest of the code its completion carries. */
 		code: id.optional(),
 		/** The path's purpose a possession's key-change completion was asked for. */
-		asked: z.enum(["first-key", "passkey-add"]).optional(),
+		asked: z.enum(["first-key", "passkey-add", "sign-up"]).optional(),
 		/** The id of the approval's record on the subject's flow, which the code's chain roots in. */
 		record: id.optional(),
 		/** That record's reference on the log, its shard and number. */
@@ -208,6 +212,9 @@ export function statementsOver(p: StatementParts) {
 			...made.screen,
 			state: "issued",
 			seq: 0,
+			...(ask.purpose === "authorization" && ask.continues?.length
+				? { continues: [...new Set(ask.continues)] }
+				: {}),
 		};
 		// Kept a while past its expiry, so a late use reads as expired.
 		await p.store.create(hash, stored(record), (p.lifetimeS + keptPastS) * 1000);
@@ -255,11 +262,11 @@ export function statementsOver(p: StatementParts) {
 		esig: esigOf(r.e_sig),
 	});
 
-	/** Marks the record used, from issued alone; the same evidence again reads as the approval. */
+	/** Marks the record used, from issued alone (a begun sign-up's T by its key); the same evidence again reads as the approval. */
 	async function marked(hash: string, use: Partial<StatementRecord>): Promise<Used> {
 		const changed = await p.store.change(hash, (current) => {
 			const r = recordOf(current) as StatementRecord;
-			return r.state === "issued"
+			return r.state === "issued" && signedUpBy(r, use)
 				? { value: stored({ ...r, ...use, usedAt: p.now(), state: "used" }) }
 				: undefined;
 		});
@@ -297,10 +304,14 @@ export function statementsOver(p: StatementParts) {
 		const asked = { challenge: challengeOf(q.statement), allow: [] };
 		const response = parsed(assertion);
 		if (response === undefined) return { kind: "refused", reason: "malformed" };
+		// A begun sign-up's T: refused before the assertion is asked, by the credential it names.
+		if (r.signUp && (r.signUp.credential === undefined || r.signUp.credential !== idOf(response)))
+			return { kind: "refused", reason: "used" };
 		const asserted = await p.passkeys.assert(response, asked);
 		if (asserted.kind === "refused") return asserted;
 		// approvals' own invariant, whatever passkeys' section says.
 		if (!asserted.userVerified) return { kind: "refused", reason: "unverified" };
+		if (!signedUpBy(r, asserted)) return { kind: "refused", reason: "used" };
 		return marked(hash, {
 			subject: asserted.subject,
 			credential: asserted.credential,
@@ -343,6 +354,31 @@ export function statementsOver(p: StatementParts) {
 		return { statement: r.jws, items, screen: { eEnc: r.e_enc, eSig: r.e_sig } };
 	}
 
+	async function signUpOf(hash: string): Promise<SignUp | undefined> {
+		const r = recordOf(await p.store.read(hash));
+		if (r?.purpose !== "authorization" || !r.signUp) return undefined;
+		if (!(await current(p.keys, r.jws))) return undefined;
+		const { subject, credential } = r.signUp;
+		const creation = creationIn(r.result);
+		return {
+			statement: r.jws,
+			...(subject === undefined ? {} : { subject }),
+			...(creation === undefined ? {} : { creation }),
+			...(credential === undefined ? {} : { credential }),
+		};
+	}
+
+	async function signUpSubject(hash: string, subject: string): Promise<string | undefined> {
+		const changed = await p.store.change(hash, (current) => {
+			const r = recordOf(current);
+			return r?.purpose === "authorization" && r.signUp && r.signUp.subject === undefined
+				? { value: stored({ ...r, signUp: { ...r.signUp, subject } }) }
+				: undefined;
+		});
+		const after = recordOf(changed?.after);
+		return after?.purpose === "authorization" ? after.signUp?.subject : undefined;
+	}
+
 	async function completionOf(hash: string) {
 		const r = recordOf(await p.store.read(hash));
 		return r?.purpose === "authorization" && r.state === "completed" && r.published
@@ -364,8 +400,39 @@ export function statementsOver(p: StatementParts) {
 			: "unknown";
 	}
 
-	return { issue, use, usedOf, rootOf, passkeyAddOf, creationOf, completionOf, publish };
+	return {
+		issue,
+		use,
+		usedOf,
+		rootOf,
+		passkeyAddOf,
+		creationOf,
+		signUpOf,
+		signUpSubject,
+		completionOf,
+		publish,
+	};
 }
+
+const signedUpBy = (
+	r: StatementRecord,
+	by: { readonly credential?: string | undefined; readonly subject?: string | undefined },
+) =>
+	r.signUp === undefined ||
+	(r.signUp.credential !== undefined &&
+		r.signUp.credential === by.credential &&
+		(r.signUp.subject === undefined || r.signUp.subject === by.subject));
+
+const idOf = (response: unknown) => {
+	const id = (response as { id?: unknown } | null)?.id;
+	return typeof id === "string" ? id : undefined;
+};
+
+/** The creation a sign-up's step answered, kept as its result; none for a refusal or no answer. */
+export const creationIn = (result: StatementRecord["result"]): string | undefined => {
+	const read = z.object({ creation: id }).strict().safeParse(result);
+	return read.success ? read.data.creation : undefined;
+};
 
 /** The thumbprint of a statement's E_sig: none is a record no statement was issued with, so unavailable. */
 const esigOf = (key: unknown): string => {

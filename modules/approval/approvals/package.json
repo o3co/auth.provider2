@@ -12,6 +12,7 @@
 		"./module": "./src/module.ts"
 	},
 	"dependencies": {
+		"@mod/continuation-wire": "workspace:*",
 		"@mod/issuer": "workspace:*",
 		"@mod/kernel": "workspace:*",
 		"@mod/keys": "workspace:*",

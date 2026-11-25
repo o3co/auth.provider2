@@ -11,12 +11,13 @@ Internal module of `approvals`: issuing statements, using each once, and reading
 - Continuations (`continuation`). Making a completion, and the flow (`completion`).
 
 ## Offers
-- `statementsOver` (`StatementParts`) → `issue`, `use`, `usedOf`, `creationOf`, `rootOf`, `passkeyAddOf`, `completionOf`, `publish`, as `approvals` offers them:
-  - `issue` (purpose, items, the screen's `eEnc` and `eSig`, the key it is counted by) → the statement (`approval+jwt`), its hash, its challenge; or refused: `items` (a screen key of no point or no thumbprint among them), `limited`, `busy`, `withdrawn`.
+- `statementsOver` (`StatementParts`) → `issue`, `use`, `usedOf`, `creationOf`, `rootOf`, `passkeyAddOf`, `signUpOf`, `signUpSubject`, `completionOf`, `publish`, as `approvals` offers them:
+  - `issue` (purpose, items, the screen's `eEnc` and `eSig`, the key it is counted by; a T's stages its owner allows, `continues`) → the statement (`approval+jwt`), its hash, its challenge; or refused: `items` (a screen key of no point or no thumbprint among them), `limited`, `busy`, `withdrawn`.
   - `use` (statement; an assertion's JSON text as sent, or a possession's verification) → the approval (hash, purpose, items, subject, credential and the key's registration's record id, or the verification; when used, its `eSig`'s thumbprint `esig`); or refused. A passkey-add's items are none.
   - `usedOf` (hash) → a used statement's approval, with its statement's issue time, `completed` once its completion is kept. `creationOf` (hash) → a creation's record until it expires.
   - `rootOf` (hash) → what a used authorization rests on, for a refresh family to check again: its statement, the assertion as received, its credential; none once its record is gone.
   - `passkeyAddOf` (hash) → a used passkey-add: its statement, the assertion as received, the key's subject, credential and registration, the screen's keys, and the statement's use-once mark; none past its expiry, where this generation's ring does not verify it, or for a record used before it held the registration.
+  - `signUpOf` (T's hash) → its sign-up as kept (F1): its statement, the subject, the creation its step answered and the credential its key change kept, each once kept; none where none began, or this generation's ring does not verify it. `signUpSubject` (T's hash, subject) → the subject kept for its begun sign-up, the first one written; none where none began.
   - `completionOf` (hash) → the completion kept, as `complete` answered it, once `publish` marked it gone out; none before. `publish` (hash): marks it so, once its caller let it go (an authorization's code rooted first).
 - `declaredOf` (the declarations, a refusal) → each purpose's declared names. `statementMark` (a statement's id) → its use-once mark, as `authority-rules`' fold names it. `itemNames`, `itemsIn`, `challengeOf`, `sha256`; the record's shape (`recordOf`, `stored`).
 
@@ -25,6 +26,7 @@ Internal module of `approvals`: issuing statements, using each once, and reading
 - A creation's challenge is for `create()`, any other's for `get()`.
 - The record is kept a minute past the statement's expiry, so a late use reads as expired.
 - A use writes once, from issued to used, holding what used it and when: an assertion's subject, credential, the key's registration as `passkeys` answered it, and JSON text as sent, or a verification. A record used before it held the registration names none. Its answer is the approval only where the record holds that same evidence; any other is `used`.
+- A T whose sign-up began is used only once its key change kept the credential it registered (`signUp.credential`), and only by that credential's assertion, of the subject made for it where one is kept: refused `used` before the assertion is asked (by the credential it names), after it, and in the write that uses it.
 - A record of another shape is read as a store that cannot tell: unavailable.
 - A use reads the record by the hash of the bytes presented, and takes them only where they are the bytes recorded and the Core's ring of this generation verifies them.
 

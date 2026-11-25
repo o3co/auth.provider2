@@ -11,7 +11,9 @@ Internal module of `approvals`: an authorization's approval put on the subject's
 ## Offers
 - `approvalKind`: no bundle, one stage, no records of its own and no resend: an orphan is marked and abandoned, never taken over. `approvalsOwner`: the state's `approvals` and `consumed`. `deciding` (KE-C01). `completionsOver` (`CompletionParts`) → the run of one completion, `complete`:
   - `complete` (hash, code) → the completion sealed to `eEnc` (HPKE's `enc` and ciphertext) and the approval's record's id on the flow (the code's chain's root), its `recordRef` (`ref`, an ID token's `apr`) and acceptance time (`acceptedAt`, its `auth_time`); or refused. `part`.
-- `keyChangeCompletionsOver` → `completeKeyChange` (a used possession's hash, its path's purpose `first-key` or `passkey-add`, what the change's record was given on the log): the `keyChange` completion of the key the possession names.
+- `keyChangeCompletionsOver` → `completeKeyChange` (a used possession's hash, its path's purpose `first-key`, `passkey-add` or `sign-up`, what the change's record was given on the log): the `keyChange` completion of the key the possession names.
+  - A sign-up's first keeps the possession's credential on its T (`signUp.credential`), unless the T kept another (`other`). Its possession's creation is the one its T's sign-up step answered, of basis `sign-up`, both records verified by this generation's ring (`creation` otherwise).
+  - A possession of a sign-up's creation asked for another purpose is refused `creation`.
 - `passkeyAddCompletionsOver` → `completePasskeyAdd` (a used passkey-add's hash, the assertion that used it as received, and, to make one, the creation its caller made for it): the `passkeyAdd` completion carrying that creation.
 
 ## Invariants

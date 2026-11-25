@@ -49,10 +49,15 @@ import approvalsModule from "../../src/module.ts";
 
 export const sha256 = (data: string) => createHash("sha256").update(data).digest("base64url");
 
-/** Statements' records in memory, under a clock a test moves, failing on demand as a store that cannot tell. */
+/**
+ * Statements' records in memory, under a clock a test moves, failing on demand as a store that cannot
+ * tell, and running a test's hook once before the next change of a record (another call's write
+ * between a read and a change, or a fault there).
+ */
 export function memoryStatements(now: () => number) {
 	const kept = new Map<string, { value: StoredStatement; until: number }>();
 	let failing = false;
+	const hooks = new Map<string, () => Promise<void>>();
 	const live = (hash: string) => {
 		if (failing) throw new Unavailable("store");
 		const entry = kept.get(hash);
@@ -66,6 +71,9 @@ export function memoryStatements(now: () => number) {
 		},
 		read: async (hash) => structuredClone(live(hash)?.value),
 		async change(hash, change) {
+			const hook = hooks.get(hash);
+			hooks.delete(hash);
+			if (hook) await hook();
 			const entry = live(hash);
 			if (!entry) return undefined;
 			const next = change(structuredClone(entry.value));
@@ -79,6 +87,9 @@ export function memoryStatements(now: () => number) {
 		value: (hash: string) => kept.get(hash)?.value as unknown as Record<string, unknown>,
 		fail: (on: boolean) => {
 			failing = on;
+		},
+		beforeChange: (hash: string, hook: () => Promise<void>) => {
+			hooks.set(hash, hook);
 		},
 	};
 }

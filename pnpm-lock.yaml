@@ -30,6 +30,9 @@ importers:
 
   modules/approval/approvals:
     dependencies:
+      '@mod/continuation-wire':
+        specifier: workspace:*
+        version: link:../../wire/continuation-wire
       '@mod/issuer':
         specifier: workspace:*
         version: link:../../oauth/issuer
