@@ -162,7 +162,7 @@ describe("an operation over HTTP", () => {
 			field: "stage",
 			error: "enumRange",
 		});
-		expect(messageOf("firstKeyContinue", carried({ seq: "01" }))).toMatchObject({
+		expect(messageOf("continue", carried({ stage: "rename", seq: "01" }))).toMatchObject({
 			field: "seq",
 			error: "enumRange",
 		});
