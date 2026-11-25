@@ -343,7 +343,7 @@ describe("a bundle, owned by the token endpoint (A40)", () => {
 			return { issue: world.run({ ...t, decide }), effs };
 		};
 		const person = { ...grant, subject: "alice", subjectKind: "user" as const };
-		const rootings = [{ via: "code" }, { via: "refresh" }] as const;
+		const rootings = [{ via: "code", code: "code-digest" }, { via: "refresh" }] as const;
 		liveFamilies = { r1: familyAt(0) };
 		for (const [i, via] of rootings.entries()) {
 			const { issue, effs } = await watching();
@@ -384,7 +384,7 @@ describe("a bundle, owned by the token endpoint (A40)", () => {
 			...ask,
 			request: { ...ask.request, grant: person },
 			root: "r-approval",
-			via: { via: "code" },
+			via: { via: "code", code: "code-digest" },
 			parts: [part("idToken"), part("family")],
 		});
 		expect(answer).toEqual({

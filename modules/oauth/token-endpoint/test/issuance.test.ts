@@ -61,9 +61,9 @@ it("hands a bundle's root, its rooting and its parts on, and answers each part's
 		audience: [],
 		scope: [],
 	};
-	const answer = await issue({ access, root: "r", via: { via: "code" }, parts: [part] });
+	const answer = await issue({ access, root: "r", via: { via: "code", code: "d" }, parts: [part] });
 	expect(answer).toMatchObject({ kind: "issued", parts: ["id"] });
-	expect(asked[0]).toMatchObject({ root: "r", via: { via: "code" }, parts: [part] });
+	expect(asked[0]).toMatchObject({ root: "r", via: { via: "code", code: "d" }, parts: [part] });
 	await issuanceFor(issuing as never, "urn:test", undefined).issue({ access });
 	expect(Object.keys(asked[1] as object).sort()).toEqual(["limits", "request"]);
 });
