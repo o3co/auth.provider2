@@ -16,6 +16,7 @@ import {
 	tokenOf,
 	write,
 } from "../record.ts";
+import { heldBy, type Listed, rootedOver } from "../rooted/rooted.ts";
 import { type FamilyRecords, familyRecords } from "../store.ts";
 
 /** What a family's founding is made over. */
@@ -30,6 +31,8 @@ export interface FoundingParts {
 	readonly now: () => number;
 	/** A refresh token's secret: 32 random bytes, base64url. */
 	readonly secret: () => string;
+	/** Lists a family founded under its subject and its root key (internal module `rooted`). */
+	readonly list: (entry: Listed) => Promise<void>;
 }
 
 /** What a part holds between its preparing and its commit: the record but its id, and the secret. */
@@ -84,6 +87,10 @@ export function founding(p: FoundingParts): FamilyMaker {
 			const claimed = read.key(await p.records.read(key))?.family;
 			if (code?.revoked || claimed !== placed.id)
 				throw new Unavailable("refresh: ended as founded");
+			await p.list({ subject: record.subject, family: placed.id, credential: record.credential });
+			// Its root key removed since `part` read it, before it was listed: ended here, as told.
+			const root = await p.passkeys.publicKeyOf(record.credential);
+			if (root?.subject !== record.subject) throw new Unavailable("refresh: its root key is gone");
 			await p.selections.follow(record.code, placed.id, ttl);
 		} catch (error) {
 			await revokeFamily(p.records, placed.id).catch(() => undefined);
@@ -176,4 +183,10 @@ export const foundingIn = async (
 		lifetimeMs,
 		now: c.clock.now,
 		secret: () => Buffer.from(c.random.bytes(32)).toString("base64url"),
+		list: rootedOver({
+			records: await c.get(familyRecords),
+			lifetimeMs,
+			now: c.clock.now,
+			held: heldBy(await c.get(passkeys)),
+		}).list,
 	});

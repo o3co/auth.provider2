@@ -49,12 +49,29 @@ const codeShape = z.strictObject({
 	revoked: z.literal(true).optional(),
 });
 
+/** How many families a subject's rooted list holds in one bucket: a bound on one record's size. */
+export const listedPerBucket = 64;
+/**
+ * A subject's families founded in one bucket of time, each with its root key's credential: the rooted
+ * list a root key's removal ends families by. Past `listedPerBucket`, a family is not listed.
+ */
+const rootedShape = z.strictObject({
+	format: z.literal(1),
+	subject: id,
+	families: z.array(z.strictObject({ family: id, credential: id })).max(listedPerBucket),
+});
+export type RootedList = z.output<typeof rootedShape>;
+
 /** Each record's name, by its kind. */
 export const nameOf = {
 	family: (family: string) => `f.${family}`,
 	key: (confirmation: string) => `k.${confirmation}`,
 	code: (code: string) => `c.${code}`,
+	/** A subject's rooted list of one bucket. */
+	rooted: (of: string) => `s.${of}`,
 };
+/** A rooted list's name, for a subject and a bucket's number. */
+export const rootedOf = (subject: string, bucket: number) => nameOf.rooted(`${bucket}.${subject}`);
 
 const opened = <T>(shape: z.ZodType<T>, kept: StoredFamilyRecord | undefined): T | undefined => {
 	if (kept === undefined) return undefined;
@@ -69,11 +86,13 @@ export const read = {
 	family: (kept: StoredFamilyRecord | undefined) => opened(familyShape, kept),
 	key: (kept: StoredFamilyRecord | undefined) => opened(keyShape, kept),
 	code: (kept: StoredFamilyRecord | undefined) => opened(codeShape, kept),
+	rooted: (kept: StoredFamilyRecord | undefined) => opened(rootedShape, kept),
 };
 export const write = {
 	family: (r: FamilyRecord) => stored(r),
 	key: (family: string, subject: string) => stored({ format: 1, subject, family }),
 	code: (r: z.output<typeof codeShape>) => stored(r),
+	rooted: (r: RootedList) => stored(r),
 };
 
 export const sha256 = (text: string) => createHash("sha256").update(text).digest("base64url");

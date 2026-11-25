@@ -6,7 +6,7 @@ import { type Grant, grants, sessionIssuances } from "@mod/grants";
 import { assemble, contract, defineModule, kernelConfig } from "@mod/kernel";
 import { quietRuntime, takesUnused } from "@mod/kernel/testing";
 import { keys } from "@mod/keys";
-import { passkeys } from "@mod/passkeys";
+import { type PasskeyRemoval, passkeyRemovals, passkeys } from "@mod/passkeys";
 import { type Stance, stances } from "@mod/promises";
 import { sessions } from "@mod/session";
 import { type RevocableKind, revocableKinds } from "@mod/token-revocation";
@@ -25,9 +25,14 @@ const seen = contract<{
 	readonly grants: readonly Grant[];
 	readonly kinds: readonly RevocableKind[];
 	readonly stances: readonly Stance[];
+	readonly removals: readonly PasskeyRemoval[];
 }>("seen");
 const fakes = defineModule(
-	{ name: "fakes", replicaSafe: true, takes: [families, grants, revocableKinds, stances] },
+	{
+		name: "fakes",
+		replicaSafe: true,
+		takes: [families, grants, revocableKinds, stances, passkeyRemovals],
+	},
 	(m) => [
 		m.provide(approvals).by(() => ({}) as never),
 		m.provide(passkeys).by(() => ({}) as never),
@@ -41,6 +46,7 @@ const fakes = defineModule(
 			grants: await c.collect(grants),
 			kinds: await c.collect(revocableKinds),
 			stances: await c.collect(stances),
+			removals: await c.collect(passkeyRemovals),
 		})),
 	],
 );
@@ -68,6 +74,8 @@ it("founds families for code-grant, refreshes them as a grant, revokes them by t
 		["refresh_token", "user", true],
 	]);
 	expect(s.kinds.map((k) => k.hint)).toEqual(["refresh_token"]);
+	// A root key removed ends its families here (Q46): told by passkeys' settle.
+	expect(s.removals).toHaveLength(1);
 	expect(s.stances).toEqual([
 		{ promise: "front-compromise-new-authorization", holds: true, by: "refresh" },
 	]);

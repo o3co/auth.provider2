@@ -11,6 +11,7 @@ import {
 	statement,
 } from "../../../test/fixtures.ts";
 import { nameOf, read, sha256, tokenOf } from "../../record.ts";
+import { rootedOver } from "../../rooted/rooted.ts";
 import { type FoundingParts, founding } from "../family.ts";
 
 const secret = "s".repeat(43);
@@ -48,6 +49,12 @@ function world(over: Partial<FoundingParts> = {}) {
 		lifetimeMs,
 		now: records.now,
 		secret: () => secret,
+		list: rootedOver({
+			records: records.records,
+			lifetimeMs,
+			now: records.now,
+			held: async () => false,
+		}).list,
 		...over,
 	});
 	return { records, maker, followed };
@@ -186,6 +193,33 @@ describe("a family, founded with a code's redemption", () => {
 		expect(await unsigned.maker.part(request)).toEqual({
 			refused: "the statement it rests on does not verify",
 		});
+	});
+
+	it("ends itself where listing it under its root key fails, its DPoP key claimed to its end (Q27)", async () => {
+		const failing = world({
+			list: async () => {
+				throw new Error("store down");
+			},
+		});
+		await expect(founded(failing)).rejects.toThrow("store down");
+		const { records } = failing.records;
+		expect(read.family(await records.read(nameOf.family("r-bundle")))?.revoked).toBe(true);
+		expect(read.key(await records.read(nameOf.key(jkt)))?.family).toBe("r-bundle");
+	});
+
+	it("ends itself where its root key was removed between its part and its commit (Q46)", async () => {
+		let reads = 0;
+		const removed = world({
+			passkeys: {
+				// Found as the part reads it; gone when the commit reads it again.
+				publicKeyOf: async () =>
+					reads++ === 0 ? { subject: "alice", publicKey: "pk", registration: "r-key" } : undefined,
+			},
+		});
+		await expect(founded(removed)).rejects.toSatisfy(isUnavailable);
+		expect(
+			read.family(await removed.records.records.read(nameOf.family("r-bundle")))?.revoked,
+		).toBe(true);
 	});
 
 	it("lets one of two commits interleaved on one key live, and ends a family whose code is voided mid-commit", async () => {
