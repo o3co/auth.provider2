@@ -286,6 +286,21 @@ describe("a code exchange: start and bundle (J2, J7, BundleEscape023)", () => {
 		}
 	});
 
+	it("allows a start from each of two approvals naming one code: a code twice is no forgery (V12; the receiver's `apr` at L1)", () => {
+		const second = approval(5, "r-1", "sid-2");
+		const named = second.record.approval;
+		if (!named) throw new Error("an approval's record names its code");
+		const sameCode = {
+			...second,
+			record: { ...second.record, approval: { ...named, code: digest("code-sid-1") } },
+		};
+		expect(verdictOn(codeStart(6, "again", "r-5"), on([...login(), second]))).toEqual(
+			refused(/code/),
+		);
+		const p = on([...login(), sameCode]);
+		expect(verdictOn(codeStart(6, "again", "r-5"), p)).toEqual(ok);
+	});
+
 	it("refuses a bundle with no start of its op before it, or naming another start or root", () => {
 		expect(verdictOn(codeBundle(3, "login", "r-9", "r-2"), approved())).toEqual(
 			refused(/no start/),

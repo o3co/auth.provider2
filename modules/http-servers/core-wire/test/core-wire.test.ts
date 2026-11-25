@@ -18,7 +18,8 @@ import {
 import httpOps from "@mod/http-ops/module";
 import { BootRefused, defineModule, type Module } from "@mod/kernel";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import { core, tokenMessage, wireClient } from "./boot.ts";
+import { wireClient } from "../src/testing.ts";
+import { core, tokenMessage } from "./boot.ts";
 
 let certificates: WireCertificates;
 beforeAll(async () => {

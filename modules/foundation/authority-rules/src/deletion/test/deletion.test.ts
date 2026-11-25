@@ -3,11 +3,15 @@ import {
 	added,
 	addedKey,
 	addParts,
+	approval,
 	askOf,
+	codeBundle,
+	codeStart,
 	deletion,
 	firstKey,
 	newKey,
 	prefixOf,
+	refreshStart,
 	type Step,
 } from "../../../test/fixtures/flow.ts";
 import { coseKey, T0 } from "../../../test/fixtures/world.ts";
@@ -118,5 +122,25 @@ describe("a key's deletion (V24)", () => {
 	it("leaves the keys it did not name, folded as DelDrop", () => {
 		const p = on([firstKey(1), added(2, "r-1"), deletion(3, "r-1", newKey.credential)]);
 		expect(Object.keys(p.state.keys)).toEqual(["r-2"]);
+	});
+
+	it("leaves no family of the deleted key: its refresh, and a code's bundle on its approval, are refused (Rules023del)", () => {
+		// r-1 approves a login whose bundle founds the family r-5; r-2, added by r-1, deletes r-1.
+		const loggedIn = [
+			firstKey(1),
+			added(2, "r-1"),
+			approval(3, "r-1"),
+			codeStart(4, "login", "r-3"),
+			codeBundle(5, "login", "r-4", "r-3"),
+		];
+		expect(verdictOn(refreshStart(6, "rf", "r-5"), on(loggedIn))).toEqual(ok);
+		const p = on([...loggedIn, deletion(6, "r-2", newKey.credential, addedKey)]);
+		expect(Object.keys(p.state.families)).toEqual([]);
+		expect(verdictOn(refreshStart(7, "rf", "r-5"), p)).toEqual(refused(/family is not live/));
+		// The code started before the deletion, its bundle after it.
+		const started = on([...loggedIn.slice(0, 4), deletion(5, "r-2", newKey.credential, addedKey)]);
+		expect(verdictOn(codeBundle(6, "login", "r-4", "r-3"), started)).toEqual(
+			refused(/approval whose key is not live/),
+		);
 	});
 });

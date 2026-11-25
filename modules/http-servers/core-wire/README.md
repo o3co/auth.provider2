@@ -13,7 +13,7 @@
 - Composition definition (`./module`): the server of `http`'s `httpServers`. It ends TLS for the wire (`network`: `serves-wire`); its probe listener is `http-server`'s.
 - The axis's default, as the strong side: a composition that names no adapter of the http axis composes it.
 - Operator section `core-wire`: `certificate-file` and `key-file` (the entrance's), `front-authority-file`, `probe-host` and `probe-port`, and `on-violation` (`notify`, the default, or `cut`).
-- `./testing`: `coreWireConfig`, the section with a test's certificates and the probe listener on a free port.
+- `./testing`: `coreWireConfig`, the section with a test's certificates and the probe listener on a free port; `wireClient`, a Front's connection on localhost showing a certificate (`FrontCertificates`) or none, sending frames and keeping the replies by id.
 
 ## Invariants
 - The wire listens on `http`'s host and port, at most `max-connections` at once, held to `tls-options`' floor: only a Front whose certificate chains to `front-authority-file` connects, and its connection closes as that certificate expires. A handshake refused is logged at debug alone, as anyone on the network can cause one.

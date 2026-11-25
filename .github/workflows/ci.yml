@@ -35,9 +35,10 @@ jobs:
             pnpm-lock.yaml
             sdk/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
-      - run: pnpm check
-      # The receivers' parts (`sdk/`), a workspace of their own on the provider's protocol packages.
+      # The receivers' parts (`sdk/`), a workspace of their own on the provider's protocol packages,
+      # installed before the checks: the attack harness's tests read the login screen's SDK.
       - run: pnpm --dir sdk install --frozen-lockfile
+      - run: pnpm check
       - run: pnpm --dir sdk check
 
   # The tests that run child processes (`*.process.test.ts`), apart from `pnpm check` as they are
@@ -55,7 +56,11 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
           cache: pnpm
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            sdk/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
+      - run: pnpm --dir sdk install --frozen-lockfile
       - run: pnpm test:process
 
   # The one required check.
