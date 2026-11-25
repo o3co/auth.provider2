@@ -4,12 +4,13 @@ import { contract, extensionPoint } from "@mod/kernel";
 import type { Binding } from "@mod/sender-binding";
 import type {
 	AccessGrant,
-	IssuanceRefused,
 	IssuanceRequest,
 	IssuedAccess,
 	IssueLimits,
 	SubjectKind,
 } from "@mod/tokens";
+import type { TargetVerdict } from "./audience/audience.ts";
+import type { BundleRequest, Refused } from "./issuance/issuance.ts";
 
 export type OAuthError =
 	| "invalid_request"
@@ -19,12 +20,6 @@ export type OAuthError =
 	| "unsupported_grant_type"
 	| "invalid_scope"
 	| "invalid_target";
-
-/** An issuance a policy refused: a grant returns it unread, and the endpoint answers it. */
-export interface Refused {
-	readonly kind: "refused";
-	readonly refusal: IssuanceRefused;
-}
 
 export type GrantOutcome =
 	| { readonly kind: "issued"; readonly body: Readonly<Record<string, unknown>> }
@@ -43,74 +38,6 @@ export type GrantOutcome =
 			/** More members of the error body, passed through unread but for the names an error answer drops. */
 			readonly members?: Readonly<Record<string, unknown>>;
 	  };
-
-/** For an issuance's audience: the request's parameters, the audience when none is asked, and whether the issuance may have another (its owner decides). */
-export interface TargetRequest {
-	readonly param: (name: string) => string | undefined;
-	readonly audience: readonly string[];
-	readonly within: (audience: string) => boolean;
-}
-export type TargetVerdict =
-	| { readonly kind: "audience"; readonly audience: readonly string[] }
-	| { readonly kind: "error"; readonly error: "invalid_target"; readonly description: string };
-/** A rule for the audience a request asks for, as resource indicators (RFC 8707) contribute. */
-export interface TargetRule {
-	target(request: TargetRequest): TargetVerdict;
-	/** For a grant that takes no audience, or another endpoint that asks: a refusal when the request asks one anyway. */
-	untargeted?(
-		request: Pick<TargetRequest, "param">,
-	): Extract<TargetVerdict, { readonly kind: "error" }> | undefined;
-	/** For a parameter sent more than once: a refusal when it is one the rule reads. */
-	repeated?(name: string): Extract<TargetVerdict, { readonly kind: "error" }> | undefined;
-}
-/** At most one; two refuse boot. */
-export const targetRules = extensionPoint<TargetRule>("grants.target-rules", {
-	multiplicity: "many",
-});
-/** The composed rule, provided by the token endpoint; with none, the default audience, the request unread. */
-export const targets = contract<TargetRule>("grants.targets");
-
-/**
- * One bundle a grant issues: its tokens recorded once, under its start, before any is signed. It holds
- * an access token; its subject's kind names the flow it is recorded on, a person's or the client's own.
- */
-export interface BundleRequest {
-	/** Its root's reference: the record its chain roots in, where that record is on the log; none where it is not. */
-	readonly root?: string;
-	/** How a person's bundle roots there: by an approval's code, or by a family's refresh. */
-	readonly via?: Rooting;
-	readonly access: AccessGrant;
-	/** The tokens it carries beside its access token, each its owner's, recorded in the same bundle. */
-	readonly parts?: readonly BundlePart[];
-}
-
-/**
- * How a person's bundle roots: by an approval's code, or by a family's refresh, the rotation its
- * start names read by the token endpoint from the flow's applied state.
- */
-export type Rooting =
-	/** By an approval's code: its digest (its SHA-256, base64url, A21), which the start names beside its client (V24). */
-	{ readonly via: "code"; readonly code: string } | { readonly via: "refresh" };
-
-/**
- * A token a bundle carries beside its access token (A40), made by its owner: prepared with the
- * start's acceptance time before the bundle is recorded, its digest recorded with the access
- * token's, and signed only after the bundle's receipts, with its own receipt and the bundle's
- * record. Its `commit`, where it has one, runs once the bundle is taken in as its owner's `took`
- * (V12), before any token is answered: a failure answers none, the bundle on the log all the same.
- */
-export interface BundlePart {
-	readonly frame: "idToken" | "family";
-	prepare(acceptedAt: number): Promise<{ readonly prepared: unknown; readonly digest: string }>;
-	sign(prepared: unknown, receipt: string, placed: BundlePlaced): Promise<string>;
-	commit?(prepared: unknown, placed: BundlePlaced): Promise<void>;
-}
-
-/** The bundle's record on the log: its id (a family it makes is named by it) and its acceptance time. */
-export interface BundlePlaced {
-	readonly id: string;
-	readonly acceptedAt: number;
-}
 
 export interface GrantInput {
 	readonly request: HttpRequest;
@@ -221,40 +148,5 @@ export const grantServers: Readonly<Record<string, string>> = Object.freeze(
 	}),
 );
 
-/** Told of each access token `issue` makes from a session, before the grant answers it. */
-export interface SessionIssuance {
-	/** A failure revokes the token, and `issue` throws it on. */
-	issued(session: string, access: Pick<IssuedAccess, "id" | "expiresAt">): Promise<void>;
-}
-
-export const sessionIssuances = extensionPoint<SessionIssuance>("grants.session-issuances", {
-	multiplicity: "many",
-});
-
-/** What a token is tied to by one tie; `reason` is read after the token's name ("family has ended"). */
-export type TokenTieAnswer =
-	| { readonly kind: "none" }
-	| { readonly kind: "ended"; readonly reason: string }
-	| {
-			readonly kind: "held";
-			/** When the tie ends, in epoch ms: a token issued from it ends by then. */
-			readonly ends?: number;
-			/** The session a token issued from it is issued from. */
-			readonly session?: string;
-			/** Adds a token issued from it, for its subject: false when the tie ended meanwhile. */
-			join(issued: Pick<IssuedAccess, "id" | "expiresAt">, subject: string): Promise<boolean>;
-	  };
-
-/**
- * One thing a token this provider issued is tied to, kept by its owner: its family, its session.
- * Asked only of a token this provider issued and has verified; throws Unavailable when it cannot tell.
- */
-export interface TokenTie {
-	readonly name: string;
-	tieOf(tokenId: string): Promise<TokenTieAnswer>;
-}
-
-export const tokenTies = extensionPoint<TokenTie>("grants.token-ties", {
-	multiplicity: "keyed",
-	keyOf: (tie) => tie.name,
-});
+export * from "./audience/audience.ts";
+export * from "./issuance/issuance.ts";

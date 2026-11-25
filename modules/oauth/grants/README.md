@@ -21,18 +21,10 @@
 - A grant is given the request sender's binding, and what its client's authentication verified (`authenticated`, the method's owner reading it), unread.
 - A grant says whom it issues for in what it gives `admits` and `issue`: the subject, and the subject's kind (`tokens`' `subjectKind`), `user` for a person, or `client` where the client gets a token for itself, as the client credentials grant does, its subject then the client. A grant may declare that kind for every token it issues (`subjectKind`), a declaration the token endpoint reads, never a proof.
 - `admits`: whether `tokens`' issuance policies allow a grant now, under the grant type, the session it comes from and `tokens`' `continuing`.
-- `issue`: asks again, then issues one bundle (`BundleRequest`: an access token, and the `parts` its owners make beside it, `idToken` or `family`, each prepared before and signed after the receipts with the bundle's record, `commit`ted once it is taken in, answered as `parts`; omitted `family` parts are `undefined` in place) with the binding, and the expiry cap and lifetime the grant gives. A grant may add claims (`AccessGrant.claims`, under `added-claims`' rules).
-  - The bundle names its root's reference, where its root is on the log, and for a person's how it roots there (`Rooting`: by an approval's code, with the code's digest, or a family's refresh, its rotation read from the flow's state). Its start is recorded, its tokens made with that record's acceptance time as their issue time, recorded once before any is signed, and answered once judged: the token endpoint's.
-- A refused issuance is a value the grant returns unread; it is answered for every grant as `400 invalid_grant` with the policy's description.
-- Every credential an `issued` answer carries, additions included, is for the one subject its `issue` issued under: an answer issued under none or more than one is the grant's fault, `500`, none of it answered. Before it goes out, that subject passes `tokens`' issuance fences; a bundle refused is answered as a refused issuance, with `tokens`' description.
-- `target`: the audience `targets` answers within the grant's ceiling.
-- A grant that takes its audience from the request declares `targets`; any other is first asked the rule's `untargeted`, and its refusal is answered before the grant runs.
 - A grant declares `readsAmbient`: `cookie` when it reads the session's cookie, which a browser sends by itself, and then checks the request's origin itself; `none` otherwise. The token endpoint's route has no own-site policy and relies on it; it is a declaration, never a proof.
-- Extension point `sessionIssuances`: told the session and the token's id and expiry by `issue` given a session. One failing revokes the token, and `issue` throws it on.
-- Extension point `tokenTies`, one per `name`, asked of a token this provider issued and verified: `tieOf` answers `none`, `ended` (a `reason` read after the token's name: `family has ended`), or `held`: an end, a session to issue from, and `join`, adding a token issued from it for its subject, false once the tie ended.
-- Extension point `targetRules`: at most one rule; two refuse boot. A rule's `target` is given the request's parameters, the default audience and whether the issuance may have another; it answers the audience, or `invalid_target` with a description, which is the answer.
-- A rule may answer `untargeted` (the request's parameters, for a grant or endpoint that takes no audience) and `repeated` (a parameter's name, sent more than once) with `invalid_target`, which is then the answer.
-- `targets`: the composed rule, provided by `token-endpoint`. With none composed, the default audience, the request unread.
+- `issue` (internal module `issuance`): one bundle, `BundleRequest` with its `parts` (`BundlePart`, `BundlePlaced`) and how a person's roots (`Rooting`), answered issued, or `Refused` (`400 invalid_grant`); extension point `sessionIssuances`, told of each token issued from a session.
+- The audience asked (internal module `audience`): a grant's `target` and its declaration `targets` (`Grant`); extension point `targetRules` (at most one), `TargetRule`, `TargetRequest`, `TargetVerdict`, and `targets`, the composed rule `token-endpoint` provides.
+- Every credential an `issued` answer carries, additions included, is for the one subject its `issue` issued under: an answer issued under none or more than one is the grant's fault, `500`, none of it answered. Before it goes out, that subject passes `tokens`' issuance fences; a bundle refused is answered as a refused issuance, with `tokens`' description.
 - `composedGrants`: the grant types composed, answered by `token-endpoint`'s module.
 - `grantServers`: the index of first-party grants, each grant type by the module that serves it, as that module's manifest declares (`grantTypes`); a test holds the two alike. A type it does not list, a name every object has included, answers none.
 
@@ -41,4 +33,3 @@
 
 ## Vocabulary
 - grant: a procedure that issues tokens, chosen by grant type name.
-- tie: what a token ends with besides itself, kept by its owner (its family, its session).
