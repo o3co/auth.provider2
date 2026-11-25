@@ -75,6 +75,9 @@ describe("an approval's KE-C01", () => {
 				keyThumbprint,
 				digest: (data) =>
 					sha256(typeof data === "string" ? data : Buffer.from(data).toString("latin1")),
+				// An approval is judged here, no key change: no continuation is verified.
+				attestedKey: cer.attestedKey,
+				verifyEsig: () => false,
 			},
 			context: {
 				ring: signer.coreRing(1) ?? [],
