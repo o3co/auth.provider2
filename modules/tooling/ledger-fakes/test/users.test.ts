@@ -1,3 +1,4 @@
+import { ledgerRoutes } from "@mod/ledger-wire";
 import { describe, expect, it } from "vitest";
 import { type LedgerCall, usersLedger } from "../src/contract.ts";
 
@@ -26,12 +27,16 @@ describe("a fake ledger speaking users-http's calls", () => {
 	const call = caller(ledger);
 
 	it("serves its calls at one origin, under a credential of its own", () => {
-		expect(ledger.urls("http://127.0.0.1:1")).toEqual({
-			verify: "http://127.0.0.1:1/verify",
-			subject: "http://127.0.0.1:1/subject",
-			identifier: "http://127.0.0.1:1/identifier",
-			create: "http://127.0.0.1:1/create",
-		});
+		// Every route ledger-wire names, at the origin: a call the wire adds is served there too.
+		expect(ledger.urls("http://127.0.0.1:1")).toEqual(
+			Object.fromEntries(
+				Object.entries(ledgerRoutes.users).map(([call, path]) => [
+					call,
+					`http://127.0.0.1:1${path}`,
+				]),
+			),
+		);
+		expect(ledger.urls("http://127.0.0.1:1").verify).toBe("http://127.0.0.1:1/verify");
 		expect(ledger.credential).toMatch(/^[0-9a-f]{64}$/);
 	});
 
