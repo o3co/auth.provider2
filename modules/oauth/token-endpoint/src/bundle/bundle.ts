@@ -90,7 +90,7 @@ export function effectOfBundle(ask: Pick<BundleAsk, "root" | "via">, client: unk
 		: { rotate: ask.root };
 }
 
-const bundleContentOf = (start: Record<string, unknown>) =>
+const bundleContentOf = (start: Preimage["content"]) =>
 	start.via === "code" ? { via: "code" } : start;
 
 /** A client's own token refused before its op is decided, or once its evidence is found used. */
@@ -203,10 +203,8 @@ export function bundling(deps: BundleParts) {
 		// A refresh's rotation is its family's on the applied state: none there, the family is not live.
 		const contentOn = (state: FlowState) => {
 			if (client) return { via: "client" };
-			if (ask.via?.via === "code") {
-				const code = ask.via.code === undefined ? {} : { code: ask.via.code };
-				return { via: "code", ...code, client: ask.request.grant.issuedTo };
-			}
+			if (ask.via?.via === "code")
+				return { via: "code", code: ask.via.code, client: ask.request.grant.issuedTo };
 			if (ask.via?.via !== "refresh") return {};
 			const family = ask.root === undefined ? undefined : ownFamily(state, ask.root);
 			const own = family?.client === ask.request.grant.issuedTo;
