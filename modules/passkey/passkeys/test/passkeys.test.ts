@@ -5,6 +5,7 @@ import {
 	isUnavailable,
 	type Module,
 	type Parts,
+	Unavailable,
 } from "@mod/kernel";
 import { passkeyWitnesses } from "@mod/passkey-witness";
 import { passkeyWitnessStandIn } from "@mod/passkey-witness/testing";
@@ -101,6 +102,40 @@ describe("passkeys", () => {
 			reason: "unknown-credential",
 		});
 		expect(w.credentials.value(credential.id)).toEqual(taken);
+	});
+
+	it("leaves a removal untold where a contributor could not tell it, told again at the next settle", async () => {
+		const told: string[] = [];
+		let down = true;
+		const failing = contributing("failing", (m) => [
+			m.contribute(passkeyRemovals).by(() => ({
+				removed: async (_s: string, credential: string) => {
+					if (down) {
+						down = false;
+						throw new Unavailable("store");
+					}
+					told.push(credential);
+				},
+			})),
+		]);
+		const w = await world({ modules: [failing, memoryWitnessing().module] });
+		const one = await w.register();
+		const two = await w.register("s1", false, w.auth, w.recordOf("s1", one.credential.id));
+		const k2 = w.recordOf("s1", two.credential.id);
+		const removed = await w.regs.remove({
+			subject: "s1",
+			credential: two.credential.id,
+			op: "rm1",
+			decide: deciding({ removeKey: k2 }),
+		});
+		if (!("prev" in removed)) throw new Error(removed.refused);
+		await w.land("s1", "rm1", keyStage(flow, "rm1", { credential: "-", publicKey: "-" }), 2);
+		await expect(w.keys.settle("s1")).rejects.toSatisfy(isUnavailable);
+		// Nothing held as told: its details stay, and the next settle tells it.
+		expect(w.credentials.value(two.credential.id)).toHaveProperty("details");
+		expect(await w.keys.settle("s1")).toBe(true);
+		expect(told).toEqual([two.credential.id]);
+		expect(w.credentials.value(two.credential.id)).not.toHaveProperty("details");
 	});
 
 	it("settles from the applied state alone: removals told of every key gone, a mark withdrawn only once the generation moves", async () => {

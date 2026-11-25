@@ -16,6 +16,7 @@ Internal module of `approvals`: an authorization's approval put on the subject's
   - A possession of a sign-up's creation asked for another purpose is refused `creation`.
 - `passkeyManageCompletionsOver` (with passkeys' `listOf`) → `completePasskeyManage` (a used passkey-manage's hash and the assertion that used it, and `make` to make one where none is kept, or a continuation's `continued`: its rename's number and body hash): the `passkeyManage` completion listing the subject's keys, each its label or `Passkey` and its reservation's day, and its time in seconds.
 - `passkeyAddCompletionsOver` → `completePasskeyAdd` (a used passkey-add's hash, the assertion that used it as received, and, to make one, the creation its caller made for it): the `passkeyAdd` completion carrying that creation.
+- `beyondLimits` (the issuer, the Core's keys' JWKs) → why one passes the wire's completion limits, or none.
 
 ## Invariants
 - KE-C01 refuses where the statement's mark is set or its key is not live; its stage names the key's record as parent, carries the statement and assertion, and binds their digests and the code's; its changes are the approval (key, code's digest, client) and the statement's mark, as `authority-rules` reads the record.
@@ -28,6 +29,7 @@ Internal module of `approvals`: an authorization's approval put on the subject's
 - Kept, it is given again alike for that purpose, with what the log gave as first asked; another purpose is `other`.
 - A passkey-add's completion is made only for a passkey-add used by the same assertion, unexpired, that this generation's ring verifies, and a creation issued here for it: basis `passkey-add`, its hash as evidence, the subject that used it, the same screen's keys (else `creation`).
 - It is signed, padded to the bucket its creation's longest excluded credential ID chooses (`sdk-core-wire`'s `paddedCompletion`; one that does not fit is `form`, never sealed), and sealed under `completionAad` of `passkey-add` and its hash before anything is kept, then kept whole in one write from used: the first kept is answered to every call after, with or without a creation, whatever has lapsed since. Made twice at once, one creation is lost unseen.
+- Boot is refused where the issuer, or a Core key's kid or RSA modulus, passes `sdk-core-wire`'s `completionLimits` (`beyondLimits`): a padded completion then fits its bucket by settings, never failing for one person's keys alone.
 - A passkey-manage's completion is padded as a passkey-add's, to the bucket its keys' longest credential ID chooses. The approval's is made only when asked to (`make`: its caller checked the approving key), for the assertion that used it, and kept only unexpired, read in the write; else the kept one alone. A continuation's only for the number and body its record took and holds unanswered, under a live hold of its step, up to the record's end, kept by its step alone.
 
 ## Depends on

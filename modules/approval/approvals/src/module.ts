@@ -8,6 +8,7 @@ import { rateLimit } from "@mod/rate-limit";
 import { operationKinds, stateOwners, transparency, transparencyLog } from "@mod/transparency";
 import { approvalKind, approvalsOwner, completionsOver } from "./completion/completion.ts";
 import { keyChangeCompletionsOver } from "./completion/key-change.ts";
+import { beyondLimits } from "./completion/padded.ts";
 import { passkeyAddCompletionsOver } from "./completion/passkey-add.ts";
 import { passkeyManageCompletionsOver } from "./completion/passkey-manage.ts";
 import { continuationsOver } from "./continuation/continuation.ts";
@@ -50,6 +51,9 @@ export default defineModule(
 			const store = await c.get(approvalStore);
 			const signer = await c.get(keys);
 			const iss = (await c.get(issuer)).url;
+			// A completion these settings would not fit is refused at boot, never to one person alone.
+			const beyond = beyondLimits(iss, signer.coreRings());
+			if (beyond) c.refuse("approvals", beyond);
 			const now = c.clock.now;
 			const statements = statementsOver({
 				keys: signer,

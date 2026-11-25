@@ -191,6 +191,7 @@ export async function world(
 		readonly approvals?: Record<string, unknown>;
 		readonly modules?: readonly Module[];
 		readonly items?: Module;
+		readonly issuer?: string;
 	} = {},
 ) {
 	let clock = 1_800_000_000_000;
@@ -207,9 +208,10 @@ export async function world(
 		m.provide(transparencyLog).by(() => log),
 		m.provide(passkeyStore).by(() => credentials.store),
 		m.provide(approvalStore).by(() => statements.store),
-		m
-			.provide(issuer)
-			.by(() => ({ url: "https://issuer.example", endpointOrigin: "https://issuer.example" })),
+		m.provide(issuer).by(() => ({
+			url: p.issuer ?? "https://issuer.example",
+			endpointOrigin: "https://issuer.example",
+		})),
 	]);
 	const app = await assemble({
 		modules: [
