@@ -14,7 +14,7 @@ Internal module of `authority-rules`: reading a Core writer's preimage and its e
 - `readPreimage` (kind, value) → the preimage and its content, or the error `preimage` or `content`. `evidenceOf`, `oneOf` (a form's values, its one value).
 - `statementOf` (JWS, schema, checks, context): the payload of a statement the ring signed with `sdk-core-wire`'s statement `typ`, which every statement carries. `statements`: authorization, creation, possession.
 - `assertedBy` (assertion, key, statement, checks, context): the key's assertion over the statement's challenge. `within` (statement, time).
-- `Checks` (`verifyJws`, `verifyAssertion`, `digest` of text or bytes, `keyThumbprint`, a key's RFC 7638 thumbprint and COSE algorithm, `selfCeiling`, a client's own ceiling where the caller gives it), `Context` (ring, origin, times), `RuleTimes` (with `evidenceWindow` where the caller gives it).
+- `Checks` (`verifyJws`, `verifyAssertion`, `digest` of text or bytes, `keyThumbprint`, a key's RFC 7638 thumbprint and COSE algorithm, `selfCeiling`, a client's own ceiling where the caller gives it; `attestedKey`, a `create()` response's credential and new key, read, and `verifyEsig`, a screen's continuation signature by its E_sig, where the caller gives them), `Context` (ring, origin, times), `RuleTimes` (with `evidenceWindow` where the caller gives it).
 
 ## Invariants
 - A statement is read only where it verifies by the ring the context names (the record writer's Core generation), carries the statement's `typ` and holds to its schema; a field it does not know refuses it.

@@ -31,6 +31,25 @@ export interface Checks {
 	 * protocol does not take.
 	 */
 	keyThumbprint(publicKey: string): { readonly jkt: string; readonly alg: number } | undefined;
+	/**
+	 * A `create()` response's JSON as sent: its credential id and the new key (its COSE_Key, base64url)
+	 * read from its attestation's authenticator data; none for one that does not read. Read, never
+	 * verified: what vouches for the key is the chain the rules check (proposal 3.7). Where none is
+	 * given, a key change it is asked for is unchecked, so held.
+	 */
+	attestedKey?(
+		response: string,
+	): { readonly credential: string; readonly publicKey: string } | undefined;
+	/**
+	 * Whether a screen's continuation signature (ES256's raw r||s, base64url) is its E_sig's (a P-256
+	 * JWK's x and y) over the input's UTF-8 (`sdk-core-wire`'s `continuation.of`). Where none is given,
+	 * a key change it is asked for is unchecked, so held.
+	 */
+	verifyEsig?(
+		key: { readonly x: string; readonly y: string },
+		input: string,
+		signature: string,
+	): boolean;
 }
 
 /** The times the rules hold records to, in milliseconds (a configuration version's). */
