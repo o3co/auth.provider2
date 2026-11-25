@@ -88,7 +88,9 @@ export interface BundleRequest {
  * How a person's bundle roots: by an approval's code, or by a family's refresh, the rotation its
  * start names read by the token endpoint from the flow's applied state.
  */
-export type Rooting = { readonly via: "code" } | { readonly via: "refresh" };
+export type Rooting =
+	/** By an approval's code: its digest (its SHA-256, base64url, A21), which the start names beside its client (V24). */
+	{ readonly via: "code"; readonly code?: string } | { readonly via: "refresh" };
 
 /**
  * A token a bundle carries beside its access token (A40), made by its owner: prepared with the
