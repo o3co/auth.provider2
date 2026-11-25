@@ -29,6 +29,9 @@ importers:
       '@mod/flow-state-wire':
         specifier: link:../../../modules/wire/flow-state-wire
         version: link:../../../modules/wire/flow-state-wire
+      '@mod/passkey-key-wire':
+        specifier: link:../../../modules/wire/passkey-key-wire
+        version: link:../../../modules/wire/passkey-key-wire
       '@mod/sdk-core-wire':
         specifier: link:../../../modules/wire/sdk-core-wire
         version: link:../../../modules/wire/sdk-core-wire

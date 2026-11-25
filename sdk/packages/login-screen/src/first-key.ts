@@ -1,8 +1,8 @@
 import { continuations as continued } from "@mod/continuation-wire";
+import { passkeyThumbprintInput } from "@mod/passkey-key-wire";
 import {
 	type CreationPayload,
 	hpke,
-	keyThumbprintInput,
 	type PossessionPayload,
 	payloads,
 	firstKey as words,
@@ -280,7 +280,7 @@ async function thumbprintOf(
 	} catch {
 		return undefined;
 	}
-	const input = keyThumbprintInput(
+	const input = passkeyThumbprintInput(
 		Object.fromEntries(form.members.map((name) => [name, jwk[name]])),
 	);
 	return input === undefined ? undefined : digest(input);

@@ -1,13 +1,7 @@
 import { readFileSync } from "node:fs";
 import { continuations } from "@mod/continuation-wire";
-import {
-	canonicalText,
-	hpke,
-	keyThumbprintInput,
-	purposes,
-	typs,
-	firstKey as words,
-} from "@mod/sdk-core-wire";
+import { passkeyThumbprintInput } from "@mod/passkey-key-wire";
+import { canonicalText, hpke, purposes, typs, firstKey as words } from "@mod/sdk-core-wire";
 import { describe, expect, it } from "vitest";
 import { digest, utf8 } from "../src/bytes.ts";
 import { firstKey } from "../src/first-key.ts";
@@ -40,7 +34,7 @@ async function world() {
 const vectors = (
 	JSON.parse(
 		readFileSync(
-			new URL("../test/keys.vectors.json", import.meta.resolve("@mod/sdk-core-wire")),
+			new URL("../test/keys.vectors.json", import.meta.resolve("@mod/passkey-key-wire")),
 			"utf8",
 		),
 	) as { accepted: { name: string; alg: number; spki: string; jkt: string }[] }
@@ -56,7 +50,7 @@ async function passkey() {
 		name: "fresh ES256",
 		alg: -7,
 		spki: new Uint8Array(await crypto.subtle.exportKey("spki", pair.publicKey)),
-		jkt: await digest(keyThumbprintInput({ crv, kty, x, y }) ?? ""),
+		jkt: await digest(passkeyThumbprintInput({ crv, kty, x, y }) ?? ""),
 	};
 }
 

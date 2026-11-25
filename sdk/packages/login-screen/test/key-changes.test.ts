@@ -1,4 +1,5 @@
-import { hpke, keyThumbprintInput, purposes, typs } from "@mod/sdk-core-wire";
+import { passkeyThumbprintInput } from "@mod/passkey-key-wire";
+import { hpke, purposes, typs } from "@mod/sdk-core-wire";
 import { logTyps } from "@mod/transparency-wire";
 import { describe, expect, it, vi } from "vitest";
 import { digest, utf8 } from "../src/bytes.ts";
@@ -564,7 +565,7 @@ describe("keyChanges.read: a key added", () => {
 			"sign",
 		]);
 		const { crv, kty, x, y } = await crypto.subtle.exportKey("jwk", pair.publicKey);
-		const jkt = await digest(keyThumbprintInput({ crv, kty, x, y }) ?? "");
+		const jkt = await digest(passkeyThumbprintInput({ crv, kty, x, y }) ?? "");
 		const possessionCompact = await sign({
 			...common,
 			nonce: "pn",
@@ -668,7 +669,7 @@ describe("keyChanges.read: a key added", () => {
 			"sign",
 		]);
 		const { crv, kty, x, y } = await crypto.subtle.exportKey("jwk", pair.publicKey);
-		const jkt = await digest(keyThumbprintInput({ crv, kty, x, y }) ?? "");
+		const jkt = await digest(passkeyThumbprintInput({ crv, kty, x, y }) ?? "");
 		const possessionCompact = await sign({
 			...common,
 			nonce: "pn",

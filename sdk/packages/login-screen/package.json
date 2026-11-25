@@ -9,6 +9,7 @@
 	"dependencies": {
 		"@mod/continuation-wire": "link:../../../modules/wire/continuation-wire",
 		"@mod/flow-state-wire": "link:../../../modules/wire/flow-state-wire",
+		"@mod/passkey-key-wire": "link:../../../modules/wire/passkey-key-wire",
 		"@mod/sdk-core-wire": "link:../../../modules/wire/sdk-core-wire",
 		"@mod/transparency-wire": "link:../../../modules/wire/transparency-wire"
 	},
