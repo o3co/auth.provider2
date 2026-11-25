@@ -62,6 +62,15 @@ describe("a screen's continuation, as a browser's WebCrypto makes it", () => {
 		expect(digestOf("abc")).toBe("ungWv48Bz-pBQUDeXa4iI7ADYaOWF3qctBD_YfIAFa0");
 	});
 
+	it("digests a key change's possession and assertion as its writer names them (passkey-management's literal values)", () => {
+		const possession =
+			"eyJhbGciOiJFUzI1NiIsInR5cCI6ImFwcHJvdmFsK2p3dCJ9.eyJwdXJwb3NlIjoicG9zc2Vzc2lvbiJ9.c2lnbmF0dXJl";
+		expect(digestOf(possession)).toBe("p_5wwYfl5sOtQrwnw4MimfuUx4yvVSMF8VDiOT2jKkI");
+		expect(digestOf('{"id":"k1","response":{"signature":"c2ln"}}')).toBe(
+			"sEEwzKWW5uZNa96UdjoUwblfaWD0INVCWBR3i4sCKf4",
+		);
+	});
+
 	it("verifies E_sig's raw r||s over continuation.of's UTF-8, and nothing else", async () => {
 		const pair = await subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, [
 			"sign",

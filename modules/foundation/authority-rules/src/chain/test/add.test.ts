@@ -265,12 +265,12 @@ describe("a key a live key's approval adds (passkey-add; Rules023e Allowed `add`
 				keyed(),
 			),
 		).toEqual(other);
-		// Its writer names them from the start: an envelope naming none is refused (P 581).
+		// An envelope naming none is refused (P 581).
 		const { keyChange: _named, ...unnamed } = step.record as typeof step.record & {
 			keyChange?: unknown;
 		};
 		expect(verdictOn({ ...step, record: unnamed as typeof step.record }, keyed())).toEqual(
-			refused(/names its key change's digests/),
+			refused(/names no key change's digests/),
 		);
 	});
 

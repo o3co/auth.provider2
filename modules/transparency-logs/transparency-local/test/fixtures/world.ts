@@ -290,7 +290,7 @@ export type Passkey = Awaited<ReturnType<typeof passkey>>;
 
 export const subjectFlow = (id = fresh()): Flow => ({ of: "subject", id });
 
-/** The first key's stage: creation and possession signed by the ring, and the key asserting the possession. */
+/** The first key's stage: creation and possession signed by the ring, the key asserting the possession, its envelope naming their digests. */
 export async function firstKey(
 	world: World,
 	flow: Flow,
@@ -333,18 +333,20 @@ export async function firstKey(
 		},
 		p.now,
 	);
+	const asserted = key.asserts(possession);
 	return {
 		kind: "keyChange",
 		flow,
 		op: p.op ?? fresh(),
 		stage: 1,
 		last: true,
+		keyChange: { statement: digest(possession), evidence: digest(asserted) },
 		preimage: {
 			v: 1,
 			evidence: [
 				{ form: "statement", value: creation },
 				{ form: "statement", value: possession },
-				{ form: "assertion", value: key.asserts(possession) },
+				{ form: "assertion", value: asserted },
 			],
 			content: { variant: "first", credential: key.credential, publicKey: key.publicKey },
 		},

@@ -58,11 +58,24 @@ describe("a first-trust key (Rules023e Allowed `ft`)", () => {
 		const fabricated = {
 			...step,
 			preimage: preimage({
-				evidence: [{ form: "assertion", value: assertion(newKey, "x") }],
+				evidence: [
+					{ form: "statement", value: "x" },
+					{ form: "statement", value: "y" },
+					{ form: "assertion", value: assertion(newKey, "y") },
+				],
 				content: { variant: "first", ...newKey },
 			}),
 		};
 		expect(verdictOn(fabricated, empty)).toEqual(refused(/ring/));
+		// Its evidence in no first key's order is refused before any statement is read.
+		const bare = {
+			...step,
+			preimage: preimage({
+				evidence: [{ form: "assertion", value: assertion(newKey, "x") }],
+				content: { variant: "first", ...newKey },
+			}),
+		};
+		expect(verdictOn(bare, empty)).toEqual(refused(/in order/));
 	});
 
 	it("is refused for a creation signed for another key generation, read from the signed bytes (BndCheck, BindGen: W_PreResetBad; J7 境界の後の古い鍵の世代)", () => {
@@ -118,13 +131,16 @@ describe("a first-trust key (Rules023e Allowed `ft`)", () => {
 				offered === "none" ? { ...made, creation: { ...made.creation, options } } : made;
 			const creationJws = sign(named, "ring-1");
 			const possessionJws = sign(possession(creationJws, key), "ring-1");
+			const proof = assertion(key, possessionJws);
 			const s: Step = {
-				record: coreRecord("keyChange", 1),
+				record: coreRecord("keyChange", 1, {
+					keyChange: { statement: digest(possessionJws), evidence: digest(proof) },
+				}),
 				preimage: preimage({
 					evidence: [
 						{ form: "statement", value: creationJws },
 						{ form: "statement", value: possessionJws },
-						{ form: "assertion", value: assertion(key, possessionJws) },
+						{ form: "assertion", value: proof },
 					],
 					content: { variant: "first", ...key },
 				}),
@@ -509,18 +525,36 @@ describe("timely: TimeOK, from the acceptance time (§6.2, A13)", () => {
 describe("a key change's envelope digests (proposal 3.13, V22)", () => {
 	const named = (keyChange: { statement: string; evidence: string } | undefined) => {
 		const step = firstKey(1);
-		return { ...step, record: { ...step.record, ...(keyChange ? { keyChange } : {}) } };
+		const { keyChange: _own, ...bare } = step.record as typeof step.record & {
+			keyChange?: unknown;
+		};
+		return {
+			...step,
+			record: { ...bare, ...(keyChange ? { keyChange } : {}) } as typeof step.record,
+		};
 	};
 	const opened = (step: ReturnType<typeof firstKey>) =>
 		(step.preimage as { evidence: { form: string; value: string }[] }).evidence;
 	const statementOf = (step: ReturnType<typeof firstKey>) => opened(step)[1]?.value ?? "";
 	const assertionOf = (step: ReturnType<typeof firstKey>) => opened(step)[2]?.value ?? "";
 
-	it("allows a first key whose envelope names its possession's and its new key's assertion's digests, or none", () => {
+	it("allows a first key whose envelope names its possession's and its new key's assertion's digests", () => {
 		const step = firstKey(1);
 		const own = { statement: digest(statementOf(step)), evidence: digest(assertionOf(step)) };
 		expect(verdictOn(named(own), on([]))).toEqual(ok);
-		expect(verdictOn(named(undefined), on([]))).toEqual(ok);
+	});
+
+	it("refuses a first key whose envelope names no digests", () => {
+		expect(verdictOn(named(undefined), on([]))).toEqual(refused(/names no key change's digests/));
+	});
+
+	it("takes the digests as SHA-256 of the UTF-8 text, base64url unpadded: the writer's literal values", () => {
+		// The same inputs and digests passkey-management's writer is tested with.
+		const possession =
+			"eyJhbGciOiJFUzI1NiIsInR5cCI6ImFwcHJvdmFsK2p3dCJ9.eyJwdXJwb3NlIjoicG9zc2Vzc2lvbiJ9.c2lnbmF0dXJl";
+		const proof = '{"id":"k1","response":{"signature":"c2ln"}}';
+		expect(checks.digest(possession)).toBe("p_5wwYfl5sOtQrwnw4MimfuUx4yvVSMF8VDiOT2jKkI");
+		expect(checks.digest(proof)).toBe("sEEwzKWW5uZNa96UdjoUwblfaWD0INVCWBR3i4sCKf4");
 	});
 
 	it("refuses a first key whose envelope names other digests than its preimage's", () => {

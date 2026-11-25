@@ -119,19 +119,54 @@ function approvalRefusal(read: Read<"approval">): Refusal {
 	return undefined;
 }
 
-/** The first-key path's creation and possession, each verified by the writer generation's ring. */
-function ceremonyOf(read: Read<"keyChange">) {
+/**
+ * A first key's evidence, in one order by its path (proposal 3.13): the creation, the screen's
+ * continuation (the first-key path's where it carries one), the possession, the new key's assertion;
+ * a sign-up's (F1) after its T, its continuation required.
+ */
+const firstForms = {
+	firstKey: ["statement", "statement", "assertion"],
+	continued: ["statement", "continuation", "statement", "assertion"],
+	signUp: ["statement", "statement", "continuation", "statement", "assertion"],
+} as const;
+
+/** A first key's statements, each verified by the writer generation's ring, and its continuation read. */
+function firstOf(read: Read<"keyChange">) {
 	const { ask, preimage } = read;
-	const signed = preimage.evidence.filter((e) => e.form === "statement").map((e) => e.value);
-	const as = <T>(schema: Parameters<typeof statementOf<T>>[1]) =>
-		signed
-			.map((jws) => ({ jws, payload: statementOf(jws, schema, ask.checks, ask.context) }))
-			.filter((s): s is { jws: string; payload: T } => s.payload !== undefined);
-	const [creation, ...more] = as(statements.creation);
-	const [possession, ...also] = as(statements.possession);
-	if (!creation || !possession || more.length > 0 || also.length > 0) return undefined;
-	return { creation, possession };
+	const forms = preimage.evidence.map((e) => e.form);
+	const values = preimage.evidence.map((e) => e.value);
+	const path = (Object.keys(firstForms) as (keyof typeof firstForms)[]).find(
+		(k) => forms.length === firstForms[k].length && forms.every((f, at) => f === firstForms[k][at]),
+	);
+	if (!path)
+		return {
+			refusal:
+				"a first key carries its creation, possession and assertion in order, a sign-up's after its T",
+		};
+	const at = path === "signUp" ? 1 : 0;
+	const creation = values[at] ?? "";
+	const possession = values[values.length - 2] ?? "";
+	const proof = values[values.length - 1] ?? "";
+	const sent = path === "firstKey" ? undefined : values[at + 1];
+	const signed = <T>(jws: string, schema: Parameters<typeof statementOf<T>>[1]) =>
+		statementOf(jws, schema, ask.checks, ask.context);
+	const c = signed(creation, statements.creation);
+	const p = signed(possession, statements.possession);
+	if (!c || !p)
+		return {
+			refusal: "the creation and possession are not both signed by the writer generation's ring",
+		};
+	const tJws = path === "signUp" ? (values[0] ?? "") : undefined;
+	const tRead = tJws === undefined ? undefined : signed(tJws, statements.authorization);
+	if (tJws !== undefined && !tRead)
+		return { refusal: "the T is not signed by the writer generation's ring" };
+	const continued = sent === undefined ? undefined : continuationOf(sent);
+	if (sent !== undefined && !continued) return { refusal: "the continuation does not read" };
+	const t = tJws !== undefined && tRead ? { jws: tJws, payload: tRead } : undefined;
+	return { creation, c, possession, p, proof, continued, t };
 }
+
+type FirstOf = Exclude<ReturnType<typeof firstOf>, { refusal: string }>;
 
 /** Why the new key is not the one the possession names by its thumbprint, of an algorithm the creation offered. */
 function newKeyRefusal(
@@ -147,30 +182,68 @@ function newKeyRefusal(
 	return p.key_jkt === key.jkt ? undefined : "the signed bytes are not the record's";
 }
 
+/** Why the screen's continuation is not its E_sig's over the creation, sending the record's key. */
+function continuedRefusal(
+	checks: Checks,
+	of: { readonly creation: string; readonly c: { readonly e_sig: { x: string; y: string } } },
+	continued: { readonly seq: number; readonly body: string; readonly signature: string },
+	content: { readonly credential: string; readonly publicKey: string },
+): Refusal {
+	const { seq, body, signature } = continued;
+	const input = continuation.of("register", checks.digest(of.creation), seq, checks.digest(body));
+	if (!checks.verifyEsig(of.c.e_sig, input, signature))
+		return "the continuation is not the screen's over the creation";
+	const sent = checks.attestedKey(body);
+	if (sent?.credential !== content.credential || sent.publicKey !== content.publicKey)
+		return "the continuation sends another key than the record's";
+	return undefined;
+}
+
+/**
+ * Why a first key's path is not the one its signed creation names (`basis`): the first-key path's
+ * (none or `first-key`) on a flow with no live key; a sign-up's (F1) as the flow's first record, for
+ * its T, with the T's screen keys. A passkey-add's creation is no first key's.
+ */
+function pathRefusal(ask: Ask, of: FirstOf): Refusal {
+	const made = of.c.creation;
+	if (made.basis === undefined || made.basis === "first-key") {
+		if (of.t) return "a first key's T is a sign-up's alone";
+		if (Object.keys(ask.state.keys).length > 0)
+			return "the flow has a live key: first trust takes a flow with none";
+		return undefined;
+	}
+	if (made.basis !== "sign-up") return "the creation is not for a first key";
+	if (!of.t) return "a sign-up carries its T and continuation";
+	if (ask.prior.length > 0) return "the flow has a record: a sign-up's key is its first";
+	if (made.evidence !== ask.checks.digest(of.t.jws)) return "the creation is not for its T";
+	if (!sameScreen(of.t.payload, of.c)) return "the creation names another screen's keys than its T";
+	return undefined;
+}
+
 function firstKeyRefusal(read: Read<"keyChange">): Refusal {
 	const { ask, preimage, content } = read;
-	if (Object.keys(ask.state.keys).length > 0)
-		return "the flow has a live key: first trust takes a flow with none";
-	const ceremony = ceremonyOf(read);
-	if (!ceremony)
-		return "the creation and possession are not both signed by the writer generation's ring";
-	const { creation, possession } = ceremony;
-	if (creation.payload.creation.kg !== ask.state.keyGeneration)
+	if (preimage.parent !== undefined || preimage.root !== undefined)
+		return "a first key names no parent or root: it is its own root";
+	const of = firstOf(read);
+	if ("refusal" in of) return of.refusal;
+	const path = pathRefusal(ask, of);
+	if (path) return path;
+	const made = of.c.creation;
+	if (made.kg !== ask.state.keyGeneration)
 		return "the creation is signed for another key generation than the flow's";
-	if (creation.payload.creation.subject !== ask.record.flow.id)
-		return "the creation is another subject's";
-	const p = possession.payload.possession;
-	const named = newKeyRefusal(ask.checks, creation.payload.creation, p, content.publicKey);
+	if (made.subject !== ask.record.flow.id) return "the creation is another subject's";
+	if (of.continued) {
+		const continued = continuedRefusal(ask.checks, of, of.continued, content);
+		if (continued) return continued;
+	}
+	const p = of.p.possession;
+	const named = newKeyRefusal(ask.checks, made, p, content.publicKey);
 	if (named) return named;
-	if (p.creation_hash !== ask.checks.digest(creation.jws) || p.credential_id !== content.credential)
+	if (p.creation_hash !== ask.checks.digest(of.creation) || p.credential_id !== content.credential)
 		return "the signed bytes are not the record's";
-	const asserted = oneOf(preimage, "assertion");
-	if (
-		asserted === undefined ||
-		!assertedBy(asserted, content, possession.jws, ask.checks, ask.context)
-	)
+	if (!assertedBy(of.proof, content, of.possession, ask.checks, ask.context))
 		return "the new key does not assert the possession";
-	return keyChangeBound(ask, possession.jws, asserted);
+	return keyChangeBound(ask, of.possession, of.proof);
 }
 
 /** A passkey-add's evidence, in its one order: its root, the creation, the continuation, the possession. */
@@ -226,13 +299,8 @@ function addRefusal(read: Read<"keyChange">): Refusal {
 		return "the creation is signed for another key generation than the flow's";
 	if (!sameScreen(of.t, of.c))
 		return "the creation names another screen's keys than its passkey-add";
-	const { seq, body, signature } = of.continued;
-	const input = continuation.of("register", checks.digest(of.creation), seq, checks.digest(body));
-	if (!checks.verifyEsig(of.c.e_sig, input, signature))
-		return "the continuation is not the screen's over the creation";
-	const sent = checks.attestedKey(body);
-	if (sent?.credential !== content.credential || sent.publicKey !== content.publicKey)
-		return "the continuation sends another key than the record's";
+	const continued = continuedRefusal(checks, of, of.continued, content);
+	if (continued) return continued;
 	const p = of.p.possession;
 	const named = newKeyRefusal(checks, made, p, content.publicKey);
 	if (named) return named;
@@ -240,22 +308,19 @@ function addRefusal(read: Read<"keyChange">): Refusal {
 		return "the signed bytes are not the record's";
 	if (!assertedBy(of.proof, content, of.possession, checks, ask.context))
 		return "the new key does not assert the possession";
-	// Its writer names the digests from the start: the first key's leeway is not a passkey-add's.
-	if (!ask.record.keyChange) return "a passkey-add's envelope names its key change's digests";
 	return keyChangeBound(ask, of.possession, of.proof);
 }
 
 /**
- * A key change's envelope digests, where it names them, the preimage's own (proposal 3.13, V22): its
- * statement's and its evidence's, as a screen checks its receipt by them. Named otherwise, a taken
- * Core could show the screen its own digests over another key's evidence. For now a first key's
- * naming none is not checked (no writer names them yet; a screen with a pinned log takes no such
- * receipt): once the writer names them, one naming none is refused. A passkey-add's always names them.
+ * A key change's envelope digests, the preimage's own (proposal 3.13, V22): its statement's and its
+ * evidence's, as a screen checks its receipt by them. Named otherwise, a taken Core could show the
+ * screen its own digests over another key's evidence; naming none, its receipt binds nothing.
  */
 function keyChangeBound(ask: Ask, statement: string, evidence: string): Refusal {
 	const bound = ask.record.keyChange;
 	const { digest } = ask.checks;
-	if (bound && (bound.statement !== digest(statement) || bound.evidence !== digest(evidence)))
+	if (!bound) return "the envelope names no key change's digests";
+	if (bound.statement !== digest(statement) || bound.evidence !== digest(evidence))
 		return "the envelope binds other evidence than the preimage's";
 	return undefined;
 }
@@ -470,11 +535,13 @@ export function timely(ask: Ask, acceptedAt: number): boolean {
 				const of = addOf(read);
 				return !("refusal" in of) && [of.t, of.c, of.p].every((s) => within(s, acceptedAt));
 			}
-			const ceremony = read && ceremonyOf(read);
+			// A sign-up's T is held to its times by the approval that uses it, after the key (F1).
+			const of = read && firstOf(read);
 			return (
-				ceremony !== undefined &&
-				within(ceremony.creation.payload, acceptedAt) &&
-				within(ceremony.possession.payload, acceptedAt)
+				of !== undefined &&
+				!("refusal" in of) &&
+				within(of.c, acceptedAt) &&
+				within(of.p, acceptedAt)
 			);
 		}
 		case "start": {

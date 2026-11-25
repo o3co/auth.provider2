@@ -37,16 +37,19 @@ const ceremony = (kg = 0) => {
 };
 export const firstKeyEvidence = ceremony();
 
-/** The first key, its ceremony signed for key generation `kg`. */
+/** The first key, its ceremony signed for key generation `kg`, its envelope naming its digests. */
 export const firstKey = (position = 1, kg = 0) => {
 	const { creationJws, possessionJws } = ceremony(kg);
+	const proof = assertion(newKey, possessionJws);
 	return {
-		record: coreRecord("keyChange", position),
+		record: coreRecord("keyChange", position, {
+			keyChange: { statement: digest(possessionJws), evidence: digest(proof) },
+		}),
 		preimage: preimage({
 			evidence: [
 				{ form: "statement", value: creationJws },
 				{ form: "statement", value: possessionJws },
-				{ form: "assertion", value: assertion(newKey, possessionJws) },
+				{ form: "assertion", value: proof },
 			],
 			content: { variant: "first", ...newKey },
 		}),
@@ -187,6 +190,68 @@ export function prefixOf(steps: readonly (Step & { judgment?: Finding })[]) {
 	}
 	return { state, prior };
 }
+
+/** A sign-up's (F1) evidence as an honest Core and screen make it: T, its creation, the screen's continuation, the possession. */
+export function signUpParts(sid = "signup-1", key: Key = newKey) {
+	const t = sign(authorization(sid), "ring-1");
+	const basis = { basis: "sign-up", evidence: digest(t) };
+	const creationJws = sign(creation(subject.id, undefined, 0, undefined, basis), "ring-1");
+	const possessionJws = sign(possession(creationJws, key), "ring-1");
+	return {
+		t,
+		creation: creationJws,
+		continuation: continued(creationJws, JSON.stringify(key)),
+		possession: possessionJws,
+		proof: assertion(key, possessionJws),
+		key,
+	};
+}
+export type SignUpParts = ReturnType<typeof signUpParts>;
+
+/** A first key of `variant: "first"` over the evidence given in its order, its envelope naming its digests. */
+export const firstOver = (
+	position: number,
+	evidence: { form: string; value: string }[],
+	key: Key,
+	named: { possession: string; proof: string },
+) => ({
+	record: coreRecord("keyChange", position, {
+		keyChange: { statement: digest(named.possession), evidence: digest(named.proof) },
+	}),
+	preimage: preimage({ evidence, content: { variant: "first", ...key } }),
+});
+
+/** A sign-up's key (F1) on its flow: [T, creation, continuation, possession, assertion]. */
+export const signedUp = (position = 1, parts: SignUpParts = signUpParts()) =>
+	firstOver(
+		position,
+		[
+			{ form: "statement", value: parts.t },
+			{ form: "statement", value: parts.creation },
+			{ form: "continuation", value: parts.continuation },
+			{ form: "statement", value: parts.possession },
+			{ form: "assertion", value: parts.proof },
+		],
+		parts.key,
+		parts,
+	);
+
+/** The first key carrying the screen's continuation: [creation, continuation, possession, assertion]. */
+export const firstKeyContinued = (position = 1, body = JSON.stringify(newKey)) => {
+	const { creationJws, possessionJws } = firstKeyEvidence;
+	const proof = assertion(newKey, possessionJws);
+	return firstOver(
+		position,
+		[
+			{ form: "statement", value: creationJws },
+			{ form: "continuation", value: continued(creationJws, body) },
+			{ form: "statement", value: possessionJws },
+			{ form: "assertion", value: proof },
+		],
+		newKey,
+		{ possession: possessionJws, proof },
+	);
+};
 
 /** The usual login: first key (r-1), approval (r-2), start (r-3) and bundle (r-4) of op `login`. */
 export const login = () => [
