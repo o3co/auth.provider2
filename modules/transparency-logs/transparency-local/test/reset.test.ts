@@ -1,4 +1,5 @@
 import { generateKeyPairSync, randomBytes, sign } from "node:crypto";
+import { instructionLimit } from "@mod/reset-wire";
 import type { ResetAnswer } from "@mod/transparency";
 import { logTyps } from "@mod/transparency-wire";
 import { describe, expect, it } from "vitest";
@@ -11,15 +12,25 @@ function recoveryKey(kid = "reset-1") {
 	const pair = generateKeyPairSync("ec", { namedCurve: "P-256" });
 	const jwk = { ...pair.publicKey.export({ format: "jwk" }), kid, alg: "ES256" };
 	const privateJwk = { ...pair.privateKey.export({ format: "jwk" }), kid, alg: "ES256" };
-	const signed = (payload: unknown, typ: string = logTyps.resetInstruction) => {
-		const input = `${b64({ alg: "ES256", typ, kid })}.${b64(payload)}`;
+	const signedText = (text: string, typ: string = logTyps.resetInstruction) => {
+		const input = `${b64({ alg: "ES256", typ, kid })}.${Buffer.from(text).toString("base64url")}`;
 		const signature = sign("sha256", Buffer.from(input), {
 			key: pair.privateKey,
 			dsaEncoding: "ieee-p1363",
 		});
 		return `${input}.${signature.toString("base64url")}`;
 	};
-	return { jwk, privateJwk, signed };
+	const signed = (payload: unknown, typ?: string) => signedText(JSON.stringify(payload), typ);
+	/** The payload signed with spaces after it, the whole instruction exactly `length` bytes. */
+	const paddedTo = (length: number, payload: unknown) => {
+		for (let n = 0; n < length; n++) {
+			const text = signedText(`${JSON.stringify(payload)}${" ".repeat(n)}`);
+			if (text.length === length) return text;
+			if (text.length > length) break;
+		}
+		throw new Error(`no padding makes an instruction of ${length} bytes`);
+	};
+	return { jwk, privateJwk, signed, paddedTo };
 }
 
 const instructionFor = (subject: string, nowMs: number, over: Record<string, unknown> = {}) => ({
@@ -91,6 +102,19 @@ describe("a reset placed by the log in the Core (L0)", () => {
 		] as const)
 			expect(await w.reset(instruction), fault).toEqual({ v: 1, result: "invalid", fault });
 		expect(await w.log.head(flow)).toBe(0);
+	});
+
+	it("refuses an instruction longer than reset-wire's limit as shape, before it is read, a placed one padded and sent again among them", async () => {
+		const w = await world();
+		const flow = subjectFlow();
+		const instruction = instructionFor(flow.id, w.clock.now());
+		const atLimit = w.key.paddedTo(instructionLimit, instruction);
+		expect(await w.reset(atLimit)).toMatchObject({ result: "accepted", position: 1 });
+		const shape = { v: 1, result: "invalid", fault: "shape" };
+		expect(await w.reset(w.key.paddedTo(instructionLimit + 1, instruction))).toEqual(shape);
+		const other = instructionFor(flow.id, w.clock.now());
+		expect(await w.reset(w.key.paddedTo(instructionLimit + 1, other))).toEqual(shape);
+		expect(await w.log.head(flow)).toBe(1);
 	});
 
 	it("answers a placed reset sent again by the set it was placed under, after a newer one, and refuses the same payload another key signed", async () => {

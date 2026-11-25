@@ -10,7 +10,7 @@ import {
 	ruleSchemas,
 } from "@mod/authority-rules";
 import { Unavailable } from "@mod/kernel";
-import { resetInstruction, resetRefusal } from "@mod/reset-wire";
+import { instructionLimit, resetInstruction, resetRefusal } from "@mod/reset-wire";
 import { canonicalJson, type Json } from "@mod/store";
 import type { Placed, ResetAnswer, TransparencyLog } from "@mod/transparency";
 import {
@@ -184,13 +184,15 @@ export function localLog(p: {
 	const digest = (preimage: unknown) => sha256(canonicalJson(plain(preimage) as Json));
 
 	/**
-	 * §B.4: the instruction's shape read first, its flow and op from it; the op looked up on the flow,
+	 * §B.4: the instruction's shape read first (its length within reset-wire's limit, a placed one's
+	 * resend among them), its flow and op from it; the op looked up on the flow,
 	 * a placed one answered as placed where the payload is the same and its set's keys verify it,
 	 * `conflict` where not; else the rule run on the flow's head with the newest set, any fault
 	 * `invalid`, and the boundary placed at the head as the monitor's, judged as placed.
 	 */
 	async function reset(instruction: string): Promise<ResetAnswer> {
 		const r = p.resetting;
+		if (Buffer.byteLength(instruction) > instructionLimit) return resetRefusal.invalid("shape");
 		const payload = payloadOf(instruction);
 		const read = resetInstruction.safeParse(payload);
 		if (!read.success) return resetRefusal.invalid("shape");
