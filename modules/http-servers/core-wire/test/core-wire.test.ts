@@ -97,6 +97,23 @@ describe("core-wire", () => {
 		]);
 	});
 
+	it("relays a DPoP nonce as long and of the characters as the wire's field takes, and none outside them", async () => {
+		// dpop's form: the time bucket's digits, then its MAC in base64url, 59 characters.
+		const long = `${"1".repeat(16)}${"A".repeat(42)}Q`;
+		const sent: string[] = [long, `${"1".repeat(16)}.${"A".repeat(42)}Q`, "n".repeat(65)];
+		const app = await started([
+			token(() => jsonAnswer(200, {}, { headers: { "dpop-nonce": sent.shift() ?? "" } })),
+		]);
+		const front = await client(app.port);
+		const nonces: string[] = [];
+		for (let id = 1; id <= 3; id++) {
+			const reply = await front.send("token", id, tokenMessage(`c${id}`));
+			nonces.push(reply.outcome === "ok" ? reply.message.dpopNonce : "not ok");
+		}
+		expect(long).toHaveLength(59);
+		expect(nonces).toEqual([long, "", ""]);
+	});
+
 	it("replies a refusal the wire names with its word and detail, 503 as temporarily_unavailable, anything else server_error", async () => {
 		const answers: HttpResponse[] = [
 			jsonAnswer(400, { error: "invalid_grant", error_description: "used\nonce" }),

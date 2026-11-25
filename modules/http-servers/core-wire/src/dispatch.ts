@@ -1,4 +1,4 @@
-import { carriedOf, type WireReply, type WireRequest } from "@mod/front-core-codec";
+import { carriedOf, checkField, type WireReply, type WireRequest } from "@mod/front-core-codec";
 import { overHttp, refusals, replies } from "@mod/front-core-wire";
 import {
 	type GuardedRoute,
@@ -19,7 +19,11 @@ type Reply = {
 
 const encoder = new TextEncoder();
 const okBodyMax = replies.ok[0].max;
-const nonce = /^[A-Za-z0-9_-]{1,64}$/;
+// A DPoP nonce goes as the wire's spec of the field takes it, checked as the codec checks it: the
+// spec held once, by front-core-wire, never a copy of its length and characters here.
+const nonceSpec = replies.ok.find((field) => field.name === "dpopNonce");
+if (nonceSpec === undefined) throw new TypeError("front-core-wire's ok reply names no dpopNonce");
+const carriesNonce = (sent: string) => checkField(nonceSpec, encoder.encode(sent)) === undefined;
 const detailMax = replies.refused[1].max;
 
 const seconds = /^[0-9]{1,10}$/;
@@ -53,7 +57,7 @@ function detailOf(value: unknown): string {
 function replyOf(kind: WireRequest["kind"], response: HttpResponse, log: Log): Reply {
 	const { path, successStatus } = overHttp.operations[kind];
 	const sent = response.headers?.["dpop-nonce"] ?? "";
-	const dpopNonce = nonce.test(sent) ? sent : "";
+	const dpopNonce = carriesNonce(sent) ? sent : "";
 	const after = response.headers?.["retry-after"] ?? "";
 	const retryAfter = seconds.test(after) ? after : "";
 	const json =

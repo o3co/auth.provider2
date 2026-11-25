@@ -9,7 +9,7 @@ Internal module of `attack-front`: the dishonest Front.
 - The wire's connection (core-wire's `wireClient`, given), the roles and their keys, what a step expects.
 
 ## Offers
-- `badFront` (`Wire`, source): `post` (`Sent` → `Answered`), `send` (a frame of its own making), `rewrite` (`Rewrites`: each operation's message, each reply), `seen` (every frame and reply, `Relayed`).
+- `badFront` (`Wire`, source): `post` (`Sent` → `Answered`, beside the HTTP answer the Core's reply before any rewrite, none where nothing was sent), `send` (a frame of its own making), `rewrite` (`Rewrites`: each operation's message, each reply), `seen` (every frame and reply, `Relayed`).
 
 ## Invariants
 - A request of no operation is `404`, one with a field the frame cannot carry `400` `invalid_request`, nothing sent; a reply `ok` is the operation's success status and JSON body, a refusal its word's status with `error`, `error_description` where the Core gave a detail, and its `Retry-After`, a rejection `502` `server_error`: as `front-relay` answers them.

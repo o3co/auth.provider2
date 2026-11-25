@@ -19,7 +19,9 @@
 		"@mod/promises": "workspace:*",
 		"@mod/sdk-core-wire": "workspace:*",
 		"@mod/tls-options": "workspace:*",
+		"@mod/webauthn": "workspace:*",
 		"@mod/workspace-packages": "workspace:*",
+		"@sdk/login-screen": "link:../../../sdk/packages/login-screen",
 		"vitest": "5.0.5"
 	}
 }

@@ -4,11 +4,6 @@
  * pattern's package once its shape settles (the coordinator, 2026-11-26); the operator's HOCON sections
  * come in there.
  *
- * Interim, until worker-3's fix of refresh's boot lands (the dependency cycle refresh ↔ passkeys
- * through `passkeyRemovals`, and the transparency state's `families`, which no module owns): `interim`
- * below leaves refresh and refresh-store out, stands in for `delegation` and owns `families`. Take it
- * out whole when that fix lands; F-14 and F-20 wait for it.
- *
  * The store is the memory one, which takes neither durability nor authentication, so it is told to
  * accept both: the store-write promise is outside the harness's claims.
  */
@@ -135,9 +130,8 @@ export async function pattern(spec: PatternSpec, sent: (mail: SentMail) => void)
 			}),
 		],
 	);
-	const modules = [...(await interim.modules(defineModule))];
+	const modules = [];
 	for (const name of names) {
-		if (interim.out.includes(name)) continue;
 		modules.push(name === "@mod/mail" ? capture : (await entry(name, "./module")).default);
 	}
 	// A section for a module not composed refuses boot: only the composed modules' are kept.
@@ -147,48 +141,6 @@ export async function pattern(spec: PatternSpec, sent: (mail: SentMail) => void)
 		),
 	);
 	return { names, modules, config };
-}
-
-/** The interim (the note above): what it leaves out, and its stand-ins, `delegation` and `families`' owner. */
-const interim = {
-	out: scoped(["refresh", "refresh-store"]),
-	modules: interimModules,
-};
-
-// biome-ignore lint/suspicious/noExplicitAny: the kernel's defineModule, typed by the entry imported.
-async function interimModules(defineModule: any) {
-	const { delegation } = await entry("@mod/refresh");
-	const { stateOwners } = await entry("@mod/transparency");
-	const { spaces } = await entry("@mod/store");
-	const { frameParts } = await entry("@mod/transparency-frames");
-	const space = {
-		name: "families-owner.flows",
-		guarantees: ["no-eviction", "durable", "replicated", "confirmed-reads", "authenticated"],
-		subjectData: "retained",
-	};
-	return [
-		defineModule(
-			{ name: "delegation-stand-in", replicaSafe: true, takes: [] },
-			// biome-ignore lint/suspicious/noExplicitAny: as above.
-			(m: any) => [m.provide(delegation).by(() => ({ lifetimeMs: 86_400_000 }))],
-		),
-		defineModule(
-			{ name: "families-owner", replicaSafe: true, takes: [] },
-			// biome-ignore lint/suspicious/noExplicitAny: as above.
-			(m: any) => [
-				m.contribute(spaces).by(() => space),
-				m.contribute(frameParts).by(() => ({ name: "families", space })),
-				m.contribute(stateOwners).by(() => ({
-					name: "families",
-					holds: ["families"],
-					parts: ["families"],
-					records: () => [{ part: "families", name: "state" }],
-					read: () => ({ families: {} }),
-					write: () => [undefined],
-				})),
-			],
-		),
-	];
 }
 
 const pem = () =>

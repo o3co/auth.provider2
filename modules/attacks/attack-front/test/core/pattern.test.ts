@@ -23,7 +23,9 @@ const spec = (change: readonly string[] = []) => ({
 // cycle, a state part no module owns) fails here, in the checks, before any harness step.
 it("boots the default pattern, every module its own, claim 1 held, and stops it", async () => {
 	const { names, modules, config } = await pattern(spec(), () => {});
-	expect(names).toEqual(expect.arrayContaining([...features, "@mod/core-wire"]));
+	expect(names).toEqual(
+		expect.arrayContaining([...features, "@mod/core-wire", "@mod/refresh", "@mod/refresh-store"]),
+	);
 	const app = await assemble({ modules, config, runtime: quietRuntime() });
 	try {
 		await app.start();

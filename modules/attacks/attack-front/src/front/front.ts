@@ -20,6 +20,11 @@ export interface Answered {
 	readonly body: unknown;
 	readonly dpopNonce?: string;
 	readonly retryAfter?: string;
+	/**
+	 * The Core's reply as the wire carried it, before any rewrite: none where nothing was sent. Not
+	 * part of the HTTP answer: the harness reads it to tell the Core's refusal from the Front's.
+	 */
+	readonly wire?: WireReply;
 }
 
 /** The wire to the Core a Front holds: core-wire's `wireClient`, its replies by id. */
@@ -103,7 +108,7 @@ export function badFront(wire: Wire, source: string) {
 			if (error instanceof WireEncodeError) return invalidRequest;
 			throw error;
 		}
-		return answerOf(kind, rewrites.replies?.[kind]?.(reply) ?? reply);
+		return { ...answerOf(kind, rewrites.replies?.[kind]?.(reply) ?? reply), wire: reply };
 	};
 	return {
 		/** Relays a request: read as its operation, rewritten, sent, and its reply rewritten and answered. */

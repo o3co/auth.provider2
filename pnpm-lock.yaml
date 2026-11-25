@@ -104,9 +104,15 @@ importers:
       '@mod/tls-options':
         specifier: workspace:*
         version: link:../../foundation/tls-options
+      '@mod/webauthn':
+        specifier: workspace:*
+        version: link:../../passkey/webauthn
       '@mod/workspace-packages':
         specifier: workspace:*
         version: link:../../scaffold/workspace-packages
+      '@sdk/login-screen':
+        specifier: link:../../../sdk/packages/login-screen
+        version: link:../../../sdk/packages/login-screen
       vitest:
         specifier: 5.0.5
         version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(vite@8.3.3(@types/node@26.6.5)(yaml@2.9.1))

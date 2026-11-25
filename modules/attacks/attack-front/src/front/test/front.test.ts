@@ -82,7 +82,8 @@ describe("the dishonest Front", () => {
 		);
 		const front = badFront(wire, "203.0.113.9");
 		const answered = await front.post(sentOf(token));
-		expect(answered).toEqual({ status: 200, body: { access_token: "t" }, dpopNonce: "n0" });
+		expect(answered).toMatchObject({ status: 200, body: { access_token: "t" }, dpopNonce: "n0" });
+		expect(answered.wire?.outcome).toBe("ok");
 		expect(seen[0]?.source).toMatchObject({ address: "203.0.113.9", determined: true });
 		expect(front.seen()).toEqual([
 			expect.objectContaining({ kind: "token", message: { ...token, source: "203.0.113.9" } }),
@@ -112,10 +113,13 @@ describe("the dishonest Front", () => {
 				}),
 			},
 		});
-		expect(await front.post(sentOf(token))).toEqual({
+		const rewritten = await front.post(sentOf(token));
+		expect(rewritten).toMatchObject({
 			status: 400,
 			body: { error: "invalid_grant", error_description: "x" },
 		});
+		// The Core's own reply stays as it came: the refusal is the Front's.
+		expect(rewritten.wire?.outcome).toBe("ok");
 	});
 
 	it("answers a refusal with its word's status, and a request of no operation or field it cannot carry as an honest Front does", async () => {
@@ -129,6 +133,7 @@ describe("the dishonest Front", () => {
 			status: 404,
 			body: undefined,
 		});
+		expect((await front.post({ path: "/nowhere", body: {} })).wire).toBeUndefined();
 		const loose = sentOf(token);
 		expect(await front.post({ ...loose, body: { ...loose.body, code: "!" } })).toEqual({
 			status: 400,
@@ -141,7 +146,7 @@ describe("the dishonest Front", () => {
 			jsonAnswer(429, { error: "rate_limited" }, { headers: { "retry-after": "7" } }),
 		);
 		const front = badFront(wire, "203.0.113.9");
-		expect(await front.post(sentOf(token))).toEqual({
+		expect(await front.post(sentOf(token))).toMatchObject({
 			status: 429,
 			body: { error: "rate_limited" },
 			retryAfter: "7",
