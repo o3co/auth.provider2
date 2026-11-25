@@ -55,6 +55,22 @@ it("refuses boot for offline_access among the scopes or the default scopes, nami
 	]);
 });
 
+it("refuses boot for a registered client writing openid among its own ceiling's scopes, naming the entry", async () => {
+	const refusals = await boot(
+		allowancesFor({ self: [{ audience: "https://api", scopes: ["read", "openid"] }] }),
+	).then(
+		() => [],
+		(error: { refusals: readonly { where: string; reason: string }[] }) => error.refusals,
+	);
+	expect(refusals).toEqual([
+		{
+			where: "clients.registered.0.sections.client-allowance.self.0.scopes.1",
+			reason:
+				"openid asks for a person's identity, which a client's own token never carries, so remove it",
+		},
+	]);
+});
+
 it("takes nothing: its one contribution is a value", async () => {
 	// Its own entry alone: another module's takes this composition leaves unused are its owner's to check.
 	expect((await takesUnused(assembly({})))["client-allowance"]).toBeUndefined();

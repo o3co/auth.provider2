@@ -134,7 +134,7 @@ describe("the client's own ceiling", () => {
 		});
 	});
 
-	it("refuses a record naming an audience in two entries, or offline_access among an entry's scopes", () => {
+	it("refuses a record naming an audience in two entries, or offline_access or openid among an entry's scopes", () => {
 		const twice = read({
 			self: [
 				{ audience: "https://api", scopes: ["read"] },
@@ -144,5 +144,14 @@ describe("the client's own ceiling", () => {
 		expect(twice.issues?.map((i) => i.path)).toEqual([["self", 1, "audience"]]);
 		const offline = read({ self: [{ audience: "https://api", scopes: ["offline_access"] }] });
 		expect(offline.issues?.map((i) => i.path)).toEqual([["self", 0, "scopes", 0]]);
+		const openid = read({ self: [{ audience: "https://api", scopes: ["read", "openid"] }] });
+		expect(openid.issues?.map((i) => [i.path, i.message])).toEqual([
+			[
+				["self", 0, "scopes", 1],
+				"openid asks for a person's identity, which a client's own token never carries, so remove it",
+			],
+		]);
+		// The person's delegation keeps openid: a client asks it for a person.
+		expect(read({ scopes: ["openid"] }).issues).toBeUndefined();
 	});
 });

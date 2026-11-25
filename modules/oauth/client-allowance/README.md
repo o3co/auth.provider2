@@ -30,7 +30,7 @@
 - OpenID Connect's offline access is not offered (out of scope): `offline_access` in `scopes` or `default-scopes` refuses the client's record at that entry.
 - Decisions are pure: no failure, no state. `allowancesWithin` never widens the ceiling.
 - The client's own ceiling is apart from the person's delegation: `allowedSelfIssuance` reads `self` alone, and the other decisions never read it. It is read only for a client whose source declares it signed (`clients`' `signed`), never from the client's version alone, so a registered client is issued nothing for itself.
-- An audience written in two entries of `self`, or `offline_access` among an entry's scopes, refuses the client's record at that entry. A registered client writing `self` refuses boot at its section, as no one would read it.
+- An audience written in two entries of `self`, or `offline_access` or `openid` among an entry's scopes, refuses the client's record at that entry. `openid` is refused there because a client's own token carries no person. A registered client writing a non-empty `self` refuses boot, as no one would read it; one of those entries refuses it at that entry.
 
 ## Data
 - None, so it is safe on many instances.

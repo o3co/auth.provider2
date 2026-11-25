@@ -24,6 +24,15 @@ const scope = z
 		"offline_access allows nothing: offline access is not offered, so remove it",
 	);
 
+/**
+ * A scope of the client's own ceiling: never `openid` either, which asks for a person's identity a
+ * client's own token, whose subject is the client, never carries.
+ */
+const selfScope = scope.refine(
+	(name) => name !== "openid",
+	"openid asks for a person's identity, which a client's own token never carries, so remove it",
+);
+
 export const allowances: Section<Allowances> = {
 	name: "client-allowance",
 	// A registered client is never of a signed version, so its own ceiling would be read by no one.
@@ -53,7 +62,7 @@ export const allowances: Section<Allowances> = {
 				"The audiences the client's tokens may name, the first given when none is asked; none means the issuer.",
 			),
 		self: z
-			.array(z.strictObject({ audience: z.string().min(1), scopes: z.array(scope) }))
+			.array(z.strictObject({ audience: z.string().min(1), scopes: z.array(selfScope) }))
 			.prefault([])
 			.superRefine((entries, context) => {
 				for (const [i, entry] of entries.entries()) {
@@ -66,7 +75,7 @@ export const allowances: Section<Allowances> = {
 				}
 			})
 			.describe(
-				"The client's own ceiling, for a token it takes for itself: each entry an audience and the scopes it may be issued there. Read only for a client of a version its publisher signed; none allows nothing. The person's delegation (`scopes`, `audiences`) is never read for it.",
+				"The client's own ceiling, for a token it takes for itself: each entry an audience and the scopes it may be issued there, never `offline_access` or `openid`. Read only for a client of a version its publisher signed; none allows nothing. The person's delegation (`scopes`, `audiences`) is never read for it.",
 			),
 	}),
 };
