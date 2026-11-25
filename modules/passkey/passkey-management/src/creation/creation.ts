@@ -23,6 +23,7 @@ export type CreationAsk = {
 				readonly ctHash: string;
 		  }
 		| { readonly basis: "passkey-add" }
+		| { readonly basis: "sign-up" }
 	);
 
 export type Created = Issued | { readonly kind: "refused"; readonly reason: "revoked" };

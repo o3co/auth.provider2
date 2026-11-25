@@ -51,8 +51,14 @@ describe("a first key's registration after its creation", () => {
 		});
 		expect((await w.parts.held.of("s1")).pending).toBeUndefined();
 		expect(w.settled).toContain("s1");
+		// The register continuation the screen sent, as approvals kept it, after the creation.
+		const sent = await w.parts.approvals.continuationOf(c.hash);
 		expect(w.book.sent[0]?.stage.preimage?.evidence).toEqual([
 			{ form: "statement", value: c.statement },
+			{
+				form: "continuation",
+				value: JSON.stringify({ body: sent?.body, seq: 1, signature: sent?.signature }),
+			},
 			{ form: "statement", value: possession },
 			{ form: "assertion", value: assertion },
 		]);
@@ -235,6 +241,15 @@ describe("a first key's registration after its creation", () => {
 		expect(await w.registration.finish({ statement: possession, assertion: unverified })).toEqual({
 			kind: "refused",
 			reason: "unverified",
+		});
+	});
+
+	it("asks no create() for a sign-up's creation its T's sign-up does not hold", async () => {
+		const w = await stack();
+		const made = await w.created("s9", "sign-up");
+		expect(await w.registration.register(w.continued(made, w.made(made)))).toEqual({
+			kind: "refused",
+			reason: "sign-up",
 		});
 	});
 

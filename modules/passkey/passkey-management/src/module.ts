@@ -5,13 +5,14 @@ import { mailPurposes } from "@mod/mail";
 import { type Counter, counter, instruments } from "@mod/metrics";
 import { evidence, evidenceKinds, promiseNames, stances } from "@mod/promises";
 import { operationKinds } from "@mod/transparency";
-import { firstKeyEvidence, firstKeyMail } from "./contract.ts";
+import { continueStages, firstKeyEvidence, firstKeyMail, signUpCreations } from "./contract.ts";
 import { creationItems } from "./creation/creation.ts";
 import { type Evidence, evidenceOver, inboxKind, undeclared } from "./evidence/evidence.ts";
 import { keyChangeKind } from "./key-change/key-change.ts";
 import { keyingOf, keyingTakes } from "./keying/keying.ts";
 import { pathOf, pathTakes } from "./path/path.ts";
 import { possessionItems } from "./registration/registration.ts";
+import { continueRoute, stagesOf } from "./routes/routes.ts";
 import { type Settings, section } from "./section.ts";
 
 type Context = BuildContext<Settings>;
@@ -31,7 +32,7 @@ export default defineModule(
 		name: "passkey-management",
 		section,
 		replicaSafe: true,
-		takes: [firstKeyEvidence, evidence, ...new Set([...pathTakes, ...keyingTakes])],
+		takes: [firstKeyEvidence, continueStages, evidence, ...new Set([...pathTakes, ...keyingTakes])],
 	},
 	(m) => [
 		// A first key's path, and a key a live key's passkey-add approves, are outside the new
@@ -82,9 +83,21 @@ export default defineModule(
 		m.contribute(routes).by(async (c) => (await c.get(firstKeyPath)).mail),
 		m.contribute(routes).by(async (c) => (await c.get(firstKeyPath)).recover),
 		m.provide(keying).by((c: Context) => keyingOf(c)),
-		m.contribute(routes).by(async (c) => (await c.get(keying)).continue),
+		// `/continue`, each stage to the module that continues it; `register` is this package's own.
+		m.contribute(continueStages).by(async (c) => (await c.get(keying)).registerStage),
+		m.contribute(routes).by(async (c: Context) =>
+			continueRoute({
+				stages: stagesOf(await c.collect(continueStages), (reason) =>
+					c.refuse("passkey-management", reason),
+				),
+				window: { limit: c.section.requests, ms: c.section.window * 1000 },
+				refused: (stage, reason) =>
+					c.log.info("passkey-management.continue_refused", { stage, reason }),
+			}),
+		),
 		m.contribute(routes).by(async (c) => (await c.get(keying)).keyFinish),
 		m.contribute(routes).by(async (c) => (await c.get(keying)).approvalStart),
 		m.contribute(routes).by(async (c) => (await c.get(keying)).approvalFinish),
+		m.provide(signUpCreations).by(async (c) => (await c.get(keying)).signUp),
 	],
 );

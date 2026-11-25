@@ -1,4 +1,7 @@
+import type { Issued } from "@mod/approvals";
+import type { ContinuationStageName } from "@mod/continuation-wire";
 import { contract, extensionPoint } from "@mod/kernel";
+import type { SigningKey } from "@mod/sdk-core-wire";
 
 /**
  * A first key's start, which every item of evidence is bound to: the nonce the path gave the
@@ -132,6 +135,77 @@ export const firstKeyMail = Object.freeze({
 		minutes: "minutes",
 	}),
 });
+
+/** A continuation as `/continue` read it, by the wire's sizes: the statement, its hash, and what the screen signed. */
+export type ContinueAsk = {
+	readonly stage: ContinuationStageName;
+	/** The request's source, as its rate is counted (`rate-limit`'s `sourceKey`). */
+	readonly source: string;
+	readonly statement: string;
+	/** SHA-256 of the statement, base64url: the key its record is kept by. */
+	readonly hash: string;
+	readonly seq: number;
+} & (
+	| {
+			/** The body as received, and E_sig's `r‖s`, base64url: a stage in the clear. */
+			readonly body: string;
+			readonly signature: string;
+	  }
+	| {
+			/** The body and signature sealed to the Core: a stage `continuation-wire` seals. */
+			readonly sealed: { readonly enc: string; readonly ct: string };
+	  }
+);
+
+/** A continuation's answer: a statement or a sealed value, as the wire's forms give its stage; or refused, its reason for the log alone. */
+export type ContinueAnswer =
+	| { readonly kind: "statement"; readonly statement: string }
+	| { readonly kind: "sealed"; readonly enc: string; readonly ct: string }
+	| { readonly kind: "refused"; readonly reason: string };
+
+/**
+ * One stage of `/continue`, contributed by the module whose ceremony it continues: its word, as
+ * `continuation-wire` names it, and how it goes on, by its own step through `approvals`. A fault, or
+ * a store that cannot tell, it throws.
+ */
+export interface ContinueStage {
+	readonly stage: ContinuationStageName;
+	continue(q: ContinueAsk): Promise<ContinueAnswer>;
+}
+
+/** The stages `/continue` takes: one module each, boot refusing a stage two contribute. */
+export const continueStages = extensionPoint<ContinueStage>("passkey-management.continue-stages", {
+	multiplicity: "many",
+});
+
+/**
+ * A sign-up's (F1) creation asked, by the authorization's flow once the ledger made its subject: T's
+ * hash (the creation's evidence), the new subject, T's screen keys as approvals keeps them, and
+ * when T was issued (a revocation of the subject since refuses it).
+ */
+export interface SignUpAsk {
+	readonly tHash: string;
+	readonly subject: string;
+	readonly screen: { readonly eEnc: string; readonly eSig: SigningKey };
+	readonly since: number;
+}
+
+/**
+ * A sign-up's creation: issued, or refused `revoked` where the subject was. A passing failure (a
+ * count reached, a signing busy, the ring withdrawn) is thrown, never answered, so it is not kept.
+ */
+export type SignUpCreated =
+	| Extract<Issued, { readonly kind: "issued" }>
+	| { readonly kind: "refused"; readonly reason: "revoked" };
+
+/**
+ * Makes a sign-up's creation (F1): basis `sign-up`, its account named in `user_name` alone by the
+ * deployment's name and a short mark of the subject, for T's screen. Taken by the module whose flow
+ * makes the subject; the registration that follows is this package's.
+ */
+export const signUpCreations = contract<{ create(ask: SignUpAsk): Promise<SignUpCreated> }>(
+	"passkey-management.sign-up-creations",
+);
 
 /** This package's part of a subject's flow: a key change's preimage, kept beside passkeys' reservation for a resend. */
 export const keyChangePart = "passkey-management";

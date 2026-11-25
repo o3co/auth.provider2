@@ -1,9 +1,11 @@
 import { createHash } from "node:crypto";
+import { allowed, emptyState } from "@mod/authority-rules";
 import { challengeInput, continuation, firstKey, hpke } from "@mod/sdk-core-wire";
+import type { Stage } from "@mod/transparency";
 import { type Credential, ceremonies } from "@mod/webauthn";
 import { softwareAuthenticator, testOrigin } from "@mod/webauthn/testing";
 import { describe, expect, it } from "vitest";
-import { firstKeyWorld, opened, payloadOf, screen, sealed, sha256 } from "./world.ts";
+import { b64, firstKeyWorld, opened, payloadOf, rulesOf, screen, sealed, sha256 } from "./world.ts";
 
 describe("a first key, from its start to its completion, over real sealing", () => {
 	it("starts, mails a token, creates, registers and completes the key, each answer opened by the screen", async () => {
@@ -57,12 +59,13 @@ describe("a first key, from its start to its completion, over real sealing", () 
 		);
 		const body = JSON.stringify(auth.create(options as never, client));
 		const hash = sha256(creation);
+		const registeredSig = side.signs(continuation.of("register", hash, 1, sha256(body)));
 		const registered = await w.post("/continue", {
 			statement: creation,
 			stage: "register",
 			seq: "1",
 			body,
-			sig: side.signs(continuation.of("register", hash, 1, sha256(body))),
+			sig: registeredSig,
 		});
 		expect(registered.status).toBe(200);
 		const possession = registered.json.statement as string;
@@ -90,13 +93,31 @@ describe("a first key, from its start to its completion, over real sealing", () 
 			change: { op: "add", credential_id: named.credential_id, key_jkt: named.key_jkt },
 			receipt: "h.p.s",
 		});
-		// The key is on the subject's flow, its stage's preimage the creation, possession and assertion.
+		// The key is on the subject's flow, its preimage the creation, the continuation, the possession and the assertion.
 		const [placed] = w.book.sent;
 		expect(placed?.stage.preimage?.evidence.map((e) => e.value)).toEqual([
 			creation,
+			JSON.stringify({ body, seq: 1, signature: registeredSig }),
 			possession,
 			assertion,
 		]);
+		// Its record, read by the rules as a monitor reads it: allowed on a flow holding no key.
+		const askOf = await rulesOf(w);
+		const stage = placed?.stage as Stage;
+		expect(allowed(askOf(stage, emptyState))).toEqual({ allowed: true });
+		// With another continuation than the screen's, it is refused.
+		const forged = {
+			...stage,
+			preimage: {
+				...stage.preimage,
+				evidence: stage.preimage?.evidence.map((e) =>
+					e.form === "continuation"
+						? { ...e, value: JSON.stringify({ body, seq: 1, signature: b64(new Uint8Array(64)) }) }
+						: e,
+				),
+			},
+		} as Stage;
+		expect(allowed(askOf(forged, emptyState))).toMatchObject({ allowed: false });
 		// Started again, the subject holding a key now gets no mail.
 		const again = await sealed(w, await screen(), "start", { identifier: "alice" });
 		expect((await w.post("/first-key/start", again)).status).toBe(200);

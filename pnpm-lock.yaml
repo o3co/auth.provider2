@@ -2139,6 +2139,9 @@ importers:
       '@mod/approvals':
         specifier: workspace:*
         version: link:../../approval/approvals
+      '@mod/continuation-wire':
+        specifier: workspace:*
+        version: link:../../wire/continuation-wire
       '@mod/http':
         specifier: workspace:*
         version: link:../../foundation/http

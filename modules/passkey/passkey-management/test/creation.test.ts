@@ -120,3 +120,17 @@ it("names a passkey-add's account no address names in `user_name`, and shows it 
 	// sdk-core-wire takes one of the two, an account or a name, for any basis but the first key's.
 	expect(payloads.creation.shape.creation.safeParse(asked?.items).success).toBe(true);
 });
+
+it("signs a sign-up's creation for its T, its account named in `user_name` alone", async () => {
+	const c = creation();
+	const { ctHash: _first, account: _masked, ...rest } = ask;
+	await c.create({ ...rest, basis: "sign-up", evidence: "t-hash", userName: "Example 3fa9c1" });
+	const [asked] = c.asked;
+	expect(asked?.items).toMatchObject({
+		basis: "sign-up",
+		evidence: "t-hash",
+		options: { user_name: "Example 3fa9c1" },
+	});
+	expect(asked?.items).not.toHaveProperty("account");
+	expect(payloads.creation.shape.creation.safeParse(asked?.items).success).toBe(true);
+});

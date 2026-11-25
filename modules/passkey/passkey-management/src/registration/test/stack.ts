@@ -181,7 +181,7 @@ export async function stack(given: { readonly passkeys?: Record<string, unknown>
 	/** A creation for `subject`, a first key's as the mail's side issues it unless told, and its screen. */
 	const created = async (
 		subject = "s1",
-		basis: "first-key" | "passkey-add" = "first-key",
+		basis: "first-key" | "passkey-add" | "sign-up" = "first-key",
 		given: { readonly evidence?: string; readonly shown?: ReturnType<typeof screen> } = {},
 	) => {
 		const shown = given.shown ?? screen();
@@ -189,7 +189,8 @@ export async function stack(given: { readonly passkeys?: Record<string, unknown>
 		const issued = await parts.approvals.issue({
 			purpose: "creation",
 			items: {
-				account: "a***@example.com",
+				// A sign-up's names its account in `user_name` alone.
+				...(basis === "sign-up" ? {} : { account: "a***@example.com" }),
 				basis,
 				evidence: given.evidence ?? sha256("token"),
 				...(basis === "first-key" ? { ct_hash: sha256("ct") } : {}),
@@ -197,6 +198,7 @@ export async function stack(given: { readonly passkeys?: Record<string, unknown>
 				kg: 0,
 				options: {
 					user_id: handle,
+					...(basis === "sign-up" ? { user_name: "Example 3fa9c1" } : {}),
 					rp_id: "rp.example",
 					exclude_credentials: [],
 					algorithms: [-7, -8],
@@ -222,6 +224,7 @@ export async function stack(given: { readonly passkeys?: Record<string, unknown>
 	/** The register continuation of `body`, signed by the creation's screen. */
 	const continued = (c: Created, body: string, seq = 1) => ({
 		statement: c.statement,
+		hash: c.hash,
 		seq,
 		body,
 		sig: c.signs(continuation.of("register", c.hash, seq, sha256(body))),

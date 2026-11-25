@@ -10,6 +10,7 @@ Internal module of `passkey-management`: a start's evidence, the kinds composed 
 - Checking one kind: its own module. When the start's end comes, and what the screen is answered: the path's start.
 
 ## Offers
+- The package's extension point `firstKeyEvidence` (keyed by kind): a `FirstKeyEvidence` names its kind; may `prepare` what the screen needs before it makes the items; `check` (the start, the subject the identifier names or none, its own items) → `passed`, `failed`, or `absent` where its record says the subject holds none, a fault thrown, Unavailable; and may be told the start's end once it checked (`settled`).
 - `evidenceOver` (the kinds composed, whether one absent on all may pass) → `ask` (the start, the subject or none, the request's items by kind) → `Asked`: `checked` (`passed`, `failed`, `unavailable`), the faults thrown, and `tell` (the start's end) → what the kinds threw telling it.
 - `itemsOf` (the start's plain text as the wire carries it) → the items by kind: its password is the kind `password`'s, the one place the wire's fields become a kind's.
 - `undeclared` (the kinds composed, the kinds declared) → the names composed that no living declaration holds.

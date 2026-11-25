@@ -43,6 +43,11 @@ describe("a first key's change", () => {
 			preimage: {
 				evidence: [
 					{ form: "statement", value: k.creation },
+					// The screen's continuation over the creation, in canonical JSON.
+					{
+						form: "continuation",
+						value: '{"body":"{\\"id\\":\\"k\\"}","seq":1,"signature":"c2ln"}',
+					},
 					{ form: "statement", value: k.possession },
 					{ form: "assertion", value: k.assertion },
 				],
@@ -250,6 +255,7 @@ describe("a passkey-add's change", () => {
 		const registration = (await w.passkeys.publicKeyOf(first.credential))?.registration as string;
 		const k: AddedKey = {
 			...(await w.verified("s1", false)),
+			continuation: { seq: 1, body: '{"id":"k2"}', signature: "c2ln" },
 			approved: {
 				statement: "add.jws",
 				assertion: '{"id":"k1"}',
@@ -257,7 +263,6 @@ describe("a passkey-add's change", () => {
 				registration,
 				mark: "statement:sid-1",
 				generation: 0,
-				continuation: { seq: 1, body: '{"id":"k2"}', signature: "c2ln" },
 			},
 		};
 		return { first, k, registration };
@@ -353,5 +358,26 @@ describe("a passkey-add's change", () => {
 			kind: "refused",
 			reason: "fenced",
 		});
+	});
+});
+
+describe("a sign-up's change (F1)", () => {
+	it("carries its T before the first key's ceremony, approved by none", async () => {
+		const w = await keyFlow();
+		w.book.judgeOnAppend({ verdict: "verified", outcome: "took" });
+		const { change } = await writer(w);
+		const k = { ...(await w.verified("s1")), signUp: { statement: "t.jws" } };
+		expect(await change(k)).toEqual({ kind: "took", receipts: ["h.p.s"] });
+		const preimage = w.book.sent[0]?.stage.preimage;
+		expect(preimage?.parent).toBeUndefined();
+		expect(preimage?.evidence.map((e) => e.form)).toEqual([
+			"statement",
+			"statement",
+			"continuation",
+			"statement",
+			"assertion",
+		]);
+		expect(preimage?.evidence[0]).toEqual({ form: "statement", value: "t.jws" });
+		expect(preimage?.content).toMatchObject({ variant: "first", credential: k.credential });
 	});
 });

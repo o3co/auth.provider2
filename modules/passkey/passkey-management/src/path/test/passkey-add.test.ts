@@ -1,20 +1,10 @@
-import { createHash, createPublicKey, verify, type webcrypto } from "node:crypto";
-import {
-	type Ask,
-	allowed,
-	type Checks,
-	effectOf,
-	emptyState,
-	type FlowState,
-	timely,
-} from "@mod/authority-rules";
-import { keys } from "@mod/keys";
+import { allowed, effectOf, emptyState, type FlowState, timely } from "@mod/authority-rules";
 import { challengeInput, continuation, firstKey, hpke } from "@mod/sdk-core-wire";
 import type { Stage } from "@mod/transparency";
-import { type Credential, ceremonies, keyThumbprint } from "@mod/webauthn";
+import { type Credential, ceremonies } from "@mod/webauthn";
 import { softwareAuthenticator, testOrigin } from "@mod/webauthn/testing";
 import { describe, expect, it } from "vitest";
-import { firstKeyWorld, opened, payloadOf, screen, sealed, sha256 } from "./world.ts";
+import { firstKeyWorld, opened, payloadOf, rulesOf, screen, sealed, sha256 } from "./world.ts";
 
 type World = Awaited<ReturnType<typeof firstKeyWorld>>;
 type Screen = Awaited<ReturnType<typeof screen>>;
@@ -83,49 +73,6 @@ async function register(
 	const request = cer.request(sha256(challengeInput(possession, "get")), [key], "required");
 	const assertion = JSON.stringify(auth.get(request as never, client, {}));
 	return { possession, assertion, key };
-}
-
-/** The rules' checks and context over this Core's ring and webauthn, as a monitor of its log reads them. */
-async function rulesOf(w: World) {
-	const ring = await w.app.get(keys);
-	const cer = await w.app.get(ceremonies);
-	const checks: Checks = {
-		verifyJws: (jws, keySet) => ring.verifyJws(jws, keySet),
-		verifyAssertion: cer.verifyAssertion,
-		attestedKey: cer.attestedKey,
-		verifyEsig: (key, input, signature) => {
-			try {
-				const jwk = { kty: "EC", crv: "P-256", x: key.x, y: key.y } as webcrypto.JsonWebKey;
-				const publicKey = createPublicKey({ key: jwk, format: "jwk" });
-				const how = { key: publicKey, dsaEncoding: "ieee-p1363" } as const;
-				return verify("sha256", Buffer.from(input), how, Buffer.from(signature, "base64url"));
-			} catch {
-				return false;
-			}
-		},
-		digest: (data) => createHash("sha256").update(data).digest("base64url"),
-		keyThumbprint,
-	};
-	const context = {
-		ring: ring.coreRing(ring.generation()) ?? [],
-		origin: testOrigin,
-		limits: {
-			codeLifetime: 60,
-			refreshLifetime: 86_400,
-			issueWindow: 60,
-			epsilon: 0,
-			propagation: 0,
-			retry: 0,
-		},
-	};
-	return (stage: Stage, state: FlowState): Ask => ({
-		record: stage as Ask["record"],
-		preimage: stage.preimage,
-		state,
-		prior: [],
-		checks,
-		context,
-	});
 }
 
 describe("a key a passkey-add approves, from its approval to its completion, over real sealing", () => {

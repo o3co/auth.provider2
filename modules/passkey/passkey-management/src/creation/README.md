@@ -10,7 +10,7 @@ Internal module of `passkey-management`: a creation statement made (§3.13's reg
 - The statement's signing, record and challenge: `approvals`. Its schema: `sdk-core-wire`. The options' values: `webauthn`. The evidence and the subject it binds: the path that asks.
 
 ## Offers
-- `creationOver` (approvals' `issue`, webauthn's `creation`, `heldKeys`, `passkeyGenerations`, the subject's revocation, random bytes) → a `CreationAsk` (subject, its account masked as `account` or named as `userName`, never both, basis `first-key` with the ciphertext's hash or `passkey-add` with none, evidence, screen, since) → `Issued`, or refused `revoked`. `creationItems`: the creation's items it fills, every one its schema names.
+- `creationOver` (approvals' `issue`, webauthn's `creation`, `heldKeys`, `passkeyGenerations`, the subject's revocation, random bytes) → a `CreationAsk` (subject, its account masked as `account` or named as `userName`, never both, basis `first-key` with the ciphertext's hash, or `passkey-add` or `sign-up` with none, evidence, screen, since) → `Issued`, or refused `revoked`. `creationItems`: the creation's items it fills, every one its schema names.
 
 ## Invariants
 - A subject revoked since its evidence began gets no creation.

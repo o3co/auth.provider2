@@ -1,12 +1,14 @@
 import { setTimeout as sleep } from "node:timers/promises";
 import { approvals } from "@mod/approvals";
-import type { BuildContext } from "@mod/kernel";
+import { type BuildContext, Unavailable } from "@mod/kernel";
 import { heldKeys, passkeyGenerations, passkeys, registrations } from "@mod/passkeys";
 import { subjectRevocation } from "@mod/subject-revocation";
 import { transparency, transparencyLog } from "@mod/transparency";
 import { users } from "@mod/users";
 import { ceremonies } from "@mod/webauthn";
+import { deploymentOf, nameOf } from "../account.ts";
 import { approvalOver, type Finished, type Started } from "../approval/approval.ts";
+import type { ContinueStage, SignUpAsk, SignUpCreated } from "../contract.ts";
 import { creationOver } from "../creation/creation.ts";
 import { keyChangesOver } from "../key-change/key-change.ts";
 import { type Registered, registrationOver } from "../registration/registration.ts";
@@ -67,24 +69,42 @@ export async function keyingOf(c: Context) {
 		keyChange,
 	});
 	const window = { limit: c.section.requests, ms: c.section.window * 1000 };
+	const create = creationOver({
+		approvals: await c.get(approvals),
+		ceremonies: await c.get(ceremonies),
+		held: await c.get(heldKeys),
+		generations: await c.get(passkeyGenerations),
+		revocation: await c.get(subjectRevocation),
+		random: (n) => c.random.bytes(n),
+	});
+	const deployment = deploymentOf(c.section);
 	const approval = approvalOver({
 		approvals: await c.get(approvals),
 		passkeys: settling,
 		users: await c.get(users),
-		create: creationOver({
-			approvals: await c.get(approvals),
-			ceremonies: await c.get(ceremonies),
-			held: await c.get(heldKeys),
-			generations: await c.get(passkeyGenerations),
-			revocation: await c.get(subjectRevocation),
-			random: (n) => c.random.bytes(n),
-		}),
-		// The deployment's name, by default the mail link's host, as long as `account-name` may be.
-		deployment: c.section["account-name"] ?? new URL(c.section["mail-link"]).hostname.slice(0, 50),
+		create,
+		deployment,
 	});
+	/** A sign-up's creation (F1): its account named by the deployment and a mark of its subject. */
+	const signUp = {
+		create: async (ask: SignUpAsk): Promise<SignUpCreated> => {
+			const made = await create({
+				subject: ask.subject,
+				userName: nameOf(deployment, ask.subject),
+				basis: "sign-up",
+				evidence: ask.tHash,
+				screen: ask.screen,
+				since: ask.since,
+			});
+			if (made.kind === "issued" || made.reason === "revoked") return made;
+			// Items the schema refuses are a fault; a count reached, busy or withdrawn passes: thrown, never kept.
+			if (made.reason === "items")
+				throw new TypeError("passkey-management: a sign-up's creation refused");
+			throw new Unavailable("passkey-management");
+		},
+	};
 	return {
 		...keyRoutes({
-			register: written(c, "registration_refused", registration.register),
 			finish: written(c, "registration_refused", registration.finish),
 			window,
 		}),
@@ -93,5 +113,25 @@ export async function keyingOf(c: Context) {
 			finish: written(c, "approval_refused", approval.finish),
 			window,
 		}),
+		/** The stage `register` of `/continue`: a creation's continuation, as the registration takes it. */
+		registerStage: {
+			stage: "register",
+			continue: async (q) => {
+				// A register's continuation comes in the clear: `continuation-wire` seals no register.
+				if (!("body" in q)) throw new TypeError("passkey-management: a register sealed");
+				const registered = await registration.register({
+					statement: q.statement,
+					hash: q.hash,
+					seq: q.seq,
+					body: q.body,
+					sig: q.signature,
+				});
+				if (registered.kind === "possession")
+					return { kind: "statement", statement: registered.statement };
+				if (registered.kind === "refused") return registered;
+				throw new TypeError("passkey-management: a register answered a completion");
+			},
+		} satisfies ContinueStage,
+		signUp,
 	};
 }

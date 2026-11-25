@@ -1,6 +1,15 @@
-import { createHash, generateKeyPairSync, type KeyObject, sign } from "node:crypto";
-import { approvalStore, type StoredStatement } from "@mod/approvals";
+import {
+	createHash,
+	createPublicKey,
+	generateKeyPairSync,
+	type KeyObject,
+	sign,
+	verify,
+	type webcrypto,
+} from "node:crypto";
+import { approvalStore, type StoredStatement, statementItems } from "@mod/approvals";
 import approvalsModule from "@mod/approvals/module";
+import type { Ask, Checks, FlowState } from "@mod/authority-rules";
 import { type Route, routes } from "@mod/http";
 import { testRequest } from "@mod/http/testing";
 import { issuer } from "@mod/issuer";
@@ -20,12 +29,19 @@ import {
 import passkeysModule from "@mod/passkeys/module";
 import promisesModule from "@mod/promises/module";
 import { rateLimitStandIn } from "@mod/rate-limit/testing";
-import { type FirstKeyStage, firstKey, hpke } from "@mod/sdk-core-wire";
+import { type FirstKeyStage, firstKey, hpke, payloads } from "@mod/sdk-core-wire";
 import { type SubjectRevocation, subjectRevocation } from "@mod/subject-revocation";
-import { frameStore, type StateOwner, stateOwners, transparencyLog } from "@mod/transparency";
+import {
+	frameStore,
+	type Stage,
+	type StateOwner,
+	stateOwners,
+	transparencyLog,
+} from "@mod/transparency";
 import transparencyModule from "@mod/transparency/module";
 import { logBook, memoryFrames } from "@mod/transparency/testing";
 import { type Users, users } from "@mod/users";
+import { ceremonies, keyThumbprint } from "@mod/webauthn";
 import webauthnModule from "@mod/webauthn/module";
 import { testOrigin, webauthnConfig } from "@mod/webauthn/testing";
 import { memoryKept } from "../../../test/fixtures/kept.ts";
@@ -141,6 +157,12 @@ export async function firstKeyWorld() {
 			.provide(issuer)
 			.by(() => ({ url: "https://issuer.example", endpointOrigin: "https://issuer.example" })),
 		m.contribute(stateOwners).by(() => familiesOwner),
+		// The items of T as an authorization's modules fill them, so a T may be issued here.
+		m.contribute(statementItems).by(() => ({
+			purpose: "authorization",
+			names: Object.keys(payloads.statement.shape.approval.shape),
+			by: "stand-ins",
+		})),
 		// One mark per subject, for a key generation, as the witness keeps it.
 		m.contribute(passkeyWitnessing).by(() => {
 			const marks = new Map<string, number>();
@@ -266,4 +288,47 @@ export async function opened(
 		utf8(aad),
 	);
 	return read.kind === "opened" ? new TextDecoder().decode(read.plaintext) : undefined;
+}
+
+/** The rules' checks and context over this Core's ring and webauthn, as a monitor of its log reads them. */
+export async function rulesOf(w: World) {
+	const ring = await w.app.get(keys);
+	const cer = await w.app.get(ceremonies);
+	const checks: Checks = {
+		verifyJws: (jws, keySet) => ring.verifyJws(jws, keySet),
+		verifyAssertion: cer.verifyAssertion,
+		attestedKey: cer.attestedKey,
+		verifyEsig: (key, input, signature) => {
+			try {
+				const jwk = { kty: "EC", crv: "P-256", x: key.x, y: key.y } as webcrypto.JsonWebKey;
+				const publicKey = createPublicKey({ key: jwk, format: "jwk" });
+				const how = { key: publicKey, dsaEncoding: "ieee-p1363" } as const;
+				return verify("sha256", Buffer.from(input), how, Buffer.from(signature, "base64url"));
+			} catch {
+				return false;
+			}
+		},
+		digest: (data) => createHash("sha256").update(data).digest("base64url"),
+		keyThumbprint,
+	};
+	const context = {
+		ring: ring.coreRing(ring.generation()) ?? [],
+		origin: testOrigin,
+		limits: {
+			codeLifetime: 60,
+			refreshLifetime: 86_400,
+			issueWindow: 60,
+			epsilon: 0,
+			propagation: 0,
+			retry: 0,
+		},
+	};
+	return (stage: Stage, state: FlowState): Ask => ({
+		record: stage as Ask["record"],
+		preimage: stage.preimage,
+		state,
+		prior: [],
+		checks,
+		context,
+	});
 }

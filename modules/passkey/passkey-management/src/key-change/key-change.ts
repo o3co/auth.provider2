@@ -37,14 +37,9 @@ export interface Approved {
 	readonly registration: string;
 	readonly mark: string;
 	readonly generation: number;
-	readonly continuation: {
-		readonly seq: number;
-		readonly body: string;
-		readonly signature: string;
-	};
 }
 
-/** A key added, asked: its reservation, the new key, its ceremony; `approved` by a passkey-add, none for a first key. */
+/** A key added, asked: its reservation, the new key, its ceremony; `approved` by a passkey-add; `signUp`, a sign-up's T. */
 export interface AddedKey {
 	readonly subject: string;
 	readonly reservation: string;
@@ -56,7 +51,14 @@ export interface AddedKey {
 	readonly creation: string;
 	readonly possession: string;
 	readonly assertion: string;
+	/** The screen's register continuation over the creation, the one that made the possession. */
+	readonly continuation: {
+		readonly seq: number;
+		readonly body: string;
+		readonly signature: string;
+	};
 	readonly approved?: Approved;
+	readonly signUp?: { readonly statement: string };
 }
 
 /** Why passkeys would not commit a reservation (its `committing`'s words). */
@@ -218,6 +220,8 @@ function stageOf(k: AddedKey) {
 	const flow: Flow = { of: "subject", id: k.subject };
 	const a = k.approved;
 	const ceremony = [
+		{ form: "statement", value: k.creation },
+		{ form: "continuation", value: canonicalText(k.continuation) },
 		{ form: "statement", value: k.possession },
 		{ form: "assertion", value: k.assertion },
 	] as const;
@@ -228,15 +232,16 @@ function stageOf(k: AddedKey) {
 				evidence: [
 					{ form: "statement", value: a.statement },
 					{ form: "assertion", value: a.assertion },
-					{ form: "statement", value: k.creation },
-					{ form: "continuation", value: canonicalText(a.continuation) },
 					...ceremony,
 				],
 				content: { variant: "add", credential: k.credential, publicKey: k.publicKey },
 			}
 		: {
 				v: 1,
-				evidence: [{ form: "statement", value: k.creation }, ...ceremony],
+				evidence: [
+					...(k.signUp ? [{ form: "statement", value: k.signUp.statement } as const] : []),
+					...ceremony,
+				],
 				content: { variant: "first", credential: k.credential, publicKey: k.publicKey },
 			};
 	const stage: Stage = {

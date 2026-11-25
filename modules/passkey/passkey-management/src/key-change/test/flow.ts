@@ -113,6 +113,7 @@ export async function keyFlow() {
 			creation: "creation.jws",
 			possession: "possession.jws",
 			assertion: "{}",
+			continuation: { seq: 1, body: '{"id":"k"}', signature: "c2ln" },
 		};
 	};
 	return {

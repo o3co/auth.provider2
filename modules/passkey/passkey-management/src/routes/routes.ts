@@ -1,11 +1,14 @@
+import { createHash } from "node:crypto";
+import { continuations } from "@mod/continuation-wire";
 import { type HttpRequest, type HttpResponse, jsonAnswer, use } from "@mod/http";
 import { Unavailable } from "@mod/kernel";
 import { requestsPerSource, sourceKey, type Window } from "@mod/rate-limit";
 import type { FirstKeyStage } from "@mod/sdk-core-wire";
 import type { Started as Approving, Finished } from "../approval/approval.ts";
+import type { ContinueStage } from "../contract.ts";
 import type { Answered, Recovery } from "../mail-side/mail-side.ts";
 import type { Nonces } from "../nonces/nonces.ts";
-import type { Continuation, Registered } from "../registration/registration.ts";
+import type { Registered } from "../registration/registration.ts";
 import type { Screen, SealedRequest } from "../sealed/sealed.ts";
 import type { Started } from "../start/start.ts";
 
@@ -136,19 +139,85 @@ const jwsOf = (text: string | undefined, max: number) =>
 const utf8Of = (text: string | undefined, max: number) =>
 	text !== undefined && text.length > 0 && Buffer.byteLength(text) <= max ? text : undefined;
 
-/** A continuation's fields as front-core-wire sizes them, its stage `register`; none for any other. */
-function continuationOf(fields: HttpRequest["fields"]): Continuation | "stage" | undefined {
+/** A continuation's fields as front-core-wire sizes them, its stage one `continuation-wire` names; none for any other. */
+function continuationOf(fields: HttpRequest["fields"]) {
 	const statement = jwsOf(fields.single("statement"), 8192);
+	const stage = continuations.stages.find((name) => name === fields.single("stage"));
 	const seq = fields.single("seq");
-	const body = utf8Of(fields.single("body"), 8192);
-	const sig = fields.single("sig");
-	if (!statement || !body || sig === undefined || !bytesOf(sig, 64)) return undefined;
+	if (!statement || !stage) return undefined;
 	if (seq === undefined || !/^[1-9][0-9]?$/.test(seq) || Number(seq) > 16) return undefined;
-	// A key's deletion and renaming are passkey-manage's, which this route does not take.
-	if (fields.single("stage") !== "register") return "stage";
-	// A register's body is sent as it is, signed in the clear: no sealing comes with it.
-	if ((fields.single("enc") ?? "") !== "" || (fields.single("ct") ?? "") !== "") return undefined;
-	return { statement, seq: Number(seq), body, sig };
+	const [body, sig, enc, ct] = ["body", "sig", "enc", "ct"].map(
+		(name) => fields.single(name) ?? "",
+	);
+	// A sealed stage's body and signature come in its sealing alone; any other's in the clear, unsealed.
+	if ((continuations.sealed as readonly string[]).includes(stage)) {
+		if (body !== "" || sig !== "" || !bytesOf(enc, 65) || !bytesOf(ct, 1, 2064)) return undefined;
+		return { stage, statement, seq: Number(seq), sealed: { enc: enc as string, ct: ct as string } };
+	}
+	if (!utf8Of(body, 8192) || !bytesOf(sig, 64) || enc !== "" || ct !== "") return undefined;
+	return {
+		stage,
+		statement,
+		seq: Number(seq),
+		body: body as string,
+		signature: sig as string,
+	} as const;
+}
+
+/** The stages contributed, by their word: boot refuses a stage two modules contribute. */
+export function stagesOf(given: readonly ContinueStage[], refuse: (reason: string) => never) {
+	const taken = new Map<string, ContinueStage>();
+	for (const stage of given) {
+		if (taken.has(stage.stage)) refuse(`two modules continue the stage ${stage.stage}`);
+		taken.set(stage.stage, stage);
+	}
+	return taken as ReadonlyMap<string, ContinueStage>;
+}
+
+/** The answer's form a stage's continuation takes: a sealed value for a stage sealed, else a statement. */
+const formOf = (stage: string) =>
+	(continuations.sealed as readonly string[]).includes(stage) ? "sealed" : "statement";
+
+/**
+ * `POST /continue`, each stage handed to the module that continues it: the fields read by the
+ * wire's sizes, a stage none continues refused, its answer of the form the wire gives its stage;
+ * any refusal in one word, its reason to `refused` alone.
+ */
+export function continueRoute(p: {
+	readonly stages: ReadonlyMap<string, ContinueStage>;
+	readonly window: Window;
+	readonly refused: (stage: string, reason: string) => void;
+}) {
+	return {
+		method: "POST" as const,
+		path: "/continue",
+		uses: [use(requestsPerSource, { name: "passkey-management.continue", window: p.window })],
+		takes: ["json" as const],
+		cors: { headers: ["content-type"] },
+		crossSite,
+		handle: async (request: HttpRequest): Promise<HttpResponse> => {
+			// A member of no string is none of the wire's fields, and one sent there is not the wire's.
+			const q = request.mistyped?.size ? undefined : continuationOf(request.fields);
+			if (!q)
+				return malformed(
+					"a continuation is a statement, a stage, a sequence number, and its body and E_sig's signature, sealed for a sealed stage",
+				);
+			const stage = p.stages.get(q.stage);
+			if (!stage) return malformed("no module continues that stage here");
+			const hash = createHash("sha256").update(q.statement).digest("base64url");
+			const source = sourceKey(request.source.address);
+			const answer = await stage.continue({ ...q, hash, source });
+			if (answer.kind === "refused") {
+				p.refused(q.stage, answer.reason);
+				return denied();
+			}
+			if (answer.kind !== formOf(q.stage))
+				throw new TypeError(`passkey-management: stage ${q.stage} answered another form`);
+			return answer.kind === "statement"
+				? jsonAnswer(200, { statement: answer.statement })
+				: jsonAnswer(200, { sealed: { enc: answer.enc, ct: answer.ct } });
+		},
+	};
 }
 
 /** A registration's answer: the possession, or the completion sealed; any refusal in one word. */
@@ -159,31 +228,14 @@ function registeredBy(registered: Registered): HttpResponse {
 	return denied();
 }
 
-/** The routes of a key's registration after its creation, each counted per source, taking the screen's JSON across origins. */
+/** The route of a key's finish after its possession, counted per source, taking the screen's JSON across origins. */
 export function keyRoutes(p: {
-	readonly register: (q: Continuation) => Promise<Registered>;
 	readonly finish: (q: { statement: string; assertion: string }) => Promise<Registered>;
 	readonly window: Window;
 }) {
 	const counted = (name: string) => [use(requestsPerSource, { name, window: p.window })];
 	const screen = { takes: ["json" as const], cors: { headers: ["content-type"] }, crossSite };
 	return {
-		continue: {
-			method: "POST" as const,
-			path: "/continue",
-			uses: counted("passkey-management.continue"),
-			...screen,
-			handle: async (request: HttpRequest): Promise<HttpResponse> => {
-				// A member of no string is none of the wire's fields, and one sent there is not the wire's.
-				const q = request.mistyped?.size ? undefined : continuationOf(request.fields);
-				if (q === "stage") return malformed("the stage continued here is register");
-				if (!q)
-					return malformed(
-						"a continuation is a statement, a stage, a sequence number, a body and E_sig's signature",
-					);
-				return registeredBy(await p.register(q));
-			},
-		},
 		keyFinish: {
 			method: "POST" as const,
 			path: "/key/finish",
