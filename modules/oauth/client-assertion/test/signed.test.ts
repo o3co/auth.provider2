@@ -67,6 +67,8 @@ async function boot() {
 			...clientsConfig([
 				keyed("app", clientKeysFor([jwk(ec.publicKey, { kid: "ec" }), jwk(rsa.publicKey)])),
 				keyed("far", { "client-assertion": { "jwks-uri": "https://keys.example/jwks" } }),
+				// An RSA key that names RS256: never read under PS256, the default.
+				keyed("rs", clientKeysFor([jwk(rsa.publicKey, { alg: "RS256" })])),
 			]),
 		},
 		runtime,
@@ -112,6 +114,43 @@ describe("a JWT a client signed", () => {
 		expect(await checks.verifySignedBy(app, old, "jwt")).toEqual({
 			kind: "refused",
 			reason: "expired",
+		});
+	});
+});
+
+describe("a request object's algorithm, by default FAPI 2.0's", () => {
+	const typ = "oauth-authz-req+jwt";
+	const by = (key: KeyObject, alg: string) =>
+		new SignJWT({ exp: Math.floor(now / 1000) + 60 }).setProtectedHeader({ alg, typ }).sign(key);
+
+	it("takes PS256 by an RSA key naming no alg, and refuses RS256, ES384 and ES512 unless named", async () => {
+		const { checks, client } = await boot();
+		const app = await client("app");
+		expect(await checks.verifySignedBy(app, await by(rsa.privateKey, "PS256"), typ)).toMatchObject({
+			kind: "signed",
+		});
+		expect(await checks.verifySignedBy(app, await by(rsa.privateKey, "RS256"), typ)).toEqual({
+			kind: "refused",
+			reason: "algorithm",
+		});
+		for (const [curve, alg] of [
+			["P-384", "ES384"],
+			["P-521", "ES512"],
+		] as const) {
+			const key = generateKeyPairSync("ec", { namedCurve: curve }).privateKey;
+			expect(await checks.verifySignedBy(app, await by(key, alg), typ), alg).toEqual({
+				kind: "refused",
+				reason: "algorithm",
+			});
+		}
+	});
+
+	it("never reads a key naming RS256 under PS256", async () => {
+		const { checks, client } = await boot();
+		const rs = await client("rs");
+		expect(await checks.verifySignedBy(rs, await by(rsa.privateKey, "PS256"), typ)).toEqual({
+			kind: "refused",
+			reason: "no key fits",
 		});
 	});
 });

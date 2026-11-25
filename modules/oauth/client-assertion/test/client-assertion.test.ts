@@ -15,6 +15,7 @@ import issuerModule from "@mod/issuer/module";
 import { issuerConfig } from "@mod/issuer/testing";
 import { assemble, BootRefused, defineModule, isUnavailable, kernelConfig } from "@mod/kernel";
 import { quietRuntime, recordingLog, takesUnused, unavailableSwitch } from "@mod/kernel/testing";
+import { rs256Deprecated } from "@mod/keys";
 import outboundModule from "@mod/outbound/module";
 import { memoryRecords } from "@mod/records/testing";
 import secretHashModule from "@mod/secret-hash/module";
@@ -201,9 +202,9 @@ describe("private_key_jwt", () => {
 		expect(await tried(c, { jti: "kept" })).toBe("app");
 	});
 
-	it("names the asymmetric algorithms an assertion may be signed with: by default the elliptic ones, RS256 only where named [oidc-discovery-3-ad]", async () => {
+	it("names the asymmetric algorithms an assertion may be signed with: by default FAPI 2.0's, any other only where named [oidc-discovery-3-ad]", async () => {
 		const { c } = await boot();
-		expect(c.signingAlgorithms()).toEqual(["ES256", "ES384", "ES512", "EdDSA"]);
+		expect(c.signingAlgorithms()).toEqual(["ES256", "PS256", "EdDSA"]);
 		const named = await boot({
 			keys: [jwk(rsa.publicKey, { kid: "r", alg: "PS256" })],
 			settings: { algorithms: ["RS256", "PS256", "RS256"] },
@@ -393,6 +394,23 @@ describe("private_key_jwt", () => {
 		expect(await at({ jti: "j\ud800" })).toBe("bad_credentials");
 	});
 
+	it("warns at every start where RS256 is named, in keys' words, and not where it is not", async () => {
+		const warned = () =>
+			recorded.lines().filter((line) => line.event === "client-assertion.rs256_deprecated");
+		const before = warned().length;
+		await boot();
+		await boot({ settings: { algorithms: ["ES256", "PS256"] } });
+		expect(warned()).toHaveLength(before);
+		await boot({ settings: { algorithms: ["ES256", "RS256"] } });
+		expect(warned().slice(before)).toEqual([
+			{
+				level: "warn",
+				event: "client-assertion.rs256_deprecated",
+				fields: { reason: rs256Deprecated },
+			},
+		]);
+	});
+
 	it("verifies with the one key the header picks, by asymmetric algorithms only [rfc7523-3-u] [rfc7521-5.2-n] [rfc8414-2-i]", async () => {
 		const { c } = await boot({
 			keys: [jwk(ec.publicKey, { kid: "ec" }), jwk(ed.publicKey), jwk(rsa.publicKey, { kid: "r" })],
@@ -401,9 +419,9 @@ describe("private_key_jwt", () => {
 		expect(await by(ec.privateKey, { alg: "ES256", kid: "ec" })).toBe("app");
 		expect(await by(ec.privateKey, { alg: "ES256" })).toBe("app");
 		expect(await by(ed.privateKey, { alg: "EdDSA" })).toBe("app");
-		// RS256 and PS256 are not taken by default; named, a key naming one is read under it alone.
+		// PS256 is taken by default, RS256 only where named; named, a key naming one is read under it alone.
 		expect(await by(rsa.privateKey, { alg: "RS256" })).toBe("bad_credentials");
-		expect(await by(rsa.privateKey, { alg: "PS256", kid: "r" })).toBe("bad_credentials");
+		expect(await by(rsa.privateKey, { alg: "PS256", kid: "r" })).toBe("app");
 		const withPss = await boot({
 			keys: [jwk(rsa.publicKey, { kid: "r", alg: "PS256" })],
 			settings: { algorithms: ["RS256", "PS256"] },
@@ -427,9 +445,10 @@ describe("private_key_jwt", () => {
 		const p521 = generateKeyPairSync("ec", { namedCurve: "P-521" });
 		const curves = await boot({
 			keys: [jwk(ec.publicKey), jwk(p384.publicKey), jwk(p521.publicKey)],
+			settings: { algorithms: ["ES256", "ES384", "ES512"] },
 		});
 		expect(await tried(curves.c, {}, {}, ec.privateKey, { alg: "ES256" })).toBe("app");
-		// By default, keys of P-384 and P-521 naming no alg are read under their own curve's.
+		// Named, keys of P-384 and P-521 naming no alg are read under their own curve's.
 		expect(await tried(curves.c, {}, {}, p384.privateKey, { alg: "ES384" })).toBe("app");
 		expect(await tried(curves.c, {}, {}, p521.privateKey, { alg: "ES512" })).toBe("app");
 	});
@@ -480,12 +499,15 @@ describe("private_key_jwt", () => {
 			settings: { algorithms: ["RS256", "PS256", "ES256"] },
 		});
 		expect(several.warned).toEqual(byClient(["keys.0", "keys.2"]));
-		// One taken for its kind, a key naming no alg is read under it; by default no RSA key is read.
+		// One taken for its kind, a key naming no alg is read under it; by default an RSA key is read under PS256.
 		const rs256 = { algorithms: ["RS256" as const] };
 		expect(
 			(await started({ keys: [jwk(rsa.publicKey, { kid: "r" })], settings: rs256 })).warned,
 		).toEqual([]);
-		expect((await started({ keys: [jwk(rsa.publicKey, { kid: "r" })] })).warned).toEqual(
+		expect((await started({ keys: [jwk(rsa.publicKey, { kid: "r" })] })).warned).toEqual([]);
+		// ES384 is not taken by default: a P-384 key naming no alg is read under none.
+		const p384 = generateKeyPairSync("ec", { namedCurve: "P-384" });
+		expect((await started({ keys: [jwk(p384.publicKey, { kid: "p" })] })).warned).toEqual(
 			byClient(["keys.0"]),
 		);
 	});
@@ -968,7 +990,7 @@ describe("private_key_jwt", () => {
 		expect(section.parse({})).toEqual({
 			"max-lifetime": 3600,
 			"clock-skew": 30,
-			algorithms: ["ES256", "ES384", "ES512", "EdDSA"],
+			algorithms: ["ES256", "PS256", "EdDSA"],
 		});
 		expect(takes({ other: 1 })).toBe(false);
 	});

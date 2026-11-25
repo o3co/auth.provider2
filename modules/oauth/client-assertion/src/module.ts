@@ -3,6 +3,7 @@ import { externalJwt } from "@mod/external-jwt";
 import { site } from "@mod/http";
 import { issuer } from "@mod/issuer";
 import { defineModule } from "@mod/kernel";
+import { rs256Deprecated } from "@mod/keys";
 import { tokenEndpointLocation } from "@mod/token-endpoint";
 import { clientAssertion } from "./contract.ts";
 import { clientKeys, clientKeysIn, keysTakes, unreadKeys } from "./keys/keys.ts";
@@ -26,14 +27,18 @@ export default defineModule(
 	{ name: "client-assertion", replicaSafe: true, section, takes },
 	(m) => [
 		m.contribute(metadataSections).by((c) => clientKeysIn(c)),
-		m.provide(clientAssertion).by(async (c) =>
-			signedBy({
+		m.provide(clientAssertion).by(async (c) => {
+			// The operator's choice, yet said at every start, in keys' words.
+			if (c.section.algorithms.includes("RS256")) {
+				c.log.warn("client-assertion.rs256_deprecated", { reason: rs256Deprecated });
+			}
+			return signedBy({
 				jwt: await c.get(externalJwt),
 				algorithms: c.section.algorithms,
 				skewMs: c.section["clock-skew"] * 1000,
 				maxLifetimeMs: c.section["max-lifetime"] * 1000,
-			}),
-		),
+			});
+		}),
 		m.contribute(authMethods).by(async (c) => {
 			const { url } = await c.get(tokenEndpointLocation);
 			// A public origin is required, as written, though the token endpoint has a location without one.

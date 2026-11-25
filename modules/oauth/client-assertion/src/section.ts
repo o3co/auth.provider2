@@ -23,9 +23,9 @@ export const section = z.strictObject({
 	algorithms: z
 		.array(z.enum(verifyAlgorithms as [VerifyAlgorithm, ...VerifyAlgorithm[]]))
 		.min(1)
-		.prefault(["ES256", "ES384", "ES512", "EdDSA"])
+		.prefault(["ES256", "PS256", "EdDSA"])
 		.transform((named) => [...new Set(named)])
 		.describe(
-			"The algorithms a client's assertion may be signed with: asymmetric ones only, by default the elliptic ones; RS256 only where named.",
+			"The algorithms a client's assertion or request object may be signed with: asymmetric ones only, by default FAPI 2.0's; any other only where named, RS256 deprecated.",
 		),
 });
