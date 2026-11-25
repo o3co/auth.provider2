@@ -74,6 +74,43 @@ importers:
         specifier: 5.0.5
         version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(vite@8.3.3(@types/node@26.6.5)(yaml@2.9.1))
 
+  modules/attacks/attack-front:
+    dependencies:
+      '@mod/front-core-codec':
+        specifier: workspace:*
+        version: link:../../wire/front-core-codec
+      '@mod/front-core-wire':
+        specifier: workspace:*
+        version: link:../../wire/front-core-wire
+    devDependencies:
+      '@mod/core-wire':
+        specifier: workspace:*
+        version: link:../../http-servers/core-wire
+      '@mod/front-relay':
+        specifier: workspace:*
+        version: link:../../http-servers/front-relay
+      '@mod/http':
+        specifier: workspace:*
+        version: link:../../foundation/http
+      '@mod/kernel':
+        specifier: workspace:*
+        version: link:../../foundation/kernel
+      '@mod/promises':
+        specifier: workspace:*
+        version: link:../../foundation/promises
+      '@mod/sdk-core-wire':
+        specifier: workspace:*
+        version: link:../../wire/sdk-core-wire
+      '@mod/tls-options':
+        specifier: workspace:*
+        version: link:../../foundation/tls-options
+      '@mod/workspace-packages':
+        specifier: workspace:*
+        version: link:../../scaffold/workspace-packages
+      vitest:
+        specifier: 5.0.5
+        version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(vite@8.3.3(@types/node@26.6.5)(yaml@2.9.1))
+
   modules/audit-receivers/audit-http:
     dependencies:
       '@mod/audit':

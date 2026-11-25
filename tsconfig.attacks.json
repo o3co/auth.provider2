@@ -1,0 +1,10 @@
+{
+	// The attack harness's tests: they read the login screen's SDK, whose code takes the DOM library's
+	// types (the SDK runs in a browser), beside Node's.
+	"extends": "./tsconfig.json",
+	"compilerOptions": {
+		"lib": ["es2024", "dom"]
+	},
+	"include": ["modules/attacks/*/test/**/*.ts", "modules/attacks/*/src/**/test/**/*.ts"],
+	"exclude": []
+}

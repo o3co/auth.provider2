@@ -1,0 +1,25 @@
+{
+	"name": "@mod/attack-front",
+	"private": true,
+	"license": "Apache-2.0",
+	"type": "module",
+	"kind": "verification",
+	"exports": {
+		".": "./src/contract.ts"
+	},
+	"dependencies": {
+		"@mod/front-core-codec": "workspace:*",
+		"@mod/front-core-wire": "workspace:*"
+	},
+	"devDependencies": {
+		"@mod/core-wire": "workspace:*",
+		"@mod/front-relay": "workspace:*",
+		"@mod/http": "workspace:*",
+		"@mod/kernel": "workspace:*",
+		"@mod/promises": "workspace:*",
+		"@mod/sdk-core-wire": "workspace:*",
+		"@mod/tls-options": "workspace:*",
+		"@mod/workspace-packages": "workspace:*",
+		"vitest": "5.0.5"
+	}
+}

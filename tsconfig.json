@@ -20,5 +20,7 @@
 		"modules/*/*/src/**/*.ts",
 		"modules/*/*/test/**/*.ts",
 		"modules/*/*/*.config.ts"
-	]
+	],
+	// The attack harness's tests read the login screen's SDK, typed with the DOM: `tsconfig.attacks.json`.
+	"exclude": ["modules/attacks/*/test/**", "modules/attacks/*/src/**/test/**"]
 }
