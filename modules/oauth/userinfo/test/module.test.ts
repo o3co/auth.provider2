@@ -16,7 +16,7 @@ import { quietRuntime, recordingLog, takesUnused } from "@mod/kernel/testing";
 import { type ReleasedClaims, releasedClaims } from "@mod/oidc";
 import { promiseNames, promises, type Stance, stances } from "@mod/promises";
 import promisesModule from "@mod/promises/module";
-import { rateLimit } from "@mod/rate-limit";
+import { rateLimitStandIn } from "@mod/rate-limit/testing";
 import { senderBinding } from "@mod/sender-binding";
 import { sessions } from "@mod/session";
 import { stubSessions } from "@mod/session/testing";
@@ -33,6 +33,8 @@ afterEach(async () => {
 /** How sessions fail: unable to tell answers 503; anything else is not userinfo's to answer. */
 let failing: "unavailable" | "bug" | undefined;
 const items = contract<readonly MetadataItem[]>("items");
+/** How many requests reached sender-binding, so read their token. */
+let admissions = 0;
 const declared = contract<readonly Stance[]>("declared");
 /** The parts userinfo reads: every token is admitted, issued in a session no longer open. */
 const parts = defineModule(
@@ -42,15 +44,18 @@ const parts = defineModule(
 		m.provide(senderBinding).by(
 			() =>
 				({
-					admitted: async () => ({
-						kind: "admitted",
-						access: {
-							kind: "valid",
-							id: "t",
-							grant: { subject: "ann", scope: ["openid"] },
-							tokenType: "Bearer",
-						},
-					}),
+					admitted: async () => {
+						admissions += 1;
+						return {
+							kind: "admitted",
+							access: {
+								kind: "valid",
+								id: "t",
+								grant: { subject: "ann", scope: ["openid"] },
+								tokenType: "Bearer",
+							},
+						};
+					},
 				}) as never,
 		),
 		m.provide(accessTokens).by(() => ({}) as never),
@@ -69,8 +74,6 @@ const parts = defineModule(
 		m.provide(releasedClaims).by(() => ({ of: async () => ({}) }) as ReleasedClaims),
 		m.provide(claimsSelections).by(() => ({ forToken: async () => undefined }) as never),
 		m.provide(items).by((c) => c.collect(metadata)),
-		// Every request is let through: what is counted is the handler's own test.
-		m.provide(rateLimit).by(() => ({ hit: async () => ({ kind: "allowed" as const }) })),
 		m.provide(declared).by((c) => c.collect(stances)),
 		m
 			.provide(issuer)
@@ -79,22 +82,22 @@ const parts = defineModule(
 );
 
 let logged = recordingLog();
-async function serve() {
+async function serve(section: object = {}) {
 	logged = recordingLog();
-	const app = await assemble(composition());
+	const base = composition();
+	const app = await assemble({ ...base, config: { ...base.config, userinfo: section } });
 	await app.start();
 	stop = () => app.stop(1000);
 	const url = `http://127.0.0.1:${app.get(listening).port()}/oauth/userinfo`;
 	return { app, url };
 }
 
-/** userinfo beside http and the parts it reads, on many instances, reached at its public origin. */
+/** userinfo beside http, rate-limit's stand-in and the parts it reads, reached at its public origin. */
 function composition() {
 	return {
-		modules: [http, testServer(), parts, userinfoModule],
+		modules: [http, testServer(), rateLimitStandIn, parts, userinfoModule],
 		config: {
-			// Many instances: userinfo keeps nothing, so it never refuses them.
-			...kernelConfig({ deployment: "multi" }),
+			...kernelConfig(),
 			...httpConfig({
 				"public-origin": "https://as.example",
 				"cors-origins": ["https://app.example"],
@@ -258,6 +261,35 @@ it("leaves both promises not holding where composed, and refuses boot where a de
 		expect(BootRefused.is(refused), name).toBe(true);
 		expect(JSON.stringify((refused as BootRefused).refusals), name).toContain("userinfo");
 	}
+});
+
+it("counts every request by its source before its token is read, GET and POST in one window, whatever scheme it names or none, 429 past it", async () => {
+	const { url } = await serve({ requests: 3 });
+	const from = { "x-forwarded-proto": "https", "x-forwarded-for": "192.0.2.9" };
+	const sent: [string, Record<string, string>][] = [
+		["GET", { authorization: "DPoP t" }],
+		["POST", { authorization: "Bearer t" }],
+		["GET", {}],
+		["POST", { authorization: "DPoP anything" }],
+	];
+	admissions = 0;
+	const statuses = [];
+	for (const [method, headers] of sent) {
+		const res = await fetch(url, { method, headers: { ...from, ...headers } });
+		statuses.push([method, res.status, res.status === 429 ? await res.json() : undefined]);
+	}
+	expect(statuses).toEqual([
+		["GET", 401, undefined],
+		["POST", 401, undefined],
+		["GET", 401, undefined],
+		["POST", 429, { error: "rate_limited" }],
+	]);
+	// The one past the window never reached sender-binding: its token was not read.
+	expect(admissions).toBe(3);
+});
+
+it("is safe on many instances: it keeps nothing a request writes", () => {
+	expect(userinfoModule.replicaSafe).toBe(true);
 });
 
 it("takes all it names", async () => {

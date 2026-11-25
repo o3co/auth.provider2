@@ -1,10 +1,10 @@
 import { claimsSelections } from "@mod/claims-selection";
-import { type Route, routes } from "@mod/http";
+import { type Route, routes, use } from "@mod/http";
 import { issuer, metadata } from "@mod/issuer";
 import { type BuildContext, defineModule } from "@mod/kernel";
 import { releasedClaims } from "@mod/oidc";
 import { promiseNames, stances } from "@mod/promises";
-import { rateLimit } from "@mod/rate-limit";
+import { requestsPerSource } from "@mod/rate-limit";
 import { senderBinding } from "@mod/sender-binding";
 import { sessions } from "@mod/session";
 import { sessionTokens } from "@mod/session-tokens";
@@ -39,8 +39,6 @@ async function handlerOf(
 		sessions: await c.get(sessions),
 		selections: await c.get(claimsSelections),
 		claims: await c.get(releasedClaims),
-		counting: await c.get(rateLimit),
-		window: { limit: c.section.requests, ms: c.section.window * 1000 },
 	});
 }
 
@@ -52,7 +50,6 @@ const takes = [
 	sessions,
 	claimsSelections,
 	releasedClaims,
-	rateLimit,
 	issuer,
 ];
 
@@ -64,13 +61,19 @@ export default defineModule({ name: "userinfo", replicaSafe: true, section, take
 			cors,
 			// A POST may carry a body, but the token is read from the header only.
 			takes: ["form", "json", "none"],
+			// Every request, whatever its scheme, before its token is read: a scheme a request names
+			// for itself never takes it out of the count.
+			uses: [
+				use(requestsPerSource, {
+					name: "userinfo",
+					window: { limit: c.section.requests, ms: c.section.window * 1000 },
+				}),
+			],
 			...(method === "GET"
 				? { changesState: false }
 				: {
 						crossSite:
 							"The access token comes in the Authorization header, never a cookie, and it only reads.",
-						unlimited:
-							"It only reads, and counts by source in its own handler any request not in the DPoP scheme; `dpop` counts a proof by the token's key alone, and any other request in that scheme is refused at the token's check, uncounted.",
 					}),
 			// `503`, never a refusal: http warns of it once, by what failed and the route.
 			unavailable: { response: unavailable },

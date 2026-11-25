@@ -44,19 +44,13 @@ function over(
 		selection?: Target;
 		/** Runs while the selection is read, as a host that stalls there. */
 		duringSelection?: (clock: { at: number }) => void;
-		failing?: "count" | "admitted" | "session" | "entry" | "selection" | "claims";
-		/** What the per-source count answers. */
-		counted?:
-			| { readonly kind: "allowed" }
-			| { readonly kind: "limited"; readonly retryAfterMs: number };
+		failing?: "admitted" | "session" | "entry" | "selection" | "claims";
 	} = {},
 ) {
 	const calls: unknown[][] = [];
 	/** The Authorization header of each request handed to sender-binding. */
 	const admittedFrom: (string | undefined)[] = [];
 	const clock = { at: 0 };
-	/** Each per-source count: its name, key and window. */
-	const hits: unknown[][] = [];
 	const fail = (part: string) => {
 		if (told.failing === part) throw new Unavailable(part);
 	};
@@ -101,20 +95,12 @@ function over(
 				return told.claims ?? { name: "Ann" };
 			},
 		},
-		counting: {
-			hit: async (name, key, window) => {
-				hits.push([name, key, window]);
-				fail("count");
-				return told.counted ?? { kind: "allowed" };
-			},
-		},
-		window: { limit: 60, ms: 60_000 },
 	});
 	const run = async (request = testRequest()) => {
 		const res = await handle(request);
 		return { status: res.status, headers: res.headers, json: (res.body as { json: unknown }).json };
 	};
-	return { run, calls, admittedFrom, hits };
+	return { run, calls, admittedFrom };
 }
 
 const noStore = { "cache-control": "no-store", pragma: "no-cache" };
@@ -279,41 +265,6 @@ describe("userinfo", () => {
 			[200, 401, 401, 403],
 		);
 		expect(JSON.stringify(seen)).not.toContain("s3cr3t");
-	});
-
-	it("counts a request not in the DPoP scheme by its source before reading its token, and leaves one in it to dpop", async () => {
-		const window = { limit: 60, ms: 60_000 };
-		for (const authorization of [undefined, "Bearer t", "bearer t", "Basic x"]) {
-			const o = over();
-			const headers = new Map<string, string>(
-				authorization === undefined ? [] : [["authorization", authorization]],
-			);
-			expect((await o.run(testRequest({ headers, source: { address: "192.0.2.7" } }))).status).toBe(
-				200,
-			);
-			expect(o.hits, String(authorization)).toEqual([["userinfo", "192.0.2.7", window]]);
-		}
-		for (const authorization of ["DPoP t", "dpop t"]) {
-			const o = over({ admission: { kind: "admitted", access: valid("DPoP") } });
-			await o.run(testRequest({ headers: new Map([["authorization", authorization]]) }));
-			expect(o.hits, authorization).toEqual([]);
-		}
-	});
-
-	it("answers 429 with its wait past the window, its token unread, and fails unavailable where the source is not told or the count cannot be made", async () => {
-		const limited = over({ counted: { kind: "limited", retryAfterMs: 1500 } });
-		expect(await limited.run()).toEqual({
-			status: 429,
-			headers: { ...noStore, "retry-after": "2" },
-			json: { error: "rate_limited" },
-		});
-		expect(limited.calls).toEqual([]);
-		const unsaid = over();
-		await expect(unsaid.run(testRequest({ source: { determined: false } }))).rejects.toSatisfy(
-			isUnavailable,
-		);
-		expect([unsaid.hits, unsaid.calls]).toEqual([[], []]);
-		await expect(over({ failing: "count" }).run()).rejects.toSatisfy(isUnavailable);
 	});
 
 	it("fails unavailable when a check or the claims cannot tell, answering no claim", async () => {

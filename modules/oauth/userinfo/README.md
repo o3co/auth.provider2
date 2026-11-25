@@ -10,14 +10,15 @@
 - Telling a token kept no selection from one whose selection was lost: `claims-selection`'s `forToken` answers none for both, and the claims are then released by the scope alone.
 
 ## Offers
-- Routes `GET` and `POST /oauth/userinfo`, the GET declared not to change state and the POST to take requests from other sites with no per-source policy, as it counts in its handler; taking cross-origin requests from the operator's origins: a page may send `authorization`, `dpop` and `content-type`, and read `www-authenticate`, `dpop-nonce` and `retry-after`.
+- Routes `GET` and `POST /oauth/userinfo`, each counted per source by `rate-limit`'s `requestsPerSource`, the GET declared not to change state and the POST to take requests from other sites; taking cross-origin requests from the operator's origins: a page may send `authorization`, `dpop` and `content-type`, and read `www-authenticate`, `dpop-nonce` and `retry-after`.
 - The issuer's metadata `userinfo_endpoint`, on the origin `issuer` names its endpoints on (`endpointOrigin`).
 - Two stances (`promises`' `stances`), both breaking: `front-compromise-new-authorization` and `front-compromise-client-token`.
 - Operator section: `requests` (per source and window; 1–100000, default 60) and `window` (written with its unit, `1s` to `1d` in whole seconds, default `1m`).
 - It opts in: a composition names it to compose it.
 
 ## Invariants
-- A request not in the DPoP scheme (a Bearer token, or none) is counted per source before its token is read, `429` `rate_limited` with `retry-after` past the window, as nothing else counts it. `dpop` counts a proof by the token's key alone; any other request in that scheme is refused at the token's check, uncounted. A source a trusted proxy did not tell, or a count that cannot be made, is `503`, whatever `rate-limit`'s `fail-mode`.
+- Every request is counted per source before its token is read, whatever scheme it names; one that goes on to a DPoP proof's check is counted by `dpop` too. Past the window, the policy's `429`. A count that cannot be made is the policy's `503` `service_unavailable`, or lets the request through where `rate-limit`'s `fail-mode` is `open`; a source a trusted proxy did not tell is `503` whatever it.
+- Many clients behind one source share its count, which may pinch: the operator raises `requests`.
 - The token comes from the `Authorization` header only, admitted by `sender-binding`; a body or query `access_token` is never read. A refusal is passed on with its status and challenge; one for a request with no token carries no `error`.
 - A token whose scope lacks `openid` is refused `403 insufficient_scope`, challenged in the token's scheme, before its session is read.
 - The token's audience is not read: userinfo is the issuer's own resource, answering any token it issued whose session enters. It tells its own tokens by the `openid` scope (OIDC Core §5.3.1); a token's `aud` names its grant's resource (RFC 9068 §4), not the issuer.

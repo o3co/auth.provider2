@@ -9,7 +9,7 @@ export const section = z.strictObject({
 		.max(100_000)
 		.prefault(60)
 		.describe(
-			"Requests not in the DPoP scheme (a Bearer token, or none) allowed per source in each window, counted before the token is read.",
+			"Requests allowed per source in each window, whatever their scheme, counted before the token is read.",
 		),
 	window: setting
 		.duration("s")
