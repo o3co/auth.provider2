@@ -1,5 +1,5 @@
 import { constants, generateKeyPairSync, type KeyObject, sign } from "node:crypto";
-import { continuation } from "@mod/sdk-core-wire";
+import { continuations } from "@mod/continuation-wire";
 import { describe, expect, it } from "vitest";
 import { digestOf, verifiedByOne, verifiedEsig } from "../src/verify.ts";
 
@@ -71,13 +71,13 @@ describe("a screen's continuation, as a browser's WebCrypto makes it", () => {
 		);
 	});
 
-	it("verifies E_sig's raw r||s over continuation.of's UTF-8, and nothing else", async () => {
+	it("verifies E_sig's raw r||s over continuations.of's UTF-8, and nothing else", async () => {
 		const pair = await subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, [
 			"sign",
 			"verify",
 		]);
 		const { x = "", y = "" } = await subtle.exportKey("jwk", pair.publicKey);
-		const input = continuation.of("register", digestOf("creation"), 1, digestOf("body"));
+		const input = continuations.of("register", digestOf("creation"), 1, digestOf("body"));
 		const signed = base64url(
 			await subtle.sign(
 				{ name: "ECDSA", hash: "SHA-256" },
@@ -86,7 +86,7 @@ describe("a screen's continuation, as a browser's WebCrypto makes it", () => {
 			),
 		);
 		expect(verifiedEsig({ x, y }, input, signed)).toBe(true);
-		const other = continuation.of("register", digestOf("creation"), 2, digestOf("body"));
+		const other = continuations.of("register", digestOf("creation"), 2, digestOf("body"));
 		expect(verifiedEsig({ x, y }, other, signed)).toBe(false);
 		expect(verifiedEsig({ x: y, y: x }, input, signed)).toBe(false);
 		expect(verifiedEsig({ x, y }, input, `${signed.slice(0, -2)}AA`)).toBe(false);

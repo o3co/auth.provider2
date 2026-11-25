@@ -196,6 +196,9 @@ importers:
 
   modules/foundation/authority-rules:
     dependencies:
+      '@mod/continuation-wire':
+        specifier: workspace:*
+        version: link:../../wire/continuation-wire
       '@mod/reset-wire':
         specifier: workspace:*
         version: link:../../wire/reset-wire
@@ -3163,6 +3166,9 @@ importers:
         specifier: 4.6.7
         version: 4.6.7
     devDependencies:
+      '@mod/continuation-wire':
+        specifier: workspace:*
+        version: link:../../wire/continuation-wire
       '@mod/sdk-core-wire':
         specifier: workspace:*
         version: link:../../wire/sdk-core-wire

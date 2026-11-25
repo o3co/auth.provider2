@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { allowed, emptyState } from "@mod/authority-rules";
-import { challengeInput, continuation, firstKey, hpke } from "@mod/sdk-core-wire";
+import { continuations } from "@mod/continuation-wire";
+import { challengeInput, firstKey, hpke } from "@mod/sdk-core-wire";
 import type { Stage } from "@mod/transparency";
 import { type Credential, ceremonies } from "@mod/webauthn";
 import { softwareAuthenticator, testOrigin } from "@mod/webauthn/testing";
@@ -59,7 +60,7 @@ describe("a first key, from its start to its completion, over real sealing", () 
 		);
 		const body = JSON.stringify(auth.create(options as never, client));
 		const hash = sha256(creation);
-		const registeredSig = side.signs(continuation.of("register", hash, 1, sha256(body)));
+		const registeredSig = side.signs(continuations.of("register", hash, 1, sha256(body)));
 		const registered = await w.post("/continue", {
 			statement: creation,
 			stage: "register",

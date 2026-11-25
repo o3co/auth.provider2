@@ -5,7 +5,7 @@
 - Owns the schemas transparency-wire leaves to it: a flow's state, a record's changes, and a Core writer's preimage content by kind.
 
 ## Not here
-- The words, the records' and the receipts' forms, the verdict and outcome words: `transparency-wire`. T's items and statements: `sdk-core-wire`.
+- The words, the records' and the receipts' forms, the verdict and outcome words: `transparency-wire`. T's items and statements: `sdk-core-wire`. A continuation's stages and bytes: `continuation-wire`.
 - Signing, decrypting, hashing and verifying: the caller's, passed in as functions. Reading the log, the clock, keeping the judged prefix: the caller's.
 - The intent frame, leases, the owner rule and the end-of-intent table, which the Core alone runs: the Core's `transparency`.
 - Whether a receiver takes a record (`Acceptable`, read off a status, not a judgment): the receivers' parts.
@@ -33,7 +33,7 @@
 - A check a client's record needs that the caller does not give (the client's record at its version, the evidence window, the self ceiling) leaves it unchecked: held, never verified nor forged.
 
 ## Depends on
-- `transparency-wire`, `sdk-core-wire`, `reset-wire` (the protocols); `zod`.
+- `transparency-wire`, `sdk-core-wire`, `continuation-wire`, `reset-wire` (the protocols); `zod`.
 
 ## Vocabulary
 - state (S, M): a flow's live keys, approvals and families by the record that made each, its key generation and use-once marks.

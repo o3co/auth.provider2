@@ -3,7 +3,7 @@ import { continuations } from "@mod/continuation-wire";
 import { Unavailable } from "@mod/kernel";
 import type { Keys } from "@mod/keys";
 import type { KeyList } from "@mod/passkeys";
-import { continuation, hpke, type SigningKey } from "@mod/sdk-core-wire";
+import { hpke, type SigningKey } from "@mod/sdk-core-wire";
 import type {
 	ApprovalStore,
 	Approvals,
@@ -195,7 +195,7 @@ export function continuationsOver(p: {
 		const body = sha256(q.body);
 		const input = signUp
 			? continuations.of("sign-up", q.hash, q.seq, body)
-			: continuation.of("register", q.hash, q.seq, body);
+			: continuations.of("register", q.hash, q.seq, body);
 		if (!signedBy(r.e_sig, input, q.signature)) return { kind: "refused", reason: "signature" };
 		const sent = { body: q.body, signature: q.signature };
 		// Its items read from its bytes, the screen's keys from its record.

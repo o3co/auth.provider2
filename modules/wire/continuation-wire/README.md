@@ -18,7 +18,7 @@
 - Each stage signs apart: `of` names the stage, and a register's input is the same bytes as before the stages were named.
 - A body is strict: a credential id is base64url in one spelling, 1364 characters at most (1023 bytes); a label is 1 to 64 code points, no control, format, surrogate or line separator.
 - A sign-up's body travels unsealed as its text: `{}`, the one spelling `bodyText` gives, which the Core takes alone; its hash covers that text.
-- A sealed stage's body goes sealed, its signature inside: `{ body, sig }`'s canonical text padded with spaces to `plainBytes`, bound to stage, statement hash and sequence, so only the stage shows. An opened text reads only at that length, canonical then spaces alone, of its stage's shape.
+- A sealed stage's body goes sealed, its signature inside: `{ body, sig }`'s canonical text padded with spaces to `plainBytes`, bound to stage, statement hash and sequence, so only the stage shows. An opened text reads only at that length, canonical then spaces alone, of its stage's shape. The Core opens before verifying, within the rate limit; any failure is one refusal, nothing stored or spent.
 
 ## Depends on
 - Nothing in the workspace; `zod` (a peer).

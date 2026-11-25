@@ -1,4 +1,5 @@
-import { canonicalText, continuation, type PossessionPayload } from "@mod/sdk-core-wire";
+import { continuations } from "@mod/continuation-wire";
+import { canonicalText, type PossessionPayload } from "@mod/sdk-core-wire";
 import type { AppendRequest } from "@mod/transparency-wire";
 import {
 	type ClientAt,
@@ -189,7 +190,7 @@ function continuedRefusal(
 	content: { readonly credential: string; readonly publicKey: string },
 ): Refusal {
 	const { seq, body, signature } = continued;
-	const input = continuation.of("register", checks.digest(of.creation), seq, checks.digest(body));
+	const input = continuations.of("register", checks.digest(of.creation), seq, checks.digest(body));
 	if (!checks.verifyEsig(of.c.e_sig, input, signature))
 		return "the continuation is not the screen's over the creation";
 	const sent = checks.attestedKey(body);

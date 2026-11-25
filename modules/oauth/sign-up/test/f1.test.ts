@@ -1,6 +1,6 @@
 import { continuations } from "@mod/continuation-wire";
 import { overHttp } from "@mod/front-core-wire";
-import { challengeInput, continuation, hpke } from "@mod/sdk-core-wire";
+import { challengeInput, hpke } from "@mod/sdk-core-wire";
 import { type Credential, ceremonies } from "@mod/webauthn";
 import { softwareAuthenticator, testOrigin } from "@mod/webauthn/testing";
 import { describe, expect, it } from "vitest";
@@ -77,7 +77,7 @@ describe("a person's sign-up (F1), from the login's start to its finish", () => 
 			stage: "register",
 			seq: "1",
 			body,
-			sig: s.signs(continuation.of("register", sha256(creation), 1, sha256(body))),
+			sig: s.signs(continuations.of("register", sha256(creation), 1, sha256(body))),
 		});
 		expect(registered.status).toBe(200);
 		const possession = registered.json.statement as string;

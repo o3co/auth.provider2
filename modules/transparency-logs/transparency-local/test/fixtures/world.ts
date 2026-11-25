@@ -1,12 +1,13 @@
 import { createHash, generateKeyPairSync, randomBytes, sign as signBytes } from "node:crypto";
 import { tokenRules } from "@mod/authority-rules";
+import { continuations } from "@mod/continuation-wire";
 import { assemble, defineModule, kernelConfig, type Module } from "@mod/kernel";
 import { quietRuntime } from "@mod/kernel/testing";
 import { keys } from "@mod/keys";
 import keysModule from "@mod/keys/module";
 import { keysConfig, testHolder } from "@mod/keys/testing";
 import { passkeys } from "@mod/passkeys";
-import { canonicalText, challengeInput, continuation, typs } from "@mod/sdk-core-wire";
+import { canonicalText, challengeInput, typs } from "@mod/sdk-core-wire";
 import { type Guarantee, type Space, spaces, store } from "@mod/store";
 import storeModule from "@mod/store/module";
 import { storeConfig } from "@mod/store/testing";
@@ -254,7 +255,7 @@ const { x, y } = eSig.publicKey.export({ format: "jwk" });
 const screen = { v: 1, e_enc: "ZW5j", e_sig: { kty: "EC", crv: "P-256", x, y } };
 /** The screen's register continuation over a creation, sending `body`: canonical, as a key change carries it. */
 const continued = (creation: string, body: string, seq = 1) => {
-	const input = continuation.of("register", digest(creation), seq, digest(body));
+	const input = continuations.of("register", digest(creation), seq, digest(body));
 	const signature = signBytes("sha256", Buffer.from(input), {
 		key: eSig.privateKey,
 		dsaEncoding: "ieee-p1363",

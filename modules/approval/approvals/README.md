@@ -5,7 +5,7 @@
 - Owns the statements' store interface and its needs, the authorization's kind of operation on the subject's flow (`approval`), and the flow state's approvals and use-once marks (`approvals`, `consumed`).
 
 ## Not here
-- The statements' schemas, the challenge's and a continuation's inputs, the completion's form and the HPKE suite: `sdk-core-wire`. Signing, verifying and sealing: `keys`.
+- The statements' schemas, the challenge's input, the completion's form and the HPKE suite: `sdk-core-wire`. Signing, verifying and sealing: `keys`.
 - The assertion's ceremony, the keys and a pending key's verification: `passkeys`. The frame, leases, takers and abandonments: `transparency`. What a record changes, and its judgment: `authority-rules`.
 - What an item means and who asked it: the module that fills it. The code: the authorization's owner, which gives it to `complete`.
 - The completion's receipt of its record (A35): not in the completion's schema, so the completion carries none.
@@ -36,7 +36,7 @@
 - Each statement's record, by its hash, from its issuing to a minute past its expiry: its purpose, bytes, the screen's keys, how far it went, the subject, credential and assertion that used it, the last continuation (its body as received, up to 8192 bytes, and signature; a sealed one's body hash alone) and its step's answer (a sealed list's up to about 60 kB), and the completion. Its part of each subject's flow, in the frames' store: the state's approvals and use-once marks.
 
 ## Depends on
-- `kernel`, `keys` (the Core's ring, sealing, opening), `passkeys` (the assertion, the keys' list), `promises` (its stance), `rate-limit` (issuing counted), `issuer`, `sdk-core-wire` (schemas, inputs), `continuation-wire` (sign-up's input, the sealed stages), `transparency` and `transparency-wire` (the kind, flow and log's digest); `zod`.
+- `kernel`, `keys` (the Core's ring, sealing, opening), `passkeys` (the assertion, the keys' list), `promises` (its stance), `rate-limit` (issuing counted), `issuer`, `sdk-core-wire` (schemas, inputs), `continuation-wire` (a continuation's inputs, the sealed stages), `transparency` and `transparency-wire` (the kind, flow and log's digest); `zod`.
 
 ## Vocabulary
 - statement: what a person approves, signed for one purpose. T: an authorization's statement. item: a statement's field of its purpose. approval: a statement used, with what used it. continuation: the screen's next message in a ceremony, signed by its `eSig`. completion: an authorization's, a key change's, a passkey-add's or a passkey-manage's answer to the screen.

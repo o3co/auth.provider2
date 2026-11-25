@@ -1,6 +1,7 @@
 import { createHash, generateKeyPairSync, randomBytes, sign } from "node:crypto";
 import { approvalStore, approvals, type StoredStatement, statementItems } from "@mod/approvals";
 import approvalsModule from "@mod/approvals/module";
+import { continuations } from "@mod/continuation-wire";
 import { issuer } from "@mod/issuer";
 import { assemble, defineModule, kernelConfig } from "@mod/kernel";
 import { quietRuntime } from "@mod/kernel/testing";
@@ -17,7 +18,7 @@ import {
 import passkeysModule from "@mod/passkeys/module";
 import { stances } from "@mod/promises";
 import { rateLimitStandIn } from "@mod/rate-limit/testing";
-import { challengeInput, continuation } from "@mod/sdk-core-wire";
+import { challengeInput } from "@mod/sdk-core-wire";
 import {
 	frameStore,
 	operationKinds,
@@ -230,7 +231,7 @@ export async function stack(given: { readonly passkeys?: Record<string, unknown>
 		hash: c.hash,
 		seq,
 		body,
-		sig: c.signs(continuation.of("register", c.hash, seq, sha256(body))),
+		sig: c.signs(continuations.of("register", c.hash, seq, sha256(body))),
 	});
 	/** The new key's assertion over a possession, as the screen's `get()` answers it. */
 	const asserted = (

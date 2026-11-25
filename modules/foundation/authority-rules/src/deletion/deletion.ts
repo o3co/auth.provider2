@@ -1,4 +1,5 @@
-import { canonicalText, continuation } from "@mod/sdk-core-wire";
+import { continuations } from "@mod/continuation-wire";
+import { canonicalText } from "@mod/sdk-core-wire";
 import {
 	assertedBy,
 	type Checks,
@@ -12,10 +13,10 @@ import { type FlowState, own } from "../fold/fold.ts";
 /** A key's deletion's evidence, in its one order (V24): the passkey-manage, the approving key's assertion over it, the screen's `delete` continuation. */
 const forms = ["statement", "assertion", "continuation"];
 
-/** A `delete` continuation's body, its canonical text of the wire's shape (`continuation.bodies.delete`): the key it names; none otherwise. */
+/** A `delete` continuation's body, its canonical text of the wire's shape (`continuations.bodies.delete`): the key it names; none otherwise. */
 function bodyOf(body: string): { readonly credential_id: string } | undefined {
 	try {
-		const read = continuation.bodies.delete.safeParse(JSON.parse(body));
+		const read = continuations.bodies.delete.safeParse(JSON.parse(body));
 		return read.success && canonicalText(read.data) === body ? read.data : undefined;
 	} catch {
 		return undefined;
@@ -69,7 +70,7 @@ export function deletionOf(ask: DeletionAsk): Deletion {
 	if (!parent) return { refusal: "the approving key is not live on the flow" };
 	if (!assertedBy(asserted, parent, statement, checks, ask.context))
 		return { refusal: "the assertion is not the approving key's over the passkey-manage" };
-	const input = continuation.of(
+	const input = continuations.of(
 		"delete",
 		checks.digest(statement),
 		continued.seq,

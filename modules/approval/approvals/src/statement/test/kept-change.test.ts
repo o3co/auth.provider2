@@ -1,4 +1,4 @@
-import { continuation } from "@mod/sdk-core-wire";
+import { continuations } from "@mod/continuation-wire";
 import { describe, expect, it } from "vitest";
 import { screenKeys, sha256, world } from "../../../test/fixtures/world.ts";
 
@@ -34,7 +34,7 @@ async function made(w: World, items: object = creationItems) {
 	});
 	if (c.kind !== "issued") throw new Error(c.reason);
 	const register = async (seq: number, body: string) => {
-		const signature = keys.signs(continuation.of("register", c.hash, seq, sha256(body)));
+		const signature = keys.signs(continuations.of("register", c.hash, seq, sha256(body)));
 		let made = "";
 		await w.approvals.continue({
 			hash: c.hash,

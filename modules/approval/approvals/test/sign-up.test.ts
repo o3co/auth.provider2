@@ -1,5 +1,4 @@
 import { continuations } from "@mod/continuation-wire";
-import { continuation } from "@mod/sdk-core-wire";
 import { describe, expect, it } from "vitest";
 import type { KeptSignUp, SignUpResult } from "../src/contract.ts";
 import { screenKeys, sha256, world } from "./fixtures/world.ts";
@@ -141,7 +140,7 @@ describe("a T's sign-up (F1)", () => {
 			reason: "purpose",
 		});
 		// A T is no creation: `continue` (register) does not take it.
-		const signature = t.keys.signs(continuation.of("register", t.hash, 1, sha256("{}")));
+		const signature = t.keys.signs(continuations.of("register", t.hash, 1, sha256("{}")));
 		const step = async () => null;
 		expect(
 			await w.approvals.continue({ hash: t.hash, seq: 1, body: "{}", signature, step }),
@@ -156,7 +155,7 @@ describe("a T's sign-up (F1)", () => {
 		expect(await signUp(w, t, never, { body: "{ }" })).toEqual(refused("body"));
 		expect(await signUp(w, t, never, { seq: 2 })).toEqual(refused("seq"));
 		// The register stage's input, the same hash, number and body: another stage's words.
-		const register = t.keys.signs(continuation.of("register", t.hash, 1, sha256("{}")));
+		const register = t.keys.signs(continuations.of("register", t.hash, 1, sha256("{}")));
 		expect(await signUp(w, t, never, { signature: register })).toEqual(refused("signature"));
 		expect(w.statements.value(t.hash).signUp).toBeUndefined();
 	});

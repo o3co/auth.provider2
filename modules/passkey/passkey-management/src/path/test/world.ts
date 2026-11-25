@@ -10,6 +10,7 @@ import {
 import { approvalStore, type StoredStatement, statementItems } from "@mod/approvals";
 import approvalsModule from "@mod/approvals/module";
 import type { Ask, Checks, FlowState } from "@mod/authority-rules";
+import { continuations } from "@mod/continuation-wire";
 import { type Route, routes } from "@mod/http";
 import { testRequest } from "@mod/http/testing";
 import { issuer } from "@mod/issuer";
@@ -30,14 +31,7 @@ import {
 import passkeysModule from "@mod/passkeys/module";
 import promisesModule from "@mod/promises/module";
 import { rateLimitStandIn } from "@mod/rate-limit/testing";
-import {
-	challengeInput,
-	continuation,
-	type FirstKeyStage,
-	firstKey,
-	hpke,
-	payloads,
-} from "@mod/sdk-core-wire";
+import { challengeInput, type FirstKeyStage, firstKey, hpke, payloads } from "@mod/sdk-core-wire";
 import { type SubjectRevocation, subjectRevocation } from "@mod/subject-revocation";
 import {
 	frameStore,
@@ -410,7 +404,7 @@ export async function register(
 		"required",
 	);
 	const body = JSON.stringify(auth.create(options as never, client));
-	const sig = s.signs(continuation.of("register", sha256(creation), seq, sha256(body)));
+	const sig = s.signs(continuations.of("register", sha256(creation), seq, sha256(body)));
 	const answered = await w.post("/continue", {
 		statement: creation,
 		stage: "register",

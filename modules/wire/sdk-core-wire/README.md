@@ -7,6 +7,7 @@
 - Hashing, signing, sealing and verifying: the screen's SDK and the Core, each its own.
 - How a request crosses the Front: `front-core-wire`.
 - A passkey's public key form (its JWK, its thumbprint's input, the shared vectors): `passkey-key-wire`.
+- A statement's continuation (its stages, bodies and bytes, a sealed stage's plaintext and data): `continuation-wire`. Only the info it is sealed under is here (`hpke`).
 
 ## Offers
 - `typs`: the `typ` of a JAR, every statement (T, a creation, a possession: `approval+jwt`), the completion's answer (`completion+jwt`), a client assertion and a DPoP proof. `purposes`: `authorization`, `creation`, `possession`, `passkey-add`, `passkey-manage`.
@@ -18,7 +19,6 @@
 - `payloads.completions`: `passkeyAdd`, `passkeyManage` and `keyChange` (internal module `completions`). `payloads.completion` is the authorization's, its `purpose` and ⑤'s `receipt` optional.
 - `versions`: the wire versions a reader speaks (1); every statement and completion names its own as `v`. A creation's `options` name the `algorithms` the ceremony offered, as COSE numbers them, each once, and may name `user_name`, the account's name a passkey shows for a subject with no identifier: a label's text, not blank.
 - `canonicalText` and `challengeInput`: what a challenge covers. `firstKey`: `stages` (`start`, `mail`), `evidenceInput`, `aad` and `recoverInput`: what the evidence's value, a sealed request's additional data and a recovery's signature (the mail's nonce, the request's digest) cover.
-- `continuation`: `stages` (`register`, `delete`, `rename`; `ContinuationStage`), what a signature covers (`of`) and how (`signature`), the `bodies` of a delete and a rename, and the `sealed` stages' `aad`, `plainBytes`, `plainOf` and `readPlain`.
 
 ## Invariants
 - A protocol (G33): types, frozen constants, fixed schemas and the functions that build by them; no I/O, clock, randomness or state.
@@ -28,7 +28,6 @@
 - ②'s answer: T, its get challenge (SHA-256 of `challengeInput(T, "get")`, which the screen recomputes and uses) and `create`, an unsigned hint for F1.
 - A sealed value is `{ enc, ct }`: a 65-byte uncompressed point and the ciphertext with its 16-byte tag, base64url in one spelling; a nonce is 32 bytes.
 - An approval's completion binds the statement's and assertion's SHA-256, sealed under `completionAad` of the statement answered (a key change's: the `possession` for an add, the `passkey-manage` statement for a delete). A reader parses the form its request expects.
-- A `sealed` stage's body goes sealed to the Core, its signature inside (V24): `{ body, sig }`'s canonical text padded with spaces to `plainBytes`, bound to stage, statement hash and sequence; only the stage shows. The Core opens before verifying, within the rate limit; any failure is one refusal, nothing stored or spent. A credential id is 1023 bytes or less.
 - A label is 1 to 64 code points, no control, format, surrogate or line separator.
 - A creation excludes 15 credentials at most.
 - `basis` and the completion's `purpose` are optional until their writers name them, then required. `prompt` is the Core's to check, before T.

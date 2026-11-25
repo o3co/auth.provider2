@@ -1,5 +1,6 @@
+import { continuations } from "@mod/continuation-wire";
 import { defineModule } from "@mod/kernel";
-import { challengeInput, continuation, hpke, payloads, typs } from "@mod/sdk-core-wire";
+import { challengeInput, hpke, payloads, typs } from "@mod/sdk-core-wire";
 import { type Stage, transparency, transparencyLog } from "@mod/transparency";
 import { tokens } from "@mod/transparency-wire";
 import { describe, expect, it } from "vitest";
@@ -739,7 +740,7 @@ describe("a continuation", () => {
 			hash: c.hash,
 			seq: 1,
 			body: "b",
-			signature: keys.signs(continuation.of("register", c.hash, 1, sha256("b"))),
+			signature: keys.signs(continuations.of("register", c.hash, 1, sha256("b"))),
 			step: async (kept) => {
 				handed.push(kept);
 				return null;
@@ -807,7 +808,7 @@ describe("a continuation", () => {
 				hash: c.hash,
 				seq,
 				body,
-				signature: signature ?? keys.signs(continuation.of("register", c.hash, seq, sha256(body))),
+				signature: signature ?? keys.signs(continuations.of("register", c.hash, seq, sha256(body))),
 				step: async () => {
 					runs += 1;
 					return { reserved: `${body}-${runs}` };
@@ -828,7 +829,7 @@ describe("a continuation", () => {
 		expect(runs).toBe(1);
 		expect(await step(1, "b2")).toEqual({ kind: "refused", reason: "seq" });
 		expect(await step(3, "b3")).toEqual({ kind: "refused", reason: "seq" });
-		const other = screenKeys().signs(continuation.of("register", c.hash, 2, sha256("b2")));
+		const other = screenKeys().signs(continuations.of("register", c.hash, 2, sha256("b2")));
 		expect(await step(2, "b2", other)).toEqual({ kind: "refused", reason: "signature" });
 		expect(await step(2, "b2")).toMatchObject({
 			kind: "continued",
@@ -857,7 +858,7 @@ describe("a continuation", () => {
 			by: "s",
 		});
 		if (c.kind !== "issued") throw new Error(c.reason);
-		const signed = () => keys.signs(continuation.of("register", c.hash, 1, sha256("b1")));
+		const signed = () => keys.signs(continuations.of("register", c.hash, 1, sha256("b1")));
 		const first = signed();
 		const fell = w.approvals.continue({
 			hash: c.hash,
@@ -903,14 +904,14 @@ describe("a continuation", () => {
 		const ask = (body: string, signature: string) =>
 			w.approvals.continue({ hash: c.hash, seq: 1, body, signature, step: async () => null });
 		const big = "x".repeat(8193);
-		expect(await ask(big, keys.signs(continuation.of("register", c.hash, 1, sha256(big))))).toEqual(
-			{
-				kind: "refused",
-				reason: "body",
-			},
-		);
+		expect(
+			await ask(big, keys.signs(continuations.of("register", c.hash, 1, sha256(big)))),
+		).toEqual({
+			kind: "refused",
+			reason: "body",
+		});
 		// The same 64 bytes, its last character's unused bits set: it verifies, and is refused.
-		const sig = keys.signs(continuation.of("register", c.hash, 1, sha256("b1")));
+		const sig = keys.signs(continuations.of("register", c.hash, 1, sha256("b1")));
 		const last = sig.at(-1) as string;
 		const spelt = `${sig.slice(0, -1)}${String.fromCharCode(last.charCodeAt(0) + 1)}`;
 		expect(Buffer.from(spelt, "base64url")).toEqual(Buffer.from(sig, "base64url"));
@@ -922,7 +923,7 @@ describe("a continuation", () => {
 		// The bound counts UTF-8 bytes, not characters: 4096 two-byte characters pass, one more does not.
 		const wide = "é".repeat(4096);
 		const signedWide = (body: string) =>
-			keys.signs(continuation.of("register", c.hash, 1, sha256(body)));
+			keys.signs(continuations.of("register", c.hash, 1, sha256(body)));
 		expect(await ask(`${wide}é`, signedWide(`${wide}é`))).toEqual({
 			kind: "refused",
 			reason: "body",
@@ -941,7 +942,7 @@ describe("a continuation", () => {
 			by: "s",
 		});
 		if (c.kind !== "issued") throw new Error(c.reason);
-		const signature = keys.signs(continuation.of("register", c.hash, 1, sha256("b1")));
+		const signature = keys.signs(continuations.of("register", c.hash, 1, sha256("b1")));
 		let release = () => {};
 		const held = new Promise<void>((resolve) => {
 			release = resolve;
@@ -956,7 +957,7 @@ describe("a continuation", () => {
 		});
 		await new Promise((resolve) => setTimeout(resolve, 10));
 		expect(await call(async () => "second")).toEqual({ kind: "refused", reason: "pending" });
-		const next = keys.signs(continuation.of("register", c.hash, 2, sha256("b2")));
+		const next = keys.signs(continuations.of("register", c.hash, 2, sha256("b2")));
 		const two = await w.approvals.continue({
 			hash: c.hash,
 			seq: 2,

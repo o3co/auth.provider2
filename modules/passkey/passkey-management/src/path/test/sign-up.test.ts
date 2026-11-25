@@ -1,7 +1,7 @@
 import { approvals } from "@mod/approvals";
 import { allowed, emptyState } from "@mod/authority-rules";
 import { continuations } from "@mod/continuation-wire";
-import { challengeInput, continuation, hpke } from "@mod/sdk-core-wire";
+import { challengeInput, hpke } from "@mod/sdk-core-wire";
 import type { Stage } from "@mod/transparency";
 import { type Credential, ceremonies } from "@mod/webauthn";
 import { softwareAuthenticator, testOrigin } from "@mod/webauthn/testing";
@@ -102,7 +102,7 @@ async function registered(w: World, s: Screen, creation: string, seq = 1) {
 		"required",
 	);
 	const body = JSON.stringify(auth.create(options as never, client));
-	const sig = s.signs(continuation.of("register", sha256(creation), seq, sha256(body)));
+	const sig = s.signs(continuations.of("register", sha256(creation), seq, sha256(body)));
 	const answered = await w.post("/continue", {
 		statement: creation,
 		stage: "register",

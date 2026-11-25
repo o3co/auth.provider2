@@ -1,4 +1,5 @@
-import { canonicalText, continuation } from "@mod/sdk-core-wire";
+import { continuations } from "@mod/continuation-wire";
+import { canonicalText } from "@mod/sdk-core-wire";
 import type { Ask } from "../../src/chain/chain.ts";
 import { effectOf } from "../../src/chain/chain.ts";
 import {
@@ -70,7 +71,7 @@ export const addedKey = { credential: "cred-2A", publicKey: coseKey(2) };
 
 /** A screen's register continuation over a creation and a body, signed by `key` (the screen's E_sig). */
 export const continued = (creationJws: string, body: string, seq = 1, key = screen.e_sig) => {
-	const input = continuation.of("register", digest(creationJws), seq, digest(body));
+	const input = continuations.of("register", digest(creationJws), seq, digest(body));
 	return canonicalText({ seq, body, signature: esig(key, input) });
 };
 
@@ -265,7 +266,7 @@ export function deletion(
 ) {
 	const statement = sign(passkeyManage(over.sid ?? "del-1"), "ring-1");
 	const body = over.body ?? canonicalText({ credential_id: over.named ?? credential });
-	const input = continuation.of(over.stage ?? "delete", digest(statement), 1, digest(body));
+	const input = continuations.of(over.stage ?? "delete", digest(statement), 1, digest(body));
 	const sent = canonicalText({ seq: 1, body, signature: esig(screen.e_sig, input) });
 	return {
 		record: coreRecord("keyChange", position, {

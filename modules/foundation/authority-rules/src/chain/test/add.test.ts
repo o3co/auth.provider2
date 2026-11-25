@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
-import { canonicalText, continuation } from "@mod/sdk-core-wire";
+import { continuations } from "@mod/continuation-wire";
+import { canonicalText } from "@mod/sdk-core-wire";
 import { describe, expect, it } from "vitest";
 import {
 	type AddParts,
@@ -176,7 +177,7 @@ describe("a key a live key's approval adds (passkey-add; Rules023e Allowed `add`
 			);
 	});
 
-	it("verifies E_sig over the bytes approvals verifies: continuation.of over the creation's and the body's SHA-256", () => {
+	it("verifies E_sig over the bytes approvals verifies: continuations.of over the creation's and the body's SHA-256", () => {
 		const parts = addParts();
 		const seen: string[] = [];
 		const step = added(2, "r-1", parts);
@@ -194,7 +195,7 @@ describe("a key a live key's approval adds (passkey-add; Rules023e Allowed `add`
 		expect(allowed(watching)).toEqual(ok);
 		const sha256 = (text: string) => createHash("sha256").update(text, "utf8").digest("base64url");
 		const body = JSON.stringify(addedKey);
-		expect(seen).toEqual([continuation.of("register", sha256(parts.creation), 1, sha256(body))]);
+		expect(seen).toEqual([continuations.of("register", sha256(parts.creation), 1, sha256(body))]);
 		expect(seen[0]).toBe(
 			`{"body":"${sha256(body)}","h":"${sha256(parts.creation)}","seq":1,"stage":"register"}`,
 		);
