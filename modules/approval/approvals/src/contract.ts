@@ -161,16 +161,11 @@ export interface KeptSignUp {
  */
 export type SignUpResult = { readonly creation: string } | { readonly refused: string };
 
-/**
- * A used passkey-manage as its record keeps it, for a sealed continuation's step: its hash, the
- * subject, the approving key's credential and registration, and the screen's keys.
- */
+/** A used passkey-manage as its record keeps it, for a sealed continuation's step: its hash, and the rest. */
 export interface KeptManage {
 	readonly hash: string;
-	readonly subject: string;
-	readonly credential: string;
-	readonly registration: string;
-	readonly screen: Screen;
+	/** The passkey-manage as its key change takes it: statement, assertion, subject, approving key, screen, mark. */
+	readonly used: UsedApproval;
 	/** When its record is gone (kernel clock, ms): no step of it runs past it. */
 	readonly until: number;
 }
@@ -180,6 +175,10 @@ export interface OpenedBody {
 	readonly stage: SealedStageName;
 	readonly body: { readonly credential_id: string; readonly label?: string };
 	readonly bodyHash: string;
+	/** E_sig's signature (`r‖s`, base64url) as the write that took its number kept it: one for that number. */
+	readonly signature: string;
+	/** When this call's hold of its step ends (kernel clock, ms): past it, another call may take it over. */
+	readonly heldUntil: number;
 }
 
 /**
@@ -213,12 +212,25 @@ export type PasskeyManageAsk =
 	  }
 	| {
 			readonly hash: string;
-			/** The rename it answers, the one its record took and holds unanswered: its number and body hash. */
-			readonly continued: {
-				readonly stage: "rename";
-				readonly seq: number;
-				readonly bodyHash: string;
-			};
+			/**
+			 * The continuation it answers, the one its record took and holds unanswered: its number and
+			 * body hash; a delete's, the key it took (`credential`, the log's `receipt`), or why not.
+			 */
+			readonly continued:
+				| { readonly stage: "rename"; readonly seq: number; readonly bodyHash: string }
+				| {
+						readonly stage: "delete";
+						readonly seq: number;
+						readonly bodyHash: string;
+						readonly credential: string;
+						readonly receipt: string;
+				  }
+				| {
+						readonly stage: "delete";
+						readonly seq: number;
+						readonly bodyHash: string;
+						readonly refused: "last" | "used" | "unknown";
+				  };
 	  };
 
 export type PasskeyManageCompleted =
@@ -275,15 +287,16 @@ export interface KeptChange {
 	readonly creation: CreationRecord;
 	readonly continuation: LastContinuation;
 	/** What the creation's evidence names, by its basis: a passkey-add's, used by its subject; a sign-up's T as signed; none. */
-	readonly evidence?: UsedPasskeyAdd | string;
+	readonly evidence?: UsedApproval | string;
 }
 
 /**
- * A used passkey-add as the key change it approves takes it: its statement as signed, the assertion's
- * JSON text as received, the subject, credential and registration of the key that made it, the screen's
- * keys, and the flow state's use-once mark of the statement, which that key change consumes.
+ * A used passkey-add or passkey-manage as the key change it approves takes it: its statement as
+ * signed, the assertion's JSON text as received, the subject, credential and registration of the key
+ * that made it, the screen's keys, and the flow state's use-once mark of the statement, which that key
+ * change consumes.
  */
-export interface UsedPasskeyAdd {
+export interface UsedApproval {
 	readonly statement: string;
 	readonly assertion: string;
 	readonly subject: string;
@@ -489,7 +502,7 @@ export interface Approvals {
 	 * verifies it; none for any other statement, one not used, or one used before its key's
 	 * registration was kept. The whole ceremony it approves lives within its statement's life.
 	 */
-	passkeyAddOf(hash: string): Promise<UsedPasskeyAdd | undefined>;
+	passkeyAddOf(hash: string): Promise<UsedApproval | undefined>;
 	/**
 	 * What a used possession's key change was made of, to make its stage again once placed: its
 	 * creation, the continuation that made the possession, and the passkey-add or the sign-up's T it

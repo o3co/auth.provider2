@@ -20,10 +20,13 @@ async function writer(w: Awaited<ReturnType<typeof keyFlow>>) {
 				settled.push(subject);
 				return w.passkeys.settle(subject);
 			},
+			publicKeyOf: (id) => w.passkeys.publicKeyOf(id),
 		},
 		digest: w.log.digest,
 		pause: async () => {},
 		looks: 3,
+		now: () => Date.now(),
+		log: w.log,
 	});
 	return { change, receipts, settled };
 }

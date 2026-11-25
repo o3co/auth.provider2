@@ -86,13 +86,24 @@ describe("a sealed continuation", () => {
 			{
 				kept: {
 					hash: m.hash,
-					subject: "s1",
-					credential: expect.any(String),
-					registration: "r0",
-					screen: m.screen.screen,
+					used: {
+						statement: m.statement,
+						assertion: expect.any(String),
+						subject: "s1",
+						credential: expect.any(String),
+						registration: "r0",
+						screen: m.screen.screen,
+						mark: `statement:${JSON.parse(Buffer.from(m.statement.split(".")[1] ?? "", "base64url").toString()).sid}`,
+					},
 					until: expect.any(Number),
 				},
-				opened: { stage: "rename", body: renamed("Laptop"), bodyHash },
+				opened: {
+					stage: "rename",
+					body: renamed("Laptop"),
+					bodyHash,
+					signature: expect.stringMatching(/^[A-Za-z0-9_-]{86}$/),
+					heldUntil: expect.any(Number),
+				},
 			},
 		]);
 		// The same continuation again answers what was kept, its step not run again.
@@ -102,6 +113,52 @@ describe("a sealed continuation", () => {
 		expect(kept).not.toHaveProperty("sent");
 		expect(JSON.stringify(kept)).not.toContain("Laptop");
 		expect(kept).toMatchObject({ seq: 1, body: bodyHash, result: { hash: bodyHash } });
+	});
+
+	it("hands a number taken again the signature the write that took it kept, not a new one", async () => {
+		const w = await world();
+		const m = await used(w);
+		const first = await sealed(w, m.screen, m.hash, 1, renamed("one"));
+		const fell = async () => {
+			throw new Error("fell");
+		};
+		await expect(
+			w.approvals.continueSealed({
+				hash: m.hash,
+				stage: "rename",
+				seq: 1,
+				sealed: first,
+				step: fell,
+			}),
+		).rejects.toThrow("fell");
+		const kept = (w.statements.value(m.hash) as { sig: string }).sig;
+		// The same number and body, signed and sealed again: another signature.
+		w.advance(30_001);
+		const again = await sealed(w, m.screen, m.hash, 1, renamed("one"));
+		const { handed, step } = stepping();
+		await w.approvals.continueSealed({
+			hash: m.hash,
+			stage: "rename",
+			seq: 1,
+			sealed: again,
+			step,
+		});
+		expect(handed).toMatchObject([{ opened: { signature: kept } }]);
+	});
+
+	it("takes a delete's number with the longest ID of the subject's keys then and the key it names", async () => {
+		const w = await world();
+		const m = await used(w);
+		const { step } = stepping();
+		const long = Buffer.alloc(129, 7).toString("base64url");
+		const box = await sealed(w, m.screen, m.hash, 1, { credential_id: long }, { stage: "delete" });
+		await w.approvals.continueSealed({ hash: m.hash, stage: "delete", seq: 1, sealed: box, step });
+		// A key none of the subject's still sets its pad, so taken and not taken answer at one length.
+		expect(w.statements.value(m.hash)).toMatchObject({ seq: 1, pad: 129 });
+		// The next number, a rename's, keeps none.
+		const two = await sealed(w, m.screen, m.hash, 2, renamed("x"));
+		await w.approvals.continueSealed({ hash: m.hash, stage: "rename", seq: 2, sealed: two, step });
+		expect(w.statements.value(m.hash)).not.toHaveProperty("pad");
 	});
 
 	it("takes the next number once the last is kept, and an earlier one again as seq", async () => {
@@ -381,6 +438,7 @@ describe("a sealed continuation", () => {
 		const m = await used(w);
 		const over = continuationsOver({
 			keys: { verify: w.keys.verify, open: async () => ({ kind: "withdrawn" }) },
+			list: { listOf: async () => [] },
 			store: w.statements.store,
 			now: () => Date.now(),
 			token: () => "t",

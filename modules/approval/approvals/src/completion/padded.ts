@@ -2,7 +2,9 @@ import { hpke } from "@mod/sdk-core-wire";
 
 /** A completion padded to the bucket its longest credential ID's bytes choose; none where it does not fit, never sealed. */
 export const paddedFor = (jws: string, ids: readonly string[]): string | undefined =>
-	hpke.paddedCompletion(jws, Math.max(0, ...ids.map((id) => Buffer.from(id, "base64url").length)));
+	hpke.paddedCompletion(jws, longestOf(ids));
+export const longestOf = (ids: readonly string[]) =>
+	Math.max(0, ...ids.map((id) => Buffer.from(id, "base64url").length));
 
 /** Why this Core's issuer or a Core key passes sdk-core-wire's completion limits; none where they fit. */
 export function beyondLimits(

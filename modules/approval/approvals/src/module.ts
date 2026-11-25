@@ -75,6 +75,7 @@ export default defineModule(
 				...statements,
 				...continuationsOver({
 					keys: signer,
+					list: await c.get(keyList),
 					store,
 					now,
 					token: () => Buffer.from(c.random.bytes(16)).toString("base64url"),

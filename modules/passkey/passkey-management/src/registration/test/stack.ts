@@ -159,10 +159,13 @@ export async function stack(given: { readonly passkeys?: Record<string, unknown>
 				settled.push(subject);
 				return known.settle(subject);
 			},
+			publicKeyOf: (id) => known.publicKeyOf(id),
 		},
 		digest: book.as("w1").digest,
 		pause: async () => {},
 		looks: 3,
+		now,
+		log: book.as("w1"),
 	});
 	const parts = {
 		approvals: await app.get(approvals),

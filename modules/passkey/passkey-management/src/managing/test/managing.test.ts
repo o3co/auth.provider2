@@ -1,20 +1,28 @@
 import type { Approvals, KeptManage, OpenedBody, StepResult } from "@mod/approvals";
 import { describe, expect, it } from "vitest";
 import type { ContinueAsk } from "../../contract.ts";
-import { renameStageOver } from "../managing.ts";
+import type { Removed } from "../../key-change/key-change.ts";
+import { deleteStageOver, renameStageOver } from "../managing.ts";
 
 const kept: KeptManage = {
 	hash: "H",
-	subject: "s1",
-	credential: "approver",
-	registration: "r0",
-	screen: { eEnc: "E", eSig: { kty: "EC", crv: "P-256", x: "x", y: "y" } },
+	used: {
+		statement: "a.b.c",
+		assertion: "{}",
+		subject: "s1",
+		credential: "approver",
+		registration: "r0",
+		screen: { eEnc: "E", eSig: { kty: "EC", crv: "P-256", x: "x", y: "y" } },
+		mark: "statement:sid",
+	},
 	until: 9,
 };
 const opened: OpenedBody = {
 	stage: "rename",
 	body: { credential_id: "k2", label: "Laptop" },
 	bodyHash: "B",
+	signature: "s",
+	heldUntil: 9,
 };
 const ask = {
 	stage: "rename",
@@ -101,5 +109,37 @@ describe("a passkey-manage's rename", () => {
 		const { sealed: _, ...common } = ask as { sealed: unknown };
 		const clear = { ...common, body: "{}", signature: "s" } as unknown as ContinueAsk;
 		await expect(stage().renameStage.continue(clear)).rejects.toThrow(TypeError);
+	});
+});
+
+describe("a passkey-manage's delete", () => {
+	const deleting = { ...opened, stage: "delete" as const, body: { credential_id: "approver" } };
+	const asking = { ...ask, stage: "delete" } as ContinueAsk;
+	const statement = `h.${Buffer.from(JSON.stringify({ exp: 9_999_999_999 })).toString("base64url")}.s`;
+	const keptDelete: KeptManage = { ...kept, used: { ...kept.used, statement } };
+
+	it("answers a self-delete another call placed by its key change, its approving key gone since", async () => {
+		const outcomes: Removed[] = [{ kind: "none" }, { kind: "took", receipts: ["r.p.s"] }];
+		const completed: unknown[] = [];
+		const stage = deleteStageOver({
+			approvals: {
+				continueSealed: async (q) => {
+					const result: StepResult = await q.step(keptDelete, deleting);
+					return { kind: "continued", seq: q.seq, again: false, result } as const;
+				},
+				completePasskeyManage: async (q) => {
+					completed.push(q);
+					return { kind: "completed", enc: "E", ct: "C" } as const;
+				},
+			},
+			keyChange: {
+				removed: async () => outcomes.shift() as Removed,
+				remove: async () => ({ kind: "ended" }) as const,
+			},
+		});
+		expect(await stage.continue(asking)).toEqual({ kind: "sealed", enc: "E", ct: "C" });
+		expect(completed).toMatchObject([
+			{ continued: { stage: "delete", credential: "approver", receipt: "r.p.s" } },
+		]);
 	});
 });

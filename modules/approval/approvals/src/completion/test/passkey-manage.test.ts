@@ -1,3 +1,4 @@
+import { continuations } from "@mod/continuation-wire";
 import { keyList } from "@mod/passkeys";
 import { hpke, payloads, typs } from "@mod/sdk-core-wire";
 import { describe, expect, it } from "vitest";
@@ -240,6 +241,78 @@ describe("a passkey-manage's completion", () => {
 			await w.approvals.completePasskeyManage({ hash: a.hash, assertion, make: true }),
 		).toEqual({ kind: "refused", reason: "expired" });
 		expect(w.statements.value(a.hash)).toMatchObject({ state: "used" });
+	});
+
+	it("answers a delete taken as its key change, and one not taken as the list naming why", async () => {
+		const w = await world();
+		const { a, keys, key } = await used(w);
+		const body = continuations.bodyText("delete", { credential_id: key.id }) as string;
+		await w.statements.store.change(a.hash, (r) => ({
+			value: {
+				...(r as object),
+				seq: 1,
+				body: sha256(body),
+				claimed: { by: "t", until: Number.MAX_SAFE_INTEGER },
+			} as never,
+		}));
+		const base = { stage: "delete" as const, seq: 1, bodyHash: sha256(body) };
+		const open = (box: { enc: string; ct: string }) => {
+			const text = openSealed(
+				keys.encKey,
+				box,
+				hpke.info.completion,
+				hpke.completionAad("passkey-manage", a.hash),
+			);
+			return { length: text.length, payload: payloadOf(hpke.unpaddedCompletion(text) as string) };
+		};
+		const taken = await w.approvals.completePasskeyManage({
+			hash: a.hash,
+			continued: { ...base, credential: key.id, receipt: "h.p.s" },
+		});
+		if (taken.kind !== "completed") throw new Error(taken.reason);
+		const change = open(taken);
+		expect(payloads.completions.keyChange.safeParse(change.payload).success).toBe(true);
+		expect(change.payload).toMatchObject({
+			purpose: "passkey-manage",
+			change: { op: "delete", credential_id: key.id },
+			receipt: "h.p.s",
+		});
+		const kept = await w.approvals.completePasskeyManage({
+			hash: a.hash,
+			continued: { ...base, refused: "last" },
+		});
+		if (kept.kind !== "completed") throw new Error(kept.reason);
+		const list = open(kept);
+		expect(list.payload).toMatchObject({
+			keys: [{ credential_id: key.id }],
+			continued: { stage: "delete", seq: 1, body_hash: sha256(body), refused: "last" },
+		});
+		// One length for both: the Front learns neither which nor whether.
+		expect(list.length).toBe(change.length);
+		// Padded by the keys as they were when its number was taken, though one long since went.
+		await w.statements.store.change(a.hash, (r) => ({
+			value: { ...(r as object), pad: 129 } as never,
+		}));
+		const kept129 = await w.approvals.completePasskeyManage({
+			hash: a.hash,
+			continued: { ...base, credential: key.id, receipt: "h.p.s" },
+		});
+		if (kept129.kind !== "completed") throw new Error(kept129.reason);
+		expect(open(kept129).length).toBe(hpke.completionBuckets[1]);
+		// Not taken, padded alike: the Front tells neither from the other.
+		const notTaken = await w.approvals.completePasskeyManage({
+			hash: a.hash,
+			continued: { ...base, refused: "last" },
+		});
+		if (notTaken.kind !== "completed") throw new Error(notTaken.reason);
+		expect(open(notTaken).length).toBe(hpke.completionBuckets[1]);
+		// A key its body does not name: none.
+		expect(
+			await w.approvals.completePasskeyManage({
+				hash: a.hash,
+				continued: { ...base, credential: "other", receipt: "h.p.s" },
+			}),
+		).toEqual({ kind: "refused", reason: "continued" });
 	});
 
 	it("names no continuation but the one its record took and holds unanswered", async () => {

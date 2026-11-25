@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { Approval, Approvals, KeptCreation, StepResult, UsedPasskeyAdd } from "@mod/approvals";
+import type { Approval, Approvals, KeptCreation, StepResult, UsedApproval } from "@mod/approvals";
 import { Unavailable } from "@mod/kernel";
 import type { Held, Passkeys, Registrations } from "@mod/passkeys";
 import { challengeInput, payloads } from "@mod/sdk-core-wire";
@@ -78,7 +78,7 @@ const payloadOf = (jws: string): unknown =>
 const issuedAt = (jws: string) =>
 	((payloadOf(jws) as { iat?: number } | undefined)?.iat ?? 0) * 1000;
 type Path = "first-key" | "passkey-add" | "sign-up";
-const pickApproved = (a: UsedPasskeyAdd) => {
+const pickApproved = (a: UsedApproval) => {
 	const { statement, assertion, credential, registration, mark } = a;
 	return { statement, assertion, credential, registration, mark };
 };

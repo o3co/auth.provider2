@@ -1,14 +1,7 @@
 import { emptyState, type FlowState } from "@mod/authority-rules";
 import type { Ending, Json } from "@mod/transparency";
 import { describe, expect, it } from "vitest";
-import {
-	committing,
-	keyChanges,
-	keysGoneWith,
-	keysOwner,
-	type Reservation,
-	removing,
-} from "../src/records.ts";
+import { committing, keyChanges, keysOwner, type Reservation, removing } from "../src/records.ts";
 
 const reservation: Reservation = {
 	version: "v1",
@@ -86,10 +79,13 @@ describe("removing", () => {
 			records: h.map(() => writer),
 		}))(s, [...held(), null]);
 	const under = (credential: string, chain: string[]) => ({ ...key(credential), chain });
-	it("refuses what would leave no key, the keys whose chain holds it counted", () => {
+	it("refuses what would leave no key; a key under it stays and counts", () => {
 		expect(remove(state({ k1: key("c1") }))).toEqual({ refused: "last" });
-		expect(remove(state({ k1: key("c1"), k2: under("c2", ["k1"]) }))).toEqual({
-			refused: "last",
+		// The writer's own refusal is read first, on the same state.
+		const refusing = removing({ credential: "c1", op: "rm" }, () => ({ refused: "approver" }));
+		expect(refusing(state({ k1: key("c1") }), held())).toEqual({ refused: "approver" });
+		expect(remove(state({ k1: key("c1"), k2: under("c2", ["k1"]) }))).toMatchObject({
+			eff: { removeKey: "k1" },
 		});
 		// The writer's own records are kept; passkeys' reservation, first, is left as it is.
 		expect(remove(state({ k1: key("c1"), k2: key("c2") }))).toEqual({
@@ -108,12 +104,13 @@ describe("removing", () => {
 			}))(s, held()),
 		).toEqual({ refused: "op" });
 		expect(() => remove(s, "c2", "k1")).toThrow(TypeError);
-	});
-	it("tells the credentials a removal takes: its key and every key whose chain holds it", () => {
-		const s = state({ k1: key("c1"), k2: under("c2", ["k1"]), k3: key("c3") });
-		expect(keysGoneWith(s, "c1")).toEqual(["c1", "c2"]);
-		expect(keysGoneWith(s, "c3")).toEqual(["c3"]);
-		expect(keysGoneWith(s, "none")).toEqual([]);
+		// Nor may a removal add a key.
+		const adding = removing({ credential: "c1", op: "rm" }, () => ({
+			digest: "d",
+			eff: { removeKey: "k1", key: { credential: "c9", publicKey: "p" } },
+			records: [],
+		}));
+		expect(() => adding(s, held())).toThrow(TypeError);
 	});
 });
 

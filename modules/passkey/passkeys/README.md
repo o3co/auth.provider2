@@ -17,7 +17,7 @@
 - `heldKeys`, read alone: internal module `kept`.
 - `keyList`, taken as `registrations` is, internal module `listing`'s: `listOf`, a subject's keys, labels and times; `rename`.
 - `registrations`, taken only by a module standing on the promises (`promises`' `stances`): `reserve` (the key generation its approval names; `first`: only where the subject holds no key; `retrying` one), `verifyPending`, `commit` (KE-C01, its op the reservation), `cancel`, `remove` (KE-C01 of a removal).
-- `passkeyChanges`: the key change's kind (name, part, records, end) its writer registers on `operationKinds`, with its `bundle` and `resend`, and records of its own after passkeys'. `passkeysGone` (state, credential): the credentials a removal takes. `passkeyPart`: the part, which its wiring binds.
+- `passkeyChanges`: the key change's kind (name, part, records, end) its writer registers on `operationKinds`, with its `bundle` and `resend`, and records of its own after passkeys'. `passkeyPart`: the part, which its wiring binds.
 - Extension points `passkeyWitnessing` (at most one: `marked`, `mark` and `withdraw`, by key generation) and `passkeyRemovals` (any number: `removed`, told at least once of the latest 64 gone between two settles).
 - `passkeyStore`, the credential records' store interface (create unless held, read, change from what it holds), and `passkeyStoreNeeds`.
 - Operator section: `user-verification` (default `required`; any other breaks the promise of a new login, `front-compromise-new-authorization`), `pending-lifetime` (default 10 minutes), `max-credentials` (default 10, at most 16).
@@ -37,7 +37,7 @@
 - Credential records by credential id, kept without end in the passkey store. After a subject's erasure, the binding to its subject and the count remain, as the log keeps the key on the subject's flow; the details (handle, transports, backup state, label, time) go at the settle that tells of the key gone, so of the latest 64 keys taken off between two settles alone: an older one keeps its details.
 
 ## Depends on
-- `kernel`, `promises` (the stances its takers declare), `transparency` and `transparency-wire` (the frame, the kinds, the owners, flows), `authority-rules` (the state's schema, `withoutRooted`), `webauthn` (the ceremonies, the credential's form), `passkey-witness` (whether a witness is composed).
+- `kernel`, `promises` (the stances its takers declare), `transparency` and `transparency-wire` (the frame, the kinds, the owners, flows), `authority-rules` (the state's schema), `webauthn` (the ceremonies, the credential's form), `passkey-witness` (whether a witness is composed).
 
 ## Vocabulary
 - key: a credential the subject's flow state holds active. reservation: a key's registration in progress, one per subject. version: a reservation's op id; a retry makes a new one. binding: a credential record's subject.

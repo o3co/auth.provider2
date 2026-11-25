@@ -1,4 +1,4 @@
-import { type FlowState, ruleSchemas, withoutRooted } from "@mod/authority-rules";
+import { ruleSchemas } from "@mod/authority-rules";
 import type {
 	Deciding,
 	IntentUnit,
@@ -156,13 +156,6 @@ export const keysRecords = keysOwner.records;
 
 /** The credentials active in a state. */
 export const credentialsOf = (keys: Keys) => Object.values(keys.keys).map((k) => k.credential);
-/** The credentials a removal of `credential`'s key takes: it and every key whose chain holds it. */
-export function keysGoneWith(state: FlowState, credential: string): readonly string[] {
-	const key = activeKey(state, credential);
-	if (!key) return [];
-	const left = new Set(credentialsOf(withoutRooted(state, key[0])));
-	return credentialsOf(state).filter((c) => !left.has(c));
-}
 
 /** The ends that release a verified reservation's version for good. */
 const ended = new Set(["held", "abandoned"]);
@@ -219,20 +212,24 @@ function writersOwn(records: readonly PartNext[], held: readonly (Json | undefin
 	return [undefined, ...records.slice(1)];
 }
 
-/** KE-C01 of a removal: refused where no key is left, keys whose chain holds it counted. */
+/**
+ * KE-C01 of a removal: the key named alone goes (DelDrop), so it is refused where it is the last,
+ * as the rules' deletion refuses it.
+ */
 export function removing(
 	p: { readonly credential: string; readonly op: string },
 	inner: Deciding,
 ): Deciding {
 	return (state, held) => {
 		if (reservationOf(held[0])?.version === p.op) return { refused: "op" };
-		const key = activeKey(state, p.credential);
-		if (!key) return { refused: "unknown" };
-		if (Object.keys(withoutRooted(state, key[0]).keys).length === 0) return { refused: "last" };
+		// The writer's own refusals first, on the same state: its approver, its mark, its time.
 		const asked = inner(state, held);
 		if ("refused" in asked) return asked;
-		if (asked.eff.removeKey !== key[0])
-			throw new TypeError("a key change's changes name another key");
+		const key = activeKey(state, p.credential);
+		if (!key) return { refused: "unknown" };
+		if (Object.keys(state.keys).length < 2) return { refused: "last" };
+		if (asked.eff.removeKey !== key[0] || asked.eff.key !== undefined)
+			throw new TypeError("a key change's changes name another key, or add one");
 		return { ...asked, records: writersOwn(asked.records, held) };
 	};
 }

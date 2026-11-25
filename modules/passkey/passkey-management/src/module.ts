@@ -86,6 +86,7 @@ export default defineModule(
 		// `/continue`, each stage to the module that continues it; `register` is this package's own.
 		m.contribute(continueStages).by(async (c) => (await c.get(keying)).registerStage),
 		m.contribute(continueStages).by(async (c) => (await c.get(keying)).renameStage),
+		m.contribute(continueStages).by(async (c) => (await c.get(keying)).deleteStage),
 		m.contribute(routes).by(async (c: Context) =>
 			continueRoute({
 				stages: stagesOf(await c.collect(continueStages), (reason) =>

@@ -11,7 +11,7 @@ import { approvalOver, type Finished, type Started } from "../approval/approval.
 import type { ContinueStage, SignUpAsk, SignUpCreated } from "../contract.ts";
 import { creationOver } from "../creation/creation.ts";
 import { keyChangesOver } from "../key-change/key-change.ts";
-import { renameStageOver } from "../managing/managing.ts";
+import { deleteStageOver, renameStageOver } from "../managing/managing.ts";
 import { type Registered, registrationOver } from "../registration/registration.ts";
 import { approvalRoutes, keyRoutes } from "../routes/routes.ts";
 import type { Settings } from "../section.ts";
@@ -60,6 +60,8 @@ export async function keyingOf(c: Context) {
 		digest: (await c.get(transparencyLog)).digest,
 		pause: (look) => sleep(lookAgainMs(look)),
 		looks: 18,
+		now: c.clock.now,
+		log: await c.get(transparencyLog),
 	});
 	const registration = registrationOver({
 		approvals: await c.get(approvals),
@@ -135,6 +137,7 @@ export async function keyingOf(c: Context) {
 				throw new TypeError("passkey-management: a register answered a completion");
 			},
 		} satisfies ContinueStage,
+		deleteStage: deleteStageOver({ approvals: await c.get(approvals), keyChange }),
 		renameStage: renameStageOver({
 			approvals: await c.get(approvals),
 			passkeys: settling,

@@ -4,7 +4,7 @@
 - Owns the kinds of a first key's evidence beside the email's token: what a kind's module is given and answers, on one contract every kind sits on.
 - Owns a first key's nonces and mail tokens, and the answers of its mail's side: their store interfaces and needs, and its mail's purpose and the values its wording is given.
 - Runs a first key's path: its nonces, its start (§3.13's step 1), its mail's side and its creation (step 3, registration's step 2), and a creation's recovery (§C.4), as the Core's routes.
-- Runs a passkey-add (§3.13's step 1): its approval by a live key, the creation it bases, then the shared registration (steps 4 to 6); and a passkey-manage: its approval's list of keys, a rename by `/continue`. As the Core's routes.
+- Runs a passkey-add (§3.13's step 1): its approval by a live key, the creation it bases, then the shared registration (steps 4 to 6); and a passkey-manage: its approval's list of keys, a rename or a delete by `/continue`. As the Core's routes.
 
 ## Not here
 - A subject's revocation boundary at the start: its creation is refused once one followed the evidence (internal module `creation`).
@@ -15,7 +15,7 @@
 
 ## Offers
 - Extension point `firstKeyEvidence` (keyed by kind): a `FirstKeyEvidence`'s `prepare`, `check` and `settled`, as internal module `evidence` asks them.
-- Extension point `continueStages`: a stage of `/continue` (its word as `continuation-wire` names it) and how it goes on, one module each; `register` and `rename` are its own (`routes`, `managing`).
+- Extension point `continueStages`: a stage of `/continue` (its word as `continuation-wire` names it) and how it goes on, one module each; `register`, `rename`, `delete` its own.
 - `firstKeyNonces` and `firstKeyTokens`, the stores' interfaces, and their needs `firstKeyNoncesNeeds` and `firstKeyTokensNeeds`, as internal modules `nonces` and `tokens` run on them.
 - `firstKeyMail`: its mail's purpose, `first-key`, declared to `mail`'s `mailPurposes`, and the values its wording is given: `link`, `account`, `minutes`.
 - `signUpCreations`: a sign-up's creation (F1), for the `sign-up` package (internal module `keying`).

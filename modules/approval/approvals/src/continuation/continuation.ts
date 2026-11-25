@@ -2,6 +2,7 @@ import { createPublicKey, verify, type webcrypto } from "node:crypto";
 import { continuations } from "@mod/continuation-wire";
 import { Unavailable } from "@mod/kernel";
 import type { Keys } from "@mod/keys";
+import type { KeyList } from "@mod/passkeys";
 import { continuation, hpke, type SigningKey } from "@mod/sdk-core-wire";
 import type {
 	ApprovalStore,
@@ -20,6 +21,7 @@ import {
 	recordOf,
 	type StatementRecord,
 	sha256,
+	statementMark,
 	stored,
 } from "../statement/statement.ts";
 
@@ -83,6 +85,7 @@ const signUpRefusal = (r: StatementRecord, now: number): Refusal | undefined => 
 /** Continuations: each the next sequence number, verified and taken in one write, its step run by one call and its answer kept. */
 export function continuationsOver(p: {
 	readonly keys: Pick<Keys, "verify" | "open">;
+	readonly list: Pick<KeyList, "listOf">;
 	readonly store: ApprovalStore;
 	readonly now: () => number;
 	readonly token: () => string;
@@ -98,6 +101,7 @@ export function continuationsOver(p: {
 		sent: StatementRecord["sent"],
 		by: string,
 		signUp: boolean,
+		extra?: Pick<StatementRecord, "sig" | "pad">,
 	) => {
 		let refused: Refusal | undefined;
 		const changed = await p.store.change(hash, (current) => {
@@ -119,10 +123,9 @@ export function continuationsOver(p: {
 			const begun = signUp ? { signUp: now.signUp ?? {} } : {};
 			if (next) {
 				// The body and signature as sent are written with the number they took, never again for it.
-				const { result: _kept, ...rest } = now;
-				return {
-					value: stored({ ...rest, ...begun, seq, body, ...(sent ? { sent } : {}), claimed }),
-				};
+				const { result: _kept, sig: _sig, pad: _pad, ...rest } = now;
+				const taken = { ...(sent ? { sent } : {}), ...extra };
+				return { value: stored({ ...rest, ...begun, seq, body, ...taken, claimed }) };
 			}
 			return { value: stored({ ...now, ...begun, claimed }) };
 		});
@@ -150,7 +153,8 @@ export function continuationsOver(p: {
 		body: string,
 		sent: StatementRecord["sent"],
 		signUp: boolean,
-		step: () => Promise<StepResult>,
+		step: (taken: StatementRecord) => Promise<StepResult>,
+		extra?: Pick<StatementRecord, "sig" | "pad">,
 	): Promise<Continued> => {
 		const answered = (x: StatementRecord | undefined, again: boolean): Continued | undefined =>
 			x?.seq === q.seq && x.body === body && x.result !== undefined
@@ -161,14 +165,14 @@ export function continuationsOver(p: {
 		if (!signUp && r.seq !== q.seq && p.now() > r.exp)
 			return { kind: "refused", reason: "expired" };
 		const by = p.token();
-		const held = await claim(q.hash, q.seq, body, sent, by, signUp);
+		const held = await claim(q.hash, q.seq, body, sent, by, signUp, extra);
 		if (held.refused) return { kind: "refused", reason: held.refused };
 		if (held.after?.claimed?.by !== by) {
 			const now = recordOf(await p.store.read(q.hash));
 			const same = now?.seq === q.seq && now.body === body;
 			return answered(now, true) ?? { kind: "refused", reason: same ? "pending" : "seq" };
 		}
-		const after = await kept(q.hash, q.seq, by, await step());
+		const after = await kept(q.hash, q.seq, by, await step(held.after));
 		return (
 			answered(after, r.seq === q.seq) ??
 			answered(recordOf(await p.store.read(q.hash)), true) ?? { kind: "refused", reason: "pending" }
@@ -213,7 +217,9 @@ export function continuationsOver(p: {
 	const openedFor = async (
 		q: Parameters<Approvals["continueSealed"]>[0],
 	): Promise<
-		{ kept: KeptManage; opened: OpenedBody; r: StatementRecord } | "expired" | undefined
+		| { kept: KeptManage; opened: Omit<OpenedBody, "heldUntil">; r: StatementRecord }
+		| "expired"
+		| undefined
 	> => {
 		const enc = bytesOf(q.sealed.enc);
 		const ct = bytesOf(q.sealed.ct);
@@ -240,15 +246,21 @@ export function continuationsOver(p: {
 		const bodyHash = sha256(bodyText);
 		const input = continuations.of(q.stage, q.hash, q.seq, bodyHash);
 		if (!signedBy(r.e_sig, input, read.sig)) return undefined;
-		const kept = {
-			hash: q.hash,
-			subject: r.subject,
-			credential: r.credential,
-			registration: r.registration,
-			screen: { eEnc: r.e_enc, eSig: r.e_sig },
-			until: recordEnd(r),
+		if (!r.assertion) return undefined;
+		const screen = { eEnc: r.e_enc, eSig: r.e_sig };
+		const { subject, credential, registration, assertion } = r;
+		const used = {
+			statement: r.jws,
+			assertion,
+			subject,
+			credential,
+			registration,
+			screen,
+			mark: statementMark(r.sid),
 		};
-		return { kept, opened: { stage: q.stage, body: read.body as OpenedBody["body"], bodyHash }, r };
+		const kept = { hash: q.hash, used, until: recordEnd(r) };
+		const body = read.body as OpenedBody["body"];
+		return { kept, opened: { stage: q.stage, body, bodyHash, signature: read.sig }, r };
 	};
 
 	const continueSealed = async (
@@ -261,9 +273,23 @@ export function continuationsOver(p: {
 		if (!found) return { kind: "refused", reason: "sealed" };
 		// The body's hash alone is kept, never the opened text; a rename's carries a label and a
 		// delete's none, so the two stages' hashes never meet.
-		return proceed(q, found.r, found.opened.bodyHash, undefined, false, () =>
-			q.step(found.kept, found.opened),
-		);
+		// The step is handed the signature the write that took its number kept: one for that number.
+		const { opened } = found;
+		// A delete's answer is padded by the subject's keys when its number is taken, and the key it names.
+		const ids = async () => [
+			...(await p.list.listOf(found.kept.used.subject)).map((k) => k.credential),
+			opened.body.credential_id,
+		];
+		const pad =
+			q.stage === "delete"
+				? Math.max(0, ...(await ids()).map((id) => bytesOf(id)?.length ?? 0))
+				: undefined;
+		const extra = { sig: opened.signature, ...(pad === undefined ? {} : { pad }) };
+		const step = (taken: StatementRecord) => {
+			const signature = taken.sig ?? opened.signature;
+			return q.step(found.kept, { ...opened, signature, heldUntil: taken.claimed?.until ?? 0 });
+		};
+		return proceed(q, found.r, opened.bodyHash, undefined, false, step, extra);
 	};
 
 	return {

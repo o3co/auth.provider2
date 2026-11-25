@@ -22,6 +22,7 @@ import { type Message, mail } from "@mod/mail";
 import { passkeyWitnessStandIn } from "@mod/passkey-witness/testing";
 import {
 	type PasskeyStore,
+	passkeyRemovals,
 	passkeyStore,
 	passkeyWitnessing,
 	type StoredCredential,
@@ -217,9 +218,19 @@ export async function firstKeyWorld() {
 			.by(() => ({ check: async () => "valid" }) as unknown as SubjectRevocation),
 	]);
 	const recorded = recordingLog();
+	// Each removal passkeys' settle tells, as a contributor (refresh, in a deployment) hears it.
+	const told: (readonly [string, string, boolean])[] = [];
+	const removals = defineModule({ name: "removals", replicaSafe: true, takes: [] }, (m) => [
+		m.contribute(passkeyRemovals).by(() => ({
+			removed: async (subject: string, credential: string, emptied: boolean) => {
+				told.push([subject, credential, emptied]);
+			},
+		})),
+	]);
 	const app = await assemble({
 		modules: [
 			standIns,
+			removals,
 			rateLimitStandIn,
 			keysModule,
 			testHolder({ "seal-test": core }),
@@ -256,6 +267,7 @@ export async function firstKeyWorld() {
 		now,
 		sent,
 		recorded,
+		told,
 		statements,
 		corePoint: pointOf(core),
 		/** The next mail sent, once its job ran. */

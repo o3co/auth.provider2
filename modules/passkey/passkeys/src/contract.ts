@@ -2,7 +2,7 @@ import { contract, extensionPoint } from "@mod/kernel";
 import { stances } from "@mod/promises";
 import type { Deciding, Refused } from "@mod/transparency";
 import type { CeremonyRefusal, Credential } from "@mod/webauthn";
-import { keyChanges, keysGoneWith, part } from "./records.ts";
+import { keyChanges, part } from "./records.ts";
 
 /**
  * Passkeys: each subject's keys as its flow's state holds them, the reservation of a key being
@@ -19,9 +19,6 @@ export const passkeyPart = part;
  * append records of its own after passkeys' (its preimage, for a resend), whose end it answers.
  */
 export const passkeyChanges = keyChanges;
-
-/** The credentials a removal of a credential's key takes from a flow's state: it and every key whose chain holds it. */
-export const passkeysGone = keysGoneWith;
 
 export type AssertRefusal = CeremonyRefusal | "unknown-credential" | "not-named" | "raced";
 

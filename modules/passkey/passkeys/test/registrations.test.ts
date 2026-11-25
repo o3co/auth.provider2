@@ -262,7 +262,7 @@ describe("registrations", () => {
 		expect(await w.regs.cancel({ subject: "s1", ...r })).toEqual({ refused: "state" });
 	});
 
-	it("removes no key that would leave the subject none, counting the keys its chain takes too", async () => {
+	it("removes no key that would leave the subject none, and leaves the keys under it", async () => {
 		const w = await world();
 		const one = await w.register();
 		const k1 = w.recordOf("s1", one.credential.id);
@@ -276,21 +276,16 @@ describe("registrations", () => {
 		expect(await remove(one.credential.id)).toEqual({ refused: "last" });
 		expect(await remove("none")).toEqual({ refused: "unknown" });
 		const two = await w.register("s1", false, w.auth, k1);
-		// k2 hangs from k1: removing k1 takes both.
-		expect(await remove(one.credential.id)).toEqual({ refused: "last" });
-		const k2 = w.recordOf("s1", two.credential.id);
-		const rm2 = await remove(two.credential.id, "rm2");
-		expect(rm2).toEqual({ prev: 2 });
-		await w.land("s1", "rm2", keyStage(flow, "rm2", keyOf(two.credential)), 2);
-		expect(w.recordOf("s1", two.credential.id)).toBeUndefined();
-		expect(k2).toBeDefined();
-		// Every key but the first hangs from it: the first goes only with all.
-		const three = await w.register("s1", false);
-		expect(await remove(one.credential.id, "rm3")).toEqual({ refused: "last" });
 		const pending = await w.reserve({ subject: "s1", credential: await w.created() });
 		if (!("reservation" in pending)) throw new Error("not reserved");
-		expect(await remove(three.credential.id, pending.reservation)).toEqual({ refused: "op" });
-		expect(await remove(three.credential.id, "rm3")).toEqual({ prev: 4 });
+		expect(await remove(one.credential.id, pending.reservation)).toEqual({ refused: "op" });
+		// k2 hangs from k1: removing k1 takes it alone (DelDrop), k2 stays.
+		expect(await remove(one.credential.id)).toEqual({ prev: 2 });
+		await w.land("s1", "rm1", keyStage(flow, "rm1", keyOf(one.credential)), 2);
+		expect(w.recordOf("s1", one.credential.id)).toBeUndefined();
+		expect(w.recordOf("s1", two.credential.id)).toBeDefined();
+		// k2 is the last now.
+		expect(await remove(two.credential.id, "rm2")).toEqual({ refused: "last" });
 	});
 
 	it("lets no late release of an old reservation unbind a newer one", async () => {

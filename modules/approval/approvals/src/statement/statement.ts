@@ -20,7 +20,7 @@ import type {
 	StatementItems,
 	StoredStatement,
 	Used,
-	UsedPasskeyAdd,
+	UsedApproval,
 } from "../contract.ts";
 
 /** The wire version this Core writes: the latest `sdk-core-wire` speaks. */
@@ -56,6 +56,10 @@ const recordShape = z
 		seq: z.number().int().nonnegative(),
 		body: id.optional(),
 		sent: z.object({ body: z.string(), signature: id }).strict().optional(),
+		/** A sealed continuation's: E_sig's signature, kept with its number; its opened body never is. */
+		sig: id.optional(),
+		/** A delete's: the longest credential ID's bytes among the subject's keys when its number was taken. */
+		pad: z.number().int().nonnegative().optional(),
 		/** The call that holds the last continuation's step, and until when (kernel clock, ms). */
 		claimed: z.object({ by: id, until: z.number() }).strict().optional(),
 		/** What the step of the last continuation answered, once it did. */
@@ -339,7 +343,7 @@ export function statementsOver(p: StatementParts) {
 			: undefined;
 	}
 
-	async function passkeyAddOf(hash: string): Promise<UsedPasskeyAdd | undefined> {
+	async function passkeyAddOf(hash: string): Promise<UsedApproval | undefined> {
 		const r = recordOf(await p.store.read(hash));
 		if (r?.purpose !== "passkey-add" || r.state === "issued" || p.now() > r.exp) return undefined;
 		const { subject, credential, registration, assertion } = r;
