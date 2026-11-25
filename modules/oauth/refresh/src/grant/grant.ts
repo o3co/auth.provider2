@@ -1,12 +1,13 @@
 import { type ClaimsSelections, claimsSelections } from "@mod/claims-selection";
 import type { Client } from "@mod/clients";
 import type { Grant, GrantOutcome } from "@mod/grants";
-import { type BuildContext, sameSecret } from "@mod/kernel";
+import { type BuildContext, sameSecret, Unavailable } from "@mod/kernel";
 import { type Keys, keys } from "@mod/keys";
 import { challengeInput, payloads, typs } from "@mod/sdk-core-wire";
 import { sameBinding } from "@mod/sender-binding";
 import { type Sessions, sessions } from "@mod/session";
 import type { RevocableKind, Revoked } from "@mod/token-revocation";
+import { accessTokens, referenceOf, type Tokens } from "@mod/tokens";
 import { type Ceremonies, ceremonies } from "@mod/webauthn";
 import { refreshGrantType } from "../contract.ts";
 import {
@@ -26,6 +27,8 @@ export interface GrantParts {
 	readonly keys: Pick<Keys, "verifyOf">;
 	readonly ceremonies: Pick<Ceremonies, "reverifyAssertion">;
 	readonly sessions: Pick<Sessions, "entryOf">;
+	/** Revoking a token issued while its session closed. */
+	readonly tokens: Pick<Tokens, "revokeReferenced">;
 	readonly selections: Pick<ClaimsSelections, "forRefreshed">;
 	/** The delegation's length, in ms (O27). */
 	readonly lifetimeMs: number;
@@ -145,6 +148,14 @@ export function refreshGrant(p: GrantParts): Grant {
 			);
 			// A family the flow's state no longer holds is refused as every token is.
 			if (issued.kind === "refused") return isEndedFamily(issued.refusal) ? refused : issued;
+			// Read again after issuing and recording (proposal 3.15, 1): a close racing them found no
+			// token to end, so one closed meanwhile has its token revoked here, and none answered.
+			if ((await p.sessions.entryOf(r.session)).kind !== "entered") {
+				const revoked = await p.tokens.revokeReferenced(referenceOf(issued.access));
+				// Answered to none, the token needs no list to revoke it later: it never left this process.
+				if (revoked.kind === "unsupported") throw new Unavailable("refresh");
+				return refused;
+			}
 			const { id, expiresAt } = issued.access;
 			await p.selections.forRefreshed(found.id, client, r.subject, { id, expiresAt });
 			return {
@@ -179,7 +190,14 @@ export function revocableFamilies(p: Pick<GrantParts, "records" | "now">): Revoc
 }
 
 /** What the grant takes from the composition. */
-export const grantTakes = [familyRecords, keys, ceremonies, sessions, claimsSelections] as const;
+export const grantTakes = [
+	familyRecords,
+	keys,
+	ceremonies,
+	sessions,
+	accessTokens,
+	claimsSelections,
+] as const;
 
 export const grantIn = async (
 	c: Pick<BuildContext<unknown>, "get" | "clock">,
@@ -191,6 +209,7 @@ export const grantIn = async (
 		keys: await c.get(keys),
 		ceremonies: await c.get(ceremonies),
 		sessions: await c.get(sessions),
+		tokens: await c.get(accessTokens),
 		selections: await c.get(claimsSelections),
 		lifetimeMs,
 		now: c.clock.now,

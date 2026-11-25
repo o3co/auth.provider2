@@ -1,5 +1,7 @@
 import type { Client } from "@mod/clients";
 import type { BundleRequest, GrantInput } from "@mod/grants";
+import { Unavailable } from "@mod/kernel";
+import { referenceOf } from "@mod/tokens";
 import { describe, expect, it } from "vitest";
 import {
 	binding,
@@ -44,6 +46,7 @@ async function world(over: Partial<GrantParts> = {}, kept: FamilyRecord = family
 	const records = recordsAt();
 	await records.records.create(nameOf.family("r-bundle"), write.family(kept), lifetimeMs, "alice");
 	const refreshed: unknown[][] = [];
+	const revoked: string[] = [];
 	const parts: GrantParts = {
 		records: records.records,
 		keys: {
@@ -57,6 +60,12 @@ async function world(over: Partial<GrantParts> = {}, kept: FamilyRecord = family
 				assertion === "{}" && key === "pk" ? { credential: "cred-1" } : undefined,
 		},
 		sessions: { entryOf: async () => ({ kind: "entered", endsAt: now + 3_600_000 }) as never },
+		tokens: {
+			revokeReferenced: async (reference) => {
+				revoked.push(reference);
+				return { kind: "revoked" };
+			},
+		},
 		selections: {
 			forRefreshed: async (...args) => {
 				refreshed.push(args);
@@ -66,7 +75,13 @@ async function world(over: Partial<GrantParts> = {}, kept: FamilyRecord = family
 		now: records.now,
 		...over,
 	};
-	return { records, refreshed, grant: refreshGrant(parts), revocable: revocableFamilies(parts) };
+	return {
+		records,
+		refreshed,
+		revoked,
+		grant: refreshGrant(parts),
+		revocable: revocableFamilies(parts),
+	};
 }
 
 /** A request's input, as the token endpoint hands it on, recording the bundle it asks. */
@@ -99,6 +114,15 @@ function input(params: Record<string, string>, over: Partial<GrantInput> = {}) {
 }
 
 const refused = { kind: "error", error: "invalid_grant", description: "invalid refresh token" };
+
+/** A session entered when first read, and no longer when read again after issuing. */
+const afterIssuing = () => {
+	let reads = 0;
+	return async () =>
+		reads++ === 0
+			? ({ kind: "entered", endsAt: now + 3_600_000 } as never)
+			: ({ kind: "absent" } as const);
+};
 
 describe("a refresh of a rooted family", () => {
 	it("issues one bundle rooted in the family, answering its one refresh token again, never rotated", async () => {
@@ -135,6 +159,43 @@ describe("a refresh of a rooted family", () => {
 		expect(w.refreshed).toEqual([
 			["r-bundle", client, "alice", { id: "tok-1", expiresAt: now + 300_000 }],
 		]);
+		expect(w.revoked).toEqual([]);
+	});
+
+	it("revokes the token it issued where its session closed while it was issued and recorded, and answers none (proposal 3.15, 1)", async () => {
+		// The session enters when first read, and is closed when read again after issuing.
+		const entryOf = afterIssuing();
+		const w = await world({ sessions: { entryOf } });
+		const { given, asked } = input({ refresh_token: token });
+		expect(await w.grant.handle(given)).toEqual(refused);
+		expect(asked).toHaveLength(1);
+		expect(w.revoked).toEqual([referenceOf({ id: "tok-1", expiresAt: now + 300_000 })]);
+		expect(w.refreshed).toEqual([]);
+	});
+
+	it("fails as unavailable where the token issued while its session closed cannot be revoked", async () => {
+		const entryOf = afterIssuing();
+		const w = await world({
+			sessions: { entryOf },
+			tokens: { revokeReferenced: async () => ({ kind: "unsupported" }) },
+		});
+		await expect(w.grant.handle(input({ refresh_token: token }).given)).rejects.toBeInstanceOf(
+			Unavailable,
+		);
+		expect(w.refreshed).toEqual([]);
+		// The denylist's store failing: the failure goes on, and no token is answered either.
+		const failing = await world({
+			sessions: { entryOf: afterIssuing() },
+			tokens: {
+				revokeReferenced: async () => {
+					throw new Unavailable("token-denylist");
+				},
+			},
+		});
+		await expect(
+			failing.grant.handle(input({ refresh_token: token }).given),
+		).rejects.toBeInstanceOf(Unavailable);
+		expect(failing.refreshed).toEqual([]);
 	});
 
 	it("narrows the scope within the family's, each word once, never to offline_access alone", async () => {
@@ -175,7 +236,7 @@ describe("a refresh of a rooted family", () => {
 		ended.records.move(family.end - now);
 		expect(await ended.grant.handle(input({ refresh_token: token }).given)).toEqual(refused);
 		const closed = await world({
-			sessions: { entryOf: async () => ({ kind: "closed" }) as never },
+			sessions: { entryOf: async () => ({ kind: "absent" }) },
 		});
 		expect(await closed.grant.handle(input({ refresh_token: token }).given)).toEqual(refused);
 	});

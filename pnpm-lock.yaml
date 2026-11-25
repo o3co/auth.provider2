@@ -1763,6 +1763,9 @@ importers:
       '@mod/token-revocation':
         specifier: workspace:*
         version: link:../token-revocation
+      '@mod/tokens':
+        specifier: workspace:*
+        version: link:../tokens
       '@mod/webauthn':
         specifier: workspace:*
         version: link:../../passkey/webauthn

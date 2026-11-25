@@ -21,13 +21,13 @@
 ## Invariants
 - A refresh token is `<family>.<secret>`: the family's id (its bundle record's, base64url) and 32 random bytes; the family keeps the secret's SHA-256 alone.
 - A family is bound to its authorization's key (`dpop_jkt`): one family a key (Q27), the key held until that family's end, revoked or not; its token used only with a proof by that key. Bound, it is never rotated: each refresh answers the same token.
-- A family lives no longer than its delegation (its statement's issue and `lifetime`, the same end as its session's) nor its session: each refresh asks the session to enter, so a logout ends it, its record and key kept to their end.
+- A family lives no longer than its delegation (its statement's issue and `lifetime`, the same end as its session's) nor its session: each refresh asks the session to enter, before issuing and again after, so a logout ends it, even one racing a refresh, its record and key kept to their end. Boot is refused where no module records its tokens to their session (`grants`' `sessionIssuances`).
 - Ending a family (revoked, its code voided, its key removed) revokes no access token it gave: each ends with its lifetime, as after a reset (proposal 3.9).
 - Every refusal of a token is the same `invalid_grant`; a store failure is unavailable, never a negative verdict.
 - Its access tokens carry the amr, authentication time and acr of its redemption, its scope narrowed only within the family's (`offline_access` never part of it), its audience within the family's.
 
 ## Depends on
-- `kernel`, `code-grant`, `grants`, `token-revocation`, `promises`, `erasure-extensions`; the internal modules' own.
+- `kernel`, `code-grant`, `grants`, `token-revocation`, `tokens`, `promises`, `erasure-extensions`; the internal modules' own.
 
 ## Vocabulary
 - family: a code redemption's delegation, its one refresh token. root: the approval it rests on.

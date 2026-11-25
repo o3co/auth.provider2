@@ -2,7 +2,7 @@ import { approvals } from "@mod/approvals";
 import { claimsSelections } from "@mod/claims-selection";
 import { type FamilyMaker, families } from "@mod/code-grant";
 import { type Eraser, erasers } from "@mod/erasure-extensions";
-import { type Grant, grants } from "@mod/grants";
+import { type Grant, grants, sessionIssuances } from "@mod/grants";
 import { assemble, contract, defineModule, kernelConfig } from "@mod/kernel";
 import { quietRuntime, takesUnused } from "@mod/kernel/testing";
 import { keys } from "@mod/keys";
@@ -10,6 +10,7 @@ import { passkeys } from "@mod/passkeys";
 import { type Stance, stances } from "@mod/promises";
 import { sessions } from "@mod/session";
 import { type RevocableKind, revocableKinds } from "@mod/token-revocation";
+import { accessTokens } from "@mod/tokens";
 import { ceremonies } from "@mod/webauthn";
 import { afterEach, expect, it } from "vitest";
 import { delegation, familyRecords } from "../src/contract.ts";
@@ -33,6 +34,7 @@ const fakes = defineModule(
 		m.provide(keys).by(() => ({}) as never),
 		m.provide(ceremonies).by(() => ({}) as never),
 		m.provide(sessions).by(() => ({}) as never),
+		m.provide(accessTokens).by(() => ({}) as never),
 		m.provide(claimsSelections).by(() => ({}) as never),
 		m.provide(seen).by(async (c) => ({
 			families: await c.collect(families),
@@ -42,12 +44,16 @@ const fakes = defineModule(
 		})),
 	],
 );
+/** Who records each token issued from a session (session-tokens, in a deployment). */
+const recorder = defineModule({ name: "recorder", replicaSafe: true, takes: [] }, (m) => [
+	m.contribute(sessionIssuances).by(() => ({ issued: async () => undefined })),
+]);
 const erasersSeen = contract<readonly Eraser[]>("erasers-seen");
 const erasing = defineModule({ name: "erasing", replicaSafe: true, takes: [erasers] }, (m) => [
 	m.provide(erasersSeen).by((c) => c.collect(erasers)),
 ]);
 const input = (settings = {}) => ({
-	modules: [fakes, familyRecordsInMemory().module, refreshModule],
+	modules: [fakes, recorder, familyRecordsInMemory().module, refreshModule],
 	config: { ...kernelConfig(), ...refreshConfig(settings) },
 	runtime: quietRuntime(),
 });
@@ -90,9 +96,19 @@ it("contributes its eraser, `refresh`, not erasable over a store without the por
 		],
 	);
 	await expect(
-		assemble({ ...input(), modules: [fakes, halfModule, refreshModule] }),
+		assemble({ ...input(), modules: [fakes, recorder, halfModule, refreshModule] }),
 	).rejects.toMatchObject({
 		refusals: [expect.objectContaining({ reason: expect.stringMatching(/both, or neither/) })],
+	});
+});
+
+it("refuses boot where no module records its tokens to their session, so that a logout ends them", async () => {
+	await expect(
+		assemble({ ...input(), modules: [fakes, familyRecordsInMemory().module, refreshModule] }),
+	).rejects.toMatchObject({
+		refusals: [
+			expect.objectContaining({ reason: expect.stringMatching(/recorded to their session/) }),
+		],
 	});
 });
 
