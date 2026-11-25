@@ -18,15 +18,10 @@ import {
 import passkeysModule from "@mod/passkeys/module";
 import { stances } from "@mod/promises";
 import { rateLimitStandIn } from "@mod/rate-limit/testing";
+import { familiesPart } from "@mod/refresh";
+import { familiesOwning } from "@mod/refresh/testing";
 import { challengeInput } from "@mod/sdk-core-wire";
-import {
-	frameStore,
-	operationKinds,
-	type StateOwner,
-	stateOwners,
-	transparency,
-	transparencyLog,
-} from "@mod/transparency";
+import { frameStore, operationKinds, transparency, transparencyLog } from "@mod/transparency";
 import transparencyModule from "@mod/transparency/module";
 import { logBook, memoryFrames } from "@mod/transparency/testing";
 import { type Credential, ceremonies, freshHandle } from "@mod/webauthn";
@@ -65,16 +60,6 @@ function memoryRecords<T>(now: () => number) {
 	};
 }
 
-/** The families' owner, which none of these holds. */
-const familiesOwner: StateOwner = {
-	name: "families",
-	holds: ["families"],
-	parts: ["families"],
-	records: () => [{ part: "families", name: "state" }],
-	read: () => ({ families: {} }),
-	write: () => [undefined],
-};
-
 /** The screen's two keys, the signing one's private half kept to sign its continuations. */
 export function screen() {
 	const enc = generateKeyPairSync("ec", { namedCurve: "P-256" });
@@ -106,7 +91,7 @@ export function screen() {
 export async function stack(given: { readonly passkeys?: Record<string, unknown> } = {}) {
 	let clock = 1_800_000_000_000;
 	const now = () => clock;
-	const frames = memoryFrames(["passkeys", "approvals", "families", keyChangePart]);
+	const frames = memoryFrames(["passkeys", "approvals", familiesPart, keyChangePart]);
 	const book = logBook(now);
 	book.judgeOnAppend({ verdict: "verified", outcome: "took" });
 	const statements = memoryRecords<StoredStatement>(now);
@@ -123,7 +108,6 @@ export async function stack(given: { readonly passkeys?: Record<string, unknown>
 		m.contribute(statementItems).by(() => creationItems),
 		m.contribute(statementItems).by(() => possessionItems),
 		m.contribute(statementItems).by(() => ({ purpose: "authorization", names: [], by: "beside" })),
-		m.contribute(stateOwners).by(() => familiesOwner),
 		m.contribute(operationKinds).by(() => keyChangeKind),
 		m.contribute(stances).by(() => ({
 			promise: "front-compromise-new-authorization",
@@ -134,6 +118,8 @@ export async function stack(given: { readonly passkeys?: Record<string, unknown>
 	const app = await assemble({
 		modules: [
 			beside,
+			// The state's families, as refresh owns them in a deployment.
+			familiesOwning,
 			rateLimitStandIn,
 			keysModule,
 			testHolder(),

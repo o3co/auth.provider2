@@ -1,6 +1,8 @@
 import { defineModule, type Module } from "@mod/kernel";
+import { stateOwners } from "@mod/transparency";
 import type { z } from "zod";
 import type { section } from "./section.ts";
+import { familiesOwner } from "./state/state.ts";
 import { type FamilyRecords, familyRecords, type StoredFamilyRecord } from "./store.ts";
 
 export type RefreshSettings = z.input<typeof section>;
@@ -49,3 +51,13 @@ export function familyRecordsInMemory(clock?: () => number): {
 		subjects: () => new Map([...entries].map(([name, e]) => [name, e.subject])),
 	};
 }
+
+/**
+ * refresh's owner of the state's families alone, for a composition of transparency's other owners
+ * without refresh: the families owned as a whole Core owns them, its part in the frames as
+ * `familiesPart`.
+ */
+export const familiesOwning: Module = defineModule(
+	{ name: "refresh-families", replicaSafe: true, takes: [] },
+	(m) => [m.contribute(stateOwners).by(() => familiesOwner)],
+);

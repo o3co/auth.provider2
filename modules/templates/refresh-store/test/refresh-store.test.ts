@@ -1,7 +1,10 @@
 import { assemble, kernelConfig } from "@mod/kernel";
 import { quietRuntime } from "@mod/kernel/testing";
-import { familyRecords, type StoredFamilyRecord } from "@mod/refresh";
-import { simulatedStore } from "@mod/store/testing";
+import { familiesPart, familyRecords, type StoredFamilyRecord } from "@mod/refresh";
+import storeModule from "@mod/store/module";
+import { simulatedStore, storeConfig } from "@mod/store/testing";
+import { frameStore } from "@mod/transparency";
+import transparencyStore from "@mod/transparency-store/module";
 import { expect, it } from "vitest";
 import wiring from "../src/module.ts";
 
@@ -67,4 +70,29 @@ it("erases a subject's rooted lists with its other records, so none names its fa
 	// Another subject's list stays; one made again for the erased subject is stopped.
 	expect(await records.read("s.20833.frank")).toEqual(value(3));
 	expect(await records.create(list, value(4), 172_920_000, "erin")).toBe("erased");
+});
+
+it("binds refresh's part of a subject's flow to the flows' space, which the frame store takes", async () => {
+	const simulated = simulatedStore();
+	await assemble({ modules: [simulated.module, wiring], config: kernelConfig(), runtime });
+	const declared = simulated.declaredSpace("refresh-store.flows");
+	expect([...declared.guarantees].sort()).toEqual(
+		["authenticated", "confirmed-reads", "durable", "no-eviction", "replicated"].sort(),
+	);
+	expect(declared.subjectData).toBe("retained");
+	const app = await assemble({
+		modules: [storeModule, transparencyStore, wiring],
+		config: { ...kernelConfig(), ...storeConfig({ "accept-unauthenticated": true }) },
+		runtime: quietRuntime(),
+	});
+	const frames = await app.get(frameStore);
+	expect(frames.parts).toContain(familiesPart);
+	const unit = { flow: { of: "subject", id: "s1" } } as const;
+	const records = [{ part: familiesPart, name: "state" }];
+	const read = await frames.read(unit, records);
+	const state = { families: {} };
+	expect(await frames.write(read, { records: [{ value: state }] }, read.now + 1000)).toBe(
+		"written",
+	);
+	expect((await frames.read(unit, records)).held).toEqual([state]);
 });

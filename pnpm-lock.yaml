@@ -1840,6 +1840,9 @@ importers:
       '@mod/tokens':
         specifier: workspace:*
         version: link:../tokens
+      '@mod/transparency':
+        specifier: workspace:*
+        version: link:../../foundation/transparency
       '@mod/webauthn':
         specifier: workspace:*
         version: link:../../passkey/webauthn
@@ -1847,6 +1850,9 @@ importers:
         specifier: 4.6.7
         version: 4.6.7
     devDependencies:
+      '@mod/authority-rules':
+        specifier: workspace:*
+        version: link:../../foundation/authority-rules
       vitest:
         specifier: 5.0.5
         version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(vite@8.3.3(@types/node@26.6.5)(yaml@2.9.1))
@@ -2384,6 +2390,9 @@ importers:
       '@mod/issuer':
         specifier: workspace:*
         version: link:../../oauth/issuer
+      '@mod/refresh':
+        specifier: workspace:*
+        version: link:../../oauth/refresh
 
   modules/passkey/passkey-management-mail:
     dependencies:
@@ -2905,7 +2914,16 @@ importers:
       '@mod/subject-records':
         specifier: workspace:*
         version: link:../../foundation/subject-records
+      '@mod/transparency':
+        specifier: workspace:*
+        version: link:../../foundation/transparency
+      '@mod/transparency-frames':
+        specifier: workspace:*
+        version: link:../../foundation/transparency-frames
     devDependencies:
+      '@mod/transparency-store':
+        specifier: workspace:*
+        version: link:../../foundation/transparency-store
       vitest:
         specifier: 5.0.5
         version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(vite@8.3.3(@types/node@26.6.5)(yaml@2.9.1))

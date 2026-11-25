@@ -10,6 +10,8 @@ import {
 } from "@mod/passkeys";
 import passkeysModule from "@mod/passkeys/module";
 import { stances } from "@mod/promises";
+import { familiesPart } from "@mod/refresh";
+import { familiesOwning } from "@mod/refresh/testing";
 import {
 	frameStore,
 	operationKinds,
@@ -62,14 +64,20 @@ function memoryCredentials(): PasskeyStore {
  */
 export async function keyFlow() {
 	let clock = 1_000_000;
-	const frames = memoryFrames(["passkeys", keyChangePart, "grants", "families"]);
+	const frames = memoryFrames(["passkeys", keyChangePart, "grants", familiesPart]);
 	const book = logBook(() => clock);
 	const log = book.as("w1");
 	const credentials = memoryCredentials();
 	/** One replica: its own composition over the shared frames, credentials and log, appending as `instance`. */
 	const replicaAs = (instance: string) =>
 		assemble({
-			modules: [writerAs(instance), transparencyModule, webauthnModule, passkeysModule],
+			modules: [
+				writerAs(instance),
+				familiesOwning,
+				transparencyModule,
+				webauthnModule,
+				passkeysModule,
+			],
 			config: { ...kernelConfig(), ...webauthnConfig(), passkeys: {} },
 			runtime: quietRuntime({ clock: { now: () => clock } }),
 		});
@@ -80,7 +88,6 @@ export async function keyFlow() {
 			m.provide(passkeyStore).by(() => credentials),
 			m.contribute(operationKinds).by(() => keyChangeKind),
 			m.contribute(stateOwners).by(() => otherOwner("grants", ["approvals", "consumed"])),
-			m.contribute(stateOwners).by(() => otherOwner("families", ["families"])),
 			m.contribute(stances).by(() => ({
 				promise: "front-compromise-new-authorization",
 				holds: true,

@@ -10,4 +10,5 @@ export interface Delegation {
 
 export const delegation = contract<Delegation>("refresh.delegation");
 
+export { familiesPart } from "./state/state.ts";
 export * from "./store.ts";

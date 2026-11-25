@@ -31,15 +31,11 @@ import {
 import passkeysModule from "@mod/passkeys/module";
 import promisesModule from "@mod/promises/module";
 import { rateLimitStandIn } from "@mod/rate-limit/testing";
+import { familiesPart } from "@mod/refresh";
+import { familiesOwning } from "@mod/refresh/testing";
 import { challengeInput, type FirstKeyStage, firstKey, hpke, payloads } from "@mod/sdk-core-wire";
 import { type SubjectRevocation, subjectRevocation } from "@mod/subject-revocation";
-import {
-	frameStore,
-	type Stage,
-	type StateOwner,
-	stateOwners,
-	transparencyLog,
-} from "@mod/transparency";
+import { frameStore, type Stage, transparencyLog } from "@mod/transparency";
 import transparencyModule from "@mod/transparency/module";
 import { logBook, memoryFrames } from "@mod/transparency/testing";
 import { type Users, users } from "@mod/users";
@@ -103,15 +99,6 @@ function memoryRecords<T>(now: () => number) {
 	};
 }
 
-const familiesOwner: StateOwner = {
-	name: "families",
-	holds: ["families"],
-	parts: ["families"],
-	records: () => [{ part: "families", name: "state" }],
-	read: () => ({ families: {} }),
-	write: () => [undefined],
-};
-
 /**
  * A screen: its encryption key held by a keys holder of its own, which seals to the Core and opens
  * what the Core sealed to it, as the screen's HPKE does; its signing key signing its continuations.
@@ -153,7 +140,7 @@ export async function firstKeyWorld() {
 	let clock = 1_800_000_000_000;
 	const now = () => clock;
 	const core = generateKeyPairSync("ec", { namedCurve: "P-256" }).privateKey;
-	const frames = memoryFrames(["passkeys", "approvals", "families", keyChangePart]);
+	const frames = memoryFrames(["passkeys", "approvals", familiesPart, keyChangePart]);
 	const book = logBook(now);
 	book.judgeOnAppend({ verdict: "verified", outcome: "took" });
 	const sent: Message[] = [];
@@ -171,7 +158,6 @@ export async function firstKeyWorld() {
 		m
 			.provide(issuer)
 			.by(() => ({ url: "https://issuer.example", endpointOrigin: "https://issuer.example" })),
-		m.contribute(stateOwners).by(() => familiesOwner),
 		// The items of T as an authorization's modules fill them, so a T may be issued here.
 		m.contribute(statementItems).by(() => ({
 			purpose: "authorization",
@@ -230,6 +216,8 @@ export async function firstKeyWorld() {
 		modules: [
 			standIns,
 			removals,
+			// The state's families, as refresh owns them in a deployment.
+			familiesOwning,
 			rateLimitStandIn,
 			keysModule,
 			testHolder({ "seal-test": core }),

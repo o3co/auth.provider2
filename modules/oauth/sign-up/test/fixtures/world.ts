@@ -37,13 +37,14 @@ import passkeysModule from "@mod/passkeys/module";
 import promisesModule from "@mod/promises/module";
 import { rateLimitStandIn } from "@mod/rate-limit/testing";
 import { redirects } from "@mod/redirect-uris";
-import { delegation } from "@mod/refresh";
+import { delegation, familiesPart } from "@mod/refresh";
+import { familiesOwning } from "@mod/refresh/testing";
 import { typs } from "@mod/sdk-core-wire";
 import { senderBinding } from "@mod/sender-binding";
 import { sessions } from "@mod/session";
 import { type SubjectRevocation, subjectRevocation } from "@mod/subject-revocation";
 import { accessTokenIssuance } from "@mod/tokens";
-import { frameStore, type StateOwner, stateOwners, transparencyLog } from "@mod/transparency";
+import { frameStore, transparencyLog } from "@mod/transparency";
 import transparencyModule from "@mod/transparency/module";
 import { logBook, memoryFrames } from "@mod/transparency/testing";
 import { type Users, users } from "@mod/users";
@@ -110,15 +111,6 @@ export async function screen() {
 	};
 }
 
-const familiesOwner: StateOwner = {
-	name: "families",
-	holds: ["families"],
-	parts: ["families"],
-	records: () => [{ part: "families", name: "state" }],
-	read: () => ({ families: {} }),
-	write: () => [undefined],
-};
-
 const client: Client = {
 	id: "c1",
 	kind: "public",
@@ -141,7 +133,7 @@ export async function f1World() {
 	const clock = 1_800_000_000_000;
 	const now = () => clock;
 	const core = generateKeyPairSync("ec", { namedCurve: "P-256" }).privateKey;
-	const frames = memoryFrames(["passkeys", "approvals", "families", keyChangePart]);
+	const frames = memoryFrames(["passkeys", "approvals", familiesPart, keyChangePart]);
 	const book = logBook(now);
 	book.judgeOnAppend({ verdict: "verified", outcome: "took" });
 	const made = new Map<string, string>();
@@ -160,7 +152,6 @@ export async function f1World() {
 		m
 			.provide(issuer)
 			.by(() => ({ url: "https://issuer.example", endpointOrigin: "https://issuer.example" })),
-		m.contribute(stateOwners).by(() => familiesOwner),
 		m
 			.contribute(statementItems)
 			.by(() => ({ purpose: "authorization", names: ["dpop_jkt"], by: "stand-ins" })),
@@ -265,6 +256,8 @@ export async function f1World() {
 	const app = await assemble({
 		modules: [
 			standIns,
+			// The state's families, as refresh owns them in a deployment.
+			familiesOwning,
 			rateLimitStandIn,
 			keysModule,
 			testHolder({ "seal-test": core }),

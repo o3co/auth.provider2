@@ -12,9 +12,10 @@
 ## Offers
 - A contribution to `code-grant`'s `families` (internal module `family`) and the `refresh_token` grant to `grants` (internal module `grant`).
 - A `token-revocation` revocable kind `refresh_token`: only its client revokes it, with its family.
-- A contribution to `passkeys`' `passkeyRemovals` (internal module `rooted`): a root key (its approval's passkey) removed ends the families rooted in it here, a subject emptied all of its (Q46).
+- A contribution to `passkeys`' `passkeyRemovals` (internal module `rooted`): a root key (its approval's passkey) removed ends the families rooted in it here, a subject emptied all of its (Q46). It holds `passkeys`, which collects it as it builds, by a late reference.
+- A contribution to `transparency`'s `stateOwners`: the state's families on a subject's flow, in its part `familiesPart`, which its store wiring binds (internal module `state`).
 - Contract `delegation` (`lifetimeMs`), which `authorize` reads for a session's end.
-- Store interface `familyRecords` (create for a subject, read, change from what it holds; `erase` and `migrate` together or neither, a part refusing boot) and `familyRecordsNeeds`; `./testing`: `refreshConfig`, `familyRecordsInMemory`.
+- Store interface `familyRecords` (create for a subject, read, change from what it holds; `erase` and `migrate` together or neither, a part refusing boot) and `familyRecordsNeeds`; `./testing`: `refreshConfig`, `familyRecordsInMemory`, `familiesOwning` (its owner of the families alone, for a composition without refresh).
 - A contribution to `erasure-extensions`' erasers: `refresh` (internal module `erasure`), every record keeping its subject.
 - Operator section: `lifetime`, the delegation's length (`5m`–`1y`, default `1d`).
 - Its stance: `front-compromise-new-authorization` holds: a family rests on a passkey's approval, its token on the authorization's key.
@@ -29,7 +30,7 @@
 - Its access tokens carry the amr, authentication time and acr of its redemption, its scope narrowed only within the family's (`offline_access` never part of it), its audience within the family's.
 
 ## Depends on
-- `kernel`, `code-grant`, `grants`, `token-revocation`, `tokens`, `promises`, `erasure-extensions`; the internal modules' own.
+- `kernel`, `code-grant`, `grants`, `token-revocation`, `tokens`, `promises`, `erasure-extensions`, `transparency` (`stateOwners`); the internal modules' own.
 
 ## Vocabulary
 - family: a code redemption's delegation, its one refresh token. root: the approval it rests on.

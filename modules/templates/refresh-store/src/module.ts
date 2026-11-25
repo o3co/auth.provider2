@@ -1,5 +1,10 @@
 import { contract, defineModule, optional, probes } from "@mod/kernel";
-import { familyRecords, type familyRecordsNeeds, type StoredFamilyRecord } from "@mod/refresh";
+import {
+	familiesPart,
+	familyRecords,
+	type familyRecordsNeeds,
+	type StoredFamilyRecord,
+} from "@mod/refresh";
 import { type Guarantee, type Space, spaces, store, storeControl } from "@mod/store";
 import {
 	indexSpaceOf,
@@ -7,6 +12,8 @@ import {
 	subjectRecordsPhase,
 	tombstoneFloor,
 } from "@mod/subject-records";
+import type { frameStoreNeeds } from "@mod/transparency";
+import { frameParts } from "@mod/transparency-frames";
 
 /** Each need refresh states, as the guarantee its space declares for it. */
 const guaranteeFor: Record<keyof typeof familyRecordsNeeds, Guarantee> = {
@@ -24,6 +31,21 @@ const families: Space = {
 	erasedBy: "refresh",
 };
 
+/** Each need transparency states for the frames, which a part's space declares alike. */
+const partGuaranteeFor: Record<keyof typeof frameStoreNeeds, Guarantee> = {
+	neverEvicted: "no-eviction",
+	survivesCrash: "durable",
+	survivesFailover: "replicated",
+	readsConfirmed: "confirmed-reads",
+	authenticated: "authenticated",
+};
+/** refresh's part of each subject's flow (the state's families), written by the flow's one write, as the frames are. */
+const flows: Space = {
+	name: "refresh-store.flows",
+	guarantees: Object.values(partGuaranteeFor),
+	subjectData: "retained",
+};
+
 /** The space's records over the phase this process reads once. */
 const placed =
 	contract<Awaited<ReturnType<typeof phasedRecordsIn<StoredFamilyRecord>>>>("refresh-store.placed");
@@ -33,6 +55,8 @@ export default defineModule(
 	(m) => [
 		m.contribute(spaces).by(() => families),
 		m.contribute(spaces).by(() => indexSpaceOf(families)),
+		m.contribute(spaces).by(() => flows),
+		m.contribute(frameParts).by(() => ({ name: familiesPart, space: flows })),
 		m.provide(placed).by(async (c) =>
 			phasedRecordsIn<StoredFamilyRecord>(
 				{
