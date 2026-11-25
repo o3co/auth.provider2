@@ -2,9 +2,10 @@ import { createHash, randomBytes } from "node:crypto";
 import type { Checks } from "@mod/authority-rules";
 import { challengeInput } from "@mod/sdk-core-wire";
 import { describe, expect, it } from "vitest";
-import { algorithmNames, ceremoniesFor } from "../src/ceremony/ceremony.ts";
-import type { Credential } from "../src/contract.ts";
-import { type RequestOptions, softwareAuthenticator, testOrigin } from "../src/testing.ts";
+import type { Credential } from "../../contract.ts";
+import { algorithmNames } from "../../keys.ts";
+import { type RequestOptions, softwareAuthenticator, testOrigin } from "../../testing.ts";
+import { ceremoniesFor } from "../ceremony.ts";
 
 const rp = {
 	id: "rp.example",

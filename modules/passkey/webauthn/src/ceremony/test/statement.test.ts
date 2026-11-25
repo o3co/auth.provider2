@@ -1,13 +1,14 @@
 import { randomBytes } from "node:crypto";
 import { decodeAttestationObject, isoBase64URL, isoCBOR } from "@simplewebauthn/server/helpers";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { algorithmNames, ceremoniesFor } from "../src/ceremony/ceremony.ts";
+import { algorithmNames } from "../../keys.ts";
 import {
 	type CreationOptions,
 	softwareAuthenticator,
 	statingCertificate,
 	testOrigin,
-} from "../src/testing.ts";
+} from "../../testing.ts";
+import { ceremoniesFor } from "../ceremony.ts";
 
 const rp = {
 	id: "rp.example",

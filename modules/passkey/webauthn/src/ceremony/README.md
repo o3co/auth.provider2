@@ -3,16 +3,13 @@
 Internal module of `webauthn`: the WebAuthn ceremonies, over a pinned version of `@simplewebauthn/server`.
 
 ## Responsibilities
-- Makes creation and request options, and verifies attestations and assertions.
+- Makes creation and request options, and verifies attestations and assertions; gives `Ceremonies` its evidence checks from the internal module `evidence`.
 
 ## Not here
-- Where challenges and credentials are kept, and which subject they belong to (the caller's).
+- Where challenges and credentials are kept, and which subject they belong to (the caller's). The evidence checks at once, against no state (`evidence`). Reading a response's client data, frame and new key (`reading`).
 
 ## Offers
 - `ceremoniesFor` (relying party) → the package's `Ceremonies`. No library type crosses it.
-- Its `verifyAssertion`, the evidence check: the library's decoders and `parseAuthenticatorData` read what `assert` reads, and Node's crypto verifies the signature over the authenticator data and the client data's hash, at once, by the key's algorithm (EdDSA, ES256 or RS256) whatever the relying party offers.
-- `algorithmNames`: the algorithms a credential may use (`EdDSA`, `ES256`, `RS256`), by the names `keys` gives them; the package's `algorithms` setting names some of them.
-- `challengeOf` (response) → the challenge the client data names, read by the library's decoder, the one that verifies it.
 
 ## Invariants
 - A challenge given that is not 32 bytes in their one unpadded base64url spelling is a `TypeError` (thrown, or the rejection of `attest` and `assert`); one that is goes into the options as it is. Verification other than `preferred` or `discouraged` is `required`. Options name no timeout, list the relying party's algorithms in its order, as COSE names them, ask for no attestation, and require a discoverable credential unless the caller asks for one that need not be.
@@ -23,4 +20,4 @@ Internal module of `webauthn`: the WebAuthn ceremonies, over a pinned version of
 - An assertion by a credential other than the one given is `malformed`; one by a kept key the package's key reading does not take is `algorithm`, read before the library, whatever the relying party offers.
 
 ## Depends on
-- `@simplewebauthn/server`; the package's contract and its key reading
+- `@simplewebauthn/server`; the package's contract and its key reading; the package's `evidence` and `reading`

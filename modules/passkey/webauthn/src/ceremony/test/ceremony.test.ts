@@ -1,13 +1,14 @@
 import { createHash, randomBytes } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { algorithmNames, ceremoniesFor, challengeOf } from "../src/ceremony/ceremony.ts";
-import type { Credential, Verification } from "../src/contract.ts";
+import type { Credential, Verification } from "../../contract.ts";
+import { algorithmNames } from "../../keys.ts";
 import {
 	type CreationOptions,
 	type RequestOptions,
 	softwareAuthenticator,
 	testOrigin,
-} from "../src/testing.ts";
+} from "../../testing.ts";
+import { ceremoniesFor } from "../ceremony.ts";
 
 const rp = {
 	id: "rp.example",
@@ -384,7 +385,6 @@ describe("creation and attestation", () => {
 		const response = softwareAuthenticator().create({ ...creation().options, challenge }, at, {
 			clientDataJSON: () => twist,
 		});
-		expect(challengeOf(response)).toBe(challenge);
 		expect(reasonOf(await ceremonies.attest(response, challenge, handle, "preferred"))).toBe(
 			"attested",
 		);

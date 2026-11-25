@@ -1,12 +1,5 @@
-import { createHash, verify } from "node:crypto";
 import { verifyAuthenticationResponse, verifyRegistrationResponse } from "@simplewebauthn/server";
-import {
-	decodeAttestationObject,
-	decodeClientDataJSON,
-	isoBase64URL,
-	isoCBOR,
-	parseAuthenticatorData,
-} from "@simplewebauthn/server/helpers";
+import { decodeAttestationObject, isoBase64URL, isoCBOR } from "@simplewebauthn/server/helpers";
 import type {
 	Asserted,
 	Ceremonies,
@@ -14,46 +7,22 @@ import type {
 	Credential,
 	Verification,
 } from "../contract.ts";
-import { assertionKey, passkeyKey } from "../keys.ts";
+import { attestedKey, evidenceCheck } from "../evidence/evidence.ts";
+import { type Algorithm, passkeyKey } from "../keys.ts";
+import {
+	clientDataOf,
+	frameRefusal,
+	isChallenge,
+	keyReadWhole,
+	type RelyingParty,
+} from "../reading/reading.ts";
 
-/** The signature algorithms a credential may use, by the names `keys` gives them. */
-export const algorithmNames = ["EdDSA", "ES256", "RS256"] as const;
-export type Algorithm = (typeof algorithmNames)[number];
+export type { RelyingParty } from "../reading/reading.ts";
 
 /** Each algorithm as COSE names it. */
 const coseIds: Readonly<Record<Algorithm, number>> = { EdDSA: -8, ES256: -7, RS256: -257 };
 
-export interface RelyingParty {
-	readonly id: string;
-	readonly name: string;
-	readonly origins: readonly string[];
-	readonly topOrigins: readonly string[];
-	/** The algorithms a credential may use, in the order creation options offer them. */
-	readonly algorithms: readonly Algorithm[];
-}
-
 const base64url = (bytes: Uint8Array) => Buffer.from(bytes).toString("base64url");
-
-/** The client data as the library decodes it; none when that is not a JSON object. */
-function clientDataOf(response: unknown): Readonly<Record<string, unknown>> | undefined {
-	const encoded = (response as { response?: { clientDataJSON?: unknown } } | null)?.response
-		?.clientDataJSON;
-	if (typeof encoded !== "string") return undefined;
-	try {
-		const data: unknown = decodeClientDataJSON(encoded);
-		return typeof data === "object" && data !== null && !Array.isArray(data)
-			? (data as Record<string, unknown>)
-			: undefined;
-	} catch {
-		return undefined;
-	}
-}
-
-/** The challenge a response answers, read as its verification reads it. */
-export function challengeOf(response: unknown): string | undefined {
-	const challenge = clientDataOf(response)?.challenge;
-	return typeof challenge === "string" ? challenge : undefined;
-}
 
 /** The library's messages for a refusal, by how they start; any other refusal is `malformed`. */
 const refusals: readonly (readonly [string, CeremonyRefusal])[] = [
@@ -71,79 +40,10 @@ const refusalOf = (error: unknown): CeremonyRefusal =>
 
 const refused = (reason: CeremonyRefusal) => ({ kind: "refused" as const, reason });
 
-/** Whether a challenge is 32 bytes in their one unpadded base64url spelling. */
-const isChallenge = (challenge: unknown): challenge is string =>
-	typeof challenge === "string" &&
-	/^[A-Za-z0-9_-]{43}$/.test(challenge) &&
-	Buffer.from(challenge, "base64url").toString("base64url") === challenge;
-
 /** The challenge given, which is 32 bytes in their one unpadded base64url spelling; throws on any other value. */
 function given(challenge: unknown): string {
 	if (isChallenge(challenge)) return challenge;
 	throw new TypeError("a challenge is 32 bytes, unpadded base64url");
-}
-
-/** Why client data's frame is refused, by the pages that may frame a ceremony; none where it is not. */
-function frameRefusal(
-	data: Readonly<Record<string, unknown>>,
-	topOrigins: readonly string[],
-): CeremonyRefusal | undefined {
-	// With no page listed, a frame is refused even when the browser names no page.
-	if (data.crossOrigin === true && topOrigins.length === 0) return "top-origin";
-	if (data.topOrigin === undefined) return undefined;
-	const listed = typeof data.topOrigin === "string" && topOrigins.includes(data.topOrigin);
-	return data.crossOrigin === true && listed ? undefined : "top-origin";
-}
-
-const statuses: readonly unknown[] = ["present", "supported", "notSupported"];
-
-/**
- * The evidence check: an assertion's credential where it verifies by the key given, whatever the
- * relying party offers, for the challenge and origin, with the user present and verified; none
- * otherwise. It reads what the library reads, as `assert` does, and no count, backup state or handle.
- */
-/** The evidence check, the rules' and a rooted refresh's: for the origin given, or with none, any it lists. */
-function evidenceCheck(rp: RelyingParty) {
-	const rpIdHash = createHash("sha256").update(rp.id).digest();
-	const verified = (assertion: string, publicKey: string, challenge: string, given?: string) => {
-		if (!isChallenge(challenge)) return undefined;
-		const { key, hash } = assertionKey(publicKey);
-		const sent = JSON.parse(assertion);
-		const { id, rawId, type, response } = sent ?? {};
-		if (typeof id !== "string" || id === "" || id !== rawId || type !== "public-key")
-			return undefined;
-		const data = clientDataOf(sent);
-		if (data?.type !== "webauthn.get" || data.challenge !== challenge) return undefined;
-		// The origin asked, and one the relying party lists: closed where the two settings drift.
-		const origin = given ?? data.origin;
-		if (data.origin !== origin || typeof origin !== "string" || !rp.origins.includes(origin))
-			return undefined;
-		if (frameRefusal(data, rp.topOrigins)) return undefined;
-		const binding = data.tokenBinding as { status?: unknown } | undefined;
-		if (binding !== undefined && !statuses.includes(binding?.status)) return undefined;
-		const { authenticatorData, signature, clientDataJSON } = response;
-		if (![authenticatorData, signature].every((s) => isoBase64URL.isBase64URL(s))) return undefined;
-		const authData = isoBase64URL.toBuffer(authenticatorData);
-		const { rpIdHash: named, flags } = parseAuthenticatorData(authData);
-		if (!Buffer.from(named).equals(rpIdHash) || !flags.up || !flags.uv) return undefined;
-		// Backed up yet not backup eligible, which the library refuses at assert.
-		if (flags.bs && !flags.be) return undefined;
-		const clientDataHash = createHash("sha256")
-			.update(isoBase64URL.toBuffer(clientDataJSON))
-			.digest();
-		const signed = Buffer.concat([authData, clientDataHash]);
-		return verify(hash, signed, key, isoBase64URL.toBuffer(signature))
-			? { credential: id }
-			: undefined;
-	};
-	return (assertion: string, publicKey: string, challenge: string, origin?: string) => {
-		// Anything it cannot read, the key included, is evidence that does not verify.
-		try {
-			return verified(assertion, publicKey, challenge, origin);
-		} catch {
-			return undefined;
-		}
-	};
 }
 
 /** The verification asked: weakened only where `preferred` or `discouraged` is, `required` for any other value. */
@@ -181,64 +81,6 @@ function statementDropped(response: unknown): RegistrationResponse {
 	]);
 	const attestationObject = isoBase64URL.fromBuffer(isoCBOR.encode(kept));
 	return { ...sent, response: { ...sent.response, attestationObject } };
-}
-
-/** A `create()` response's credential id and new key, read from its authenticator data; none where it does not read. */
-function attestedKey(response: string) {
-	try {
-		const sent = JSON.parse(response);
-		const { id, rawId, type } = sent ?? {};
-		if (typeof id !== "string" || id === "" || id !== rawId || type !== "public-key")
-			return undefined;
-		const attestationObject = isoBase64URL.toBuffer(sent.response.attestationObject);
-		const authData = decodeAttestationObject(attestationObject).get("authData") as Uint8Array;
-		const { credentialID, credentialPublicKey } = parseAuthenticatorData(new Uint8Array(authData));
-		if (!credentialID || !credentialPublicKey) return undefined;
-		if (isoBase64URL.fromBuffer(credentialID) !== id) return undefined;
-		if (!keyReadWhole(attestationObject, credentialPublicKey)) return undefined;
-		return { credential: id, publicKey: Buffer.from(credentialPublicKey).toString("base64url") };
-	} catch {
-		// Anything it cannot read is a response of no key.
-		return undefined;
-	}
-}
-
-/** Whether a new key is in its one COSE_Key form, the very bytes after the credential id (offset 55 + its length). */
-function keyReadWhole(attestationObject: Uint8Array, publicKey: Uint8Array): boolean {
-	const authData = Buffer.from(
-		decodeAttestationObject(new Uint8Array(attestationObject)).get("authData") as Uint8Array,
-	);
-	const at = 55 + authData.readUInt16BE(53);
-	const key = Buffer.from(publicKey);
-	const rest = authData.subarray(at + key.length);
-	if (passkeyKey(key.toString("base64url")) === undefined) return false;
-	if (!authData.subarray(at, at + key.length).equals(key)) return false;
-	// After the key: nothing, or where the extension flag is set, one map of extensions, read whole.
-	if (((authData[32] ?? 0) & 0x80) === 0) return rest.length === 0;
-	return (rest[0] ?? 0) >> 5 === 5 && itemEnd(rest, 0) === rest.length;
-}
-
-/** Where one CBOR item of definite lengths at `at` ends, on the bytes as sent; none for any other. */
-function itemEnd(bytes: Buffer, at: number, depth = 0): number | undefined {
-	const head = bytes[at];
-	if (head === undefined || depth > 16 || (head & 31) > 27) return undefined;
-	const size = (head & 31) < 24 ? 0 : 1 << ((head & 31) - 24);
-	if (at + 1 + size > bytes.length) return undefined;
-	const n =
-		size === 0
-			? head & 31
-			: size === 8
-				? Number(bytes.readBigUInt64BE(at + 1))
-				: bytes.readUIntBE(at + 1, size);
-	const next = at + 1 + size;
-	const major = head >> 5;
-	if (major <= 1 || major === 7) return next;
-	if (major <= 3) return next + n <= bytes.length ? next + n : undefined;
-	if (major === 6) return itemEnd(bytes, next, depth + 1);
-	let end: number | undefined = next;
-	for (let i = 0; i < (major === 5 ? 2 * n : n) && end !== undefined; i++)
-		end = itemEnd(bytes, end, depth + 1);
-	return end;
 }
 
 // The client's transports, which the library passes on unchecked: a short list of short strings.

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { algorithmNames } from "./ceremony/ceremony.ts";
+import { algorithmNames } from "./keys.ts";
 
 /** An origin as a browser serializes it: https, or http on localhost; a domain, never an IP literal. */
 const origin = z.string().refine((entry) => {

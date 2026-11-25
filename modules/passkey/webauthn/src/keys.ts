@@ -1,6 +1,10 @@
 import { createHash, createPublicKey, type KeyObject } from "node:crypto";
 import { passkeyThumbprintInput } from "@mod/passkey-key-wire";
 
+/** The signature algorithms a credential may use, by the names `keys` gives them. */
+export const algorithmNames = ["EdDSA", "ES256", "RS256"] as const;
+export type Algorithm = (typeof algorithmNames)[number];
+
 /** A passkey's key read from its COSE_Key: its algorithm as COSE numbers it, its thumbprint, the key. */
 export interface PasskeyKey {
 	readonly alg: number;

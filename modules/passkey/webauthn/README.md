@@ -1,19 +1,16 @@
 # webauthn
 
 ## Responsibilities
-- Runs WebAuthn ceremonies for its relying party: options, response verification, the signature count and the user handle, by its internal module `ceremony`.
+- Runs WebAuthn ceremonies for its relying party: options, response verification, the signature count and the user handle, by its internal module `ceremony` (its evidence checks by `evidence`, a response's reading by `reading`).
 - Owns the form of a credential and of a user handle that ceremonies take and answer.
 
 ## Not here
 - Keeping passkeys and their subjects (`passkeys`). Making a challenge, keeping it, judging its lifetime, and what an assertion leads to (the caller's). Issuing tokens.
 
 ## Offers
-- `ceremonies`: creation options (a discoverable credential unless asked otherwise) and attestation, request options and assertion, each over a challenge the caller gives. The caller keeps the challenge and credential, judges how long the challenge is answerable, and hands them over once. `challengeOf` reads the challenge a response answers: the client's value, so a caller hands the ceremonies only a challenge it matched against its own record.
+- `ceremonies`: creation options (a discoverable credential unless asked otherwise) and attestation, request options and assertion, each over a challenge the caller gives. The caller keeps the challenge and credential, judges how long the challenge is answerable, and hands them over once.
   - The user verification asked is an argument of each call: `preferred` and `discouraged` weaken it; any other, none included, is `required`.
-  - `verifyAssertion(assertion, publicKey, challenge, origin)` (authority-rules' `Checks.verifyAssertion`), at once, against no credential state: an assertion response's JSON as a browser serializes it, and the key's COSE_Key in base64url, of any algorithm a passkey may be of (ES256, EdDSA, RS256) whatever `algorithms` offers.
-  - `verifyAssertion` answers the assertion's credential id where `assert` requiring verification would take it for that challenge and origin (the one given, which `origins` must list; backed up without backup eligibility refused, as `assert` refuses it), reading no count, backup state or handle; else none, never a throw.
-  - `reverifyAssertion(assertion, publicKey, challenge)`: the same check, one function, at a rooted refresh, for an approval's assertion: for whichever of `origins` its client data names.
-  - `attestedKey(response)` (authority-rules' `Checks.attestedKey`): a `create()` response's credential id and new key (COSE_Key, base64url), as `attest` reads them, the key whole; never verified; none where it does not read.
+  - `verifyAssertion`, `reverifyAssertion` and `attestedKey`, the checks at once against no credential state (internal module `evidence`).
   - `allowsOrigin(origin)`: whether `origins` lists it, as ceremonies match.
   - `assert` takes the challenge with `named`, whether the request named credentials: the caller's own record of its request, never a value the client sent. Only `true` is named.
 - `keyThumbprint` (a COSE_Key, base64url): its thumbprint, the SHA-256 of passkey-key-wire's `passkeyThumbprintInput`, and its algorithm as COSE numbers it; none for a key not in passkey-key-wire's one COSE_Key form, or off its curve.
