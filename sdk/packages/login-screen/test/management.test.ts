@@ -298,3 +298,65 @@ describe("management.finish", () => {
 		}
 	});
 });
+
+describe("management.renamed", () => {
+	const rows = [{ credential_id: "AQID", label: "Desk", created_at: 1 }];
+
+	it("takes the rename's answer naming the rename sent: the new keys' list", async () => {
+		const w = await world();
+		const made = await management.continuation(
+			w.manage,
+			"rename",
+			2,
+			{ credential_id: "AQID", label: "Desk" },
+			w,
+		);
+		if ("error" in made) throw new Error(made.error);
+		expect(made.sent.bodyHash).toBe(
+			await digest(canonicalText({ credential_id: "AQID", label: "Desk" })),
+		);
+		const continued = { stage: "rename", seq: 2, body_hash: made.sent.bodyHash };
+		const answer = await w.sealed({
+			...w.approved,
+			purpose: purposes.passkeyManage,
+			keys: rows,
+			continued,
+		});
+		expect(await management.renamed(made.sent, answer, w.options)).toEqual({ keys: rows });
+	});
+
+	it("refuses an answer naming an older sequence, another body or no rename, and a continuation it did not send or a delete's", async () => {
+		const w = await world();
+		const made = await management.continuation(
+			w.manage,
+			"rename",
+			2,
+			{ credential_id: "AQID", label: "Desk" },
+			w,
+		);
+		if ("error" in made) throw new Error(made.error);
+		const listing = { ...w.approved, purpose: purposes.passkeyManage, keys: rows };
+		const named = { stage: "rename", seq: 2, body_hash: made.sent.bodyHash };
+		for (const [answer, why] of [
+			[{ ...listing, continued: { ...named, seq: 1 } }, "an older sequence"],
+			[{ ...listing, continued: { ...named, body_hash: await digest("other") } }, "another body"],
+			[listing, "no rename"],
+		] as const)
+			expect(await management.renamed(made.sent, await w.sealed(answer), w.options), why).toEqual({
+				error: "continued",
+			});
+		const answer = await w.sealed({ ...listing, continued: named });
+		expect(await management.renamed({ ...made.sent }, answer, w.options)).toEqual({
+			error: "sent",
+		});
+		const deleted = await management.continuation(
+			w.manage,
+			"delete",
+			3,
+			{ credential_id: "AQID" },
+			w,
+		);
+		if ("error" in deleted) throw new Error(deleted.error);
+		expect(await management.renamed(deleted.sent, answer, w.options)).toEqual({ error: "sent" });
+	});
+});

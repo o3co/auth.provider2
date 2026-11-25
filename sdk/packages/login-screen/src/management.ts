@@ -63,6 +63,47 @@ export type ManagementFinishError =
 	| "basis"
 	| "evidence";
 
+/** A management statement's completion: opened under its purpose and hash, the ring's, of its purpose's schema, binding the statement and the assertion, the issuer's. */
+async function completionOf(
+	manage: ReadManage,
+	sealed: Sealed,
+	options: ReadOptions & { readonly assertion: Uint8Array },
+): Promise<
+	| {
+			readonly done:
+				| ReturnType<typeof payloads.completions.passkeyAdd.parse>
+				| ReturnType<typeof payloads.completions.passkeyManage.parse>;
+			readonly h: string;
+	  }
+	| {
+			readonly error:
+				| "open"
+				| "signature"
+				| "typ"
+				| "payload"
+				| "issuer"
+				| "statement"
+				| "assertion";
+	  }
+> {
+	const { purpose } = manage.statement;
+	const h = await digest(manage.compact);
+	const opened = await openCompletion(sealed, {
+		...options,
+		aad: utf8(hpke.completionAad(purpose, h)),
+	});
+	if ("error" in opened) return opened;
+	const completion = (
+		purpose === "passkey-add" ? schemas.completions.passkeyAdd : schemas.completions.passkeyManage
+	).safeParse(opened.payload);
+	if (!completion.success) return { error: "payload" };
+	const done = completion.data;
+	if (done.iss !== options.issuer) return { error: "issuer" };
+	if (done.t_hash !== h) return { error: "statement" };
+	if (done.assertion_hash !== (await digest(options.assertion))) return { error: "assertion" };
+	return { done, h };
+}
+
 /**
  * The approval's completion (`approvalFinish`, sealed): opened under `completionAad` of the
  * statement's purpose and hash, the Core's ring's, of that purpose's completion, binding the statement
@@ -81,21 +122,9 @@ async function finish(
 	| { readonly error: ManagementFinishError }
 > {
 	if (!issued.has(manage)) return { error: "statement" };
-	const { purpose } = manage.statement;
-	const h = await digest(manage.compact);
-	const opened = await openCompletion(sealed, {
-		...options,
-		aad: utf8(hpke.completionAad(purpose, h)),
-	});
-	if ("error" in opened) return opened;
-	const completion = (
-		purpose === "passkey-add" ? schemas.completions.passkeyAdd : schemas.completions.passkeyManage
-	).safeParse(opened.payload);
-	if (!completion.success) return { error: "payload" };
-	const done = completion.data;
-	if (done.iss !== options.issuer) return { error: "issuer" };
-	if (done.t_hash !== h) return { error: "statement" };
-	if (done.assertion_hash !== (await digest(options.assertion))) return { error: "assertion" };
+	const taken = await completionOf(manage, sealed, options);
+	if ("error" in taken) return taken;
+	const { done, h } = taken;
 	if (done.purpose === "passkey-manage") {
 		if (done.continued !== undefined) return { error: "continued" };
 		return { keys: done.keys };
@@ -107,12 +136,24 @@ async function finish(
 	return { creation: creationOf(creation.statement, creation.compact) };
 }
 
+/** A delete's or a rename's continuation as `continuation` sent it: its statement, stage, sequence, body and the body's hash. Only `continuation` makes one. */
+export interface Continued {
+	readonly manage: ReadManage;
+	readonly stage: "delete" | "rename";
+	readonly seq: number;
+	readonly body: { readonly credential_id: string; readonly label?: string };
+	/** The hash of the body's `canonicalText`, the one its signature covers. */
+	readonly bodyHash: string;
+}
+const sent = new WeakSet<Continued>();
+
 /**
  * A delete's or a rename's continuation (V24): its body, of its stage's shape, signed with E_sig over
  * the plaintext body's hash (`continuation.of`, as every stage), and the body with its signature
  * sealed to the Core's sealing key, padded to one length and bound to the stage, the statement and
  * the sequence. The Front sees neither. A resend sends the same sealed value again, kept by the
- * caller: sealing anew gives other bytes for the same body.
+ * caller: sealing anew gives other bytes for the same body. What was sent (`Continued`) is what the
+ * answer is read against.
  */
 async function continuation(
 	manage: ReadManage,
@@ -121,7 +162,8 @@ async function continuation(
 	body: unknown,
 	options: { readonly keys: ScreenKeys; readonly sealingKey: Uint8Array },
 ): Promise<
-	{ readonly sealed: Sealed } | { readonly error: "statement" | "keys" | "sequence" | "body" }
+	| { readonly sealed: Sealed; readonly sent: Continued }
+	| { readonly error: "statement" | "keys" | "sequence" | "body" }
 > {
 	if (!issued.has(manage) || manage.statement.purpose !== "passkey-manage")
 		return { error: "statement" };
@@ -131,7 +173,8 @@ async function continuation(
 	const read = continued.bodies[stage].safeParse(body);
 	if (!read.success) return { error: "body" };
 	const h = await digest(manage.compact);
-	const input = continued.of(stage, h, seq, await digest(canonicalText(read.data)));
+	const bodyHash = await digest(canonicalText(read.data));
+	const input = continued.of(stage, h, seq, bodyHash);
 	const signature = await crypto.subtle.sign(
 		{ name: "ECDSA", hash: "SHA-256" },
 		options.keys.signing.privateKey,
@@ -145,8 +188,34 @@ async function continuation(
 		utf8(continued.aad(stage, h, seq)),
 		utf8(plain),
 	);
-	return { sealed };
+	const made: Continued = deepFreeze({ manage, stage, seq, body: read.data, bodyHash });
+	sent.add(made);
+	return { sealed, sent: made };
 }
 
-/** The keys' management on the screen: read its statement, take its approval's completion, seal a delete's or a rename's continuation. */
-export const management = Object.freeze({ read, finish, continuation });
+/**
+ * A rename's answer (`continue`'s rename, sealed): the passkey-manage completion as `finish` takes
+ * it, with `continued` naming exactly the rename sent (its stage, sequence and body's hash): one of
+ * another sequence or body, or none, is refused. Answers the new keys' list.
+ */
+async function renamed(
+	rename: Continued,
+	sealed: Sealed,
+	options: ReadOptions & { readonly assertion: Uint8Array },
+): Promise<
+	| { readonly keys: readonly KeyRow[] }
+	| { readonly error: "sent" | Exclude<ManagementFinishError, "creation" | "basis" | "evidence"> }
+> {
+	if (!sent.has(rename) || rename.stage !== "rename") return { error: "sent" };
+	const taken = await completionOf(rename.manage, sealed, options);
+	if ("error" in taken) return taken;
+	const { done } = taken;
+	if (done.purpose !== "passkey-manage") return { error: "payload" };
+	const named = done.continued;
+	if (named?.seq !== rename.seq || named.body_hash !== rename.bodyHash)
+		return { error: "continued" };
+	return { keys: done.keys };
+}
+
+/** The keys' management on the screen: read its statement, take its approval's completion, seal a delete's or a rename's continuation, take a rename's answer. */
+export const management = Object.freeze({ read, finish, continuation, renamed });
