@@ -212,10 +212,10 @@ describe("a choice's cost, against the platform's store and one root more", () =
 			expect(work.again).toBe(0);
 			// A signature is verified only where node takes the certificate as the issuer, once each.
 			expect(work.verified).toBeLessThanOrEqual(verifies);
-			const runs = 20;
+			// One timed run, logged alone: the bounds above are what the test holds, not the clock.
 			const started = performance.now();
-			for (let run = 0; run < runs; run++) choose();
-			const ms = (performance.now() - started) / runs;
+			choose();
+			const ms = performance.now() - started;
 			return { kind: work.value.kind, asked: work.asked, ms };
 		};
 		// Ordinary: a leaf under two intermediates under the root.
