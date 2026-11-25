@@ -4,6 +4,7 @@ import {
 	askOf,
 	codeBundle,
 	codeStart,
+	continued,
 	firstKey,
 	firstKeyEvidence,
 	login,
@@ -61,6 +62,7 @@ describe("a first-trust key (Rules023e Allowed `ft`)", () => {
 			preimage: preimage({
 				evidence: [
 					{ form: "statement", value: "x" },
+					{ form: "continuation", value: "z" },
 					{ form: "statement", value: "y" },
 					{ form: "assertion", value: assertion(newKey, "y") },
 				],
@@ -96,6 +98,7 @@ describe("a first-trust key (Rules023e Allowed `ft`)", () => {
 		const { creationJws, possessionJws } = firstKeyEvidence;
 		const evidence = (c: string, p: string, key = newKey) => [
 			{ form: "statement", value: c },
+			{ form: "continuation", value: continued(c, JSON.stringify(key)) },
 			{ form: "statement", value: p },
 			{ form: "assertion", value: assertion(key, p) },
 		];
@@ -141,6 +144,7 @@ describe("a first-trust key (Rules023e Allowed `ft`)", () => {
 				preimage: preimage({
 					evidence: [
 						{ form: "statement", value: creationJws },
+						{ form: "continuation", value: continued(creationJws, JSON.stringify(key)) },
 						{ form: "statement", value: possessionJws },
 						{ form: "assertion", value: proof },
 					],
@@ -537,8 +541,9 @@ describe("a key change's envelope digests (proposal 3.13, V22)", () => {
 	};
 	const opened = (step: ReturnType<typeof firstKey>) =>
 		(step.preimage as { evidence: { form: string; value: string }[] }).evidence;
-	const statementOf = (step: ReturnType<typeof firstKey>) => opened(step)[1]?.value ?? "";
-	const assertionOf = (step: ReturnType<typeof firstKey>) => opened(step)[2]?.value ?? "";
+	// The possession and the new key's assertion: the evidence's last two.
+	const statementOf = (step: ReturnType<typeof firstKey>) => opened(step).at(-2)?.value ?? "";
+	const assertionOf = (step: ReturnType<typeof firstKey>) => opened(step).at(-1)?.value ?? "";
 
 	it("allows a first key whose envelope names its possession's and its new key's assertion's digests", () => {
 		const step = firstKey(1);

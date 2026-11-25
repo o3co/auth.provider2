@@ -6,7 +6,7 @@ import { keys } from "@mod/keys";
 import keysModule from "@mod/keys/module";
 import { keysConfig, testHolder } from "@mod/keys/testing";
 import { passkeys } from "@mod/passkeys";
-import { challengeInput, typs } from "@mod/sdk-core-wire";
+import { canonicalText, challengeInput, continuation, typs } from "@mod/sdk-core-wire";
 import { type Guarantee, type Space, spaces, store } from "@mod/store";
 import storeModule from "@mod/store/module";
 import { storeConfig } from "@mod/store/testing";
@@ -248,7 +248,19 @@ const ceremonies = testCeremonies({
 	topOrigins: [],
 	algorithms: ["ES256", "EdDSA", "RS256"],
 });
-const screen = { v: 1, e_enc: "ZW5j", e_sig: { kty: "EC", crv: "P-256", x: "eA", y: "eQ" } };
+/** The screen's E_sig: a P-256 key its statements carry, signing its continuations (raw r‖s). */
+const eSig = generateKeyPairSync("ec", { namedCurve: "P-256" });
+const { x, y } = eSig.publicKey.export({ format: "jwk" });
+const screen = { v: 1, e_enc: "ZW5j", e_sig: { kty: "EC", crv: "P-256", x, y } };
+/** The screen's register continuation over a creation, sending `body`: canonical, as a key change carries it. */
+const continued = (creation: string, body: string, seq = 1) => {
+	const input = continuation.of("register", digest(creation), seq, digest(body));
+	const signature = signBytes("sha256", Buffer.from(input), {
+		key: eSig.privateKey,
+		dsaEncoding: "ieee-p1363",
+	}).toString("base64url");
+	return canonicalText({ seq, body, signature });
+};
 const fresh = () => randomBytes(32).toString("base64url");
 
 /** A statement the Core's ring signs, valid from now for five minutes, by the world's clock. */
@@ -271,11 +283,8 @@ export async function passkey(algorithm: "ES256" | "EdDSA" | "RS256" = "ES256") 
 	const handle = fresh();
 	const options = ceremonies.creation(challenge, { handle, name: "sam" }, []);
 	const at = { origin: testOrigin };
-	const attested = await ceremonies.attest(
-		authenticator.create(options as never, at),
-		challenge,
-		handle,
-	);
+	const created = authenticator.create(options as never, at);
+	const attested = await ceremonies.attest(created, challenge, handle);
 	if (attested.kind !== "attested") throw new Error(attested.reason);
 	const credential = attested.credential;
 	/** Its assertion over a statement, as the rules ask: the get challenge's digest, at `origin`. */
@@ -284,13 +293,15 @@ export async function passkey(algorithm: "ES256" | "EdDSA" | "RS256" = "ES256") 
 		const request = ceremonies.request(asked, [credential]) as RequestOptions;
 		return JSON.stringify(authenticator.get(request, { origin }));
 	};
-	return { credential: credential.id, publicKey: credential.publicKey, asserts };
+	// The create() response as the screen sends it in its continuation.
+	const response = JSON.stringify(created);
+	return { credential: credential.id, publicKey: credential.publicKey, response, asserts };
 }
 export type Passkey = Awaited<ReturnType<typeof passkey>>;
 
 export const subjectFlow = (id = fresh()): Flow => ({ of: "subject", id });
 
-/** The first key's stage: creation and possession signed by the ring, the key asserting the possession, its envelope naming their digests, its op the reservation the possession names. */
+/** The first key's stage: creation and possession signed by the ring, the screen's continuation sending the key, the key asserting the possession, its envelope naming their digests, its op the reservation the possession names. */
 export async function firstKey(
 	world: World,
 	flow: Flow,
@@ -347,6 +358,7 @@ export async function firstKey(
 			v: 1,
 			evidence: [
 				{ form: "statement", value: creation },
+				{ form: "continuation", value: continued(creation, key.response) },
 				{ form: "statement", value: possession },
 				{ form: "assertion", value: asserted },
 			],

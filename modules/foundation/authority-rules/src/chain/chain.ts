@@ -121,12 +121,10 @@ function approvalRefusal(read: Read<"approval">): Refusal {
 
 /**
  * A first key's evidence, in one order by its path (proposal 3.13): the creation, the screen's
- * continuation (the first-key path's where it carries one), the possession, the new key's assertion;
- * a sign-up's (F1) after its T, its continuation required.
+ * continuation, the possession, the new key's assertion; a sign-up's (F1) after its T.
  */
 const firstForms = {
-	firstKey: ["statement", "statement", "assertion"],
-	continued: ["statement", "continuation", "statement", "assertion"],
+	firstKey: ["statement", "continuation", "statement", "assertion"],
 	signUp: ["statement", "statement", "continuation", "statement", "assertion"],
 } as const;
 
@@ -141,13 +139,13 @@ function firstOf(read: Read<"keyChange">) {
 	if (!path)
 		return {
 			refusal:
-				"a first key carries its creation, possession and assertion in order, a sign-up's after its T",
+				"a first key carries its creation, continuation, possession and assertion in order, a sign-up's after its T",
 		};
 	const at = path === "signUp" ? 1 : 0;
 	const creation = values[at] ?? "";
 	const possession = values[values.length - 2] ?? "";
 	const proof = values[values.length - 1] ?? "";
-	const sent = path === "firstKey" ? undefined : values[at + 1];
+	const sent = values[at + 1] ?? "";
 	const signed = <T>(jws: string, schema: Parameters<typeof statementOf<T>>[1]) =>
 		statementOf(jws, schema, ask.checks, ask.context);
 	const c = signed(creation, statements.creation);
@@ -160,8 +158,8 @@ function firstOf(read: Read<"keyChange">) {
 	const tRead = tJws === undefined ? undefined : signed(tJws, statements.authorization);
 	if (tJws !== undefined && !tRead)
 		return { refusal: "the T is not signed by the writer generation's ring" };
-	const continued = sent === undefined ? undefined : continuationOf(sent);
-	if (sent !== undefined && !continued) return { refusal: "the continuation does not read" };
+	const continued = continuationOf(sent);
+	if (!continued) return { refusal: "the continuation does not read" };
 	const t = tJws !== undefined && tRead ? { jws: tJws, payload: tRead } : undefined;
 	return { creation, c, possession, p, proof, continued, t };
 }
@@ -213,7 +211,7 @@ function pathRefusal(ask: Ask, of: FirstOf): Refusal {
 		return undefined;
 	}
 	if (made.basis !== "sign-up") return "the creation is not for a first key";
-	if (!of.t) return "a sign-up carries its T and continuation";
+	if (!of.t) return "a sign-up's key comes after its T";
 	if (ask.prior.length > 0) return "the flow has a record: a sign-up's key is its first";
 	if (made.evidence !== ask.checks.digest(of.t.jws)) return "the creation is not for its T";
 	if (!sameScreen(of.t.payload, of.c)) return "the creation names another screen's keys than its T";
@@ -232,10 +230,8 @@ function firstKeyRefusal(read: Read<"keyChange">): Refusal {
 	if (made.kg !== ask.state.keyGeneration)
 		return "the creation is signed for another key generation than the flow's";
 	if (made.subject !== ask.record.flow.id) return "the creation is another subject's";
-	if (of.continued) {
-		const continued = continuedRefusal(ask.checks, of, of.continued, content);
-		if (continued) return continued;
-	}
+	const continued = continuedRefusal(ask.checks, of, of.continued, content);
+	if (continued) return continued;
 	return possessionRefusal(ask, of, [of.t?.payload, of.c, of.p], content);
 }
 

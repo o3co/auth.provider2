@@ -5,7 +5,6 @@ import {
 	askOf,
 	continued,
 	firstKey,
-	firstKeyContinued,
 	firstKeyEvidence,
 	firstOver,
 	newKey,
@@ -147,9 +146,9 @@ describe("a sign-up's key (F1; P 358: first trust where the subject first appear
 		expect(verdictOn(signUpWith({ continuation: "{}" }))).toEqual(refused(/does not read/));
 	});
 
-	it("is refused without its T or continuation, or with them for a creation of another path", () => {
+	it("is refused without its T, in no order without its continuation, or with them for a creation of another path", () => {
 		const parts = signUpParts();
-		// A sign-up's creation in the first-key path's order: its T and continuation are required.
+		// A sign-up's creation with no T nor continuation is no path's order.
 		const bare = firstOver(
 			1,
 			[
@@ -160,7 +159,7 @@ describe("a sign-up's key (F1; P 358: first trust where the subject first appear
 			newKey,
 			parts,
 		);
-		expect(verdictOn(bare)).toEqual(refused(/carries its T and continuation/));
+		expect(verdictOn(bare)).toEqual(refused(/in order/));
 		const continuedOnly = firstOver(
 			1,
 			[
@@ -172,7 +171,7 @@ describe("a sign-up's key (F1; P 358: first trust where the subject first appear
 			newKey,
 			parts,
 		);
-		expect(verdictOn(continuedOnly)).toEqual(refused(/carries its T and continuation/));
+		expect(verdictOn(continuedOnly)).toEqual(refused(/comes after its T/));
 		// The first-key path's creation after a T: a T is a sign-up's alone.
 		const { creationJws, possessionJws } = firstKeyEvidence;
 		const proof = assertion(newKey, possessionJws);
@@ -191,6 +190,7 @@ describe("a sign-up's key (F1; P 358: first trust where the subject first appear
 			1,
 			[
 				{ form: "statement", value: add.creation },
+				{ form: "continuation", value: add.continuation },
 				{ form: "statement", value: add.possession },
 				{ form: "assertion", value: add.proof },
 			],
@@ -268,14 +268,20 @@ describe("a sign-up's key (F1; P 358: first trust where the subject first appear
 	});
 });
 
-describe("the first-key path's continuation, checked where it carries one (P 355)", () => {
+describe("the first-key path's continuation, required (P 355)", () => {
 	it("is allowed with the screen's continuation over the creation, sending the record's key", () => {
-		expect(verdictOn(firstKeyContinued(1))).toEqual(ok);
 		expect(verdictOn(firstKey(1))).toEqual(ok);
 	});
 
+	it("is refused without its continuation", () => {
+		const step = firstKey(1);
+		const p = step.preimage as { evidence: { form: string }[] };
+		const evidence = p.evidence.filter((e) => e.form !== "continuation");
+		expect(verdictOn({ ...step, preimage: { ...p, evidence } })).toEqual(refused(/in order/));
+	});
+
 	it("is refused for a continuation sending another key, or not the screen's, or not read", () => {
-		expect(verdictOn(firstKeyContinued(1, JSON.stringify(addedKey)))).toEqual(
+		expect(verdictOn(firstKey(1, 0, JSON.stringify(addedKey)))).toEqual(
 			refused(/sends another key/),
 		);
 		const { creationJws, possessionJws } = firstKeyEvidence;

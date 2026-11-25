@@ -40,8 +40,11 @@ const ceremony = (kg = 0) => {
 };
 export const firstKeyEvidence = ceremony();
 
-/** The first key, its ceremony signed for key generation `kg`, its envelope naming its digests. */
-export const firstKey = (position = 1, kg = 0) => {
+/**
+ * The first key, its ceremony signed for key generation `kg`, the screen's continuation sending
+ * `body`, its envelope naming its digests: [creation, continuation, possession, assertion].
+ */
+export const firstKey = (position = 1, kg = 0, body = JSON.stringify(newKey)) => {
 	const { creationJws, possessionJws } = ceremony(kg);
 	const proof = assertion(newKey, possessionJws);
 	return {
@@ -52,6 +55,7 @@ export const firstKey = (position = 1, kg = 0) => {
 		preimage: preimage({
 			evidence: [
 				{ form: "statement", value: creationJws },
+				{ form: "continuation", value: continued(creationJws, body) },
 				{ form: "statement", value: possessionJws },
 				{ form: "assertion", value: proof },
 			],
@@ -245,23 +249,6 @@ export const signedUp = (position = 1, parts: SignUpParts = signUpParts()) =>
 		parts.key,
 		parts,
 	);
-
-/** The first key carrying the screen's continuation: [creation, continuation, possession, assertion]. */
-export const firstKeyContinued = (position = 1, body = JSON.stringify(newKey)) => {
-	const { creationJws, possessionJws } = firstKeyEvidence;
-	const proof = assertion(newKey, possessionJws);
-	return firstOver(
-		position,
-		[
-			{ form: "statement", value: creationJws },
-			{ form: "continuation", value: continued(creationJws, body) },
-			{ form: "statement", value: possessionJws },
-			{ form: "assertion", value: proof },
-		],
-		newKey,
-		{ possession: possessionJws, proof },
-	);
-};
 
 /** The usual login: first key (r-1), approval (r-2), start (r-3) and bundle (r-4) of op `login`. */
 export const login = () => [

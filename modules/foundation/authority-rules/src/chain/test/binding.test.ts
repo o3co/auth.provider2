@@ -117,6 +117,7 @@ describe("the reservation a key change's possession names (P 355: 予約の id)"
 			1,
 			[
 				{ form: "statement", value: creationJws },
+				{ form: "continuation", value: continued(creationJws, JSON.stringify(newKey)) },
 				{ form: "statement", value: held },
 				{ form: "assertion", value: proof },
 			],
@@ -136,6 +137,7 @@ describe("one issuer for a key change's statements (P 355: issuer, from the sign
 			1,
 			[
 				{ form: "statement", value: creationJws },
+				{ form: "continuation", value: continued(creationJws, JSON.stringify(newKey)) },
 				{ form: "statement", value: other.possession },
 				{ form: "assertion", value: other.proof },
 			],
