@@ -22,7 +22,7 @@ function records(
 			return placed;
 		},
 		byIdentifier: async () => undefined,
-		byKey: async () => left.shift(),
+		byIdentifierlessKey: async () => left.shift(),
 		bySubject: async () => undefined,
 	};
 }

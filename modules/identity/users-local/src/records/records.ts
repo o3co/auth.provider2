@@ -92,7 +92,7 @@ export interface LocalRecords {
 		subject: string,
 	): Promise<"placed" | "exists" | "taken" | "erased">;
 	byIdentifier(identifier: string): Promise<IdentifierRecord | undefined>;
-	byKey(key: string): Promise<IdentifierlessRecord | undefined>;
+	byIdentifierlessKey(key: string): Promise<IdentifierlessRecord | undefined>;
 	bySubject(subject: string): Promise<SubjectRecord | undefined>;
 }
 
@@ -156,7 +156,7 @@ export function localRecords(builders: Builders): LocalRecords {
 			if (answer.why === "erased") return "erased";
 			throw new Unavailable("users-local");
 		},
-		byKey: async (key) =>
+		byIdentifierlessKey: async (key) =>
 			shaped<IdentifierlessRecord>(await builders.identifierless.read(key), (read) =>
 				isText(read.subject),
 			),
@@ -194,7 +194,7 @@ export function localMarks(builders: Pick<Builders, "marks">): LocalMarks {
 	};
 }
 
-/** Whose a record written before indexing is: an identifier's and an identifierless key's name their subject, a subject's and a mark's are keyed by it. */
+/** Whose a record written before indexing is: an identifier's and an identifierless subject's key's name their subject, a subject's and a mark's are keyed by it. */
 const identifierReading: SubjectReading = async (_key, value): Promise<SubjectOf> => {
 	const subject = (value as { subject?: unknown } | null)?.subject;
 	return isText(subject)

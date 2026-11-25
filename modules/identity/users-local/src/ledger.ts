@@ -48,13 +48,13 @@ export function localLedger(records: LocalRecords, random: Random, passwords: Pa
 		},
 		// The same key is answered the same subject: placed once, read back after, whoever placed it.
 		createIdentifierless: async (key) => {
-			const held = await records.byKey(key);
+			const held = await records.byIdentifierlessKey(key);
 			if (held) return userOf(held.subject);
 			const subject = Buffer.from(random.bytes(subjectBytes)).toString("hex");
 			const placed = await records.placeIdentifierless(key, subject);
 			if (placed === "placed") return userOf(subject);
 			// Placed at once by another: its subject is the key's.
-			const after = placed === "exists" ? await records.byKey(key) : undefined;
+			const after = placed === "exists" ? await records.byIdentifierlessKey(key) : undefined;
 			// A drawn subject held already, or erased: no answer for the key, asked again.
 			if (!after) throw new Unavailable("users-local");
 			return userOf(after.subject);

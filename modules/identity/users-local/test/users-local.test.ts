@@ -297,7 +297,8 @@ describe("users-local", () => {
 		const reader = await opened("reader");
 		const made = await reader.ledger.create?.("carol");
 		await reader.witness.enroll(made?.kind === "created" ? made.user.subject : "", "t");
-		await reader.ledger.createIdentifierless?.(identifierlessKeyOf("dave"));
+		const dave = identifierlessKeyOf("dave");
+		const unindexed = await reader.ledger.createIdentifierless?.(dave);
 		reader.simulated.mark("subject-records.phase", "indexed");
 		const shared = defineModule({ name: "store", replicaSafe: true, takes: [] }, (m) => [
 			m.provide(store).by(() => reader.app.get(store)),
@@ -324,6 +325,12 @@ describe("users-local", () => {
 			{ kind: "migrated", space: "users-local.subjects", indexed: 2, removed: 0 },
 			{ kind: "migrated", space: "users-local.marks", indexed: 1, removed: 0 },
 		]);
+		// The identifierless subject the reader phase wrote is erased by its index now, its key with it.
+		const ledger = app.get(seen).ledgers[0];
+		const subject = unindexed?.subject ?? "";
+		await eraser?.online(subject, signal);
+		expect(await ledger?.bySubject(subject)).toEqual({ kind: "none" });
+		expect((await ledger?.createIdentifierless?.(dave))?.subject).not.toBe(subject);
 	});
 
 	it("answers a record of another shape unavailable, never none", async () => {
