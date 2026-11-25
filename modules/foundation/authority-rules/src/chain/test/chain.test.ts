@@ -505,3 +505,53 @@ describe("timely: TimeOK, from the acceptance time (§6.2, A13)", () => {
 		expect(checks.digest("x")).toBe(digest("x"));
 	});
 });
+
+describe("a key change's envelope digests (proposal 3.13, V22)", () => {
+	const named = (keyChange: { statement: string; evidence: string } | undefined) => {
+		const step = firstKey(1);
+		return { ...step, record: { ...step.record, ...(keyChange ? { keyChange } : {}) } };
+	};
+	const opened = (step: ReturnType<typeof firstKey>) =>
+		(step.preimage as { evidence: { form: string; value: string }[] }).evidence;
+	const statementOf = (step: ReturnType<typeof firstKey>) => opened(step)[1]?.value ?? "";
+	const assertionOf = (step: ReturnType<typeof firstKey>) => opened(step)[2]?.value ?? "";
+
+	it("allows a first key whose envelope names its possession's and its new key's assertion's digests, or none", () => {
+		const step = firstKey(1);
+		const own = { statement: digest(statementOf(step)), evidence: digest(assertionOf(step)) };
+		expect(verdictOn(named(own), on([]))).toEqual(ok);
+		expect(verdictOn(named(undefined), on([]))).toEqual(ok);
+	});
+
+	it("refuses a first key whose envelope names other digests than its preimage's", () => {
+		const step = firstKey(1);
+		const [statement, evidence] = [digest(statementOf(step)), digest(assertionOf(step))];
+		const other = refused(/other evidence than the preimage's/);
+		expect(verdictOn(named({ statement: digest("another"), evidence }), on([]))).toEqual(other);
+		expect(verdictOn(named({ statement, evidence: digest("another assertion") }), on([]))).toEqual(
+			other,
+		);
+	});
+
+	it("refuses a passkey-add's or a passkey-manage's key change as no rule reads it yet, whatever its digests", () => {
+		for (const variant of ["add", "delete"]) {
+			const step = firstKey(1);
+			const changed = {
+				...step,
+				preimage: {
+					...(step.preimage as object),
+					content: { variant, credential: "c", publicKey: "AA" },
+				},
+			};
+			expect(verdictOn(changed, on([])), variant).toEqual(refused(/does not read/));
+			// Its envelope naming digests, matching or not, changes nothing: no rule reads it.
+			for (const keyChange of [
+				{ statement: digest(statementOf(step)), evidence: digest(assertionOf(step)) },
+				{ statement: digest("another"), evidence: digest("another assertion") },
+			]) {
+				const bound = { ...changed, record: { ...changed.record, keyChange } };
+				expect(verdictOn(bound, on([])), variant).toEqual(refused(/does not read/));
+			}
+		}
+	});
+});

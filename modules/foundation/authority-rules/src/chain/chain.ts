@@ -37,6 +37,7 @@ export type Named = Pick<
 	| "stage"
 	| "last"
 	| "approval"
+	| "keyChange"
 	| "tokens"
 	| "abandons"
 	| "registryVersion"
@@ -167,6 +168,21 @@ function firstKeyRefusal(read: Read<"keyChange">): Refusal {
 		!assertedBy(asserted, content, possession.jws, ask.checks, ask.context)
 	)
 		return "the new key does not assert the possession";
+	return keyChangeBound(ask, possession.jws, asserted);
+}
+
+/**
+ * A key change's envelope digests, where it names them, the preimage's own (proposal 3.13, V22): its
+ * statement's and its evidence's, as a screen checks its receipt by them. Named otherwise, a taken
+ * Core could show the screen its own digests over another key's evidence. For now one naming none is
+ * not checked (no writer names them yet; a screen with a pinned log takes no such receipt): once the
+ * writer names them, one naming none is refused.
+ */
+function keyChangeBound(ask: Ask, statement: string, evidence: string): Refusal {
+	const bound = ask.record.keyChange;
+	const { digest } = ask.checks;
+	if (bound && (bound.statement !== digest(statement) || bound.evidence !== digest(evidence)))
+		return "the envelope binds other evidence than the preimage's";
 	return undefined;
 }
 
