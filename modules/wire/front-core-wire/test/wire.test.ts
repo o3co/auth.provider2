@@ -17,6 +17,10 @@ describe("the requests the Core opens to the Front", () => {
 		const codes = kinds.map((k) => k.code);
 		expect(new Set(codes).size).toBe(codes.length);
 		for (const code of codes) expect(code > 0 && code < 256, String(code)).toBe(true);
+		// The first key's old continuation and finish (0x08, 0x09) are not given again.
+		expect((codes as readonly number[]).filter((code) => code === 0x08 || code === 0x09)).toEqual(
+			[],
+		);
 	});
 
 	it("names each field once in its kind, with a length range a u16 holds", () => {
