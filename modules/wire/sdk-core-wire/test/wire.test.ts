@@ -353,7 +353,7 @@ describe("the first key's statements", () => {
 		).toBe(false);
 	});
 
-	/** F1's creation: of sign-up's basis, no ciphertext hash and no account, the Core's name for it. */
+	/** F1's creation: of sign-up's basis, no ciphertext hash and no account, named by `user_name`. */
 	const { ct_hash: _ct, account: _account, ...noAccount } = creation.creation;
 	const signUp = (options: Record<string, unknown> = { user_name: "Example 7f3a" }, more = {}) =>
 		payloads.creation.safeParse({
@@ -366,18 +366,35 @@ describe("the first key's statements", () => {
 			},
 		}).success;
 
-	it("lets sign-up's creation alone leave its account out, naming it by user_name, a label's text, not blank", () => {
+	it("names a creation's account by account or user_name, one alone: the first key's path by account, sign-up's by user_name, passkey-add's by either", () => {
 		expect(signUp()).toBe(true);
 		for (const bad of ["", "   ", "x".repeat(65), "a\nb", "a\u202eb", 7])
 			expect(signUp({ user_name: bad }), JSON.stringify(bad)).toBe(false);
-		// Sign-up's has no account and a name; every other path's has an account and no name.
-		expect(signUp({ user_name: undefined })).toBe(false);
-		expect(signUp(undefined, { account: "a***" })).toBe(false);
-		const others = (change: Record<string, unknown>) =>
-			payloads.creation.safeParse({ ...creation, creation: { ...creation.creation, ...change } })
-				.success;
-		expect(others({ options: { ...creation.creation.options, user_name: "N" } })).toBe(false);
-		expect(others({ account: undefined })).toBe(false);
+		// Each basis with an account, a name, both or neither: the first key's path by account,
+		// sign-up's by user_name, passkey-add's by either; both or neither on none.
+		const { ct_hash: _, account: _a, ...neither } = creation.creation;
+		const takes = {
+			"": ["account"],
+			"first-key": ["account"],
+			"passkey-add": ["account", "user_name"],
+			"sign-up": ["user_name"],
+		};
+		for (const [basis, names] of Object.entries(takes))
+			for (const account of [false, true])
+				for (const user_name of [false, true]) {
+					const made = {
+						...neither,
+						...(basis === "" ? {} : { basis }),
+						...(basis === "" || basis === "first-key" ? { ct_hash: "ct" } : {}),
+						...(account ? { account: "a***" } : {}),
+						options: { ...neither.options, ...(user_name ? { user_name: "N" } : {}) },
+					};
+					const one = account !== user_name && names.includes(account ? "account" : "user_name");
+					expect(
+						payloads.creation.safeParse({ ...creation, creation: made }).success,
+						JSON.stringify({ basis, account, user_name }),
+					).toBe(one);
+				}
 	});
 
 	it("carries a ciphertext hash on the first key's path alone, by the creation's basis", () => {

@@ -16,14 +16,14 @@
 - `payloads`: the schemas of T, the completion's answer, the `creation`, `possession`, `passkeyAdd` and `passkeyManage` statements, and what the first key's start, mail and answer seal. Types: `StatementPayload`, `CompletionPayload`, `CreationPayload`, `PossessionPayload`, `AuthorizationAnswer`, `AuthorizationItems`, `SigningKey`, `FirstKeyStage`.
 - `payloads.answers`: the answers' forms the Front carries unread, whose names `front-core-wire` gives each operation: `authorization` (②'s), `statement`, `sealed` and `nonce`.
 - `payloads.completions`: `passkeyAdd` (the continued `creation`), `passkeyManage` (the keys' list) and `keyChange` (§C.5; F1's under `sign-up` too). `payloads.completion` is the authorization's, its `purpose` and ⑤'s `receipt` optional.
-- `versions`: the wire versions a reader speaks (1); every statement and completion names its own as `v`. A creation's `options` name the `algorithms` the ceremony offered, as COSE numbers them, each once, and may name `user_name`, the account's name a passkey shows (F1's creation has no identifier): a label's text, not blank.
+- `versions`: the wire versions a reader speaks (1); every statement and completion names its own as `v`. A creation's `options` name the `algorithms` the ceremony offered, as COSE numbers them, each once, and may name `user_name`, the account's name a passkey shows for a subject with no identifier: a label's text, not blank.
 - `canonicalText` and `challengeInput`: what a challenge covers. `firstKey`: `stages` (`start`, `mail`), `evidenceInput`, `aad` and `recoverInput`: what the evidence's value, a sealed request's additional data and a recovery's signature (the mail's nonce, the request's digest) cover.
 - `continuation`: `stages` (`register`, `delete`, `rename`; `ContinuationStage`), what a signature covers (`of`) and how (`signature`), the `bodies` of a delete and a rename, and the `sealed` stages' `aad`, `plainBytes`, `plainOf` and `readPlain`.
 
 ## Invariants
 - A protocol (G33): types, frozen constants, fixed schemas and the functions that build by them; no I/O, clock, randomness or state.
 - Every payload refuses a field it does not know; T's items are a closed set, and a JAR with any other claim beside its envelope yields no items.
-- The identifier goes in a statement masked alone, for display; F1's creation has none, its account named by `user_name` alone, which no other path's carries.
+- The identifier goes in a statement masked alone, for display; a creation names its account by `account` or `user_name`, one alone: the first key's path by `account`, F1's by `user_name` (its subject has none), passkey-add's by either.
 - A creation's `basis` fixes what its evidence hashes: the mail token (`first-key`), the approved `passkey-add` statement, or the T read before signing up (`sign-up`); `ct_hash` is `first-key`'s alone, a creation with no basis read as such.
 - ②'s answer: T, its get challenge (SHA-256 of `challengeInput(T, "get")`, which the screen recomputes and uses) and `create`, an unsigned hint for F1.
 - A sealed value is `{ enc, ct }`: a 65-byte uncompressed point and the ciphertext with its 16-byte tag, base64url in one spelling; a nonce is 32 bytes.

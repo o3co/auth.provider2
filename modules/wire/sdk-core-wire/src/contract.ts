@@ -170,7 +170,7 @@ const creation = z
 		purpose: z.literal(purposes.creation),
 		creation: z
 			.object({
-				/** The identifier, masked, for display alone; F1's has none, its name in `user_name`. */
+				/** The identifier, masked, for display alone; a subject with none (F1's) is named by `user_name`. */
 				account: z.string().optional(),
 				/** What the evidence is: the first key's mail, an approved `passkey-add`, or a T read before signing up. */
 				basis: z.enum(["first-key", "passkey-add", "sign-up"]).optional(),
@@ -204,9 +204,13 @@ const creation = z
 			)
 			.refine(
 				(c) =>
-					(c.basis === "sign-up") === (c.account === undefined) &&
-					(c.basis === "sign-up") === (c.options.user_name !== undefined),
-				{ message: "sign-up's creation alone has no account, and a name for it" },
+					(c.account === undefined) !== (c.options.user_name === undefined) &&
+					(c.basis === "sign-up" ? c.options.user_name !== undefined : true) &&
+					(c.basis === undefined || c.basis === "first-key" ? c.account !== undefined : true),
+				{
+					message:
+						"a creation names its account by one of account or user_name: the first key's path by account, sign-up's by user_name, passkey-add's by either",
+				},
 			),
 	})
 	.strict();
