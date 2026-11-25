@@ -95,36 +95,58 @@ async function assertionOptions(
 	};
 }
 
-/** A completion as `finish` took it: its code and ⑤'s record. Only `finish` makes one, for the T it was given. */
+/** A completion as `finish` took it: its code, and ⑤'s record at `log`. Only `finish` makes one, for the T it was given. */
 export interface Finished {
 	readonly code: string;
-	readonly approval: RecordRef;
+	/** ⑤'s record, from its receipt: none at `L0`, where no receipt is read. */
+	readonly approval?: RecordRef;
 }
-const finished = new WeakMap<Finished, ReadT>();
-
-/** Why a completion is not taken: T not `read`'s, its own refusal, ring and log keys shared, or ⑤'s receipt that does not bind it. */
-export type FinishError = CompletionError | "statement" | "keys" | "receipt";
 
 /**
- * The completion taken (A35): only with ⑤'s receipt, signed by the log, binding the T `read` gave,
- * the assertion sent and the code the completion gives, and only where no key of the log's is one
- * of the Core ring's (a Core holding both would sign its own receipt). Answers the code to POST to
- * the RP and ⑤'s record (shard, n).
+ * How far the completion is checked, named by the caller (never a log key list left out): `L0` (a
+ * bundle that fixes no log keys, as 0.1.0's) reads the completion alone, no receipt checked; `log`
+ * also takes it only with ⑤'s receipt, signed by the log keys given.
+ */
+export type FinishChecks =
+	| { readonly level: "L0" }
+	| { readonly level: "log"; readonly receipt: string; readonly log: readonly Jwk[] };
+const finished = new WeakMap<Finished, ReadT>();
+
+/** Why a completion is not taken: T not `read`'s, its own refusal, a level not named or its inputs (`checks`), ring and log keys shared, or ⑤'s receipt that does not bind it. */
+export type FinishError = CompletionError | "statement" | "keys" | "receipt" | "checks";
+
+/**
+ * The completion taken, at the level the caller names: at `L0`, read alone and bound to the T `read`
+ * gave and the assertion sent, answering the code to POST to the RP; at `log` (A35), only with ⑤'s
+ * receipt, signed by the log, binding them and the code, and only where no key of the log's is one of
+ * the Core ring's (a Core holding both would sign its own receipt), answering ⑤'s record too.
  */
 async function finish(
 	t: ReadT,
 	sealed: Sealed,
-	receipt: string,
-	options: Omit<CompletionOptions, "statement"> & { readonly log: readonly Jwk[] },
+	options: Omit<CompletionOptions, "statement"> & FinishChecks,
 ): Promise<Finished | { readonly error: FinishError }> {
 	if (!issued.has(t)) return { error: "statement" };
+	if (options.level !== "L0" && options.level !== "log") return { error: "checks" };
+	// The log's inputs, given whole, as keyChanges.read takes them: a receipt and a key list not empty.
+	if (
+		options.level === "log" &&
+		(typeof options.receipt !== "string" || !Array.isArray(options.log) || options.log.length === 0)
+	)
+		return { error: "checks" };
 	// A key with no identity verifies nothing, so it shares nothing either.
 	const ring = new Set(options.ring.map(keyIdentity).filter((id) => id !== undefined));
-	if (options.log.some((key) => ring.has(keyIdentity(key) ?? ""))) return { error: "keys" };
+	if (options.level === "log" && options.log.some((key) => ring.has(keyIdentity(key) ?? "")))
+		return { error: "keys" };
 	const read = await readCompletion(sealed, { ...options, statement: t.compact });
 	if ("error" in read) return read;
 	const { code } = read.completion;
-	const bound = await readApprovalReceipt(receipt, options.log, {
+	if (options.level === "L0") {
+		const done: Finished = deepFreeze({ code });
+		finished.set(done, t);
+		return done;
+	}
+	const bound = await readApprovalReceipt(options.receipt, options.log, {
 		statement: t.compact,
 		assertion: options.assertion,
 		code,
@@ -148,10 +170,13 @@ async function callbackProof(
 	keys: ScreenKeys,
 	now: number,
 ): Promise<
-	{ readonly proof: string } | { readonly error: "statement" | "finish" | "keys" | "proof" }
+	| { readonly proof: string }
+	| { readonly error: "statement" | "finish" | "level" | "keys" | "proof" }
 > {
 	if (!issued.has(t)) return { error: "statement" };
 	if (finished.get(done) !== t) return { error: "finish" };
+	// The proof names ⑤'s record, which only a receipt gives: none for a finish at L0.
+	if (!done.approval) return { error: "level" };
 	if (!namesKeys(keys, t.statement.e_enc, t.statement.e_sig)) return { error: "keys" };
 	const header = logSchemas.callbackHeader.safeParse({
 		alg: "ES256",

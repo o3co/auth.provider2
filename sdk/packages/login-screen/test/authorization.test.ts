@@ -203,10 +203,56 @@ describe("authorization.finish (A35)", () => {
 	it("answers the code and ⑤'s record where the completion and its receipt both bind T, the assertion and the code", async () => {
 		const { w, sealed, receipt, finish, code, receiptPayload } = await answered();
 		expect(logSchemas.receipt.safeParse(receiptPayload).success).toBe(true);
-		expect(await authorization.finish(w.read, sealed, receipt, finish)).toEqual({
+		expect(
+			await authorization.finish(w.read, sealed, { ...finish, level: "log", receipt: receipt }),
+		).toEqual({
 			code,
 			approval: { shard: "s1", n: 7 },
 		});
+	});
+
+	it("answers the code alone at L0, no receipt read, the completion still held to T, the assertion and its additional data", async () => {
+		const { w, sealed, finish, code } = await answered();
+		const { log: _log, ...completionOnly } = finish;
+		const done = await authorization.finish(w.read, sealed, { ...completionOnly, level: "L0" });
+		expect(done).toEqual({ code });
+		// No record to name: the callback's proof needs ⑤'s, which only a receipt gives.
+		expect(await authorization.callbackProof(w.read, done as never, w.keys, 0)).toEqual({
+			error: "level",
+		});
+		expect(
+			await authorization.finish(w.read, sealed, {
+				...completionOnly,
+				level: "L0",
+				aad: utf8("other"),
+			}),
+		).toEqual({ error: "open" });
+		expect(
+			await authorization.finish({ ...w.read }, sealed, { ...completionOnly, level: "L0" }),
+		).toEqual({
+			error: "statement",
+		});
+		expect(
+			await authorization.finish(w.read, sealed, {
+				...completionOnly,
+				level: "L0",
+				assertion: utf8("another assertion"),
+			}),
+		).toEqual({ error: "assertion" });
+		// The level is named, never left out, and the log's inputs given whole.
+		for (const bad of [
+			completionOnly,
+			{ ...completionOnly, level: "L1" },
+			{ ...finish, level: "log" },
+			{ ...finish, level: "log", receipt: "r", log: [] },
+			{ ...finish, level: "log", receipt: "r", log: "keys" },
+		])
+			expect(
+				await authorization.finish(w.read, sealed, bad as never),
+				JSON.stringify((bad as { level?: unknown }).level),
+			).toEqual({
+				error: "checks",
+			});
 	});
 
 	it("refuses a receipt binding another T, another assertion or another code, each apart", async () => {
@@ -216,7 +262,10 @@ describe("authorization.finish (A35)", () => {
 				{},
 				{ [field]: await otherDigest(field) },
 			);
-			expect(await authorization.finish(w.read, sealed, receipt, finish), field).toEqual({
+			expect(
+				await authorization.finish(w.read, sealed, { ...finish, level: "log", receipt: receipt }),
+				field,
+			).toEqual({
 				error: "receipt",
 			});
 		}
@@ -224,7 +273,9 @@ describe("authorization.finish (A35)", () => {
 
 	it("refuses a receipt of a record that is no approval", async () => {
 		const { w, sealed, receipt, finish } = await answered({ kind: "start", approval: undefined });
-		expect(await authorization.finish(w.read, sealed, receipt, finish)).toEqual({
+		expect(
+			await authorization.finish(w.read, sealed, { ...finish, level: "log", receipt: receipt }),
+		).toEqual({
 			error: "receipt",
 		});
 	});
@@ -233,11 +284,20 @@ describe("authorization.finish (A35)", () => {
 		const { w, sealed, receipt, finish } = await answered();
 		const stranger = await signingKey("ES256", "log-1");
 		expect(
-			await authorization.finish(w.read, sealed, receipt, { ...finish, log: [stranger.jwk] }),
+			await authorization.finish(w.read, sealed, {
+				...finish,
+				level: "log",
+				receipt: receipt,
+				log: [stranger.jwk],
+			}),
 		).toEqual({ error: "receipt" });
 		const typed = await answered({}, { typ: typs.completion });
 		expect(
-			await authorization.finish(typed.w.read, typed.sealed, typed.receipt, typed.finish),
+			await authorization.finish(typed.w.read, typed.sealed, {
+				...typed.finish,
+				level: "log",
+				receipt: typed.receipt,
+			}),
 		).toEqual({ error: "receipt" });
 	});
 
@@ -248,8 +308,10 @@ describe("authorization.finish (A35)", () => {
 			{ ...w.ring.jwk, kid: "log-shared", n: "AQAB", use: "sig" },
 		])
 			expect(
-				await authorization.finish(w.read, sealed, receipt, {
+				await authorization.finish(w.read, sealed, {
 					...finish,
+					level: "log",
+					receipt,
 					log: [w.log.jwk, shared],
 				}),
 				JSON.stringify(shared),
@@ -260,8 +322,10 @@ describe("authorization.finish (A35)", () => {
 		const { w, sealed, receipt, finish, code } = await answered();
 		const broken = { kty: "EC", crv: "P-256", x: "=", y: "=" };
 		expect(
-			await authorization.finish(w.read, sealed, receipt, {
+			await authorization.finish(w.read, sealed, {
 				...finish,
+				level: "log",
+				receipt,
 				ring: [...finish.ring, broken],
 				log: [...finish.log, broken],
 			}),
@@ -272,20 +336,36 @@ describe("authorization.finish (A35)", () => {
 		const { w, sealed, receipt, finish } = await answered();
 		const padded = { ...w.log.jwk, x: `${w.log.jwk.x}=` };
 		expect(
-			await authorization.finish(w.read, sealed, receipt, { ...finish, log: [padded] }),
+			await authorization.finish(w.read, sealed, {
+				...finish,
+				level: "log",
+				receipt: receipt,
+				log: [padded],
+			}),
 		).toEqual({ error: "receipt" });
 	});
 
 	it("passes the completion's refusal through before it reads the receipt", async () => {
 		const { w, sealed, receipt, finish } = await answered();
 		expect(
-			await authorization.finish(w.read, sealed, receipt, { ...finish, aad: utf8("other") }),
+			await authorization.finish(w.read, sealed, {
+				...finish,
+				level: "log",
+				receipt: receipt,
+				aad: utf8("other"),
+			}),
 		).toEqual({ error: "open" });
 	});
 
 	it("refuses a T it did not read", async () => {
 		const { w, sealed, receipt, finish } = await answered();
-		expect(await authorization.finish({ ...w.read }, sealed, receipt, finish)).toEqual({
+		expect(
+			await authorization.finish({ ...w.read }, sealed, {
+				...finish,
+				level: "log",
+				receipt: receipt,
+			}),
+		).toEqual({
 			error: "statement",
 		});
 	});
@@ -295,7 +375,11 @@ describe("authorization.callbackProof (A38)", () => {
 	/** T read, and what `finish` gave for it. */
 	async function taken() {
 		const { w, sealed, receipt, finish } = await answered();
-		const given = await authorization.finish(w.read, sealed, receipt, finish);
+		const given = await authorization.finish(w.read, sealed, {
+			...finish,
+			level: "log",
+			receipt: receipt,
+		});
 		if ("error" in given) throw new Error(given.error);
 		return { ...w, done: given };
 	}
