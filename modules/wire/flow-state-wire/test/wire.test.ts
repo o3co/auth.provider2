@@ -38,9 +38,20 @@ describe("credentialsOf", () => {
 		expect(credentialsOf(state)).toEqual(["AQID"]);
 		const inherited = Object.create({ keys: { r1: key("AQID") } });
 		expect(credentialsOf(inherited)).toBeUndefined();
-		// An entry the keys inherit is no entry; a credential an entry inherits is none.
-		expect(credentialsOf({ keys: Object.create({ r1: key("AQID") }) })).toEqual([]);
+		// Keys inheriting an entry are no plain object, so none; a credential an entry inherits is none.
+		expect(credentialsOf({ keys: Object.create({ r1: key("AQID") }) })).toBeUndefined();
 		expect(credentialsOf({ keys: { r1: Object.create({ credential: "AQID" }) } })).toBeUndefined();
+	});
+
+	it("reads a credential id in its one spelling alone, and plain objects alone", () => {
+		expect(credentialsOf({ keys: { r1: key("AQI") } })).toEqual(["AQI"]);
+		for (const id of ["AQID=", "AQJ", "A", "AQ+/", "AQ I"])
+			expect(credentialsOf({ keys: { r1: key(id) } }), id).toBeUndefined();
+		for (const keys of [new Map(), new Date(0)])
+			expect(credentialsOf({ keys }), String(keys)).toBeUndefined();
+		expect(
+			credentialsOf({ keys: Object.assign(Object.create(null), { r1: key("AQID") }) }),
+		).toEqual(["AQID"]);
 	});
 
 	it("reads none where one entry does not read, among entries that do", () => {
@@ -62,5 +73,6 @@ describe("keyGenerationOf", () => {
 		])
 			expect(keyGenerationOf(state), JSON.stringify(state)).toBeUndefined();
 		expect(keyGenerationOf(Object.create({ keyGeneration: 1 }))).toBeUndefined();
+		expect(Object.is(keyGenerationOf(JSON.parse('{"keyGeneration":-0}')), 0)).toBe(true);
 	});
 });
