@@ -1,7 +1,11 @@
 import type { Approvals, IssueAsk } from "@mod/approvals";
 import type { Client } from "@mod/clients";
+import { type TargetRule, targetRules } from "@mod/grants";
 import type { HttpRequest } from "@mod/http";
+import { assemble, contract, defineModule, kernelConfig } from "@mod/kernel";
+import { quietRuntime } from "@mod/kernel/testing";
 import { redirects } from "@mod/redirect-uris";
+import resourceIndicators from "@mod/resource-indicators/module";
 import { payloads, typs } from "@mod/sdk-core-wire";
 import { describe, expect, it } from "vitest";
 import type { JarReservations, RequestSource, StoredReservation } from "../src/contract.ts";
@@ -21,7 +25,11 @@ const client: Client = {
 	section: <T>(s: { name: string }) =>
 		(s.name === redirects.name
 			? { "redirect-uris": ["https://rp.example/cb"] }
-			: { grants: ["authorization_code"], scopes: ["read"], audiences: [] }) as T,
+			: {
+					grants: ["authorization_code"],
+					scopes: ["read"],
+					audiences: ["https://api.example"],
+				}) as T,
 };
 
 const claims = (more: Record<string, unknown> = {}) => ({
@@ -81,6 +89,8 @@ function harness(
 		slow?: () => Promise<void>;
 		/** Whether an ID token is made; made unless told otherwise. */
 		idTokens?: boolean;
+		/** The rule for the audience asked, as resource-indicators contributes it; none unless told. */
+		rule?: Pick<TargetRule, "target">;
 	} = {},
 ) {
 	const asked: IssueAsk[] = [];
@@ -133,6 +143,8 @@ function harness(
 		withoutPasskey: p.allows === undefined ? undefined : { allows: async () => p.allows === true },
 		signUp: p.signUp ?? false,
 		idTokens: p.idTokens ?? true,
+		targets: p.rule,
+		issuer,
 		bindings: {
 			requestedOf: (param) => {
 				const jkt = param("dpop_jkt");
@@ -416,6 +428,97 @@ describe("a login's start (②)", () => {
 			json: { error: "invalid_request_object" },
 		});
 		expect(h.asked).toHaveLength(0);
+	});
+
+	it("reads the resource asked by the one rule, before T: none composed refuses it, as does an audience not the client's", async () => {
+		/** resource-indicators' rule, as it answers: the resource alone where the client may be issued it. */
+		const rule: Pick<TargetRule, "target"> = {
+			target: ({ param, audience, within }) => {
+				const resource = param("resource");
+				if (!resource) return { kind: "audience", audience };
+				return within(resource)
+					? { kind: "audience", audience: [resource] }
+					: {
+							kind: "error",
+							error: "invalid_target",
+							description: "resource is not an audience this client may be issued",
+						};
+			},
+		};
+		const api = "https://api.example";
+		const unruled = harness();
+		expect(await unruled.body(unruled.fields(jar(claims({ resource: api }))))).toMatchObject({
+			json: {
+				error: "invalid_request_object",
+				error_description: "resource is read by no rule here",
+			},
+		});
+		expect(unruled.asked).toHaveLength(0);
+		const ruled = harness({ rule });
+		expect(
+			await ruled.body(ruled.fields(jar(claims({ jti: "j9", resource: "https://elsewhere" })))),
+		).toMatchObject({
+			json: {
+				error: "invalid_request_object",
+				error_description: "resource is not an audience this client may be issued",
+			},
+		});
+		expect(ruled.asked).toHaveLength(0);
+		expect(
+			(await ruled.body(ruled.fields(jar(claims({ jti: "j10", resource: api }))))).status,
+		).toBe(200);
+		expect(ruled.asked.map((ask) => (ask.items as { resource?: string }).resource)).toEqual([api]);
+		// A rule answering anything but that resource alone (the default, unread) is refused too.
+		const unread = harness({
+			rule: { target: ({ audience }) => ({ kind: "audience", audience }) },
+		});
+		expect(
+			await unread.body(unread.fields(jar(claims({ jti: "j11", resource: api })))),
+		).toMatchObject({ json: { error_description: "resource is not the audience asked" } });
+	});
+
+	it("reads the resource by resource-indicators' own rule: its URI form, the client's audiences, and the issuer where it names none", async () => {
+		const got = contract<readonly TargetRule[]>("test.rules");
+		const reader = defineModule(
+			{ name: "reader", replicaSafe: true, takes: [targetRules] },
+			(m) => [m.provide(got).by((c) => c.collect(targetRules))],
+		);
+		const app = await assemble({
+			modules: [resourceIndicators, reader],
+			config: kernelConfig(),
+			runtime: quietRuntime(),
+		});
+		const [rule] = app.get(got);
+		if (!rule) throw new Error("no rule composed");
+		const h = harness({ rule });
+		const refusedFor = async (resource: string, jti: string) =>
+			((await h.body(h.fields(jar(claims({ jti, resource }))))) as { json: unknown }).json;
+		expect(await refusedFor("api.example", "r1")).toMatchObject({
+			error: "invalid_request_object",
+			error_description: "resource is not an absolute URI",
+		});
+		expect(await refusedFor("https://api.example#f", "r2")).toMatchObject({
+			error_description: "resource carries a fragment",
+		});
+		expect(
+			(await h.body(h.fields(jar(claims({ jti: "r3", resource: "https://api.example" }))))).status,
+		).toBe(200);
+		// A client whose allowance names no audience is issued for the issuer: the rule takes it too.
+		const allowance = client.section;
+		(client as { section: unknown }).section = <T>(s: { name: string }) =>
+			(s.name === redirects.name
+				? allowance<T>(s as never)
+				: { grants: ["authorization_code"], scopes: ["read"], audiences: [] }) as T;
+		try {
+			expect((await h.body(h.fields(jar(claims({ jti: "r4", resource: issuer }))))).status).toBe(
+				200,
+			);
+			expect(await refusedFor("https://api.example", "r5")).toMatchObject({
+				error_description: "resource is not an audience this client may be issued",
+			});
+		} finally {
+			(client as { section: unknown }).section = allowance;
+		}
 	});
 
 	it("refuses, before T, a client not allowed the code grant", async () => {

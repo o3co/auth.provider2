@@ -5,6 +5,7 @@ import { clientAssertion } from "@mod/client-assertion";
 import { clients } from "@mod/clients";
 import { codes } from "@mod/code-grant";
 import { overHttp } from "@mod/front-core-wire";
+import { targetRules } from "@mod/grants";
 import { type Route, routes } from "@mod/http";
 import { issuer, type MetadataItem, metadata } from "@mod/issuer";
 import {
@@ -17,6 +18,7 @@ import {
 } from "@mod/kernel";
 import { quietRuntime } from "@mod/kernel/testing";
 import { delegation } from "@mod/refresh";
+import resourceIndicators from "@mod/resource-indicators/module";
 import { senderBinding } from "@mod/sender-binding";
 import { sessions } from "@mod/session";
 import { accessTokenIssuance } from "@mod/tokens";
@@ -119,6 +121,23 @@ describe("authorize, composed", () => {
 		expect(refused).toEqual([
 			expect.stringMatching(/no module fills the authorization's dpop_jkt/),
 		]);
+	});
+
+	it("takes no rule for the audience asked, or one, and refuses boot with two, the token endpoint composed or not", async () => {
+		const rule = (name: string) =>
+			defineModule({ name, replicaSafe: true, takes: [] }, (m) => [
+				m
+					.contribute(targetRules)
+					.by(() => ({ target: ({ audience }) => ({ kind: "audience", audience }) })),
+			]);
+		await expect(boot()).resolves.toBeDefined();
+		await expect(boot([resourceIndicators])).resolves.toBeDefined();
+		const refused = await boot([resourceIndicators, rule("another")]).then(
+			() => [],
+			(error: unknown) =>
+				BootRefused.is(error) ? error.refusals.map((r) => r.reason) : [String(error)],
+		);
+		expect(refused).toEqual(["more than one rule reads the audience asked (resource)"]);
 	});
 
 	it("refuses boot with two answers to a person with no passkey, or two sign-ups offered", async () => {

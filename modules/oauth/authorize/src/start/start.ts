@@ -2,6 +2,7 @@ import type { Approvals } from "@mod/approvals";
 import { clientAllowance } from "@mod/client-allowance";
 import type { Clients } from "@mod/clients";
 import { challengeShape, codeGrantType, codes, openid } from "@mod/code-grant";
+import { type TargetRule, targetRules } from "@mod/grants";
 import { type HttpRequest, type HttpResponse, jsonAnswer, use } from "@mod/http";
 import type { BuildContext } from "@mod/kernel";
 import { requestsPerSource, sourceKey, type Window } from "@mod/rate-limit";
@@ -39,6 +40,10 @@ export interface StartParts {
 	readonly bindings: Pick<SenderBindings, "requestedOf">;
 	/** Whether an ID token is made (`code-grant`'s `issuesIdTokens`): without, an OpenID request is refused. */
 	readonly idTokens: boolean;
+	/** The rule for the audience asked (`grants`' `targetRules`, resource-indicators'): `resource` is read by it alone. */
+	readonly targets: Pick<TargetRule, "target"> | undefined;
+	/** `issuer`'s URL: a client's audience where its allowance names none (`allowsAudience`). */
+	readonly issuer: string;
 }
 
 /** The statuses `front-core-wire` answers these refusals with; any other is 400. */
@@ -131,6 +136,32 @@ export function starting(p: StartParts) {
 				error: "invalid_request",
 				description: "the client may not use the code grant",
 			});
+		// The resource asked is read by the one rule (resource-indicators), within the client's audiences:
+		// unless it answers that resource alone (none composed answers none), it is refused before T,
+		// never shown to the person for a token of another audience.
+		const resource = made.items.resource;
+		if (resource !== undefined) {
+			if (!p.targets)
+				return answerOf(400, {
+					error: "invalid_request_object",
+					description: "resource is read by no rule here",
+				});
+			const verdict = p.targets.target({
+				param: (name) => (name === "resource" ? resource : undefined),
+				audience: [],
+				within: (audience) => clientAllowance.allowsAudience(client, audience, p.issuer),
+			});
+			if (
+				verdict.kind === "error" ||
+				verdict.audience.length !== 1 ||
+				verdict.audience[0] !== resource
+			)
+				return answerOf(400, {
+					error: "invalid_request_object",
+					description:
+						verdict.kind === "error" ? verdict.description : "resource is not the audience asked",
+				});
+		}
 		if (!challengeShape.test(made.items.code_challenge))
 			return answerOf(400, {
 				error: "invalid_request_object",
@@ -174,6 +205,13 @@ export const unfilled = (
 
 /** The binding kinds' reading of what a request asks for ahead, taken from the composition. */
 export const bindingsIn = (c: Pick<BuildContext<unknown>, "get">) => c.get(senderBinding);
+/** What the start takes beside the rest: the rule for the audience asked, contributed or not. */
+export const startTakes = [targetRules];
+/**
+ * The rules themselves (resource-indicators'), not the token endpoint's `targets`, so the start needs
+ * no endpoint composed: none where none is; more than one, which refuse boot here too.
+ */
+export const targetsIn = (c: Pick<BuildContext<unknown>, "collect">) => c.collect(targetRules);
 /** Whether `code-grant` makes an ID token, for the start to refuse an OpenID request without. */
 export const idTokensIn = async (c: Pick<BuildContext<unknown>, "get">) =>
 	(await c.get(codes)).issuesIdTokens();

@@ -1222,6 +1222,9 @@ importers:
       '@mod/code-grant':
         specifier: workspace:*
         version: link:../code-grant
+      '@mod/grants':
+        specifier: workspace:*
+        version: link:../grants
       '@mod/http':
         specifier: workspace:*
         version: link:../../foundation/http
@@ -1265,6 +1268,9 @@ importers:
       '@mod/front-core-wire':
         specifier: workspace:*
         version: link:../../wire/front-core-wire
+      '@mod/resource-indicators':
+        specifier: workspace:*
+        version: link:../resource-indicators
       vitest:
         specifier: 5.0.5
         version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(vite@8.3.3(@types/node@26.6.5)(yaml@2.9.1))
@@ -1434,6 +1440,9 @@ importers:
       '@mod/promises':
         specifier: workspace:*
         version: link:../../foundation/promises
+      '@mod/resource-indicators':
+        specifier: workspace:*
+        version: link:../resource-indicators
       '@mod/secret-hash':
         specifier: workspace:*
         version: link:../../foundation/secret-hash
@@ -1772,6 +1781,19 @@ importers:
       zod:
         specifier: 4.6.7
         version: 4.6.7
+    devDependencies:
+      vitest:
+        specifier: 5.0.5
+        version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(vite@8.3.3(@types/node@26.6.5)(yaml@2.9.1))
+
+  modules/oauth/resource-indicators:
+    dependencies:
+      '@mod/grants':
+        specifier: workspace:*
+        version: link:../grants
+      '@mod/kernel':
+        specifier: workspace:*
+        version: link:../../foundation/kernel
     devDependencies:
       vitest:
         specifier: 5.0.5

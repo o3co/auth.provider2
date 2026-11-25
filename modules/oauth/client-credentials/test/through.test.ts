@@ -26,6 +26,7 @@ import outboundModule from "@mod/outbound/module";
 import { promiseNames, promises } from "@mod/promises";
 import promisesModule from "@mod/promises/module";
 import { rateLimitStandIn } from "@mod/rate-limit/testing";
+import resourceIndicatorsModule from "@mod/resource-indicators/module";
 import secretHashModule from "@mod/secret-hash/module";
 import senderBindingModule from "@mod/sender-binding/module";
 import { simulatedStore } from "@mod/store/testing";
@@ -85,14 +86,31 @@ const registry = defineModule({ name: "registry", replicaSafe: true, takes: [] }
 						},
 						version: 3,
 					}
-				: undefined,
+				: id === "svc2"
+					? {
+							id,
+							kind: "confidential",
+							method: "private_key_jwt",
+							sections: {
+								...allowancesFor({
+									grants: ["client_credentials"],
+									self: [
+										{ audience: "https://api.example", scopes: ["read"] },
+										{ audience: "https://api2.example", scopes: ["read"] },
+									],
+								}),
+								...clientKeysFor([{ ...jwkOf(ec.publicKey), kid: "ec" }]),
+							},
+							version: 3,
+						}
+					: undefined,
 	})),
 ]);
 
 let stop = async () => {};
 afterEach(() => stop());
 
-async function serve() {
+async function serve(options: { rule?: boolean } = {}) {
 	const app = await assemble({
 		modules: [
 			http,
@@ -121,6 +139,7 @@ async function serve() {
 			tokenEndpointModule,
 			clientCredentialsModule,
 			registry,
+			...(options.rule ? [resourceIndicatorsModule] : []),
 		],
 		config: {
 			...kernelConfig(),
@@ -138,8 +157,8 @@ async function serve() {
 	stop = () => app.stop(1000);
 	const at = `http://127.0.0.1:${app.get(listening).port()}/oauth/token`;
 	const now = () => Math.floor(Date.now() / 1000);
-	const assertion = () =>
-		new SignJWT({ iss: "svc", sub: "svc", aud: issuer, jti: randomUUID(), exp: now() + 60 })
+	const assertion = (id = "svc") =>
+		new SignJWT({ iss: id, sub: id, aud: issuer, jti: randomUUID(), exp: now() + 60 })
 			.setProtectedHeader({ alg: "ES256", kid: "ec" })
 			.sign(ec.privateKey);
 	const proof = (key: KeyObject, publicKey: KeyObject) =>
@@ -147,7 +166,10 @@ async function serve() {
 			.setProtectedHeader({ alg: "ES256", typ: "dpop+jwt", jwk: jwkOf(publicKey) })
 			.sign(key);
 	/** A client credentials request for `read`, its client proved by `ec`, its token bound by DPoP to `pair`'s key, or by none. */
-	const post = async (pair?: { privateKey: KeyObject; publicKey: KeyObject }) => {
+	const post = async (
+		pair?: { privateKey: KeyObject; publicKey: KeyObject },
+		asked: { id?: string; resource?: string } = {},
+	) => {
 		const res = await fetch(at, {
 			method: "POST",
 			headers: {
@@ -158,7 +180,8 @@ async function serve() {
 				grant_type: "client_credentials",
 				scope: "read",
 				client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
-				client_assertion: await assertion(),
+				client_assertion: await assertion(asked.id),
+				...(asked.resource ? { resource: asked.resource } : {}),
 			}),
 		});
 		return { status: res.status, body: (await res.json()) as Record<string, unknown> };
@@ -215,4 +238,27 @@ it("composed, breaks the promise that no client subject token is issued, naming 
 			},
 		],
 	});
+});
+
+it("issues a client whose own ceiling has two entries for the one its resource names, with resource-indicators composed, and nothing without", async () => {
+	const ruled = await serve({ rule: true });
+	const second = await ruled.post(ec, { id: "svc2", resource: "https://api2.example" });
+	expect(second.status).toBe(200);
+	expect(await ruled.tokens.verifyAccess(String(second.body.access_token))).toMatchObject({
+		kind: "valid",
+		grant: { subject: "svc2", audience: ["https://api2.example"] },
+	});
+	// Two entries and no resource named: no audience to issue for.
+	const unnamed = {
+		status: 400,
+		body: { error: "invalid_target", error_description: "name one audience of the client's own" },
+	};
+	expect(await ruled.post(ec, { id: "svc2" })).toEqual(unnamed);
+	expect(await ruled.post(ec, { id: "svc2", resource: "https://elsewhere.example" })).toMatchObject(
+		{ status: 400, body: { error: "invalid_target" } },
+	);
+	await stop();
+	// Without the rule, no rule chooses by the resource: two entries issue nothing.
+	const plain = await serve();
+	expect(await plain.post(ec, { id: "svc2", resource: "https://api2.example" })).toEqual(unnamed);
 });

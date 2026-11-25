@@ -20,6 +20,8 @@ import {
 	idTokensIn,
 	issuerMetadata,
 	startRoute,
+	startTakes,
+	targetsIn,
 	unfilled,
 } from "./start/start.ts";
 
@@ -42,6 +44,7 @@ export default defineModule(
 			signUpOffers,
 			statementItems,
 			acr,
+			...startTakes,
 			...delegationTakes,
 			...finishTakes,
 		],
@@ -88,6 +91,10 @@ export default defineModule(
 			const missing = unfilled(await c.collect(statementItems));
 			if (missing.length > 0)
 				return c.refuse("authorize", `no module fills the authorization's ${missing.join(", ")}`);
+			// At most one rule reads `resource`, as at the token endpoint, which may not be composed.
+			const rules = await targetsIn(c);
+			if (rules.length > 1)
+				return c.refuse("authorize", "more than one rule reads the audience asked (resource)");
 			const window = { limit: c.section.requests, ms: c.section.window * 1000 };
 			return startRoute(
 				{
@@ -110,6 +117,8 @@ export default defineModule(
 					signUp: offers.length === 1,
 					bindings: await bindingsIn(c),
 					idTokens: await idTokensIn(c),
+					targets: rules[0],
+					issuer: (await c.get(issuer)).url,
 				},
 				window,
 			);

@@ -20,6 +20,7 @@
 		"@mod/client-documents": "workspace:*",
 		"@mod/clients": "workspace:*",
 		"@mod/code-grant": "workspace:*",
+		"@mod/grants": "workspace:*",
 		"@mod/http": "workspace:*",
 		"@mod/issuer": "workspace:*",
 		"@mod/kernel": "workspace:*",
@@ -44,6 +45,7 @@
 	},
 	"devDependencies": {
 		"@mod/front-core-wire": "workspace:*",
+		"@mod/resource-indicators": "workspace:*",
 		"vitest": "5.0.5"
 	}
 }

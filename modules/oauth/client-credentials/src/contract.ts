@@ -82,9 +82,10 @@ export function clientCredentials(
 			);
 			if (allowed.kind === "error") return allowed;
 			const { scope, audience } = allowed;
-			// A `resource` asked that no rule read is never passed over for the one entry's audience.
+			// A `resource` asked that no rule read is never passed over for the one entry's audience; an
+			// empty one asks nothing, as the rule reads it.
 			const resource = param("resource");
-			if (asked.audience.length === 0 && resource !== undefined && audience[0] !== resource) {
+			if (asked.audience.length === 0 && resource && audience[0] !== resource) {
 				const description = "the resource asked is not the audience given";
 				return { kind: "error", error: "invalid_target", description };
 			}

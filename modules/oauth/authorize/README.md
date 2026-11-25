@@ -35,7 +35,7 @@
 - Each JAR's reservation, by its client and `jti`: the digest of the start that used it and the answer made, until the JAR's expiry and the clock skew.
 
 ## Depends on
-- `kernel`, `http` (the routes), `clients` and `client-documents` (the client, its section), `client-assertion` (`verifySignedBy`), `client-allowance`, `redirect-uris`, `approvals`, `code-grant`, `session`, `tokens` (the policies), `sender-binding` (the binding asked for ahead), `issuer`, `rate-limit`, `promises` (its stance), `sdk-core-wire`; `zod`.
+- `kernel`, `http` (the routes), `clients` and `client-documents` (the client, its section), `client-assertion` (`verifySignedBy`), `client-allowance`, `grants` (`targetRules`), `redirect-uris`, `approvals`, `code-grant`, `session`, `tokens` (the policies), `sender-binding` (the binding asked for ahead), `issuer`, `rate-limit`, `promises` (its stance), `sdk-core-wire`; `zod`.
 - `oidc` (the `claims` parameter's reading) and `claims-selection`; `acr` (`amrSources`, the acr a passkey's login meets); `refresh` (`delegation`, a session's length), which must be composed.
 
 ## Vocabulary

@@ -160,6 +160,10 @@ describe("client credentials", () => {
 		expect((await ask(client(), { scope: "read", resource: api })).answer).toMatchObject({
 			kind: "issued",
 		});
+		// An empty one asks nothing, as resource-indicators' rule reads it: the one entry's audience.
+		expect((await ask(client(), { scope: "read", resource: "" })).answer).toMatchObject({
+			kind: "issued",
+		});
 		const elsewhere = await ask(client(), { scope: "read", resource: "https://elsewhere" });
 		expect([elsewhere.answer, elsewhere.issued]).toEqual([
 			{
