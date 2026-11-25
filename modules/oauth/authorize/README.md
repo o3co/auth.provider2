@@ -12,7 +12,7 @@
 - `dpop_jkt`: filled by `approval-binding`. What a person with no passkey is offered: the module contributing `withoutPasskey`.
 
 ## Offers
-- `POST /login/finish` (`loginFinish`: JSON of `statement` and `assertion`, its JSON text as sent) → `200` `{ enc, ct }`, the completion sealed to the screen; or `invalid_request`, `access_denied`, `invalid_scope`, `invalid_client`, `temporarily_unavailable`. Counted per source as the start is.
+- `POST /login/finish` (`loginFinish`: JSON of `statement` and `assertion`, its JSON text as sent) → `200` `{ sealed: { enc, ct } }`, the completion sealed to the screen; or `invalid_request`, `access_denied`, `invalid_scope`, `invalid_client`, `temporarily_unavailable`. Counted per source as the start is.
 - `POST /login/start` (`front-core-wire`'s `loginStart`: JSON of `clientId`, the request's fields, `eEnc`, `eSigX`, `eSigY`) → `200` `{ statement, challenge, create }`; or an OAuth error: `invalid_client` (`401`), `rate_limited` (`429`), `temporarily_unavailable` (`503`), any other `400` (`invalid_request`, `invalid_request_object`, `login_required`, and the word a request source names). Starts are counted per source (`requests` in `window`).
 - Extension points `requestSources` (keyed by name: a start's fields → the JAR, a refusal in its own words, or none; `request`, by value, is its own) and `withoutPasskey` (at most one: whether the screen may offer `create()`, a hint outside T's signature that whoever registers a key judges again; with none, it may not).
 - `jarReservations`, the store interface (create unless held, read, change from what it holds), and `jarReservationsNeeds`.
@@ -20,7 +20,7 @@
 - To `acr`'s `amrSources`: `authorize.passkey`, amr `pop` and `user`, what a passkey's assertion proves (a key held, the person present); not `hwk`, as no attestation is taken, nor `mfa`, as user verification is the authenticator's own word.
 - To `issuer`'s metadata: `authorization_endpoint` (the screen's URL), `response_types_supported` (`code`), `response_modes_supported` (`form_post`), `code_challenge_methods_supported` (`S256`), `require_signed_request_object`, `request_parameter_supported`, `authorization_response_iss_parameter_supported`.
 - Operator section: `screen-url` (https), `jar-max-lifetime` (default 10 minutes), `requests` and `window` (default 30 a minute per source), `clock-skew` (default 30 seconds).
-  - A session's length is `refresh.lifetime` (O27): `authorize.delegation-lifetime`, still written, is refused at boot.
+  - A session's length is `refresh.lifetime` (O27): `delegation-lifetime`, still written, refuses boot.
 - `./testing`: `authorizeConfig` (`AuthorizeSettings`), and `jarReservationsContract`, the store interface's contract test.
 
 ## Invariants

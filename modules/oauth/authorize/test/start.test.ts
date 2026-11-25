@@ -2,7 +2,7 @@ import type { Approvals, IssueAsk } from "@mod/approvals";
 import type { Client } from "@mod/clients";
 import type { HttpRequest } from "@mod/http";
 import { redirects } from "@mod/redirect-uris";
-import { typs } from "@mod/sdk-core-wire";
+import { payloads, typs } from "@mod/sdk-core-wire";
 import { describe, expect, it } from "vitest";
 import type { JarReservations, RequestSource, StoredReservation } from "../src/contract.ts";
 import { reserving } from "../src/jar/jar.ts";
@@ -67,6 +67,10 @@ function memoryReservations() {
 	return reservations;
 }
 
+/** The n-th statement T and its challenge, as approvals answers them: a compact JWS, and 32 bytes in base64url. */
+const statementOf = (n: number) => `aA.VCR7bn0.c2ln${n}`;
+const challengeOf = (n: number) => Buffer.alloc(32, n).toString("base64url");
+
 function harness(
 	p: {
 		allows?: boolean;
@@ -88,7 +92,12 @@ function harness(
 			if (reason) return { kind: "refused", reason: reason as "limited" };
 			asked.push(ask);
 			n += 1;
-			return { kind: "issued", statement: `T${n}`, hash: `h${n}`, challenge: `ch${n}` };
+			return {
+				kind: "issued",
+				statement: statementOf(n),
+				hash: `h${n}`,
+				challenge: challengeOf(n),
+			};
 		},
 	};
 	const start = starting({
@@ -152,7 +161,12 @@ describe("a login's start (②)", () => {
 	it("issues T over the JAR's items and the screen's keys, and answers it with its challenge", async () => {
 		const h = harness();
 		const r = await h.body(h.fields(jar(claims())));
-		expect(r).toEqual({ status: 200, json: { statement: "T1", challenge: "ch1", create: false } });
+		expect(r).toEqual({
+			status: 200,
+			json: { statement: statementOf(1), challenge: challengeOf(1), create: false },
+		});
+		// The answer as the wire names ②'s (sdk-core-wire).
+		expect(payloads.answers.authorization.safeParse(r.json).success).toBe(true);
 		const [ask] = h.asked;
 		expect(ask?.purpose).toBe("authorization");
 		expect(ask?.items).toMatchObject({ client_id: "c1", state: "st", dpop_jkt: "jkt" });
@@ -274,8 +288,8 @@ describe("a login's start (②)", () => {
 			json: { error: "temporarily_unavailable" },
 		});
 		go();
-		expect(await one).toMatchObject({ status: 200, json: { statement: "T1" } });
-		expect(await h.body(h.fields(request))).toMatchObject({ json: { statement: "T1" } });
+		expect(await one).toMatchObject({ status: 200, json: { statement: statementOf(1) } });
+		expect(await h.body(h.fields(request))).toMatchObject({ json: { statement: statementOf(1) } });
 		expect(h.asked).toHaveLength(1);
 	});
 
@@ -298,7 +312,7 @@ describe("a login's start (②)", () => {
 		await new Promise((resolve) => setTimeout(resolve, 10));
 		h.at(now + 30_001);
 		const taken = await h.body(h.fields(request));
-		expect(taken).toMatchObject({ status: 200, json: { statement: "T1" } });
+		expect(taken).toMatchObject({ status: 200, json: { statement: statementOf(1) } });
 		go();
 		expect(await late).toEqual(taken);
 		expect(h.asked).toHaveLength(2);
@@ -315,7 +329,7 @@ describe("a login's start (②)", () => {
 		refusing = false;
 		expect(await h.body(h.fields(request))).toMatchObject({
 			status: 200,
-			json: { statement: "T1" },
+			json: { statement: statementOf(1) },
 		});
 	});
 

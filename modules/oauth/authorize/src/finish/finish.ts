@@ -64,7 +64,7 @@ export function finishing(p: FinishParts) {
 			// Given again only once it went out, its code rooted: before that, no second code is made.
 			const kept = await p.approvals.completionOf(approval.hash);
 			return kept
-				? jsonAnswer(200, { enc: kept.enc, ct: kept.ct })
+				? jsonAnswer(200, { sealed: { enc: kept.enc, ct: kept.ct } })
 				: refused(503, "temporarily_unavailable", "the login is being finished; ask again");
 		}
 		const items = approval.items as ItemsOf["authorization"];
@@ -161,7 +161,7 @@ export function finishing(p: FinishParts) {
 			// Published after: a resend is given it only now. One whose publishing failed is answered
 			// here all the same, its code rooted; a resend of it is told to ask again.
 			await p.approvals.publish(approval.hash).catch(() => undefined);
-			return jsonAnswer(200, { enc: completed.enc, ct: completed.ct });
+			return jsonAnswer(200, { sealed: { enc: completed.enc, ct: completed.ct } });
 		} catch (error) {
 			await close();
 			throw error;

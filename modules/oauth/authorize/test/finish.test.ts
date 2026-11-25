@@ -2,11 +2,15 @@ import type { Approval, Completed, Used } from "@mod/approvals";
 import type { Client } from "@mod/clients";
 import type { CodeFacts } from "@mod/code-grant";
 import type { HttpRequest } from "@mod/http";
+import { payloads } from "@mod/sdk-core-wire";
 import { describe, expect, it } from "vitest";
 import type { Picked } from "../src/claims/claims.ts";
 import { type FinishParts, finishing } from "../src/finish/finish.ts";
 
 const now = 1_800_000_000_000;
+/** The completion sealed as the wire holds it: HPKE's `enc`, an uncompressed P-256 point, and a ciphertext of 16 bytes or more. */
+const enc = Buffer.concat([Buffer.from([4]), Buffer.alloc(64, 7)]).toString("base64url");
+const ct = Buffer.alloc(32, 9).toString("base64url");
 const issuer = "https://issuer.example";
 const iat = now / 1000 - 10;
 const statement = `h.${Buffer.from(JSON.stringify({ iat })).toString("base64url")}.s`;
@@ -95,8 +99,8 @@ function harness(
 				log.push(`complete ${code}`);
 				const answer = p.completed ?? {
 					kind: "completed",
-					enc: "e",
-					ct: "c",
+					enc,
+					ct,
 					record: "r9",
 					ref: { shard: "s1", n: 9 },
 					acceptedAt: now,
@@ -188,7 +192,10 @@ function harness(
 describe("a login's finish (⑤⑥)", () => {
 	it("uses the approval, judges, opens the session, makes a code, completes, and roots the code in the approval's record", async () => {
 		const h = harness();
-		expect(await h.send()).toEqual({ status: 200, json: { enc: "e", ct: "c" } });
+		const answer = await h.send();
+		expect(answer).toEqual({ status: 200, json: { sealed: { enc, ct } } });
+		// The answer the wire names a sealed completion by (sdk-core-wire).
+		expect(payloads.answers.sealed.safeParse(answer.json).success).toBe(true);
 		expect(h.log).toEqual([
 			"use",
 			"admits alice read",
@@ -308,10 +315,10 @@ describe("a login's finish (⑤⑥)", () => {
 				resent = await h.send();
 			},
 		});
-		expect(await h.send()).toEqual({ status: 200, json: { enc: "e", ct: "c" } });
+		expect(await h.send()).toEqual({ status: 200, json: { sealed: { enc, ct } } });
 		expect(resent).toMatchObject({ status: 503 });
 		expect(h.issued).toHaveLength(1);
-		expect(await h.send()).toEqual({ status: 200, json: { enc: "e", ct: "c" } });
+		expect(await h.send()).toEqual({ status: 200, json: { sealed: { enc, ct } } });
 	});
 
 	it("opens no session for a client not allowed the code grant, or a malformed challenge", async () => {
