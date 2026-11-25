@@ -94,7 +94,7 @@ describe("each operation over HTTP", () => {
 		}
 		expect(overHttp.operations.continue.answer).toEqual({
 			by: "stage",
-			forms: ["statement", "sealed", "sealed"],
+			forms: ["statement", "sealed", "sealed", "statement"],
 		});
 	});
 
@@ -115,7 +115,12 @@ describe("each operation over HTTP", () => {
 			"passkey-add": 0,
 			"passkey-manage": 1,
 		});
-		expect(ops.continue.enumTexts?.stage?.texts).toEqual({ register: 0, delete: 1, rename: 2 });
+		expect(ops.continue.enumTexts?.stage?.texts).toEqual({
+			register: 0,
+			delete: 1,
+			rename: 2,
+			"sign-up": 3,
+		});
 		expect(requests.continue.fields.map((f) => f.name)).toEqual([
 			"source",
 			"statement",

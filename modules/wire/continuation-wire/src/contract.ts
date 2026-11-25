@@ -6,7 +6,7 @@ import { z } from "zod";
  * and HPKE's suite and info are sdk-core-wire's.
  */
 
-const stages = Object.freeze(["register", "delete", "rename"] as const);
+const stages = Object.freeze(["register", "delete", "rename", "sign-up"] as const);
 export type ContinuationStageName = (typeof stages)[number];
 const sealedStages = Object.freeze(["delete", "rename"] as const);
 export type SealedStageName = (typeof sealedStages)[number];
@@ -50,6 +50,8 @@ const label = z.string().regex(/^[^\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}]{1,64}$/u);
 const bodies = Object.freeze({
 	delete: z.object({ credential_id: credentialId }).strict(),
 	rename: z.object({ credential_id: credentialId, label }).strict(),
+	/** F1's continuation of an authorization's T (§3.13): no field; the Core makes the subject and its name. */
+	"sign-up": z.object({}).strict(),
 });
 type BodyStage = keyof typeof bodies;
 const isBodyStage = (stage: string): stage is BodyStage => Object.hasOwn(bodies, stage);

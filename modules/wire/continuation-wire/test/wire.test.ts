@@ -6,9 +6,9 @@ const bytes = (text: string) => Buffer.byteLength(text);
 
 describe("a statement's continuation", () => {
 	it("signs each stage apart, the same bytes for register as before its stages were named", () => {
-		expect(continuations.stages).toEqual(["register", "delete", "rename"]);
+		expect(continuations.stages).toEqual(["register", "delete", "rename", "sign-up"]);
 		const inputs = continuations.stages.map((stage) => continuations.of(stage, "h", 1, "b"));
-		expect(new Set(inputs).size).toBe(3);
+		expect(new Set(inputs).size).toBe(4);
 		expect(continuations.of("register", "h", 1, "b")).toBe(
 			'{"body":"b","h":"h","seq":1,"stage":"register"}',
 		);
@@ -40,6 +40,10 @@ describe("a statement's continuation", () => {
 		expect(continuations.bodyText("delete", { credential_id: "AQID" })).toBe(
 			'{"credential_id":"AQID"}',
 		);
+		// F1's sign-up body is empty, nothing beside: the Core makes the subject's name.
+		expect(continuations.bodyText("sign-up", {})).toBe("{}");
+		for (const extra of [{ name: "x" }, { user_name: "x" }, { credential_id: "AQID" }])
+			expect(continuations.bodyText("sign-up", extra), JSON.stringify(extra)).toBeUndefined();
 		// A register's hash covers the response's text as received: no body of its shape here.
 		expect(continuations.bodyText("register", {})).toBeUndefined();
 		expect(continuations.bodyText("delete", { credential_id: "A=" })).toBeUndefined();

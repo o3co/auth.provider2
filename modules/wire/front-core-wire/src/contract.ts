@@ -173,13 +173,13 @@ export const requests = Object.freeze({
 			field("assertion", "utf8", 1, 8192),
 		] as const),
 	}),
-	/** A statement's continuation: its stage (0 `register`, 1 `delete`, 2 `rename`), sequence (the Core refuses 0), body and E_sig's r||s. */
+	/** A statement's continuation: its stage (0 `register`, 1 `delete`, 2 `rename`, 3 `sign-up`), sequence (the Core refuses 0), body and E_sig's r||s. */
 	continue: Object.freeze({
 		code: 0x0e,
 		fields: Object.freeze([
 			source,
 			field("statement", "jws", 1, 8192),
-			field("stage", "enum", 1, 1, 3),
+			field("stage", "enum", 1, 1, 4),
 			field("seq", "enum", 1, 1, 17),
 			field("body", "utf8", 0, 8192),
 			field("sig", "bytes", 0, 64),
@@ -382,11 +382,14 @@ export const overHttp = Object.freeze({
 		approvalFinish: screen("/approval/finish", "sealed"),
 		continue: screen(
 			"/continue",
-			Object.freeze({ by: "stage", forms: Object.freeze(["statement", "sealed", "sealed"]) }),
+			Object.freeze({
+				by: "stage",
+				forms: Object.freeze(["statement", "sealed", "sealed", "statement"]),
+			}),
 			{
 				enumTexts: Object.freeze({
 					stage: Object.freeze({
-						texts: Object.freeze({ register: 0, delete: 1, rename: 2 }),
+						texts: Object.freeze({ register: 0, delete: 1, rename: 2, "sign-up": 3 }),
 					}),
 				}),
 			},
