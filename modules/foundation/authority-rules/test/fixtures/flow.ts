@@ -20,6 +20,7 @@ import {
 	esig,
 	type FlowRecord,
 	passkeyAdd,
+	passkeyManage,
 	possession,
 	preimage,
 	screen,
@@ -29,7 +30,7 @@ import {
 
 /** A login on a fresh flow, as an honest Core of generation 1 writes it: each step's record and preimage. */
 
-export const newKey = { credential: "cred-1", publicKey: coseKey(1) };
+export const newKey = { credential: "cred-1A", publicKey: coseKey(1) };
 /** The op a key change's record is placed under: the reservation its possession names (P 355). */
 export const reservation = "res-1";
 
@@ -65,7 +66,7 @@ export const firstKey = (position = 1, kg = 0, body = JSON.stringify(newKey)) =>
 };
 
 type Key = { readonly credential: string; readonly publicKey: string };
-export const addedKey = { credential: "cred-2", publicKey: coseKey(2) };
+export const addedKey = { credential: "cred-2A", publicKey: coseKey(2) };
 
 /** A screen's register continuation over a creation and a body, signed by `key` (the screen's E_sig). */
 export const continued = (creationJws: string, body: string, seq = 1, key = screen.e_sig) => {
@@ -249,6 +250,39 @@ export const signedUp = (position = 1, parts: SignUpParts = signUpParts()) =>
 		parts.key,
 		parts,
 	);
+
+/**
+ * A key's deletion (V24) as an honest Core and screen make it: the passkey-manage, `approver`'s
+ * assertion over it, the screen's `delete` continuation naming `credential`; its envelope naming the
+ * passkey-manage's digest and the body's.
+ */
+export function deletion(
+	position: number,
+	parent: string,
+	credential: string,
+	approver: Key = newKey,
+	over: { sid?: string; stage?: "delete" | "rename"; named?: string; body?: string } = {},
+) {
+	const statement = sign(passkeyManage(over.sid ?? "del-1"), "ring-1");
+	const body = over.body ?? canonicalText({ credential_id: over.named ?? credential });
+	const input = continuation.of(over.stage ?? "delete", digest(statement), 1, digest(body));
+	const sent = canonicalText({ seq: 1, body, signature: esig(screen.e_sig, input) });
+	return {
+		record: coreRecord("keyChange", position, {
+			op: `del-${position}`,
+			keyChange: { statement: digest(statement), evidence: digest(body) },
+		}),
+		preimage: preimage({
+			parent,
+			evidence: [
+				{ form: "statement", value: statement },
+				{ form: "assertion", value: assertion(approver, statement) },
+				{ form: "continuation", value: sent },
+			],
+			content: { variant: "delete", credential },
+		}),
+	};
+}
 
 /** The usual login: first key (r-1), approval (r-2), start (r-3) and bundle (r-4) of op `login`. */
 export const login = () => [

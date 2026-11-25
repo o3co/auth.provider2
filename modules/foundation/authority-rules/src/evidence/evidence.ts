@@ -114,11 +114,13 @@ export const contents = Object.freeze({
 	/**
 	 * A key registered, by a first-trust key's path (the first-key path, F1) or a live key's approval
 	 * (`add`): its credential and its public key, its COSE_Key in its one unpadded base64url spelling;
-	 * the key generation is the signed creation's (`kg`).
+	 * the key generation is the signed creation's (`kg`). A live key deleted by a live key's approval
+	 * (`delete`, V24): its credential alone.
 	 */
 	keyChange: z.discriminatedUnion("variant", [
 		z.object({ variant: z.literal("first"), credential: id, publicKey: canonical }).strict(),
 		z.object({ variant: z.literal("add"), credential: id, publicKey: canonical }).strict(),
+		z.object({ variant: z.literal("delete"), credential: id }).strict(),
 	]),
 	/** How a start or a bundle roots: an approval's code, a family's refresh at its rotation, or a client. */
 	start: z.discriminatedUnion("via", [codeStart, refresh, clientStart]),
@@ -181,6 +183,7 @@ export function statementOf<T>(
 export const statements = Object.freeze({
 	authorization: payloads.statement,
 	passkeyAdd: payloads.passkeyAdd,
+	passkeyManage: payloads.passkeyManage,
 	creation: payloads.creation,
 	possession: payloads.possession,
 });

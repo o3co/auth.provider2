@@ -144,8 +144,8 @@ const keep = <T extends Item>(items: Readonly<Record<string, T>>, x: string) =>
 	Object.fromEntries(Object.entries(items).filter(([k, item]) => !under(k, item, x)));
 
 /**
- * The state without `x` and everything rooted at it: Revoke, and a key's removal. A caller asking
- * what a removal leaves (the keys that go with it) reads it here rather than repeating the rule.
+ * The state without `x` and everything rooted at it: Revoke. A caller asking what a denial leaves
+ * reads it here rather than repeating the rule.
  */
 export function withoutRooted(s: FlowState, x: string): FlowState {
 	return {
@@ -154,6 +154,19 @@ export function withoutRooted(s: FlowState, x: string): FlowState {
 		approvals: keep(s.approvals, x),
 		families: keep(s.families, x),
 	};
+}
+
+/**
+ * DelDrop (V24, owner (a)): the state without the key `x` and the families whose root key (their
+ * chain's last) it is. The keys it approved and its approvals stay. None of `x`, no change.
+ */
+function withoutKey(s: FlowState, x: string): FlowState {
+	if (!own(s.keys, x)) return s;
+	const { [x]: _deleted, ...keys } = s.keys;
+	const families = Object.fromEntries(
+		Object.entries(s.families).filter(([, family]) => family.chain.at(-1) !== x),
+	);
+	return { ...s, keys, families };
 }
 
 /** NextGen: the key generation moves on; every key, approval and family of the old one goes. */
@@ -181,7 +194,7 @@ function update(s: FlowState, k: Envelope, e: Changes): FlowState {
 			next = { ...next, keys: { ...next.keys, [k.id]: key } };
 		}
 	}
-	if (e.removeKey !== undefined) next = withoutRooted(next, e.removeKey);
+	if (e.removeKey !== undefined) next = withoutKey(next, e.removeKey);
 	if (e.approval) {
 		const key = own(next.keys, e.approval.key);
 		if (key) {

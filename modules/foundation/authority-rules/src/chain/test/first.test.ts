@@ -245,7 +245,7 @@ describe("a sign-up's key (F1; P 358: first trust where the subject first appear
 		const parts = signUpParts();
 		const step = signedUp(1);
 		const p = step.preimage as { content: Record<string, unknown> };
-		const other = { ...step, preimage: { ...p, content: { ...p.content, credential: "cred-9" } } };
+		const other = { ...step, preimage: { ...p, content: { ...p.content, credential: "cred-9A" } } };
 		expect(verdictOn(other)).toEqual(refused(/sends another key/));
 		const proof = assertion(newKey, parts.creation);
 		expect(verdictOn(signUpWith({ proof }))).toEqual(refused(/new key does not assert/));

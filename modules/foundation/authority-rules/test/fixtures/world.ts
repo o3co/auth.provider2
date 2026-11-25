@@ -101,6 +101,16 @@ export const passkeyAdd = (sid: string, iat = T0, keys = screen) => ({
 	nonce: "na",
 	purpose: "passkey-add",
 });
+/** A passkey-manage statement, valid from `iat` (seconds) for five minutes (V24). */
+export const passkeyManage = (sid: string, iat = T0, keys = screen) => ({
+	iss: "https://core.example",
+	sid,
+	iat,
+	exp: iat + 300,
+	...keys,
+	nonce: "nm",
+	purpose: "passkey-manage",
+});
 /** The statement T of an authorization, valid from `iat` (seconds) for five minutes. */
 export const authorization = (sid: string, iat = T0) => ({
 	iss: "https://core.example",

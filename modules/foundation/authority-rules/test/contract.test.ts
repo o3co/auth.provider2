@@ -19,7 +19,9 @@ import {
 	approval,
 	codeBundle,
 	codeStart,
+	deletion,
 	firstKey,
+	newKey,
 	refreshBundle,
 	refreshStart,
 	type Step,
@@ -112,7 +114,7 @@ describe("an honest flow through the contract (KP-04, Step023 CoreMonAgree, KP_0
 });
 
 describe("an honest passkey-add through the contract (proposal 3.13, P 356)", () => {
-	const third = { credential: "cred-3", publicKey: coseKey(3) };
+	const third = { credential: "cred-3A", publicKey: coseKey(3) };
 	const steps = [
 		firstKey(1),
 		added(2, "r-1"),
@@ -125,5 +127,36 @@ describe("an honest passkey-add through the contract (proposal 3.13, P 356)", ()
 		expect(rows).toEqual(["J12:unsupported", "J12:unsupported", "J0:verified", "J13:verified"]);
 		expect(Object.keys(state.keys)).toEqual(["r-1", "r-2", "r-4"]);
 		expect(state.consumed).toEqual(["statement:add-1", "statement:add-2"]);
+	});
+});
+
+describe("an honest deletion through the contract (V24, Rules023del)", () => {
+	const third = { credential: "cred-3A", publicKey: coseKey(3) };
+	const steps = [
+		firstKey(1),
+		added(2, "r-1"),
+		deletion(3, "r-1", addedKey.credential),
+		{ record: monitorRecord("confirmation", 4), body: { v: 1, registration: "r-1" } },
+		added(5, "r-1", addParts("add-2", third, newKey)),
+		deletion(6, "r-1", third.credential, newKey, { sid: "del-2" }),
+	];
+
+	it("judges a deletion as its approving key's root: unsupported before its confirmation, verified after", () => {
+		const { rows, state } = run(steps);
+		expect(rows).toEqual([
+			"J12:unsupported",
+			"J12:unsupported",
+			"J12:unsupported",
+			"J0:verified",
+			"J13:verified",
+			"J13:verified",
+		]);
+		expect(Object.keys(state.keys)).toEqual(["r-1"]);
+		expect(state.consumed).toEqual([
+			"statement:add-1",
+			"statement:del-1",
+			"statement:add-2",
+			"statement:del-2",
+		]);
 	});
 });

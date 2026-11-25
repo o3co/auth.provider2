@@ -7,6 +7,7 @@ import {
 	startOf,
 	tokenRefusal,
 } from "../client/client.ts";
+import { deletionOf } from "../deletion/deletion.ts";
 import {
 	assertedBy,
 	type Checks,
@@ -220,6 +221,7 @@ function pathRefusal(ask: Ask, of: FirstOf): Refusal {
 
 function firstKeyRefusal(read: Read<"keyChange">): Refusal {
 	const { ask, preimage, content } = read;
+	if (content.variant === "delete") return "a deletion registers no key";
 	if (preimage.parent !== undefined || preimage.root !== undefined)
 		return "a first key names no parent or root: it is its own root";
 	const of = firstOf(read);
@@ -270,6 +272,7 @@ const sameScreen = (a: { e_enc: string; e_sig: object }, b: typeof a) =>
  */
 function addRefusal(read: Read<"keyChange">): Refusal {
 	const { ask, preimage, content } = read;
+	if (content.variant === "delete") return "a deletion registers no key";
 	const { checks } = ask;
 	const of = addOf(read);
 	if ("refusal" in of) return of.refusal;
@@ -292,6 +295,25 @@ function addRefusal(read: Read<"keyChange">): Refusal {
 	if (continued) return continued;
 	return possessionRefusal(ask, of, [of.t, of.c, of.p], content);
 }
+
+/** A key's deletion (V24): `deletion`'s reading, its passkey-manage unused, the envelope naming its digests. */
+function deleteRefusal(read: Read<"keyChange">): Refusal {
+	const of = deletionAt(read);
+	if ("refusal" in of) return of.refusal;
+	if (used(read.ask.state, marks.statement(of.sid))) return "the statement is used";
+	return keyChangeBound(read.ask, of.statement, of.body);
+}
+
+/** A key change's record read as a deletion, on the state just before it. */
+const deletionAt = ({ ask, preimage, content }: Read<"keyChange">) =>
+	deletionOf({
+		state: ask.state,
+		checks: ask.checks,
+		context: ask.context,
+		parent: preimage.parent,
+		evidence: preimage.evidence,
+		credential: content.credential,
+	});
 
 /**
  * Why a key change's possession does not bind the record (P 355): its statements one issuer's; the
@@ -475,7 +497,11 @@ const rules: { readonly [K in CoreKind]: Rule<K> } = {
 	keyChange: (read) =>
 		onSubject(read.ask) ??
 		oneStage(read.ask) ??
-		(read.content.variant === "add" ? addRefusal(read) : firstKeyRefusal(read)),
+		(read.content.variant === "add"
+			? addRefusal(read)
+			: read.content.variant === "delete"
+				? deleteRefusal(read)
+				: firstKeyRefusal(read)),
 	start: (read) => onRootsFlow(read) ?? startRefusal(read),
 	bundle: (read) => onRootsFlow(read) ?? bundleRefusal(read),
 	noEffect: noEffectRefusal,
@@ -563,6 +589,10 @@ export function timely(ask: Ask, acceptedAt: number): boolean {
 				const of = addOf(read);
 				return !("refusal" in of) && [of.t, of.c, of.p].every((s) => within(s, acceptedAt));
 			}
+			if (read?.content.variant === "delete") {
+				const of = deletionAt(read);
+				return !("refusal" in of) && within(of.times, acceptedAt);
+			}
 			// A sign-up's T is held to its times by the approval that uses it, after the key (F1).
 			const of = read && firstOf(read);
 			return (
@@ -614,7 +644,8 @@ export function rootOf(ask: Ask): Root | undefined {
 	};
 	if (kind === "keyChange") {
 		const read = readOf("keyChange", ask);
-		if (read?.content.variant !== "add") return { first: true } as const;
+		// An added key's and a deletion's chains rest on their approving key's root.
+		if (read === undefined || read.content.variant === "first") return { first: true } as const;
 		const parent = read.preimage.parent;
 		return parent === undefined ? undefined : rootOfChain(own(state.keys, parent), parent);
 	}
@@ -669,6 +700,10 @@ export function effectOf(ask: Ask): Changes {
 		case "keyChange": {
 			const read = readOf("keyChange", ask);
 			if (!read) return {};
+			if (read.content.variant === "delete") {
+				const of = deletionAt(read);
+				return "refusal" in of ? {} : { removeKey: of.deleted, consume: [marks.statement(of.sid)] };
+			}
 			const key = { credential: read.content.credential, publicKey: read.content.publicKey };
 			if (read.content.variant !== "add") return { key };
 			const by = read.preimage.parent;

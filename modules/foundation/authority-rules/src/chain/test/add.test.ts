@@ -51,7 +51,7 @@ describe("a key a live key's approval adds (passkey-add; Rules023e Allowed `add`
 		expect(p.state.keys["r-2"]).toMatchObject({ ...addedKey, chain: ["r-1"] });
 		expect(p.state.consumed).toEqual(["statement:add-1"]);
 		// An added key approves the next, its chain from the first-trust key.
-		const third = { credential: "cred-3", publicKey: coseKey(3) };
+		const third = { credential: "cred-3A", publicKey: coseKey(3) };
 		const next = added(3, "r-2", addParts("add-2", third, addedKey));
 		expect(verdictOn(next, p)).toEqual(ok);
 		expect(on([firstKey(1), added(2, "r-1"), next]).state.keys["r-3"]?.chain).toEqual([
@@ -79,7 +79,7 @@ describe("a key a live key's approval adds (passkey-add; Rules023e Allowed `add`
 		const again = added(
 			3,
 			"r-1",
-			addParts("add-1", { credential: "cred-3", publicKey: coseKey(3) }),
+			addParts("add-1", { credential: "cred-3A", publicKey: coseKey(3) }),
 		);
 		expect(verdictOn(again, p)).toEqual(refused(/statement is used/));
 		// The passkey-add's mark is in the approvals' space: an approval's statement of its sid is used too.
@@ -216,7 +216,7 @@ describe("a key a live key's approval adds (passkey-add; Rules023e Allowed `add`
 	it("is refused where the continuation sends another key or credential than the record's, or none", () => {
 		const parts = addParts();
 		for (const body of [
-			JSON.stringify({ ...addedKey, credential: "cred-9" }),
+			JSON.stringify({ ...addedKey, credential: "cred-9A" }),
 			JSON.stringify({ ...addedKey, publicKey: coseKey(9) }),
 			"no create() response",
 		])
@@ -230,7 +230,7 @@ describe("a key a live key's approval adds (passkey-add; Rules023e Allowed `add`
 		const own = possession(parts.creation, addedKey);
 		const other = (p: object) =>
 			sign({ ...own, possession: { ...own.possession, ...p } }, "ring-1");
-		for (const p of [{ creation_hash: digest("another") }, { credential_id: "cred-9" }])
+		for (const p of [{ creation_hash: digest("another") }, { credential_id: "cred-9A" }])
 			expect(verdictOn(addWith({ possession: other(p) }), keyed())).toEqual(
 				refused(/signed bytes are not the record's/),
 			);
@@ -296,7 +296,7 @@ describe("a key a live key's approval adds (passkey-add; Rules023e Allowed `add`
 		const third = added(
 			3,
 			"r-2",
-			addParts("add-2", { credential: "cred-3", publicKey: coseKey(3) }, addedKey),
+			addParts("add-2", { credential: "cred-3A", publicKey: coseKey(3) }, addedKey),
 		);
 		expect(rootOf(askOf(added(2, "r-1"), keyed().state, keyed().prior))).toEqual({ root: "r-1" });
 		expect(rootOf(askOf(third, p.state, p.prior))).toEqual({ root: "r-1" });

@@ -119,30 +119,34 @@ describe("passkeys", () => {
 		const two = await w.register("s1", false, w.auth, k1);
 		const k2 = w.recordOf("s1", two.credential.id);
 		const three = await w.register("s1", false, w.auth, k2);
+		const k3 = w.recordOf("s1", three.credential.id);
 		expect(await w.keys.settle("s1")).toBe(true);
 		expect(witnessing.marks.get("s1")).toBe(0);
-		// Removing k2 takes k3, whose chain holds it: both are told, by whoever settles, once each.
+		// Removing k3, which roots nothing: it is told, by whoever settles, once.
 		const removed = await w.regs.remove({
 			subject: "s1",
-			credential: two.credential.id,
+			credential: three.credential.id,
 			op: "rm1",
-			decide: deciding({ removeKey: k2 }),
+			decide: deciding({ removeKey: k3 }),
 		});
 		if (!("prev" in removed)) throw new Error(removed.refused);
 		await w.land("s1", "rm1", keyStage(flow, "rm1", { credential: "-", publicKey: "-" }), 3);
 		expect(await w.keys.settle("s1")).toBe(true);
 		expect(await w.keys.settle("s1")).toBe(true);
-		expect(told).toEqual([
-			["s1", two.credential.id, false],
-			["s1", three.credential.id, false],
-		]);
-		expect(w.credentials.value(two.credential.id)).not.toHaveProperty("details");
+		expect(told).toEqual([["s1", three.credential.id, false]]);
+		expect(w.credentials.value(three.credential.id)).not.toHaveProperty("details");
 		expect(witnessing.marks.get("s1")).toBe(0);
 		// A boundary empties the keys and moves the generation on: the mark set for the old one goes.
 		w.log.boundary(flow);
 		await w.t.tend(flow);
 		expect(await w.keys.settle("s1")).toBe(false);
-		expect(told.at(-1)).toEqual(["s1", one.credential.id, true]);
+		expect(told.slice(1)).toEqual(
+			expect.arrayContaining([
+				["s1", one.credential.id, true],
+				["s1", two.credential.id, true],
+			]),
+		);
+		expect(told).toHaveLength(3);
 		expect(witnessing.marks.has("s1")).toBe(false);
 	});
 

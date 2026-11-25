@@ -12,14 +12,15 @@ Internal module of `authority-rules`: a flow's state and the one fold over it (k
 ## Offers
 - `flowState`, `changes` (schemas), `FlowState`, `Changes`, `Envelope` (`Env(r)` with the record's id), `Finding` (verdict, outcome), `FlowEntry` (with the parent, for a start or a bundle `via`, and for a client's start `client`: its elements, version and key), `RecordKind`, `emptyState`, `acceptable`, `own` (an item by id).
 - `fold` (state, envelope, changes, finding) → the state. `foldFlow` (flow, entries) → stateOf.
-- `withoutRooted` (state, an item's id) → the state without it and every item whose chain holds it: the rule a denial and a key's removal take, for a caller asking what a removal leaves.
+- `withoutRooted` (state, an item's id) → the state without it and every item whose chain holds it: the rule a denial takes, for a caller asking what a denial leaves.
 - `abandonedFamily` (a bundle's envelope and changes) → the family an abandonment of its op drops, by the name the fold gives it.
 
 ## Invariants
+- An abandonment's family comes from the abandoned op's bundle entry's changes (read by `chain`'s `effectOf` from the prior), by `abandonedFamily` here: where the monitor could not read that bundle's preimage (J5, J6) they are empty, so the monitor names no family where the Core's intent names one (kernel-spec §6.3's contract 1 leaves this open).
 - A record changes the state only when verified or unsupported and took; then one effect by kind: a denial revokes, an abandonment drops its family, an erasure boundary and a reset boundary move the key generation on, a confirmation and a tombstone change nothing, any other adds its changes.
 - Only an op's last stage adds; an earlier stage (a start) changes nothing.
 - A key, an approval or a family is added only while what it hangs from is live; each is named by the id of the record that made it, its position and acceptance time from the envelope.
-- Revoking or removing `x` takes `x` and every item whose chain holds it, `x` gone or not. A new key generation keeps the use-once marks and nothing else; an abandonment keeps them too.
+- Revoking `x` takes `x` and every item whose chain holds it, `x` gone or not. Deleting a key `x` (`removeKey`, DelDrop, V24) takes `x` and the families whose root key (their chain's last) it is, alone: the keys it approved and its approvals stay; no key `x`, no change. A new key generation keeps the use-once marks and nothing else; an abandonment keeps them too.
 - A family's rotation goes up by one per refresh that took; its acceptance time stays the one it was made at.
 - An id finds an item only as the state's own entry, never a name every object inherits (`toString`, `__proto__`); the schema reads a state's items entry by entry, so every own id reads back, and a list in their place is refused.
 - `foldFlow` takes the entries at positions 1 to n in order, else a TypeError.

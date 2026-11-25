@@ -11,11 +11,11 @@
 - Whether a receiver takes a record (`Acceptable`, read off a status, not a judgment): the receivers' parts.
 
 ## Offers
-- `allowed` (an `Ask`: the record's named fields, its opened preimage, its flow's state and judged prefix, the `Checks`, the `Context`) → `Allowance`, the first rule broken (internal module `chain`).
+- `allowed` (an `Ask`: the record's named fields, its opened preimage, its flow's state and judged prefix, the `Checks`, the `Context`) → `Allowance`, the first rule broken (internal module `chain`; a key's deletion read by `deletion`).
 - `timely` (an `Ask`, the acceptance time): TimeOK. `effectOf` (an `Ask`): Eff(r), the changes a Core record makes, the same in the Core's intent and the monitor's fold.
 - `judge` (a `Reading`: the placed record, what opening its preimage gave or another writer's verified body, the key sets, the versions' windows, the prefix) → `Ruling`: the flow entry with its verdict and outcome, the row J0–J13 or J0r, whether counted; or a wait (internal module `judgment`).
 - `resetFinding` (a reset boundary's body, its flow's state before it, the `Checks`, the `Context` with its `reset`: `ResetContext`, the acceptance time) → `ResetFinding`: verdict, outcome and `reset-wire`'s fault (internal module `reset`), which the monitor runs before placing a reset and `judge` again.
-- `fold` (state, `Envelope`, `Changes`, `Finding`) → the state; `foldFlow` (flow, entries) → transparency-wire's stateOf; `emptyState`; `abandonedFamily` (a bundle's envelope and changes) → the family an abandonment of its op drops, for the Core's intent and `effectOf` alike; `withoutRooted` (state, an item's id) → what a removal or a denial of it leaves (internal module `fold`).
+- `fold` (state, `Envelope`, `Changes`, `Finding`) → the state; `foldFlow` (flow, entries) → transparency-wire's stateOf; `emptyState`; `abandonedFamily` (a bundle's envelope and changes) → the family an abandonment of its op drops, for the Core's intent and `effectOf` alike; `withoutRooted` (state, an item's id) → what a denial of it leaves (internal module `fold`).
 - `ruleSchemas`: `flowState`, `changes`, and `contents`, each Core kind's preimage content (internal module `evidence`).
 - `tokenRules`, by kind of token:
   - `client` (internal module `client`): `start` (a client's start's evidence, a digest) → its op id (OpIdOf) and evidence elements (Elems), or why not, for the Core to derive them as the rules check them; `within`, whether its evidence's times hold an acceptance time, as TimeOK reads them; `lifetimeMs`, the longest a client's own token lives from its start: 15 minutes, a constant the Core narrows within..

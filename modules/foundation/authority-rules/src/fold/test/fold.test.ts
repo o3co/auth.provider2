@@ -181,13 +181,23 @@ describe("Revoke, Abandon and NextGen (kernel-spec §6.3)", () => {
 		expect(step(s, env("denial"), { revoke: "none" })).toEqual(s);
 	});
 
-	it("takes a removed key and everything under it (UpdRec: 鍵の削除が成ったら、その鍵を根にする family も除く; Rules023 Fold `rev`: Under)", () => {
+	it("takes a deleted key and the families rooted in it alone (DelDrop, V24 owner (a); Rules023del)", () => {
 		const s = step(chained(), env("keyChange"), { removeKey: "k2" });
 		expect(Object.keys(s.keys)).toEqual(["k1", "other"]);
+		// Its approval stays; the family whose root key it was goes.
+		expect(Object.keys(s.approvals)).toEqual(["a1"]);
 		expect(s.families).toEqual({});
+		// The key that added it, deleted: what it added, that key's approval and family, all stay.
+		const above = step(chained(), env("keyChange"), { removeKey: "k1" });
+		expect(Object.keys(above.keys)).toEqual(["k2", "other"]);
+		expect(Object.keys(above.approvals)).toEqual(["a1"]);
+		expect(Object.keys(above.families)).toEqual(["b1"]);
+		// No key of that id: no change.
+		const same = chained();
+		expect(step(same, env("keyChange"), { removeKey: "none" })).toEqual(same);
 	});
 
-	it("tells what a removal or a denial of an item leaves, as the fold takes it (Rules023 Fold `rev`: Under)", () => {
+	it("tells what a denial of an item leaves, as the fold takes it (Rules023 Fold `rev`: Under)", () => {
 		const s = chained();
 		expect(withoutRooted(s, "k1")).toEqual(step(s, env("denial"), { revoke: "k1" }));
 		expect(Object.keys(withoutRooted(s, "k1").keys)).toEqual(["other"]);

@@ -111,7 +111,7 @@ describe("a first-trust key (Rules023e Allowed `ft`)", () => {
 		expect(
 			verdictOn(step(otherSubject, sign(possession(otherSubject, newKey), "ring-1")), empty),
 		).toEqual(refused(/subject/));
-		const swapped = { credential: "cred-2", publicKey: coseKey(2) };
+		const swapped = { credential: "cred-2A", publicKey: coseKey(2) };
 		expect(verdictOn(step(creationJws, possessionJws, swapped), empty)).toEqual(
 			refused(/signed bytes/),
 		);
