@@ -1,6 +1,6 @@
 import { hpke, keyThumbprintInput, purposes, typs } from "@mod/sdk-core-wire";
 import { logTyps } from "@mod/transparency-wire";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { digest, utf8 } from "../src/bytes.ts";
 import { firstKey } from "../src/first-key.ts";
 import { sealTo } from "../src/hpke.ts";
@@ -363,13 +363,43 @@ describe("keyChanges.read: a delete", () => {
 		const d = await deleted();
 		// The same version: only the page's holding, read again before success, tells the two apart.
 		const denying = await d.completion({ status: await d.statusOf({ deny: ["rec-3"] }) });
-		const plain = await d.completion();
-		const [one, two] = await Promise.all([
-			keyChanges.read(d.source, plain, d.options()),
-			keyChanges.read(d.source, denying, d.options()),
-		]);
-		expect(two).toEqual({ error: "denied" });
-		expect(one).not.toHaveProperty("change");
+		const stateOf = await d.stateOfOf({ k2: { credential: "BAUG" } });
+		const plain = await d.completion({ stateOf });
+		// The plain read is held at its stateOf's signature, past its status and before its last
+		// reading of the page's holding, until the denying read has refused: the order is the test's.
+		const { payload, signatures } = JSON.parse(stateOf) as {
+			payload: string;
+			signatures: { protected: string }[];
+		};
+		const held = `${signatures[0]?.protected}.${payload}`;
+		let reached: () => void = () => {};
+		const atGate = new Promise<void>((resolve) => {
+			reached = resolve;
+		});
+		let release: () => void = () => {};
+		const gate = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		const verify = crypto.subtle.verify.bind(crypto.subtle);
+		const spy = vi
+			.spyOn(crypto.subtle, "verify")
+			.mockImplementation(async (algorithm, key, signature, data) => {
+				if (new TextDecoder().decode(data as Uint8Array) === held) {
+					reached();
+					await gate;
+				}
+				return verify(algorithm, key, signature, data);
+			});
+		try {
+			const one = keyChanges.read(d.source, plain, d.options());
+			await atGate;
+			expect(await keyChanges.read(d.source, denying, d.options())).toEqual({ error: "denied" });
+			release();
+			expect(await one).toEqual({ error: "denied" });
+		} finally {
+			release();
+			spy.mockRestore();
+		}
 		expect(await keyChanges.read(d.source, plain, d.options())).toEqual({ error: "denied" });
 		const e = await deleted();
 		const unchecked = await e.completion({
