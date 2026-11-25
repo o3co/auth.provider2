@@ -41,6 +41,20 @@ const fitting =
 		return create(identifier);
 	};
 
+/** An identifierless subject's idempotency key: a SHA-256, base64url without padding. */
+const identifierlessKey = /^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$/;
+
+/** `createIdentifierless` refusing a key of another form with a TypeError, unasked. */
+const keyed =
+	(
+		create: NonNullable<UserSource["createIdentifierless"]>,
+	): NonNullable<UserSource["createIdentifierless"]> =>
+	async (key) => {
+		if (typeof key !== "string" || !identifierlessKey.test(key))
+			throw new TypeError("users: an identifierless subject's key is a SHA-256 in base64url");
+		return create(key);
+	};
+
 /** The source's users, with the contacts written through the store interface. */
 export function ledgerUsers(
 	source: UserSource & Pick<Users, "verifyAsPart" | "failedChecks">,
@@ -60,6 +74,9 @@ export function ledgerUsers(
 		bySubject: source.bySubject,
 		...(source.byIdentifier ? { byIdentifier: fittingLookup(source.byIdentifier) } : {}),
 		...(source.create ? { create: fitting(source.create) } : {}),
+		...(source.createIdentifierless
+			? { createIdentifierless: keyed(source.createIdentifierless) }
+			: {}),
 		verifiedContact: async (subject, contact) => {
 			required(subject, contact.value);
 			if (contact.kind !== "email") throw new TypeError("users: an unknown kind of contact");

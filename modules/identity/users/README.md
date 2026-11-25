@@ -9,9 +9,10 @@
 
 ## Offers
 - `verify` (identifier, password), `bySubject` and `byIdentifier`, each answering a user or none; `bySubject` and `claimedContacts` may answer unanswerable. `byIdentifier` is offered where the settings hold the users or the ledger looks users up by identifier, and `create` (identifier: a new subject the ledger makes, or `exists`) only where it makes subjects: each one's absence is the composition's fact.
+- `createIdentifierless` (an idempotency key, a SHA-256 in base64url; F1): the subject the key names, made now or before, with no identifier, as long as the ledger keeps it; offered only where the ledger makes identifierless subjects.
 - `verifyAsPart` (identifier, password): `verify` for a check that is one part of something larger, whose caller settles once whether the whole passed; until then, and where it never does, its waits count it failed. `failedChecks`: the most failed checks of one identifier in any `windowMs`, as the waits allow, on each instance.
 - `claimedContacts`, `verifiedContact` (subject, `{ kind: "email", value }`) and `contactsOf`.
-- Extension point `ledgers`: a user ledger (verification, user by subject or unanswerable, and optionally by identifier, a create and an import, `keep`, with a password's hash of the work it declares its `keep` takes, `passwords`, which says nothing of whether the deployment holds passwords), which takes the same work for an unknown identifier as for a known one.
+- Extension point `ledgers`: a user ledger (verification, user by subject or unanswerable, and optionally by identifier, a create, an identifierless create (idempotent by its key) and an import, `keep`, with a password's hash of the work it declares its `keep` takes, `passwords`, which says nothing of whether the deployment holds passwords), which takes the same work for an unknown identifier as for a known one.
 - Operator section `registered`: `identifier`, `subject` (default the identifier), `password-hash`, `attributes`.
 - Operator section `waits`: how a password check of an identifier that failed waits; its keys: internal module `waits`.
 - Store interface for verified contacts; what it needs, its erasure ports, and the eraser `users`: internal module `stores`.

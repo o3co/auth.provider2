@@ -11,7 +11,13 @@ import secretHashModule from "@mod/secret-hash/module";
 import { describe, expect, it, vi } from "vitest";
 import { type Ledger, ledgers, type Users, users, type Verified } from "../src/contract.ts";
 import usersModule from "../src/module.ts";
-import { ledgerContract, memoryUsersStores, testUser, usersContract } from "../src/testing.ts";
+import {
+	identifierlessKeyOf,
+	ledgerContract,
+	memoryUsersStores,
+	testUser,
+	usersContract,
+} from "../src/testing.ts";
 
 const alice = { subject: "s-alice", attributes: { name: "Alice", email: "Alice@example.com" } };
 const none: Verified = { kind: "none" };
@@ -36,15 +42,17 @@ function fakeLedger(calls: string[] = []): Ledger {
 	};
 }
 
-/** A ledger holding alice that makes a subject for each new identifier. */
+/** A ledger holding alice that makes a subject for each new identifier, and an identifierless one for each new key. */
 function creatingLedger(calls: string[] = []): Ledger {
 	const made = new Map<string, Verified>([["alice", { kind: "user", user: alice }]]);
+	const identifierless = new Map<string, Verified & { kind: "user" }>();
 	const base = fakeLedger(calls);
 	return {
 		...base,
 		bySubject: async (subject) =>
-			[...made.values()].find((found) => found.kind === "user" && found.user.subject === subject) ??
-			none,
+			[...made.values(), ...identifierless.values()].find(
+				(found) => found.kind === "user" && found.user.subject === subject,
+			) ?? none,
 		byIdentifier: async (identifier) => made.get(identifier) ?? none,
 		create: async (identifier) => {
 			calls.push("create");
@@ -52,6 +60,15 @@ function creatingLedger(calls: string[] = []): Ledger {
 			const user = { subject: `s-${made.size}-${identifier}`, attributes: {} };
 			made.set(identifier, { kind: "user", user });
 			return { kind: "created", user };
+		},
+		createIdentifierless: async (key) => {
+			calls.push("createIdentifierless");
+			const held = identifierless.get(key) ?? {
+				kind: "user" as const,
+				user: { subject: `s-identifierless-${identifierless.size}`, attributes: {} },
+			};
+			identifierless.set(key, held);
+			return held.user;
 		},
 	};
 }
@@ -124,6 +141,7 @@ const answering = (answer: unknown): Ledger => ({
 	bySubject: async () => answer as Verified,
 	byIdentifier: async () => answer as Verified,
 	create: async () => answer as Verified as never,
+	createIdentifierless: async () => answer as never,
 });
 
 const openWith = (ledger: Ledger): Promise<Users> => usersOf(ledger);
@@ -143,6 +161,39 @@ usersContract("a contributed user ledger that makes subjects", {
 		return { users: await openWith(creatingLedger(checks)), checks };
 	},
 	creates: true,
+	createsIdentifierless: true,
+});
+
+ledgerContract("a contributed user ledger that makes subjects, named or not", {
+	open: async () => {
+		const checks: string[] = [];
+		return { ledger: creatingLedger(checks), checks };
+	},
+	creates: true,
+	createsIdentifierless: true,
+});
+
+describe("users reading a contributed ledger's identifierless create", () => {
+	it("answers the user the ledger answers, read as any user is, and unavailable for anything else", async () => {
+		const key = identifierlessKeyOf("k");
+		const good = await usersOf(answering({ subject: "s-u", attributes: { name: "N" } }));
+		expect(await good.createIdentifierless?.(key)).toEqual({
+			subject: "s-u",
+			attributes: { name: "N" },
+		});
+		for (const answer of [
+			null,
+			{ kind: "user", user: alice },
+			{ subject: "" },
+			{ subject: "s-u" },
+			{ subject: "s-u", attributes: [] },
+		]) {
+			const u = await usersOf(answering(answer));
+			await expect(u.createIdentifierless?.(key), JSON.stringify(answer)).rejects.toSatisfy(
+				isUnavailable,
+			);
+		}
+	});
 });
 
 /** A ledger holding alice with no password, making subjects, and looking no one up by identifier. */

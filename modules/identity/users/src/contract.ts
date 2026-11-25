@@ -141,6 +141,16 @@ export interface Users {
 	 * the composition's fact. Throws TypeError on an empty identifier, Unavailable if the ledger fails.
 	 */
 	create?(identifier: string): Promise<Created>;
+	/**
+	 * Makes, or answers again, the subject an idempotency key names, with no identifier (F1, §4.3):
+	 * the same key is answered the same subject, however often and however many at once, so a make
+	 * whose answer was lost makes no second subject, as long as the ledger keeps the subject (once it is
+	 * erased, the key makes a new one). The key is the caller's, a SHA-256 in base64url
+	 * derived from what the subject is made for. Offered where the ledger makes identifierless subjects: its
+	 * absence is the composition's fact. Throws TypeError on a key of another form, Unavailable if the
+	 * ledger fails.
+	 */
+	createIdentifierless?(key: string): Promise<User>;
 	/** Keeps a contact the subject has shown is theirs, up to 20. Throws TypeError on an empty part, RangeError past 20. */
 	verifiedContact(subject: string, contact: Contact): Promise<void>;
 	/** The subject's verified contacts, in the order first kept, frozen. */
@@ -174,6 +184,8 @@ export interface Ledger {
 	byIdentifier?(identifier: string): Promise<Verified>;
 	/** Makes a new subject for an identifier no user holds, else `exists`; a ledger that makes no subjects leaves it out. */
 	create?(identifier: string): Promise<Created>;
+	/** Makes, or answers again, the subject the idempotency key names, with no identifier; a ledger that makes no identifierless subjects leaves it out. */
+	createIdentifierless?(key: string): Promise<User>;
 	/**
 	 * Holds the identifier for the subject as given, written now or before (`kept`), unless either is
 	 * held otherwise (`conflict`); a ledger that takes no import leaves it out. A password's hash, as

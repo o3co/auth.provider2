@@ -1,4 +1,4 @@
-import { randomBytes, scryptSync } from "node:crypto";
+import { createHash, randomBytes, scryptSync } from "node:crypto";
 import { defineModule } from "@mod/kernel";
 import { describe, expect, it } from "vitest";
 import type { Contact, Ledger, Users } from "./contract.ts";
@@ -18,6 +18,10 @@ export function testPasswordHash(password: string, ln = 10): string {
 	return `$scrypt$ln=${ln},r=8,p=1$${toUnpaddedBase64(salt)}$${toUnpaddedBase64(key)}`;
 }
 
+/** An identifierless subject's idempotency key for a test: the SHA-256 of the text, base64url. */
+export const identifierlessKeyOf = (text: string) =>
+	createHash("sha256").update(text).digest("base64url");
+
 /** A password of exactly 72 bytes in UTF-8, made of 3-byte characters. */
 export const seventyTwoBytes = "\u3042".repeat(24);
 
@@ -31,6 +35,8 @@ export interface UsersHarness {
 	readonly unanswerableBySubject?: boolean;
 	/** Set where the users make subjects (`create`); else they offer no `create`. */
 	readonly creates?: boolean;
+	/** Set where the users make identifierless subjects (`createIdentifierless`); else they offer none. */
+	readonly createsIdentifierless?: boolean;
 	/** Set where the ledger looks no one up by identifier: the users then offer no `byIdentifier`. */
 	readonly withoutIdentifierLookup?: boolean;
 	/** For implementations that read bcrypt: users holding "long", whose password is `seventyTwoBytes`. */
@@ -98,6 +104,35 @@ export function usersContract(name: string, harness: UsersHarness): void {
 				expect(await u.create?.("carol")).toEqual({ kind: "exists" });
 				expect(await u.create?.("alice")).toEqual({ kind: "exists" });
 				await expect(u.create?.("")).rejects.toThrow(TypeError);
+			},
+		);
+
+		it.skipIf(Boolean(harness.createsIdentifierless))(
+			"offers no identifierless create where no identifierless subject is made",
+			async () => {
+				expect((await harness.open()).createIdentifierless).toBeUndefined();
+			},
+		);
+
+		it.runIf(Boolean(harness.createsIdentifierless))(
+			"makes an identifierless subject for a key, the same one again and at once, another for another key, and refuses a key of another form",
+			async () => {
+				const u = await harness.open();
+				const key = identifierlessKeyOf("one");
+				const made = await u.createIdentifierless?.(key);
+				expect(Object.isFrozen(made)).toBe(true);
+				expect(made?.subject).not.toBe("s-alice");
+				// The subject alone is compared: a ledger may answer more of a user later.
+				expect((await u.createIdentifierless?.(key))?.subject).toBe(made?.subject);
+				const twice = await Promise.all(
+					[1, 2].map(() => u.createIdentifierless?.(identifierlessKeyOf("two"))),
+				);
+				expect(twice[0]?.subject).toBe(twice[1]?.subject);
+				expect(twice[0]?.subject).not.toBe(made?.subject);
+				if (!harness.unanswerableBySubject && made)
+					expect(await u.bySubject(made.subject)).toEqual({ kind: "user", user: made });
+				for (const bad of ["", "short", `${key}=`, key.replace(/.$/, "B")])
+					await expect(u.createIdentifierless?.(bad), bad).rejects.toThrow(TypeError);
 			},
 		);
 
@@ -236,6 +271,8 @@ export interface LedgerHarness {
 	readonly unanswerableBySubject?: boolean;
 	/** Set where the ledger makes subjects (`create`). */
 	readonly creates?: boolean;
+	/** Set where the ledger makes identifierless subjects (`createIdentifierless`). */
+	readonly createsIdentifierless?: boolean;
 	/** Set where the ledger looks no one up by identifier (no `byIdentifier`). */
 	readonly withoutIdentifierLookup?: boolean;
 }
@@ -311,6 +348,22 @@ export function ledgerContract(name: string, harness: LedgerHarness): void {
 				}
 				expect(await ledger.create?.("carol")).toEqual({ kind: "exists" });
 				expect(await ledger.create?.("alice")).toEqual({ kind: "exists" });
+			},
+		);
+
+		it.runIf(Boolean(harness.createsIdentifierless))(
+			"makes an identifierless subject for a key, the same one again and at once, another for another key",
+			async () => {
+				const { ledger } = await harness.open();
+				const key = identifierlessKeyOf("one");
+				const made = await ledger.createIdentifierless?.(key);
+				expect(made?.subject).not.toBe("s-alice");
+				expect((await ledger.createIdentifierless?.(key))?.subject).toBe(made?.subject);
+				const twice = await Promise.all(
+					[1, 2].map(() => ledger.createIdentifierless?.(identifierlessKeyOf("two"))),
+				);
+				expect(twice[0]?.subject).toBe(twice[1]?.subject);
+				expect(twice[0]?.subject).not.toBe(made?.subject);
 			},
 		);
 

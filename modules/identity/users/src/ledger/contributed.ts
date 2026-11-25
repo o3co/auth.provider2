@@ -75,7 +75,7 @@ function readCreated(answer: unknown, log: Log): Created {
 }
 
 export function contributedSource(ledger: Ledger, log: Log): UserSource {
-	const { byIdentifier, create, keep } = ledger;
+	const { byIdentifier, create, createIdentifierless, keep } = ledger;
 	const lookingUp = byIdentifier
 		? {
 				byIdentifier: async (identifier: string) =>
@@ -108,6 +108,17 @@ export function contributedSource(ledger: Ledger, log: Log): UserSource {
 				},
 			}
 		: {};
+	// The subject the key names, read as any user the ledger answers; anything else is unavailable.
+	const creatingIdentifierless = createIdentifierless
+		? {
+				createIdentifierless: async (key: string) => {
+					const answer = copyOf(await fromLedger(() => createIdentifierless.call(ledger, key)));
+					const read = readAnswer({ kind: "user", user: answer }, log);
+					if (read.kind !== "user") throw new Unavailable("users");
+					return read.user;
+				},
+			}
+		: {};
 	return {
 		verify: async (identifier, password) =>
 			identifier === ""
@@ -123,6 +134,7 @@ export function contributedSource(ledger: Ledger, log: Log): UserSource {
 		},
 		...lookingUp,
 		...creating,
+		...creatingIdentifierless,
 		...keeping,
 	};
 }
