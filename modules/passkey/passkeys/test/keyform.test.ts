@@ -104,6 +104,9 @@ describe("the key passkeys keeps, one form for webauthn and the rules", () => {
 					verifyAssertion: cer.verifyAssertion,
 					digest,
 					keyThumbprint,
+					// An approval is judged here, no key change: no continuation is verified.
+					attestedKey: cer.attestedKey,
+					verifyEsig: () => false,
 				},
 				context: {
 					ring,
