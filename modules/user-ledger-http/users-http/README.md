@@ -15,6 +15,7 @@
   - `subject-url`: the lookup by subject, posting `{"subject"}`; a `404` or `410` saying so is none, `401` and `403` unavailable.
   - `identifier-url`: the lookup by identifier, posting `{"email"}` as the password call names it, read as the lookup by subject.
   - `create-url`: the create, posting `{"email"}`. With it the ledger offers `create`; without it, none, so `users` offers none.
+  - `create-identifierless-url`: the identifierless create (F1), posting `{"key"}`, an idempotency key. With it the ledger offers `createIdentifierless`; without it, none.
 - `credential` (optional: `keys`' `bearerToken` of at least 32 bytes of key material, never a `REPLACE-` sample), sent on every call.
 - `timeout` and `max-response-size`: each narrows outbound's cap on every call; written with its unit, a bare number refused.
 - Every call: `POST {url}` with the URL as written, nothing added; `Content-Type` and `Accept: application/json`; `Authorization: Bearer {credential}` when one is set, none otherwise.
@@ -35,6 +36,7 @@
   | anything else, a `404` or `410` saying neither, `401` and `403` included, challenged or not | unavailable |
 
 - A create, with the body `{"email"}`: `201` with a JSON object holding an `id` of a subject's shape is the user made; `409` with `{"error":"exists"}` is `exists`; anything else, a `409` saying nothing and a `200` included, is unavailable.
+- An identifierless create, with the body `{"key"}`: `201` with a JSON object holding an `id` of a subject's shape is the subject the key names, the same for the same key; any other answer is unavailable.
 - A user: `id` is the subject; `email`, `name`, `picture`, `groups` and a boolean `emailVerified` (only beside `email`) are the attributes `users` names for them; other fields are dropped.
 
 ## Invariants

@@ -8,7 +8,13 @@ import {
 	postJson,
 } from "@mod/outbound";
 import type { ConfiguredUrl } from "@mod/url-setting";
-import { type Created, isWellFormedSubject, userAttribute, type Verified } from "@mod/users";
+import {
+	type Created,
+	isWellFormedSubject,
+	type User,
+	userAttribute,
+	type Verified,
+} from "@mod/users";
 
 /** What the calls are made with: outbound, the credential if any, the narrower of each URL, and the log. */
 export interface CallParts {
@@ -18,11 +24,12 @@ export interface CallParts {
 	readonly warn: Log["warn"];
 }
 
-/** The ledger's calls: the password call, a lookup that posts what it looks up, and a create. */
+/** The ledger's calls: the password call, a lookup that posts what it looks up, a create and an identifierless create. */
 export interface Calls {
 	verify(url: ConfiguredUrl, identifier: string, password: string): Promise<Verified>;
 	lookup(url: ConfiguredUrl, asked: Readonly<Record<string, string>>): Promise<Verified>;
 	create(url: ConfiguredUrl, identifier: string): Promise<Created>;
+	createIdentifierless(url: ConfiguredUrl, key: string): Promise<User>;
 }
 
 const none: Verified = deepFreeze({ kind: "none" });
@@ -109,6 +116,11 @@ export function calls(parts: CallParts): Calls {
 			if (taken) return taken;
 			const { user } = userIn(answer, () => true, usersWire.created);
 			return deepFreeze({ kind: "created", user });
+		},
+		// The same key is answered the same subject: asked again, the ledger makes no second one.
+		async createIdentifierless(url, key) {
+			const answer = await post(url, usersWire.createIdentifierless(key));
+			return userIn(answer, () => true, usersWire.created).user;
 		},
 	};
 }

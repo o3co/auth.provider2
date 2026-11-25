@@ -11,6 +11,7 @@ import {
 	type Runtime,
 } from "@mod/kernel";
 import { takesUnused } from "@mod/kernel/testing";
+import { usersWire } from "@mod/ledger-wire";
 import { type Narrower, outbound } from "@mod/outbound";
 import outboundModule from "@mod/outbound/module";
 import {
@@ -53,12 +54,15 @@ interface Answer {
  * refuses the suspended `s-gone` with a 410 saying `gone`, and knows no one else, saying
  * `not_found`. At `/ledger/identifier` it finds alice and those it made, and refuses `gone` alike.
  * At `/ledger/create` it makes a subject for an identifier it does not hold, and says `exists` for
- * one it does. Any other route is a bare 404.
+ * one it does. At `/ledger/create-identifierless` it makes a subject for a key once and answers it for that
+ * key after. Any other route is a bare 404.
  */
 const notFound: Answer = { status: 404, json: { error: "not_found" } };
 const gone: Answer = { status: 410, json: { error: "gone" } };
 /** The users the ledger made, by identifier; cleared before each test. */
 const made = new Map<string, { id: string }>();
+/** The identifierless subjects the ledger made, by key; cleared before each test. */
+const madeIdentifierless = new Map<string, { id: string }>();
 
 function aliceLedger(asked: Asked): Answer {
 	if (asked.headers.authorization !== `Bearer ${credential}`) {
@@ -74,7 +78,9 @@ function aliceLedger(asked: Asked): Answer {
 		const { subject } = JSON.parse(asked.body);
 		if (subject === "s-gone") return gone;
 		const user =
-			subject === "s-alice" ? alice : [...made.values()].find((one) => one.id === subject);
+			subject === "s-alice"
+				? alice
+				: [...made.values(), ...madeIdentifierless.values()].find((one) => one.id === subject);
 		return user ? { status: 200, json: user } : notFound;
 	}
 	if (asked.method === "POST" && asked.path === "/ledger/identifier") {
@@ -88,6 +94,16 @@ function aliceLedger(asked: Asked): Answer {
 		if (email === "alice" || made.has(email)) return { status: 409, json: { error: "exists" } };
 		const user = { id: `s-made-${made.size}` };
 		made.set(email, user);
+		return { status: 201, json: user };
+	}
+	if (asked.method === "POST" && asked.path === "/ledger/create-identifierless") {
+		const { key } = JSON.parse(asked.body);
+		// The key users-http sends is the wire's form: users and ledger-wire hold it apart.
+		if (!usersWire.identifierlessKey.safeParse(key).success) return { status: 400 };
+		const user = madeIdentifierless.get(key) ?? {
+			id: `s-identifierless-${madeIdentifierless.size}`,
+		};
+		madeIdentifierless.set(key, user);
 		return { status: 201, json: user };
 	}
 	return { status: 404 };
@@ -131,6 +147,7 @@ beforeEach(() => {
 	received.length = 0;
 	logged.length = 0;
 	made.clear();
+	madeIdentifierless.clear();
 });
 
 const logged: unknown[][] = [];
@@ -198,6 +215,7 @@ const shapes = (from: number) => received.slice(from).map(shapeOf);
 
 const identifierUrl = () => `http://${pair}/ledger/identifier`;
 const createUrl = () => `http://${pair}/ledger/create`;
+const createIdentifierlessUrl = () => `http://${pair}/ledger/create-identifierless`;
 
 ledgerContract("users-http against a fake ledger", {
 	open: async () => {
@@ -225,6 +243,7 @@ ledgerContract("users-http looking users up by subject and identifier, and makin
 			"subject-url": `http://${pair}/ledger/subject`,
 			"identifier-url": identifierUrl(),
 			"create-url": createUrl(),
+			"create-identifierless-url": createIdentifierlessUrl(),
 		});
 		const checks: string[] = [];
 		return {
@@ -243,6 +262,7 @@ ledgerContract("users-http looking users up by subject and identifier, and makin
 		};
 	},
 	creates: true,
+	createsIdentifierless: true,
 });
 
 async function opened(extra: Record<string, unknown> = {}) {
@@ -273,10 +293,14 @@ usersContract("users with users-http against a fake ledger", {
 	unanswerableBySubject: true,
 });
 
+const making = () => ({
+	"create-url": createUrl(),
+	"create-identifierless-url": createIdentifierlessUrl(),
+});
 usersContract("users with users-http making subjects", {
-	open: () => opened({ "create-url": createUrl() }),
+	open: () => opened(making()),
 	openCounting: async () => {
-		const u = await opened({ "create-url": createUrl() });
+		const u = await opened(making());
 		const checks: string[] = [];
 		const verify = u.verify;
 		return {
@@ -296,6 +320,7 @@ usersContract("users with users-http making subjects", {
 	},
 	unanswerableBySubject: true,
 	creates: true,
+	createsIdentifierless: true,
 });
 
 /** Tokens cut from this hold many byte values, so only their length and form are at stake. */
@@ -897,7 +922,8 @@ describe("users-http looking a user up by subject", () => {
 			refusals: [
 				{
 					where: "users-http.verify-url",
-					reason: "needs one of verify-url, subject-url, identifier-url, create-url",
+					reason:
+						"needs one of verify-url, subject-url, identifier-url, create-url, create-identifierless-url",
 				},
 			],
 		});
@@ -1092,6 +1118,42 @@ describe("users-http making a subject", () => {
 			["users-http.ledger_failed", { status: 409, reason: "unmarked" }],
 			["users-http.ledger_failed", { status: 409, reason: "unmarked" }],
 		]);
+	});
+
+	it("posts the key alone to create-identifierless-url, with the credential, and hands over the subject it names", async () => {
+		const { ledger } = await open({ "create-identifierless-url": createIdentifierlessUrl() });
+		const key = "47DEQpj8HBSa-_TImW-5JCeuQeRkm5NMpJWZG3hSuFU";
+		const user = await ledger.createIdentifierless?.(key);
+		const [asked] = received;
+		expect([asked?.method, asked?.path]).toEqual(["POST", "/ledger/create-identifierless"]);
+		expect(asked?.headers).toMatchObject({ authorization: `Bearer ${credential}` });
+		expect(JSON.parse(asked?.body ?? "")).toEqual({ key });
+		expect(user).toEqual({ subject: "s-identifierless-0", attributes: {} });
+		expect(Object.isFrozen(user)).toBe(true);
+		expect(await ledger.createIdentifierless?.(key)).toEqual(user);
+	});
+
+	it("answers unavailable to an identifierless create answered anything but a 201 with a subject", async () => {
+		const { ledger } = await open({ "create-identifierless-url": createIdentifierlessUrl() });
+		for (const answer of [
+			{ status: 200, json: { id: "s-x" } },
+			{ status: 201, json: { id: "" } },
+			{ status: 201, text: "s-x" },
+			{ status: 409, json: { error: "exists" } },
+			{ status: 500 },
+		] as Answer[]) {
+			script = () => answer;
+			await expect(
+				ledger.createIdentifierless?.("47DEQpj8HBSa-_TImW-5JCeuQeRkm5NMpJWZG3hSuFU"),
+				JSON.stringify(answer),
+			).rejects.toSatisfy(isUnavailable);
+		}
+	});
+
+	it("offers no identifierless create without create-identifierless-url, so users offers none", async () => {
+		const { ledger, users: u } = await open({ "create-url": createUrl() });
+		expect(ledger.createIdentifierless).toBeUndefined();
+		expect(u.createIdentifierless).toBeUndefined();
 	});
 
 	it("offers no create without create-url, so users offers none", async () => {

@@ -14,7 +14,13 @@ import { z } from "zod";
 import { calls } from "./calls/calls.ts";
 
 /** The ledger's URLs, each an operator's setting, by the key that names it. */
-const urlKeys = ["verify-url", "subject-url", "identifier-url", "create-url"] as const;
+const urlKeys = [
+	"verify-url",
+	"subject-url",
+	"identifier-url",
+	"create-url",
+	"create-identifierless-url",
+] as const;
 const ledgerUrl = (what: string) =>
 	urlSetting({ schemes: ["https", "http"] })
 		.optional()
@@ -31,6 +37,9 @@ const section = z
 		),
 		"create-url": ledgerUrl(
 			"Where a new subject is made for an identifier; without it, the ledger makes no subjects.",
+		),
+		"create-identifierless-url": ledgerUrl(
+			"Where a new subject is made for no identifier, the same one for the same idempotency key (F1); without it, the ledger makes no identifierless subjects.",
 		),
 		credential: bearerToken({ atLeast: 32 })
 			.optional()
@@ -107,6 +116,7 @@ export default defineModule(
 				"subject-url": subjectUrl,
 				"identifier-url": identifierUrl,
 				"create-url": createUrl,
+				"create-identifierless-url": createIdentifierlessUrl,
 			} = c.section;
 			return {
 				verify: async (identifier, password) =>
@@ -126,6 +136,12 @@ export default defineModule(
 				...(createUrl === undefined
 					? {}
 					: { create: async (identifier: string) => ask.create(createUrl, identifier) }),
+				...(createIdentifierlessUrl === undefined
+					? {}
+					: {
+							createIdentifierless: async (key: string) =>
+								ask.createIdentifierless(createIdentifierlessUrl, key),
+						}),
 			};
 		}),
 	],

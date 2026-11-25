@@ -10,6 +10,7 @@
 ## Offers
 - `calls(parts)`: `verify(url, identifier, password)`, the password call, and `lookup(url, asked)`, which posts `asked`; for both, a `404` or `410` is none only with its word (`not_found`, `gone`) in a JSON object body.
 - `create(url, identifier)`: a `201` read into the user made; a `409` is `exists` only with its word (`exists`) in a JSON object body.
+- `createIdentifierless(url, key)`: the key alone posted; a `201` read into the subject the key names; any other answer is unavailable.
 
 ## Invariants
 - A destination refused, a redirect, no answer in time or size, and every answer read as unavailable throw `Unavailable`, logging one `users-http.ledger_failed` warning with the status, or the kind alone: outbound's refusal reason or failure, `no-answer` or `malformed`; for a `404`, `410` or `409` without the ledger's word, with both its status and `reason: "unmarked"`. None and `exists` are not logged.
