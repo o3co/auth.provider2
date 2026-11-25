@@ -10,7 +10,7 @@ Internal module of `authority-rules`: reading a Core writer's preimage and its e
 - What a read record must hold on its flow: `chain`. Decrypting the preimage and verifying signatures: the caller's.
 
 ## Offers
-- `contents` by kind: an approval, a noEffect and an abandonment carry none; a key change the first-key path's credential and key, its COSE_Key in its one unpadded base64url spelling; a start and a bundle how they root (`code`, `refresh` at a rotation, or `client`), a client's bundle its access token's header and claims texts.
+- `contents` by kind: an approval, a noEffect and an abandonment carry none; a key change the first-key path's credential and key, its COSE_Key in its one unpadded base64url spelling; a start and a bundle how they root (`code`, a code's start with the code's digest and client, each where named; `refresh` at a rotation; or `client`), a client's bundle its access token's header and claims texts.
 - `readPreimage` (kind, value) → the preimage and its content, or the error `preimage` or `content`. `evidenceOf`, `oneOf` (a form's values, its one value).
 - `statementOf` (JWS, schema, checks, context): the payload of a statement the ring signed with `sdk-core-wire`'s statement `typ`, which every statement carries. `statements`: authorization, creation, possession.
 - `assertedBy` (assertion, key, statement, checks, context): the key's assertion over the statement's challenge. `within` (statement, time).

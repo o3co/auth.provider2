@@ -76,6 +76,10 @@ const canonical = z
 	);
 const empty = z.object({}).strict();
 const code = z.object({ via: z.literal("code") }).strict();
+/** A code exchange's start: the code's digest and its client, which its root approval's record names (V24); each, where named. */
+const codeStart = z
+	.object({ via: z.literal("code"), code: id.optional(), client: id.optional() })
+	.strict();
 const refresh = z
 	.object({ via: z.literal("refresh"), rotation: z.number().int().nonnegative() })
 	.strict();
@@ -100,7 +104,7 @@ export const contents = Object.freeze({
 		.object({ variant: z.literal("first"), credential: id, publicKey: canonical })
 		.strict(),
 	/** How a start or a bundle roots: an approval's code, a family's refresh at its rotation, or a client. */
-	start: z.discriminatedUnion("via", [code, refresh, clientStart]),
+	start: z.discriminatedUnion("via", [codeStart, refresh, clientStart]),
 	bundle: z.discriminatedUnion("via", [code, refresh, clientBundle]),
 	noEffect: empty,
 	abandonment: empty,

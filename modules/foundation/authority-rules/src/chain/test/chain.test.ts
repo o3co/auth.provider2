@@ -223,6 +223,23 @@ describe("a code exchange: start and bundle (J2, J7, BundleEscape023)", () => {
 		expect(verdictOn(codeBundle(4, "login", "r-3", "r-2"), started)).toEqual(ok);
 	});
 
+	it("refuses a start naming another code or client than its approval's record, each held where named (V24, A21)", () => {
+		const named = (content: object) => {
+			const step = codeStart(3, "login", "r-2");
+			const opened = step.preimage as { content: object };
+			return { ...step, preimage: { ...opened, content: { via: "code", ...content } } };
+		};
+		const code = digest("code-sid-1");
+		expect(verdictOn(named({ code, client: "rp" }), approved())).toEqual(ok);
+		expect(verdictOn(named({ code }), approved())).toEqual(ok);
+		expect(verdictOn(named({ client: "rp" }), approved())).toEqual(ok);
+		const other = refused(/another code or client/);
+		expect(verdictOn(named({ code: digest("code-other"), client: "rp" }), approved())).toEqual(
+			other,
+		);
+		expect(verdictOn(named({ code, client: "another-rp" }), approved())).toEqual(other);
+	});
+
 	it("refuses a start of an approval that is not live, or at the op's last stage", () => {
 		expect(verdictOn(codeStart(2, "login", "r-2"), on([firstKey(1)]))).toEqual(refused(/not live/));
 		const step = codeStart(3, "login", "r-2");

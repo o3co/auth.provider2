@@ -200,7 +200,12 @@ function startRefusal(read: Read<"start">): Refusal {
 	const parent = preimage.parent;
 	if (parent === undefined) return "the start names no parent";
 	if (content.via === "code") {
-		if (!own(ask.state.approvals, parent)) return "the approval is not live on the flow";
+		const approval = own(ask.state.approvals, parent);
+		if (!approval) return "the approval is not live on the flow";
+		// V24 (A21): the code and the client its approval's record names, never another live approval's.
+		const other = (named: string | undefined, its: string) => named !== undefined && named !== its;
+		if (other(content.code, approval.code) || other(content.client, approval.client))
+			return "the start names another code or client than its approval";
 		if (used(ask.state, marks.code(parent))) return "the approval's code is exchanged";
 		// J2 counts the code exchanges' starts alone, whatever their verdict; a refresh's is not one.
 		const before = ask.prior.some(
