@@ -8,13 +8,13 @@
 - Anything a product reads: it is verification, unpublished.
 
 ## Offers
-- `usersLedger` (users): the password call, the lookups by subject and by identifier, and the create, for the users given (`LedgerUser`) and those it creates.
+- `usersLedger` (users): the password call, the lookups by subject and by identifier, the create and the identifierless create, for the users given (`LedgerUser`) and those it creates.
 - `passkeyWitnessLedger`.
 - Each a `FakeLedger`: its `answer` to a `LedgerCall` (a `LedgerAnswer`, none for a call not its own), its `urls` at a base (each call at `ledger-wire`'s route), and its `credential`.
 
 ## Invariants
 - A call of its own without its credential, or not a POST, is answered a bare `404`, so a wrong set-up shows; a user ledger's lookup or password call that finds no user says so (`404` with `not_found`).
-- A create adds a user with no password under a subject drawn for it, answered `201`; one for an identifier it holds answers `409` with `exists` and adds none. A user with no password passes no password call.
+- A create adds a user with no password under a subject drawn for it, answered `201`; one for an identifier it holds answers `409` with `exists` and adds none. A user with no password passes no password call. An identifierless create draws a subject for its key once and answers it, `201`, for that key ever after (a key of another form is `400`); the subject is found by subject alone.
 - A witness ledger keeps one mark per subject, set only where none is, withdrawn only by its token; a write answers `204`.
 - Each read names the mark's token; the passkey witness keeps no clear.
 - Each ledger draws a credential of its own.

@@ -40,6 +40,20 @@ describe("a fake ledger speaking users-http's calls", () => {
 		expect(ledger.credential).toMatch(/^[0-9a-f]{64}$/);
 	});
 
+	it("makes an identifierless subject for a key once, the same for that key after, found by subject", () => {
+		const key = "47DEQpj8HBSa-_TImW-5JCeuQeRkm5NMpJWZG3hSuFU";
+		const made = ledger.answer(call("/create-identifierless", { key }));
+		expect(made?.status).toBe(201);
+		const id = (made?.json as { id: string } | undefined)?.id;
+		expect(ledger.answer(call("/create-identifierless", { key }))).toEqual(made);
+		const other = ledger.answer(call("/create-identifierless", { key: key.replace("4", "5") }));
+		expect((other?.json as { id: string } | undefined)?.id).not.toBe(id);
+		expect(ledger.answer(call("/subject", { subject: id }))).toEqual({ json: { id } });
+		expect(ledger.answer(call("/create-identifierless", { key: "short" }))).toEqual({
+			status: 400,
+		});
+	});
+
 	it("verifies the right password, and says no such user to a wrong one", () => {
 		const user = { id: "u-1", username: "alice", email: "a@x.example", emailVerified: true };
 		expect(ledger.answer(call("/verify", { email: "alice", password: "right" }))).toEqual({

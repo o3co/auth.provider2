@@ -56,8 +56,9 @@ const authorized = (credential: string, call: LedgerCall) =>
 
 /**
  * A fake user ledger holding these users, as users-http calls it: the password call, the lookups by
- * subject and by identifier, and the create, which adds a user with no password under a subject drawn
- * for it.
+ * subject and by identifier, the create, which adds a user with no password under a subject drawn
+ * for it, and the identifierless create, which draws a subject for a key once and answers it for that key
+ * ever after.
  */
 export function usersLedger(
 	users: readonly LedgerUser[],
@@ -65,6 +66,8 @@ export function usersLedger(
 	const routes = ledgerRoutes.users;
 	const credential = randomBytes(32).toString("hex");
 	const held: LedgerUser[] = [...users];
+	/** The subject each identifierless create's key was answered. */
+	const identifierless = new Map<string, string>();
 	const answerOf = (user: LedgerUser): LedgerUserAnswer => ({
 		id: user.subject ?? user.identifier,
 		username: user.identifier,
@@ -81,8 +84,17 @@ export function usersLedger(
 			if (!authorized(credential, call)) return { status: 404 };
 			// The bodies users-http sends, as the wire builds them.
 			const given = JSON.parse(call.body) as Partial<
-				ReturnType<typeof usersWire.verify> & ReturnType<typeof usersWire.bySubject>
+				ReturnType<typeof usersWire.verify> &
+					ReturnType<typeof usersWire.bySubject> &
+					ReturnType<typeof usersWire.createIdentifierless>
 			>;
+			if (call.path === routes.createIdentifierless) {
+				const { key } = given;
+				if (!usersWire.identifierlessKey.safeParse(key).success) return { status: 400 };
+				const subject = identifierless.get(String(key)) ?? randomBytes(16).toString("hex");
+				identifierless.set(String(key), subject);
+				return { status: usersWire.created, json: { id: subject } };
+			}
 			const byIdentifier = held.find((u) => u.identifier === given.email);
 			if (call.path === routes.create) {
 				if (byIdentifier) return { status: 409, json: { error: usersWire.taken[409] } };
@@ -93,6 +105,12 @@ export function usersLedger(
 				held.push(made);
 				return { status: usersWire.created, json: answerOf(made) };
 			}
+			// An identifierless subject is found by its subject alone: it has no identifier.
+			if (
+				call.path === routes.subject &&
+				[...identifierless.values()].includes(String(given.subject))
+			)
+				return { json: { id: String(given.subject) } };
 			const user =
 				call.path === routes.subject
 					? held.find((u) => (u.subject ?? u.identifier) === given.subject)
