@@ -157,6 +157,40 @@ describe("firstKey.mail", () => {
 	});
 });
 
+describe("firstKey.recover", () => {
+	it("signs the mail's nonce and its sealed request's digest with the keys it was sealed under", async () => {
+		const { keys, mail } = await mailed();
+		const recovered = await firstKey.recover(mail);
+		if ("error" in recovered) throw new Error(recovered.error);
+		const ctHash = await digest(Buffer.concat([mail.sealed.enc, mail.sealed.ct]));
+		expect({ nonce: recovered.nonce, digest: recovered.digest }).toEqual({ nonce, digest: ctHash });
+		const publicKey = await crypto.subtle.importKey(
+			"jwk",
+			{ ...keys.eSig },
+			{ name: "ECDSA", namedCurve: "P-256" },
+			false,
+			["verify"],
+		);
+		const signature = Buffer.from(recovered.sig, "base64url");
+		expect(signature).toHaveLength(64);
+		const input = canonicalText({ purpose: "first-key/recover", nonce, digest: ctHash });
+		expect(words.recoverInput(nonce, ctHash)).toBe(input);
+		expect(
+			await crypto.subtle.verify(
+				{ name: "ECDSA", hash: "SHA-256" },
+				publicKey,
+				signature,
+				utf8(input),
+			),
+		).toBe(true);
+	});
+
+	it("recovers only a mail this page sealed", async () => {
+		const { mail } = await mailed();
+		expect(await firstKey.recover({ ...mail })).toEqual({ error: "mail" });
+	});
+});
+
 describe("firstKey.readCreation", () => {
 	it("reads the creation whose evidence and ciphertext hash are the screen's own", async () => {
 		const { mail, creationCompact, creationPayload, options } = await mailed();

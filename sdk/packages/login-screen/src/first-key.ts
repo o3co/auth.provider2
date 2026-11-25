@@ -70,15 +70,18 @@ async function openCode(
 	return read.success ? { code: read.data.code } : { error: "payload" };
 }
 
-/** The mail's side as the screen sealed it: the sealed request, and what a creation must name of it. */
+/** The mail's side as the screen sealed it: the sealed request, its nonce, and what a creation must name of it. */
 export interface Mail {
 	readonly sealed: Sealed;
+	/** The mail's nonce, the request was sealed under. */
+	readonly nonce: string;
 	/** The evidence's value: the mail token's hash. */
 	readonly evidence: string;
 	/** The ciphertext's hash: the SHA-256 of the sealed request's whole, its `enc` (65 bytes) then its `ct`. */
 	readonly ctHash: string;
 }
-const mails = new WeakSet<Mail>();
+/** Each mail this page sealed, with the screen keys it was sealed under (a recovery signs with them). */
+const mails = new WeakMap<Mail, ScreenKeys>();
 
 /** The mail's side: the token (from the link's fragment), the identifier and the start's code, sealed to the Core. */
 async function mail(
@@ -96,11 +99,35 @@ async function mail(
 	);
 	const sent: Mail = deepFreeze({
 		sealed,
+		nonce,
 		evidence: await digest(words.evidenceInput(read.data.token)),
 		ctHash: await digest(concat(sealed.enc, sealed.ct)),
 	});
-	mails.add(sent);
+	mails.set(sent, options.keys);
 	return { mail: sent };
+}
+
+/**
+ * A recovery where the creation's answer was lost (§C.4): the mail's nonce, its sealed request's
+ * digest (the ciphertext's hash a creation names), and E_sig's signature, ES256's raw r||s
+ * (base64url), over sdk-core-wire's `firstKey.recoverInput`, signed with the keys the mail was
+ * sealed under. The Core answers the creation it kept, the same bytes, read by `readCreation`. Only
+ * a mail this page sealed is recovered: a reloaded page has lost it.
+ */
+async function recover(
+	sent: Mail,
+): Promise<
+	| { readonly nonce: string; readonly digest: string; readonly sig: string }
+	| { readonly error: "mail" }
+> {
+	const keys = mails.get(sent);
+	if (keys === undefined) return { error: "mail" };
+	const signature = await crypto.subtle.sign(
+		{ name: "ECDSA", hash: "SHA-256" },
+		keys.signing.privateKey,
+		utf8(words.recoverInput(sent.nonce, sent.ctHash)),
+	);
+	return { nonce: sent.nonce, digest: sent.ctHash, sig: base64url(new Uint8Array(signature)) };
 }
 
 /** A creation as `readCreation` gave it. Only `readCreation` makes one. */
@@ -318,11 +345,12 @@ async function assertionOptions(
 	};
 }
 
-/** The first key's path on the screen: the start, the mail's side, the creation, `create()`, the continuation, the possession, the new key's `get()`. */
+/** The first key's path on the screen: the start, the mail's side (and its recovery), the creation, `create()`, the continuation, the possession, the new key's `get()`. */
 export const firstKey = Object.freeze({
 	start,
 	openCode,
 	mail,
+	recover,
 	readCreation,
 	createOptions,
 	continuation,
