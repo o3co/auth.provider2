@@ -352,15 +352,15 @@ describe("server nonces (RFC 9449 §8)", () => {
 	const ath = createHash("sha256").update(token).digest("base64url");
 	const toResource = () => proof({ htu: `${issuer}/api`, ath });
 	const askedAgain = { kind: "refused", error: "use_dpop_nonce" };
-	/** A nonce given, forged, or written otherwise than it was given: padded, with a stray character, a leading zero, a space. */
+	/** A nonce given, forged, or written otherwise than it was given: padded, with a stray character, a leading zero, a space, a dot. */
 	const notGiven = (given: string) => [
 		"forged",
-		`${given.split(".")[0]}.AAAA`,
+		`${given.slice(0, -43)}${"A".repeat(43)}`,
 		`${given} `,
 		`${given}=`,
 		`${given}!`,
 		`0${given}`,
-		given.replace(".", ". "),
+		`${given.slice(0, -43)}.${given.slice(-43)}`,
 	];
 
 	it("refuses a proof without the current nonce as use_dpop_nonce, giving it, and spends no jti [rfc9449-4.2-e] [rfc9449-4.3-h]", async () => {
@@ -371,7 +371,7 @@ describe("server nonces (RFC 9449 §8)", () => {
 		const first = await read(await proof({ jti }), issue);
 		if (first.kind !== "refused" || first.error !== "use_dpop_nonce") throw new Error(first.kind);
 		const given = first.headers?.["dpop-nonce"] ?? "";
-		expect(given).toMatch(/^\d+\.[A-Za-z0-9_-]+$/);
+		expect(given).toMatch(/^\d+[A-Za-z0-9_-]{43}$/);
 		expect(await read(await proof({ jti, nonce: given }), issue)).toMatchObject(bound);
 		for (const wrong of notGiven(given)) {
 			expect(await read(await proof({ nonce: wrong }), issue), wrong).toMatchObject({
@@ -446,7 +446,7 @@ describe("server nonces (RFC 9449 §8)", () => {
 			error: "use_dpop_nonce",
 			headers: {
 				"www-authenticate": 'DPoP error="use_dpop_nonce"',
-				"dpop-nonce": expect.stringMatching(/^\d+\.[A-Za-z0-9_-]+$/),
+				"dpop-nonce": expect.stringMatching(/^\d+[A-Za-z0-9_-]{43}$/),
 			},
 		});
 		const given = first.kind === "refused" ? first.headers["dpop-nonce"] : undefined;
