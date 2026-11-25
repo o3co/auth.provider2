@@ -1,5 +1,5 @@
 import { createHash, createPublicKey, type KeyObject } from "node:crypto";
-import { keyThumbprintInput } from "@mod/sdk-core-wire";
+import { passkeyThumbprintInput } from "@mod/passkey-key-wire";
 
 /** A passkey's key read from its COSE_Key: its algorithm as COSE numbers it, its thumbprint, the key. */
 export interface PasskeyKey {
@@ -67,7 +67,7 @@ export function passkeyKey(publicKey: string): PasskeyKey | undefined {
 	const cose = Buffer.from(publicKey, "base64url");
 	if (cose.toString("base64url") !== publicKey) return undefined;
 	const read = coseKeyAt(cose, 0);
-	const input = read && read.end === cose.length ? keyThumbprintInput(read.jwk) : undefined;
+	const input = read && read.end === cose.length ? passkeyThumbprintInput(read.jwk) : undefined;
 	if (!read || input === undefined) return undefined;
 	try {
 		// Node refuses a P-256 point off its curve.
@@ -78,7 +78,7 @@ export function passkeyKey(publicKey: string): PasskeyKey | undefined {
 	}
 }
 
-/** A passkey's thumbprint (sdk-core-wire's `keyThumbprintInput`, hashed) and algorithm, from its COSE_Key; none for any other value. */
+/** A passkey's thumbprint (passkey-key-wire's `passkeyThumbprintInput`, hashed) and algorithm, from its COSE_Key; none for any other value. */
 export function keyThumbprint(
 	publicKey: string,
 ): { readonly jkt: string; readonly alg: number } | undefined {

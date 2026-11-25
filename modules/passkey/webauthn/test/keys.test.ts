@@ -2,13 +2,13 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { keyThumbprint } from "../src/contract.ts";
 
-/** sdk-core-wire's shared vectors of the key form, which every reader of it runs. */
+/** passkey-key-wire's shared vectors of the key form, which every reader of it runs. */
 const vectors: {
 	readonly accepted: readonly { name: string; alg: number; cose: string; jkt: string }[];
 	readonly coseRefusals: readonly { why: string; cose: string }[];
 } = JSON.parse(
 	readFileSync(
-		new URL("../test/keys.vectors.json", import.meta.resolve("@mod/sdk-core-wire")),
+		new URL("../test/keys.vectors.json", import.meta.resolve("@mod/passkey-key-wire")),
 		"utf8",
 	),
 );
