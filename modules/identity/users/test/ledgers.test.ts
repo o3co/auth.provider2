@@ -164,7 +164,7 @@ usersContract("a contributed user ledger that makes subjects", {
 	createsIdentifierless: true,
 });
 
-ledgerContract("a contributed user ledger that makes subjects, named or not", {
+ledgerContract("a contributed user ledger that makes subjects, with an identifier or without", {
 	open: async () => {
 		const checks: string[] = [];
 		return { ledger: creatingLedger(checks), checks };

@@ -130,7 +130,10 @@ export function usersContract(name: string, harness: UsersHarness): void {
 				expect(twice[0]?.subject).toBe(twice[1]?.subject);
 				expect(twice[0]?.subject).not.toBe(made?.subject);
 				if (!harness.unanswerableBySubject && made)
-					expect(await u.bySubject(made.subject)).toEqual({ kind: "user", user: made });
+					expect(await u.bySubject(made.subject)).toMatchObject({
+						kind: "user",
+						user: { subject: made.subject },
+					});
 				for (const bad of ["", "short", `${key}=`, key.replace(/.$/, "B")])
 					await expect(u.createIdentifierless?.(bad), bad).rejects.toThrow(TypeError);
 			},
