@@ -182,6 +182,22 @@ describe("firstKey.readCreation", () => {
 		}
 	});
 
+	it("reads one of no basis or the first key's, and refuses another path's: a creation passkey-add or sign-up made is not this mail's", async () => {
+		const { mail, creationPayload, sign, options } = await mailed();
+		const withBasis = (creation: Record<string, unknown>) =>
+			sign({ ...creationPayload, creation: { ...creationPayload.creation, ...creation } });
+		expect(
+			await firstKey.readCreation(await withBasis({ basis: "first-key" }), mail, options),
+		).toHaveProperty("creation");
+		const { ct_hash: _, ...withoutCiphertext } = creationPayload.creation;
+		for (const basis of ["passkey-add", "sign-up"]) {
+			const compact = await sign({ ...creationPayload, creation: { ...withoutCiphertext, basis } });
+			expect(await firstKey.readCreation(compact, mail, options), basis).toEqual({
+				error: "basis",
+			});
+		}
+	});
+
 	it("refuses a mail it did not seal, and passes a statement's refusal through", async () => {
 		const { mail, creationCompact, creationPayload, options } = await mailed();
 		expect(await firstKey.readCreation(creationCompact, { ...mail }, options)).toEqual({

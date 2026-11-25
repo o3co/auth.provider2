@@ -111,9 +111,10 @@ export interface ReadCreation {
 const creations = new WeakSet<ReadCreation>();
 
 /**
- * The creation read before `create()`: a statement of its purpose, its evidence and ciphertext hash
- * exactly the screen's own for the mail it sealed. Another's would mean the Front rewrapped another
- * token or request to the screen's keys.
+ * The creation read before `create()`: a statement of its purpose, of the first key's path (no
+ * `basis`, or `first-key`; §C.3), its evidence and ciphertext hash exactly the screen's own for the
+ * mail it sealed. Another's would mean the Front rewrapped another token or request to the screen's
+ * keys. The schema already holds `options.algorithms` to one or more, none twice.
  */
 async function readCreation(
 	compact: string,
@@ -121,11 +122,13 @@ async function readCreation(
 	options: FirstKeyOptions,
 ): Promise<
 	| { readonly creation: ReadCreation }
-	| { readonly error: StatementError | "mail" | "evidence" | "ciphertext" }
+	| { readonly error: StatementError | "mail" | "basis" | "evidence" | "ciphertext" }
 > {
 	if (!mails.has(sent)) return { error: "mail" };
 	const read = await readStatement(compact, { ...options, purpose: "creation" });
 	if ("error" in read) return read;
+	const { basis } = read.statement.creation;
+	if (basis !== undefined && basis !== "first-key") return { error: "basis" };
 	if (read.statement.creation.evidence !== sent.evidence) return { error: "evidence" };
 	if (read.statement.creation.ct_hash !== sent.ctHash) return { error: "ciphertext" };
 	const creation: ReadCreation = deepFreeze({ statement: read.statement, compact });
