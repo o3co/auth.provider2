@@ -290,9 +290,17 @@ describe("the completions' answers", () => {
 			keyChange.safeParse({ ...base, purpose, change, ...more }).success;
 		expect(read("first-key", add)).toBe(true);
 		expect(read("passkey-add", add)).toBe(true);
+		const setSigned = JSON.stringify({
+			payload: "e30",
+			signatures: [{ protected: "e30", signature: "AA" }],
+		});
 		expect(
-			read("passkey-manage", del, { receipt: "a.b.c", status: "d.e.f", stateOf: "g.h.i" }),
+			read("passkey-manage", del, { receipt: "a.b.c", status: setSigned, stateOf: setSigned }),
 		).toBe(true);
+		// A status or a stateOf is a set's signed object, as JSON: a compact JWS, or JSON of no object, is not.
+		for (const signed of ["d.e.f", "[]", "null", "{"])
+			expect(read("passkey-manage", del, { status: signed }), signed).toBe(false);
+		expect(read("passkey-manage", del, { stateOf: "g.h.i" })).toBe(false);
 		expect(read("passkey-manage", add)).toBe(false);
 		expect(read("first-key", del)).toBe(false);
 		expect(read("passkey-add", del)).toBe(false);

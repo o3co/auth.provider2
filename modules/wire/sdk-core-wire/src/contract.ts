@@ -283,6 +283,15 @@ const label = z.string().regex(/^[^\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}]{1,64}$/u);
 const keyRow = z
 	.object({ credential_id: id, label, created_at: z.number().int().nonnegative() })
 	.strict();
+/** A set's signed object (a status, a stateOf) as JSON text, which transparency-wire's `setSigned` reads. */
+const setSignedText = z.string().refine((text) => {
+	try {
+		const value: unknown = JSON.parse(text);
+		return value !== null && typeof value === "object" && !Array.isArray(value);
+	} catch {
+		return false;
+	}
+});
 const completions = Object.freeze({
 	passkeyAdd: z
 		.object({
@@ -325,8 +334,8 @@ const completions = Object.freeze({
 				z.object({ op: z.literal("delete"), credential_id: id }).strict(),
 			]),
 			receipt: compactJws.optional(),
-			status: compactJws.optional(),
-			stateOf: compactJws.optional(),
+			status: setSignedText.optional(),
+			stateOf: setSignedText.optional(),
 			...times,
 		})
 		.strict()
