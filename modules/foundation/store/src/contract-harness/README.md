@@ -3,8 +3,8 @@
 Internal module of `store`: the contract test's shared part: the spaces it declares, the harness an implementation gives, and what every other part uses.
 
 ## Responsibilities
-- Declares the contract test's spaces (`contractSpaces`) and the harness an implementation gives (`StoreHarness`): how a test opens a store, a second connection, and, where the implementation has them, stopped replicas, a lost reply, a restart and a failover.
-- Builds what one run of the contract shares across its parts (`contractKit`): the spaces, a partition no other test uses, fresh keys in it, a key kept for ever, and two connections to the same data.
+- Declares the contract test's spaces (`contractSpaces`) and the harness an implementation gives (`StoreHarness`): how a test opens a store, a second connection, and, where the implementation has them, stopped replicas, a lost reply, a restart, a failover and a store clock moved on (`advance`).
+- Builds what one run of the contract shares across its parts (`contractKit`): the spaces, a partition no other test uses, fresh keys in it, a key kept for ever, two connections to the same data, and time passed on the store clock (`pass`, `past`): moved on where the harness gives `advance`, waited for in real time otherwise.
 - Holds the helpers the parts use: `overwrite` (also offered to other packages' tests), and reading until the store clock passes a time, retrying, racing two connections, and a write's version.
 
 ## Not here

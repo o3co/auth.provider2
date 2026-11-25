@@ -50,6 +50,12 @@ export interface StoreHarness {
 	 * the old roles with replicas running.
 	 */
 	failover?(): Promise<() => Promise<void>>;
+	/**
+	 * For implementations whose clock a test holds: moves the store clock on by `ms`, so a lifetime
+	 * or a deadline runs out at once. One without it is waited on in real time; a test tool only, the
+	 * contract's meaning the same either way.
+	 */
+	advance?(ms: number): Promise<void>;
 }
 
 /** The first answer `attempt` gives without rejecting, trying `tries` times 100 ms apart. */
@@ -117,7 +123,39 @@ export function contractKit(harness: StoreHarness) {
 		const s = await harness.open();
 		return [s, await harness.peer(s)] as const;
 	};
-	return { space, replicated, confirmed, twin, subjects, partition, fresh, never, both };
+	/** Lets `ms` of the store clock pass: moved on where the harness holds the clock, waited for otherwise. */
+	const pass = (ms: number) => (harness.advance ? harness.advance(ms) : sleep(ms));
+	/**
+	 * Until the store clock, as `read` reads it, is past `at`: moved on at once where the harness gives
+	 * `advance`; read again `every` ms of real time otherwise, given up `giveUpMs` later (never, unless
+	 * given). Its last reading.
+	 */
+	const past = async (
+		read: () => Promise<number>,
+		at: number,
+		wait: { readonly every: number; readonly giveUpMs?: number },
+	) => {
+		const giveUp = Date.now() + (wait.giveUpMs ?? Number.POSITIVE_INFINITY);
+		let now = await read();
+		while (now <= at && Date.now() < giveUp) {
+			await (harness.advance ? harness.advance(at - now + 1) : sleep(wait.every));
+			now = await read();
+		}
+		return now;
+	};
+	return {
+		space,
+		replicated,
+		confirmed,
+		twin,
+		subjects,
+		partition,
+		fresh,
+		never,
+		both,
+		pass,
+		past,
+	};
 }
 
 export type ContractKit = ReturnType<typeof contractKit>;

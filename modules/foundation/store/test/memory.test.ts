@@ -14,9 +14,14 @@ import { memoryStore } from "../src/memory/memory.ts";
 import storeModule from "../src/module.ts";
 import { contractSpaces, overwrite, storeConfig, storeContract } from "../src/testing.ts";
 
+/** The store clock a test moves on beside the caller's, as `advance` asks. */
+let moved = 0;
 storeContract("memory", {
-	open: async () => memoryStore({ now: () => Date.now() }, contractSpaces),
+	open: async () => memoryStore({ now: () => Date.now() + moved }, contractSpaces),
 	peer: async (s) => s,
+	advance: async (ms) => {
+		moved += ms;
+	},
 });
 
 it("offers a batch across partitions and spaces of one guarantee, so the contract's batches across run on it", () => {
@@ -39,10 +44,14 @@ it("judges the guarantees a batch across joins as sets, so a guarantee named twi
 });
 
 // A store clock far from the caller's catches implementations that judge time by the caller's clock.
-const skewed = { now: () => Date.now() + 3_600_000 };
+let skew = 3_600_000;
+const skewed = { now: () => Date.now() + skew };
 storeContract("memory with a skewed store clock", {
 	open: async () => memoryStore(skewed, contractSpaces),
 	peer: async (s) => s,
+	advance: async (ms) => {
+		skew += ms;
+	},
 });
 
 const start = 1_800_000_000_000;

@@ -5,13 +5,12 @@ import {
 	overwrite,
 	race,
 	type StoreHarness,
-	sleep,
 	versionOf,
 } from "../contract-harness/harness.ts";
 
 /** The store contract's batches across partitions and spaces, counting, and reads of several keys and a batch's time. */
 export function batchesContract(harness: StoreHarness, kit: ContractKit): void {
-	const { replicated, twin, fresh, never, both } = kit;
+	const { replicated, twin, fresh, never, both, pass, past } = kit;
 	describe("batches across partitions and spaces", () => {
 		/** The store's batch across partitions, or a skip where it offers none. */
 		const across = (s: Store, skip: () => void) => {
@@ -156,13 +155,13 @@ export function batchesContract(harness: StoreHarness, kit: ContractKit): void {
 			const short = { deadline: now + 1_000, idempotency: "short" };
 			expect((await batchAcross([], [put(c), put(d)], short)).kind).toBe("committed");
 			// Past the deadline, before the mark's end a second after it, with 600 ms to spare.
-			await sleep(1_400);
+			await pass(1_400);
 			// Its first partition free of the mark and its last holding it: reused, never late.
 			expect((await batchAcross([], [put(e), put(d)], short)).kind).toBe("reused");
 			expect((await batchAcross([], [put(c)], short)).kind).toBe("reused");
 			expect((await s.get(e)).entry).toBeNull();
 			// Past the end, with 400 ms to spare: forgotten in both partitions alike.
-			await sleep(1_000);
+			await pass(1_000);
 			const { now: later } = await s.get(c);
 			const again = { deadline: later + 60_000, idempotency: "short" };
 			expect((await batchAcross([], [put(c)], again)).kind).toBe("committed");
@@ -222,7 +221,7 @@ export function batchesContract(harness: StoreHarness, kit: ContractKit): void {
 			const results = await race(30, [s, t], (store) => store.count(k, { ms: 10_000, limit: 10 }));
 			expect(results.filter((r) => r.kind === "counted")).toHaveLength(10);
 			const resets = new Set(results.map((r) => ("resetAt" in r ? r.resetAt : -1)));
-			await sleep(30);
+			await pass(30);
 			const later = await s.count(k, { ms: 10_000, limit: 10 });
 			expect(later.kind).toBe("limited");
 			expect(resets.size).toBe(1);
@@ -240,12 +239,7 @@ export function batchesContract(harness: StoreHarness, kit: ContractKit): void {
 			expect((await s.count(k, window)).kind).toBe("limited");
 			// Past resetAt, not at it: a backend may keep the window through resetAt's own millisecond.
 			const resetAt = "resetAt" in first ? first.resetAt : Number.NaN;
-			const giveUp = Date.now() + window.ms + 5_000;
-			let now = await s.now();
-			while (now <= resetAt && Date.now() < giveUp) {
-				await sleep(20);
-				now = await s.now();
-			}
+			const now = await past(() => s.now(), resetAt, { every: 20, giveUpMs: window.ms + 5_000 });
 			expect(now > resetAt, "the store clock did not pass resetAt").toBe(true);
 			expect(await s.count(k, window)).toMatchObject({ kind: "counted", count: 1 });
 		});

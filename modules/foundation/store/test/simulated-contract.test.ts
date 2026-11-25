@@ -34,4 +34,5 @@ storeContract("simulated", {
 		await current?.failover();
 		return async () => {};
 	},
+	advance: async (ms) => current?.shiftClock(ms),
 });

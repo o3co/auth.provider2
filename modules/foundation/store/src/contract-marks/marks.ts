@@ -6,13 +6,12 @@ import {
 	overwrite,
 	race,
 	type StoreHarness,
-	sleep,
 	versionOf,
 } from "../contract-harness/harness.ts";
 
 /** The store contract's deadlines and idempotency marks, and concurrent connections. */
 export function marksContract(harness: StoreHarness, kit: ContractKit): void {
-	const { fresh, never, both } = kit;
+	const { fresh, never, both, pass } = kit;
 	describe("deadlines and idempotency marks", () => {
 		it("refuses putIfAbsent, replaceIf, removeIf, batch and mutate past their deadline on the store clock", async () => {
 			const s = await harness.open();
@@ -77,7 +76,7 @@ export function marksContract(harness: StoreHarness, kit: ContractKit): void {
 			const short = { ...never, deadline: now + 1_000, idempotency: "short" };
 			expect((await s.putIfAbsent(key("c"), 1, short)).kind).toBe("written");
 			// Forgotten 1 second after the deadline, checked with 400 ms to spare.
-			await sleep(2_400);
+			await pass(2_400);
 			const { now: later } = await s.get(key("c"));
 			const resend = await s.putIfAbsent(key("c"), 1, { ...short, deadline: later + 60_000 });
 			expect(resend.kind).toBe("exists");
@@ -149,7 +148,7 @@ export function marksContract(harness: StoreHarness, kit: ContractKit): void {
 			const { now } = await s.get(k);
 			const options = { ...never, deadline: now + 100, idempotency: "m" };
 			const first = await s.putIfAbsent(k, 1, options);
-			await sleep(300);
+			await pass(300);
 			expect(await s.putIfAbsent(k, 1, options)).toEqual(first);
 		});
 

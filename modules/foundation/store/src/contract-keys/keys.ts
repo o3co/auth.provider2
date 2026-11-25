@@ -6,13 +6,12 @@ import {
 	expectPresentUntil,
 	overwrite,
 	type StoreHarness,
-	sleep,
 	versionOf,
 } from "../contract-harness/harness.ts";
 
 /** The store contract's reads and writes, versions and expiry of single keys. */
 export function keysContract(harness: StoreHarness, kit: ContractKit): void {
-	const { fresh, never } = kit;
+	const { fresh, never, past, pass } = kit;
 	describe("reads and writes", () => {
 		it("reads back what it wrote with a version and the store time", async () => {
 			const s = await harness.open();
@@ -155,7 +154,7 @@ export function keysContract(harness: StoreHarness, kit: ContractKit): void {
 				seen.add(
 					versionOf(await overwrite(s, key("short"), i, { expiry: { kind: "after", ms: 100 } })),
 				);
-			await sleep(300);
+			await pass(300);
 			for (let i = 0; i < 5; i++) seen.add(versionOf(await overwrite(s, key("short"), i, never)));
 			expect(seen.size).toBe(13);
 			expect((await s.replaceIf(key("long"), kept, 2, never)).kind).toBe("written");
@@ -249,7 +248,7 @@ export function keysContract(harness: StoreHarness, kit: ContractKit): void {
 			const extended = await rewrite("long", long, { kind: "extend", ms: 5000 });
 			expect((await rewrite("forever", forever, { kind: "extend", ms: 10 })).kind).toBe("written");
 			// Until the store clock, not the caller's, is past both expiries.
-			while ((await s.get(key("probe"))).now <= Math.max(...ends)) await sleep(25);
+			await past(async () => (await s.get(key("probe"))).now, Math.max(...ends), { every: 25 });
 			expect((await s.get(key("short"))).entry).toBeNull();
 			expect((await s.get(key("kept"))).entry).toBeNull();
 			if (extended.kind === "written") expect((await s.get(key("long"))).entry?.value).toBe(2);
@@ -292,12 +291,7 @@ export function keysContract(harness: StoreHarness, kit: ContractKit): void {
 			await heldUntil("w", before + ms);
 			// Every expiry above ends by `end`, as each was written before this read.
 			const end = (await s.now()) + ms;
-			const giveUp = Date.now() + ms + 5_000;
-			let now = await s.now();
-			while (now <= end && Date.now() < giveUp) {
-				await sleep(20);
-				now = await s.now();
-			}
+			const now = await past(() => s.now(), end, { every: 20, giveUpMs: ms + 5_000 });
 			expect(now > end, "the store clock did not pass the expiries").toBe(true);
 			expect((await s.get(key("at"))).entry).toBeNull();
 			expect((await s.take(key("gone"))).kind).toBe("missing");

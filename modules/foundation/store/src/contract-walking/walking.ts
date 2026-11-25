@@ -1,16 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { Key, Space, Store } from "../contract.ts";
-import {
-	type ContractKit,
-	overwrite,
-	type StoreHarness,
-	sleep,
-} from "../contract-harness/harness.ts";
+import { type ContractKit, overwrite, type StoreHarness } from "../contract-harness/harness.ts";
 import { subjectWriter } from "../writer/subject-writer.ts";
 
 /** The store contract's scanning a space, and the checks on every input. */
 export function walkingContract(harness: StoreHarness, kit: ContractKit): void {
-	const { space, replicated, fresh, never } = kit;
+	const { space, replicated, fresh, never, past } = kit;
 	describe("scanning a space", () => {
 		const walk = async (s: Store, target: Space, between?: () => Promise<void>) => {
 			const seen = new Map<string, number>();
@@ -38,7 +33,7 @@ export function walkingContract(harness: StoreHarness, kit: ContractKit): void {
 			const { now } = await s.get(fresh()("probe"));
 			const ends = now + 30;
 			await overwrite(s, fresh()("gone"), 1, { expiry: { kind: "at", at: ends } });
-			while ((await s.now()) <= ends) await sleep(5);
+			await past(() => s.now(), ends, { every: 5 });
 			await overwrite(s, fresh(replicated)("elsewhere"), 1, never);
 			await s.count(fresh()("counted"), { ms: 60_000, limit: 5 });
 			const seen = await walk(s, space);
