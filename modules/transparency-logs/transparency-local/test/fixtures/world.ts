@@ -290,7 +290,7 @@ export type Passkey = Awaited<ReturnType<typeof passkey>>;
 
 export const subjectFlow = (id = fresh()): Flow => ({ of: "subject", id });
 
-/** The first key's stage: creation and possession signed by the ring, the key asserting the possession, its envelope naming their digests. */
+/** The first key's stage: creation and possession signed by the ring, the key asserting the possession, its envelope naming their digests, its op the reservation the possession names. */
 export async function firstKey(
 	world: World,
 	flow: Flow,
@@ -298,6 +298,8 @@ export async function firstKey(
 	p: { readonly now: number; readonly op?: string; readonly forgedBy?: World },
 ): Promise<Stage> {
 	const by = p.forgedBy ?? world;
+	// Its op is its reservation's id, which the possession names, as its writer places it.
+	const op = p.op ?? fresh();
 	const creation = await signed(
 		by,
 		{
@@ -328,7 +330,7 @@ export async function firstKey(
 				creation_hash: digest(creation),
 				key_jkt: keyThumbprint(key.publicKey)?.jkt,
 				credential_id: key.credential,
-				reservation_id: "res-1",
+				reservation_id: op,
 			},
 		},
 		p.now,
@@ -337,7 +339,7 @@ export async function firstKey(
 	return {
 		kind: "keyChange",
 		flow,
-		op: p.op ?? fresh(),
+		op,
 		stage: 1,
 		last: true,
 		keyChange: { statement: digest(possession), evidence: digest(asserted) },

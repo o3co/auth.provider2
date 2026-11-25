@@ -1,4 +1,4 @@
-import { canonicalText, continuation } from "@mod/sdk-core-wire";
+import { canonicalText, continuation, type PossessionPayload } from "@mod/sdk-core-wire";
 import type { AppendRequest } from "@mod/transparency-wire";
 import {
 	type ClientAt,
@@ -236,14 +236,7 @@ function firstKeyRefusal(read: Read<"keyChange">): Refusal {
 		const continued = continuedRefusal(ask.checks, of, of.continued, content);
 		if (continued) return continued;
 	}
-	const p = of.p.possession;
-	const named = newKeyRefusal(ask.checks, made, p, content.publicKey);
-	if (named) return named;
-	if (p.creation_hash !== ask.checks.digest(of.creation) || p.credential_id !== content.credential)
-		return "the signed bytes are not the record's";
-	if (!assertedBy(of.proof, content, of.possession, ask.checks, ask.context))
-		return "the new key does not assert the possession";
-	return keyChangeBound(ask, of.possession, of.proof);
+	return possessionRefusal(ask, of, [of.t?.payload, of.c, of.p], content);
 }
 
 /** A passkey-add's evidence, in its one order: its root, the creation, the continuation, the possession. */
@@ -301,12 +294,36 @@ function addRefusal(read: Read<"keyChange">): Refusal {
 		return "the creation names another screen's keys than its passkey-add";
 	const continued = continuedRefusal(checks, of, of.continued, content);
 	if (continued) return continued;
+	return possessionRefusal(ask, of, [of.t, of.c, of.p], content);
+}
+
+/**
+ * Why a key change's possession does not bind the record (P 355): its statements one issuer's; the
+ * possession naming the creation's digest, the credential, the new key by its thumbprint and the
+ * reservation whose id is the record's op; the new key asserting it; the envelope's digests its own.
+ */
+function possessionRefusal(
+	ask: Ask,
+	of: {
+		readonly creation: string;
+		readonly c: { readonly creation: Parameters<typeof newKeyRefusal>[1] };
+		readonly possession: string;
+		readonly p: { readonly possession: PossessionPayload["possession"] };
+		readonly proof: string;
+	},
+	statements: readonly ({ readonly iss: string } | undefined)[],
+	content: { readonly credential: string; readonly publicKey: string },
+): Refusal {
+	const issuers = new Set(statements.flatMap((s) => (s ? [s.iss] : [])));
+	if (issuers.size !== 1) return "the statements are not one issuer's";
 	const p = of.p.possession;
-	const named = newKeyRefusal(checks, made, p, content.publicKey);
+	const named = newKeyRefusal(ask.checks, of.c.creation, p, content.publicKey);
 	if (named) return named;
-	if (p.creation_hash !== checks.digest(of.creation) || p.credential_id !== content.credential)
+	if (p.creation_hash !== ask.checks.digest(of.creation) || p.credential_id !== content.credential)
 		return "the signed bytes are not the record's";
-	if (!assertedBy(of.proof, content, of.possession, checks, ask.context))
+	if (p.reservation_id !== ask.record.op)
+		return "the possession is for another reservation than the op";
+	if (!assertedBy(of.proof, content, of.possession, ask.checks, ask.context))
 		return "the new key does not assert the possession";
 	return keyChangeBound(ask, of.possession, of.proof);
 }

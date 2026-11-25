@@ -11,6 +11,7 @@ import {
 	prefixOf,
 	refreshBundle,
 	refreshStart,
+	reservation,
 	type Step,
 } from "../../../test/fixtures/flow.ts";
 import {
@@ -101,7 +102,7 @@ describe("a first-trust key (Rules023e Allowed `ft`)", () => {
 		const content = (key: typeof newKey) => ({ variant: "first", ...key });
 		const otherSubject = sign(creation("sub-2"), "ring-1");
 		const step = (c: string, p: string, key = newKey) => ({
-			record: coreRecord("keyChange", 1),
+			record: coreRecord("keyChange", 1, { op: reservation }),
 			preimage: preimage({ evidence: evidence(c, p, key), content: content(key) }),
 		});
 		expect(
@@ -134,6 +135,7 @@ describe("a first-trust key (Rules023e Allowed `ft`)", () => {
 			const proof = assertion(key, possessionJws);
 			const s: Step = {
 				record: coreRecord("keyChange", 1, {
+					op: reservation,
 					keyChange: { statement: digest(possessionJws), evidence: digest(proof) },
 				}),
 				preimage: preimage({

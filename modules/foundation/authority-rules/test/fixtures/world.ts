@@ -156,6 +156,7 @@ export const possession = (
 	creationJws: string,
 	key: { credential: string; publicKey: string },
 	iat = T0,
+	reservation = "res-1",
 ) => ({
 	iss: "https://core.example",
 	sid: "possession-1",
@@ -168,7 +169,7 @@ export const possession = (
 		creation_hash: digest(creationJws),
 		key_jkt: checks.keyThumbprint(key.publicKey)?.jkt,
 		credential_id: key.credential,
-		reservation_id: "res-1",
+		reservation_id: reservation,
 	},
 });
 

@@ -30,6 +30,9 @@ import {
 /** A login on a fresh flow, as an honest Core of generation 1 writes it: each step's record and preimage. */
 
 export const newKey = { credential: "cred-1", publicKey: coseKey(1) };
+/** The op a key change's record is placed under: the reservation its possession names (P 355). */
+export const reservation = "res-1";
+
 /** The first key's creation (signed for key generation `kg`) and possession, by the ring of generation 1. */
 const ceremony = (kg = 0) => {
 	const creationJws = sign(creation(subject.id, undefined, kg), "ring-1");
@@ -43,6 +46,7 @@ export const firstKey = (position = 1, kg = 0) => {
 	const proof = assertion(newKey, possessionJws);
 	return {
 		record: coreRecord("keyChange", position, {
+			op: reservation,
 			keyChange: { statement: digest(possessionJws), evidence: digest(proof) },
 		}),
 		preimage: preimage({
@@ -70,8 +74,10 @@ export function addParts(sid = "add-1", key: Key = addedKey, approver: Key = new
 	const statement = sign(passkeyAdd(sid), "ring-1");
 	const basis = { basis: "passkey-add", evidence: digest(statement) };
 	const creationJws = sign(creation(subject.id, undefined, 0, undefined, basis), "ring-1");
-	const possessionJws = sign(possession(creationJws, key), "ring-1");
+	const reserved = `res-${sid}`;
+	const possessionJws = sign(possession(creationJws, key, undefined, reserved), "ring-1");
 	return {
+		reservation: reserved,
 		statement,
 		asserted: assertion(approver, statement),
 		creation: creationJws,
@@ -86,6 +92,7 @@ export type AddParts = ReturnType<typeof addParts>;
 /** A key added by the live key `parent`'s approval, its envelope naming its digests. */
 export const added = (position: number, parent: string, parts: AddParts = addParts()) => ({
 	record: coreRecord("keyChange", position, {
+		op: parts.reservation,
 		keyChange: { statement: digest(parts.possession), evidence: digest(parts.proof) },
 	}),
 	preimage: preimage({
@@ -196,8 +203,10 @@ export function signUpParts(sid = "signup-1", key: Key = newKey) {
 	const t = sign(authorization(sid), "ring-1");
 	const basis = { basis: "sign-up", evidence: digest(t) };
 	const creationJws = sign(creation(subject.id, undefined, 0, undefined, basis), "ring-1");
-	const possessionJws = sign(possession(creationJws, key), "ring-1");
+	const reserved = `res-${sid}`;
+	const possessionJws = sign(possession(creationJws, key, undefined, reserved), "ring-1");
 	return {
+		reservation: reserved,
 		t,
 		creation: creationJws,
 		continuation: continued(creationJws, JSON.stringify(key)),
@@ -213,9 +222,10 @@ export const firstOver = (
 	position: number,
 	evidence: { form: string; value: string }[],
 	key: Key,
-	named: { possession: string; proof: string },
+	named: { possession: string; proof: string; reservation?: string },
 ) => ({
 	record: coreRecord("keyChange", position, {
+		op: named.reservation ?? reservation,
 		keyChange: { statement: digest(named.possession), evidence: digest(named.proof) },
 	}),
 	preimage: preimage({ evidence, content: { variant: "first", ...key } }),
