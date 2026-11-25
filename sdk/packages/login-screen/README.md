@@ -51,5 +51,5 @@
 - A new key is of an algorithm the creation offered (COSE ES256, EdDSA or RS256), its SPKI read as a key of that algorithm in its one DER form, and named by its JWK thumbprint (`key_jkt`) by sdk-core-wire's `keyThumbprintInput`, the vectors both sides share passing the same way. A browser whose WebCrypto lacks an algorithm the creation offers (Ed25519 in an older one) refuses a key of it as `key`, after `create()`: the deployment offers what its screens' browsers read.
 
 ## Depends on
-- `sdk-core-wire` (the words, the payloads, the items' rule, the inputs), `transparency-wire` (the receipt, the status, the stateOf, their signer sets), `flow-state-wire` (a stateOf's state, read).
-- `front-core-wire`, for a test alone: the answer forms and enum words it names agree with sdk-core-wire's.
+- `sdk-core-wire` (the words, the payloads, the items' rule, the inputs), `continuation-wire` (a continuation's stages, bodies and bytes), `transparency-wire` (the receipt, the status, the stateOf, their signer sets), `flow-state-wire` (a stateOf's state, read).
+- `front-core-wire`, for a test alone: the answer forms and purposes it names agree with sdk-core-wire's, the stages with continuation-wire's.

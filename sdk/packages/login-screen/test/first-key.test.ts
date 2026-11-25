@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
+import { continuations } from "@mod/continuation-wire";
 import {
 	canonicalText,
-	continuation,
 	hpke,
 	keyThumbprintInput,
 	purposes,
@@ -314,7 +314,7 @@ describe("firstKey.continuation", () => {
 		if ("error" in signed) throw new Error(signed.error);
 		const signature = Buffer.from(signed.signature, "base64url");
 		expect(signature).toHaveLength(64);
-		const input = continuation.of(
+		const input = continuations.of(
 			"register",
 			await digest(creationCompact),
 			1,

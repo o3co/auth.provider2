@@ -1,6 +1,6 @@
+import { continuations as continued } from "@mod/continuation-wire";
 import {
 	type CreationPayload,
-	continuation as continued,
 	hpke,
 	keyThumbprintInput,
 	type PossessionPayload,

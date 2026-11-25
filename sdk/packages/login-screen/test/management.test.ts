@@ -1,4 +1,5 @@
-import { canonicalText, continuation, hpke, purposes, typs } from "@mod/sdk-core-wire";
+import { continuations } from "@mod/continuation-wire";
+import { canonicalText, hpke, purposes, typs } from "@mod/sdk-core-wire";
 import { describe, expect, it } from "vitest";
 import { digest, utf8 } from "../src/bytes.ts";
 import { firstKey } from "../src/first-key.ts";
@@ -77,11 +78,11 @@ describe("management.continuation (V24)", () => {
 			w.pair,
 			made.sealed,
 			utf8(hpke.info.continuation),
-			utf8(continuation.aad("rename", h, 2)),
+			utf8(continuations.aad("rename", h, 2)),
 		);
 		const text = new TextDecoder().decode(opened);
-		expect(new TextEncoder().encode(text)).toHaveLength(continuation.plainBytes);
-		const read = continuation.readPlain("rename", text);
+		expect(new TextEncoder().encode(text)).toHaveLength(continuations.plainBytes);
+		const read = continuations.readPlain("rename", text);
 		expect(read?.body).toEqual(body);
 		const key = await crypto.subtle.importKey(
 			"jwk",
@@ -90,7 +91,7 @@ describe("management.continuation (V24)", () => {
 			false,
 			["verify"],
 		);
-		const input = continuation.of("rename", h, 2, await digest(canonicalText(body)));
+		const input = continuations.of("rename", h, 2, await digest(canonicalText(body)));
 		expect(
 			await crypto.subtle.verify(
 				{ name: "ECDSA", hash: "SHA-256" },
@@ -100,7 +101,7 @@ describe("management.continuation (V24)", () => {
 			),
 		).toBe(true);
 		// Bound: another sequence's or stage's additional data opens nothing.
-		for (const aad of [continuation.aad("rename", h, 3), continuation.aad("delete", h, 2)])
+		for (const aad of [continuations.aad("rename", h, 3), continuations.aad("delete", h, 2)])
 			expect(
 				await openSealed(w.pair, made.sealed, utf8(hpke.info.continuation), utf8(aad)),
 			).toBeUndefined();
@@ -118,7 +119,7 @@ describe("management.continuation (V24)", () => {
 		);
 		if ("error" in short || "error" in long) throw new Error("not sealed");
 		expect(short.sealed.ct.length).toBe(long.sealed.ct.length);
-		expect(short.sealed.ct.length).toBe(continuation.plainBytes + 16);
+		expect(short.sealed.ct.length).toBe(continuations.plainBytes + 16);
 	});
 
 	it("refuses a statement it did not read, keys other than the ones it names, a sequence out of 1 to 16, and a body of no shape", async () => {

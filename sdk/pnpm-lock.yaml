@@ -23,6 +23,9 @@ importers:
 
   packages/login-screen:
     dependencies:
+      '@mod/continuation-wire':
+        specifier: link:../../../modules/wire/continuation-wire
+        version: link:../../../modules/wire/continuation-wire
       '@mod/flow-state-wire':
         specifier: link:../../../modules/wire/flow-state-wire
         version: link:../../../modules/wire/flow-state-wire

@@ -1,10 +1,5 @@
-import {
-	canonicalText,
-	continuation as continued,
-	hpke,
-	type payloads,
-	payloads as schemas,
-} from "@mod/sdk-core-wire";
+import { continuations as continued } from "@mod/continuation-wire";
+import { hpke, type payloads, payloads as schemas } from "@mod/sdk-core-wire";
 import { base64url, deepFreeze, digest, utf8 } from "./bytes.ts";
 import { openCompletion } from "./completion.ts";
 import { creationOf, type ReadCreation } from "./first-key.ts";
@@ -142,7 +137,7 @@ export interface Continued {
 	readonly stage: "delete" | "rename";
 	readonly seq: number;
 	readonly body: { readonly credential_id: string; readonly label?: string };
-	/** The hash of the body's `canonicalText`, the one its signature covers. */
+	/** The hash of the body's text (continuation-wire's `bodyText`), the one its signature covers. */
 	readonly bodyHash: string;
 }
 const sent = new WeakSet<Continued>();
@@ -152,7 +147,7 @@ export const wasSent = (continuation: Continued): boolean => sent.has(continuati
 
 /**
  * A delete's or a rename's continuation (V24): its body, of its stage's shape, signed with E_sig over
- * the plaintext body's hash (`continuation.of`, as every stage), and the body with its signature
+ * the plaintext body's hash (continuation-wire's `of`, as every stage), and the body with its signature
  * sealed to the Core's sealing key, padded to one length and bound to the stage, the statement and
  * the sequence. The Front sees neither. A resend sends the same sealed value again, kept by the
  * caller: sealing anew gives other bytes for the same body. What was sent (`Continued`) is what the
@@ -176,7 +171,9 @@ async function continuation(
 	const read = continued.bodies[stage].safeParse(body);
 	if (!read.success) return { error: "body" };
 	const h = await digest(manage.compact);
-	const bodyHash = await digest(canonicalText(read.data));
+	const text = continued.bodyText(stage, read.data);
+	if (text === undefined) return { error: "body" };
+	const bodyHash = await digest(text);
 	const input = continued.of(stage, h, seq, bodyHash);
 	const signature = await crypto.subtle.sign(
 		{ name: "ECDSA", hash: "SHA-256" },
