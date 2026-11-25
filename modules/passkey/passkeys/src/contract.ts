@@ -39,6 +39,8 @@ export interface Passkeys {
 				readonly kind: "asserted";
 				readonly subject: string;
 				readonly credential: string;
+				/** The id of the key's registration's record on the subject's flow, as `publicKeyOf` names it, from the read that verified the assertion. */
+				readonly registration: string;
 				readonly userVerified: boolean;
 				readonly backupEligible: boolean;
 		  }

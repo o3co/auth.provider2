@@ -178,16 +178,20 @@ export async function stack(given: { readonly passkeys?: Record<string, unknown>
 	const auth = softwareAuthenticator();
 	const client = { origin: testOrigin };
 
-	/** A first key's creation for `subject`, as the mail's side issues it, and its screen. */
-	const created = async (subject = "s1", basis: "first-key" | "passkey-add" = "first-key") => {
-		const shown = screen();
+	/** A creation for `subject`, a first key's as the mail's side issues it unless told, and its screen. */
+	const created = async (
+		subject = "s1",
+		basis: "first-key" | "passkey-add" = "first-key",
+		given: { readonly evidence?: string; readonly shown?: ReturnType<typeof screen> } = {},
+	) => {
+		const shown = given.shown ?? screen();
 		const handle = freshHandle(randomBytes);
 		const issued = await parts.approvals.issue({
 			purpose: "creation",
 			items: {
 				account: "a***@example.com",
 				basis,
-				evidence: sha256("token"),
+				evidence: given.evidence ?? sha256("token"),
 				...(basis === "first-key" ? { ct_hash: sha256("ct") } : {}),
 				subject,
 				kg: 0,

@@ -4,6 +4,7 @@ import { type Stage, transparency, transparencyLog } from "@mod/transparency";
 import { tokens } from "@mod/transparency-wire";
 import { describe, expect, it } from "vitest";
 import { approvalKind, deciding } from "../src/completion/completion.ts";
+import { passkeyAddCompletionsOver } from "../src/completion/passkey-add.ts";
 import { type IssueAsk, statementItems } from "../src/contract.ts";
 import { recordOf } from "../src/statement/statement.ts";
 import { openSealed, screenKeys, sha256, world } from "./fixtures/world.ts";
@@ -150,6 +151,17 @@ describe("declaring the items", () => {
 		);
 	});
 
+	it("refuses boot for any item of a passkey-add, which names none", async () => {
+		const filling = defineModule({ name: "odd", replicaSafe: true, takes: [] }, (m) => [
+			m
+				.contribute(statementItems)
+				.by(() => ({ purpose: "passkey-add", names: ["amount"], by: "odd" })),
+		]);
+		await expect(world({ items: filling })).rejects.toMatchObject(
+			refusal(/fills passkey-add\/amount/),
+		);
+	});
+
 	it("refuses boot for an item two modules fill", async () => {
 		await expect(world({ modules: [declaring("second", ["scope"])] })).rejects.toMatchObject(
 			refusal(/both fill authorization\/scope/),
@@ -172,6 +184,8 @@ describe("using a statement", () => {
 				items,
 				subject: "s1",
 				credential: key.id,
+				// The asserting key's registration's record, as passkeys answered it.
+				registration: "r0",
 				usedAt: 1_800_000_000_000,
 				issuedAt: 1_800_000_000_000,
 				// The thumbprint of the screen's E_sig the statement was issued with (RFC 7638).
@@ -245,6 +259,96 @@ describe("using a statement", () => {
 			kind: "refused",
 			reason: "unverified",
 		});
+	});
+
+	it("issues a passkey-add with no member of items, and uses it by an assertion, never a verification", async () => {
+		const w = await world();
+		const key = await w.plant("s1");
+		const { screen } = screenKeys();
+		const a = await w.approvals.issue({ purpose: "passkey-add", items: {}, screen, by: "src" });
+		if (a.kind !== "issued") throw new Error(a.reason);
+		const payload = payloadOf(a.statement);
+		expect(payloads.passkeyAdd.safeParse(payload).success).toBe(true);
+		expect(payload).not.toHaveProperty("passkey-add");
+		expect(await w.approvals.use({ statement: a.statement, verification: "v1" })).toEqual({
+			kind: "refused",
+			reason: "purpose",
+		});
+		const assertion = w.assert(a.challenge);
+		expect(await w.approvals.use({ statement: a.statement, assertion })).toMatchObject({
+			kind: "approved",
+			approval: {
+				hash: a.hash,
+				purpose: "passkey-add",
+				items: {},
+				subject: "s1",
+				credential: key.id,
+				registration: "r0",
+			},
+		});
+	});
+
+	it("gives a used passkey-add as its key change takes it, while it lives; none for another", async () => {
+		const w = await world();
+		const key = await w.plant("s1");
+		const keys = screenKeys();
+		const a = await w.approvals.issue({
+			purpose: "passkey-add",
+			items: {},
+			screen: keys.screen,
+			by: "src",
+		});
+		if (a.kind !== "issued") throw new Error(a.reason);
+		// Not used yet: none.
+		expect(await w.approvals.passkeyAddOf(a.hash)).toBeUndefined();
+		const assertion = w.assert(a.challenge);
+		await w.approvals.use({ statement: a.statement, assertion });
+		expect(await w.approvals.passkeyAddOf(a.hash)).toEqual({
+			statement: a.statement,
+			assertion,
+			subject: "s1",
+			credential: key.id,
+			registration: "r0",
+			screen: keys.screen,
+			// The use-once mark the rules' fold names: the statement's id.
+			mark: `statement:${payloadOf(a.statement).sid}`,
+		});
+		// An authorization used alike is none of it.
+		const t = await issued(w);
+		await w.approvals.use({ statement: t.statement, assertion: w.assert(t.challenge) });
+		expect(await w.approvals.passkeyAddOf(t.hash)).toBeUndefined();
+		// Past its statement's expiry, its record still kept: none.
+		w.advance(5 * 60_000 + 1000);
+		expect(await w.approvals.passkeyAddOf(a.hash)).toBeUndefined();
+	});
+
+	it("gives no passkey-add used before its record held the key's registration", async () => {
+		const w = await world();
+		await w.plant("s1");
+		const { screen } = screenKeys();
+		const a = await w.approvals.issue({ purpose: "passkey-add", items: {}, screen, by: "src" });
+		if (a.kind !== "issued") throw new Error(a.reason);
+		await w.approvals.use({ statement: a.statement, assertion: w.assert(a.challenge) });
+		await w.statements.store.change(a.hash, (r) => {
+			const { registration: _gone, ...rest } = r as unknown as Record<string, unknown>;
+			return { value: rest as never };
+		});
+		expect(await w.approvals.passkeyAddOf(a.hash)).toBeUndefined();
+	});
+
+	it("gives no passkey-add whose bytes this generation's ring does not verify", async () => {
+		const w = await world();
+		await w.plant("s1");
+		const { screen } = screenKeys();
+		const a = await w.approvals.issue({ purpose: "passkey-add", items: {}, screen, by: "src" });
+		if (a.kind !== "issued") throw new Error(a.reason);
+		await w.approvals.use({ statement: a.statement, assertion: w.assert(a.challenge) });
+		const [head, body] = a.statement.split(".");
+		const other = `${head}.${body}.${Buffer.alloc(64).toString("base64url")}`;
+		await w.statements.store.change(a.hash, (r) => ({
+			value: { ...(r as object), jws: other } as never,
+		}));
+		expect(await w.approvals.passkeyAddOf(a.hash)).toBeUndefined();
 	});
 
 	it("uses a possession by its pending key's verification, and no other purpose so", async () => {
@@ -399,6 +503,219 @@ describe("a key change's completion", () => {
 	});
 });
 
+describe("a passkey-add's completion", () => {
+	/** A passkey-add used by an assertion, and a creation issued for it to the same screen. */
+	async function approved(w: Awaited<ReturnType<typeof world>>) {
+		await w.plant("s1");
+		const keys = screenKeys();
+		const a = await w.approvals.issue({
+			purpose: "passkey-add",
+			items: {},
+			screen: keys.screen,
+			by: "src",
+		});
+		if (a.kind !== "issued") throw new Error(a.reason);
+		const assertion = w.assert(a.challenge);
+		await w.approvals.use({ statement: a.statement, assertion });
+		const { ct_hash: _none, ...rest } = creationItems;
+		const creationFor = async (items: object, screen = keys.screen) => {
+			const c = await w.approvals.issue({
+				purpose: "creation",
+				// A member given as undefined is none: a sign-up's names no account.
+				items: JSON.parse(
+					JSON.stringify({ ...rest, basis: "passkey-add", evidence: a.hash, ...items }),
+				) as never,
+				screen,
+				by: "s1",
+			});
+			if (c.kind !== "issued") throw new Error(c.reason);
+			return c.statement;
+		};
+		return { keys, a, assertion, creation: await creationFor({}), creationFor };
+	}
+
+	it("signs the creation made for it, sealed to its screen under its purpose and hash, and keeps it", async () => {
+		const w = await world();
+		const { keys, a, assertion, creation, creationFor } = await approved(w);
+		const done = await w.approvals.completePasskeyAdd({ hash: a.hash, assertion, creation });
+		if (done.kind !== "completed") throw new Error(done.reason);
+		const jws = openSealed(
+			keys.encKey,
+			done,
+			hpke.info.completion,
+			hpke.completionAad("passkey-add", a.hash),
+		);
+		expect(await w.keys.verify("core", jws, typs.completion)).toMatchObject({ kind: "valid" });
+		const payload = payloadOf(jws);
+		expect(payloads.completions.passkeyAdd.safeParse(payload).success).toBe(true);
+		expect(payload).toMatchObject({
+			purpose: "passkey-add",
+			t_hash: a.hash,
+			assertion_hash: sha256(assertion),
+			creation,
+		});
+		// The one kept is answered, asked with no creation or another, and past the statement's expiry.
+		const other = await creationFor({});
+		expect(await w.approvals.completePasskeyAdd({ hash: a.hash, assertion })).toEqual(done);
+		expect(
+			await w.approvals.completePasskeyAdd({ hash: a.hash, assertion, creation: other }),
+		).toEqual(done);
+		w.advance(5 * 60_000 + 1000);
+		expect(await w.approvals.completePasskeyAdd({ hash: a.hash, assertion })).toEqual(done);
+		// Past its expiry the passkey-add is given no more; its record reads as used, its completion kept.
+		expect(await w.approvals.passkeyAddOf(a.hash)).toBeUndefined();
+		expect(await w.approvals.usedOf(a.hash)).toMatchObject({
+			purpose: "passkey-add",
+			completed: true,
+		});
+	});
+
+	it("keeps nothing where signing or sealing fails, and completes it when asked again", async () => {
+		const w = await world();
+		const { a, assertion, creation } = await approved(w);
+		const over = (keys: typeof w.keys) =>
+			passkeyAddCompletionsOver({
+				keys,
+				store: w.statements.store,
+				issuer: "https://issuer.example",
+				now: () => 1_800_000_000_000,
+			});
+		const withdrawn = over({ ...w.keys, sign: async () => ({ kind: "withdrawn" }) as never });
+		expect(await withdrawn({ hash: a.hash, assertion, creation })).toEqual({
+			kind: "refused",
+			reason: "withdrawn",
+		});
+		const unsealed = over({
+			...w.keys,
+			seal: async () => {
+				throw new Error("sealing fell");
+			},
+		});
+		await expect(unsealed({ hash: a.hash, assertion, creation })).rejects.toThrow("sealing fell");
+		// Still used, none kept: asked with no creation it answers none, and with one it completes.
+		expect(await w.approvals.usedOf(a.hash)).not.toHaveProperty("completed");
+		expect(await w.approvals.completePasskeyAdd({ hash: a.hash, assertion })).toEqual({
+			kind: "refused",
+			reason: "unknown",
+		});
+		expect(
+			await w.approvals.completePasskeyAdd({ hash: a.hash, assertion, creation }),
+		).toMatchObject({
+			kind: "completed",
+		});
+	});
+
+	it("answers the one kept only to the assertion that used it", async () => {
+		const w = await world();
+		const { a, assertion, creation } = await approved(w);
+		const done = await w.approvals.completePasskeyAdd({ hash: a.hash, assertion, creation });
+		expect(done.kind).toBe("completed");
+		const another = w.assert(a.challenge);
+		for (const ask of [{ assertion: another }, { assertion: another, creation }])
+			expect(await w.approvals.completePasskeyAdd({ hash: a.hash, ...ask })).toEqual({
+				kind: "refused",
+				reason: "assertion",
+			});
+	});
+
+	it("makes none for a passkey-add whose bytes this generation's ring does not verify", async () => {
+		const w = await world();
+		const { a, assertion, creation } = await approved(w);
+		const [head, body] = a.statement.split(".");
+		const other = `${head}.${body}.${Buffer.alloc(64).toString("base64url")}`;
+		await w.statements.store.change(a.hash, (r) => ({
+			value: { ...(r as object), jws: other } as never,
+		}));
+		expect(await w.approvals.completePasskeyAdd({ hash: a.hash, assertion, creation })).toEqual({
+			kind: "refused",
+			reason: "unknown",
+		});
+	});
+
+	it("is no authorization: completed or rooted as one, it answers none", async () => {
+		const w = await world();
+		const { a } = await approved(w);
+		expect(await w.approvals.complete({ hash: a.hash, code: "c" })).toEqual({
+			kind: "refused",
+			reason: "purpose",
+		});
+		expect(await w.approvals.rootOf(a.hash)).toBeUndefined();
+	});
+
+	it("keeps one of two creations asked at once, and answers it to both", async () => {
+		const w = await world();
+		const { a, assertion, creation, creationFor } = await approved(w);
+		const other = await creationFor({});
+		const [one, two] = await Promise.all([
+			w.approvals.completePasskeyAdd({ hash: a.hash, assertion, creation }),
+			w.approvals.completePasskeyAdd({ hash: a.hash, assertion, creation: other }),
+		]);
+		expect(one.kind).toBe("completed");
+		expect(two).toEqual(one);
+	});
+
+	it("signs no creation but one issued here for it, to its screen, and answers none kept yet", async () => {
+		const w = await world();
+		const { a, assertion, creationFor } = await approved(w);
+		expect(await w.approvals.completePasskeyAdd({ hash: a.hash, assertion })).toEqual({
+			kind: "refused",
+			reason: "unknown",
+		});
+		const refuses = async (creation: string) =>
+			expect(await w.approvals.completePasskeyAdd({ hash: a.hash, assertion, creation })).toEqual({
+				kind: "refused",
+				reason: "creation",
+			});
+		// For another statement's evidence, another basis, or another screen's keys; or bytes not issued here.
+		await refuses(await creationFor({ evidence: sha256("other") }));
+		// A sign-up's creation names no account, its name in `user_name` alone.
+		await refuses(
+			await creationFor({
+				basis: "sign-up",
+				account: undefined,
+				options: { ...creationItems.options, user_name: "Example 3fa9c1" },
+			}),
+		);
+		await refuses(await creationFor({ subject: "s2" }));
+		await refuses(await creationFor({}, screenKeys().screen));
+		const [head, body] = (await creationFor({})).split(".");
+		await refuses(`${head}.${body}.${Buffer.alloc(64).toString("base64url")}`);
+	});
+
+	it("answers no statement but a passkey-add used by that assertion, unexpired", async () => {
+		const w = await world();
+		const { a, assertion, creation } = await approved(w);
+		const another = w.assert(a.challenge);
+		expect(
+			await w.approvals.completePasskeyAdd({ hash: a.hash, assertion: another, creation }),
+		).toEqual({
+			kind: "refused",
+			reason: "assertion",
+		});
+		const t = await issued(w);
+		const tAssertion = w.assert(t.challenge);
+		await w.approvals.use({ statement: t.statement, assertion: tAssertion });
+		expect(
+			await w.approvals.completePasskeyAdd({ hash: t.hash, assertion: tAssertion, creation }),
+		).toEqual({ kind: "refused", reason: "purpose" });
+		const unused = await w.approvals.issue({
+			purpose: "passkey-add",
+			items: {},
+			screen: screenKeys().screen,
+			by: "src",
+		});
+		if (unused.kind !== "issued") throw new Error(unused.reason);
+		expect(
+			await w.approvals.completePasskeyAdd({ hash: unused.hash, assertion, creation }),
+		).toEqual({ kind: "refused", reason: "unused" });
+		w.advance(5 * 60_000 + 1000);
+		expect(await w.approvals.completePasskeyAdd({ hash: a.hash, assertion, creation })).toEqual({
+			kind: "refused",
+			reason: "expired",
+		});
+	});
+});
+
 describe("a continuation", () => {
 	it("hands its step the creation as its record keeps it: the items signed and the screen's keys", async () => {
 		const w = await world();
@@ -521,6 +838,131 @@ describe("a continuation", () => {
 				step: async () => null,
 			}),
 		).toEqual({ kind: "refused", reason: "purpose" });
+	});
+
+	it("gives a creation's last continuation as taken, with what its step answered, in one read", async () => {
+		const w = await world();
+		const keys = screenKeys();
+		const c = await w.approvals.issue({
+			purpose: "creation",
+			items: creationItems,
+			screen: keys.screen,
+			by: "s",
+		});
+		if (c.kind !== "issued") throw new Error(c.reason);
+		const signed = (seq: number, body: string) =>
+			keys.signs(continuation.of("register", c.hash, seq, sha256(body)));
+		const step = (seq: number, body: string, signature: string, run = async () => ({ seq })) =>
+			w.approvals.continue({ hash: c.hash, seq, body, signature, step: run });
+		expect(await w.approvals.continuationOf(c.hash)).toBeUndefined();
+		const first = signed(1, "b1");
+		await step(1, "b1", first);
+		expect(await w.approvals.continuationOf(c.hash)).toEqual({
+			seq: 1,
+			body: "b1",
+			signature: first,
+			result: { seq: 1 },
+		});
+		// Sent again under another signature of the same body: answered as kept, the first bytes kept.
+		await step(1, "b1", signed(1, "b1"));
+		expect(await w.approvals.continuationOf(c.hash)).toMatchObject({ signature: first });
+		const second = signed(2, "b2");
+		await step(2, "b2", second);
+		expect(await w.approvals.continuationOf(c.hash)).toEqual({
+			seq: 2,
+			body: "b2",
+			signature: second,
+			result: { seq: 2 },
+		});
+		const t = await issued(w);
+		expect(await w.approvals.continuationOf(t.hash)).toBeUndefined();
+		w.advance(5 * 60_000 + 1000);
+		expect(await w.approvals.continuationOf(c.hash)).toBeUndefined();
+	});
+
+	it("keeps the bytes of the call that took a number when another takes its lapsed hold", async () => {
+		const w = await world();
+		const keys = screenKeys();
+		const c = await w.approvals.issue({
+			purpose: "creation",
+			items: creationItems,
+			screen: keys.screen,
+			by: "s",
+		});
+		if (c.kind !== "issued") throw new Error(c.reason);
+		const signed = () => keys.signs(continuation.of("register", c.hash, 1, sha256("b1")));
+		const first = signed();
+		const fell = w.approvals.continue({
+			hash: c.hash,
+			seq: 1,
+			body: "b1",
+			signature: first,
+			step: async () => {
+				throw new Error("fell");
+			},
+		});
+		await expect(fell).rejects.toThrow("fell");
+		// Taken, its answer not kept yet: what was sent is read, with no answer.
+		expect(await w.approvals.continuationOf(c.hash)).toEqual({
+			seq: 1,
+			body: "b1",
+			signature: first,
+		});
+		w.advance(31_000);
+		await w.approvals.continue({
+			hash: c.hash,
+			seq: 1,
+			body: "b1",
+			signature: signed(),
+			step: async () => "kept",
+		});
+		expect(await w.approvals.continuationOf(c.hash)).toEqual({
+			seq: 1,
+			body: "b1",
+			signature: first,
+			result: "kept",
+		});
+	});
+
+	it("refuses a body past 8192 bytes, and a signature in another spelling, taking nothing", async () => {
+		const w = await world();
+		const keys = screenKeys();
+		const c = await w.approvals.issue({
+			purpose: "creation",
+			items: creationItems,
+			screen: keys.screen,
+			by: "s",
+		});
+		if (c.kind !== "issued") throw new Error(c.reason);
+		const ask = (body: string, signature: string) =>
+			w.approvals.continue({ hash: c.hash, seq: 1, body, signature, step: async () => null });
+		const big = "x".repeat(8193);
+		expect(await ask(big, keys.signs(continuation.of("register", c.hash, 1, sha256(big))))).toEqual(
+			{
+				kind: "refused",
+				reason: "body",
+			},
+		);
+		// The same 64 bytes, its last character's unused bits set: it verifies, and is refused.
+		const sig = keys.signs(continuation.of("register", c.hash, 1, sha256("b1")));
+		const last = sig.at(-1) as string;
+		const spelt = `${sig.slice(0, -1)}${String.fromCharCode(last.charCodeAt(0) + 1)}`;
+		expect(Buffer.from(spelt, "base64url")).toEqual(Buffer.from(sig, "base64url"));
+		expect(await ask("b1", spelt)).toEqual({ kind: "refused", reason: "signature" });
+		// Padded, of another length, or in base64's other alphabet: refused alike.
+		const std = Buffer.from(sig, "base64url").toString("base64");
+		for (const odd of [`${sig}==`, sig.slice(0, -2), `${sig}AA`, std.replace(/=+$/, "")])
+			if (odd !== sig) expect(await ask("b1", odd)).toMatchObject({ reason: "signature" });
+		// The bound counts UTF-8 bytes, not characters: 4096 two-byte characters pass, one more does not.
+		const wide = "é".repeat(4096);
+		const signedWide = (body: string) =>
+			keys.signs(continuation.of("register", c.hash, 1, sha256(body)));
+		expect(await ask(`${wide}é`, signedWide(`${wide}é`))).toEqual({
+			kind: "refused",
+			reason: "body",
+		});
+		expect(await ask(wide, signedWide(wide))).toMatchObject({ kind: "continued", seq: 1 });
+		expect(await w.approvals.continuationOf(c.hash)).toMatchObject({ seq: 1 });
 	});
 
 	it("runs a step once for two calls at once, and again only once the call that held it let go", async () => {

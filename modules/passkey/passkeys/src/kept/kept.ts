@@ -166,6 +166,7 @@ export function keptOver(
 				kind: "asserted",
 				subject: found.subject,
 				credential: id,
+				registration: found.registration,
 				userVerified: asserted.userVerified,
 				backupEligible: found.credential.backupEligible,
 			};

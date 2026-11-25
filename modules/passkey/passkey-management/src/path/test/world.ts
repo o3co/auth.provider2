@@ -20,6 +20,7 @@ import {
 import passkeysModule from "@mod/passkeys/module";
 import promisesModule from "@mod/promises/module";
 import { rateLimitStandIn } from "@mod/rate-limit/testing";
+import { type FirstKeyStage, firstKey, hpke } from "@mod/sdk-core-wire";
 import { type SubjectRevocation, subjectRevocation } from "@mod/subject-revocation";
 import { frameStore, type StateOwner, stateOwners, transparencyLog } from "@mod/transparency";
 import transparencyModule from "@mod/transparency/module";
@@ -39,7 +40,7 @@ import passkeyManagement from "../../module.ts";
 import { passkeyManagementConfig } from "../../testing.ts";
 
 export const sha256 = (text: string) => createHash("sha256").update(text).digest("base64url");
-const b64 = (bytes: Uint8Array) => Buffer.from(bytes).toString("base64url");
+export const b64 = (bytes: Uint8Array) => Buffer.from(bytes).toString("base64url");
 /** A P-256 public key's uncompressed point. */
 export const pointOf = (key: KeyObject) => {
 	const { x, y } = key.export({ format: "jwk" }) as { x: string; y: string };
@@ -209,6 +210,8 @@ export async function firstKeyWorld() {
 		app,
 		post,
 		book,
+		frames,
+		now,
 		sent,
 		recorded,
 		corePoint: pointOf(core),
@@ -221,4 +224,46 @@ export async function firstKeyWorld() {
 			clock += ms;
 		},
 	};
+}
+
+type World = Awaited<ReturnType<typeof firstKeyWorld>>;
+type Screen = Awaited<ReturnType<typeof screen>>;
+const utf8 = (text: string) => new TextEncoder().encode(text);
+export const payloadOf = (jws: string) =>
+	JSON.parse(Buffer.from(jws.split(".")[1] ?? "", "base64url").toString("utf8"));
+
+/** A request of a first key's stage, sealed by the screen to the Core under its nonce and keys. */
+export async function sealed(w: World, s: Screen, stage: FirstKeyStage, plain: unknown) {
+	const asked = await w.post("/first-key/nonce", { stage });
+	const nonce = asked.json.nonce as string;
+	const aad = firstKey.aad(stage, nonce, s.eEnc, s.eSig);
+	const box = await s.seal(
+		w.corePoint,
+		hpke.info.firstKeyRequest,
+		utf8(aad),
+		utf8(JSON.stringify(plain)),
+	);
+	return {
+		nonce,
+		eEnc: s.eEnc,
+		eSigX: s.eSigX,
+		eSigY: s.eSigY,
+		enc: b64(box.enc),
+		ct: b64(box.ct),
+	};
+}
+
+/** What the screen opens of a sealing the Core answered: its plain text, or none. */
+export async function opened(
+	s: Screen,
+	box: { enc: string; ct: string },
+	info: string,
+	aad: string,
+) {
+	const read = await s.open(
+		{ enc: Buffer.from(box.enc, "base64url"), ct: Buffer.from(box.ct, "base64url") },
+		info,
+		utf8(aad),
+	);
+	return read.kind === "opened" ? new TextDecoder().decode(read.plaintext) : undefined;
 }

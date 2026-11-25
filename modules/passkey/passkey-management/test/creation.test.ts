@@ -19,6 +19,7 @@ function creation(revoked = false, odd = false) {
 	const asked: IssueAsk[] = [];
 	const checked: [string, number][] = [];
 	const handles: string[] = [];
+	const names: string[] = [];
 	const create = creationOver({
 		approvals: {
 			issue: async (a) => {
@@ -29,6 +30,7 @@ function creation(revoked = false, odd = false) {
 		ceremonies: {
 			creation: (_challenge, user, exclude) => {
 				handles.push(user.handle);
+				names.push(user.name);
 				if (odd) return { rp: {} };
 				return {
 					rp: { id: "login.example" },
@@ -48,7 +50,7 @@ function creation(revoked = false, odd = false) {
 		},
 		random: (n) => randomBytes(n),
 	});
-	return { create, asked, handles, checked };
+	return { create, asked, handles, names, checked };
 }
 
 it("signs a creation naming the subject's key generation, its keys excluded, and a fresh handle", async () => {
@@ -94,4 +96,27 @@ it("signs none where webauthn's options come of another shape", async () => {
 it("fills every creation item sdk-core-wire's schema names", () => {
 	const named = Object.keys(payloads.creation.shape.creation.shape);
 	expect([...creationItems.names].sort()).toEqual(named.sort());
+});
+
+it("signs a passkey-add's creation with no ciphertext's hash, its account masked, as sdk-core-wire takes it", async () => {
+	const c = creation();
+	const { ctHash: _first, ...rest } = ask;
+	await c.create({ ...rest, basis: "passkey-add" });
+	const [asked] = c.asked;
+	expect(asked?.items).toMatchObject({ basis: "passkey-add", account: "a***@example.com" });
+	expect(asked?.items).not.toHaveProperty("ct_hash");
+	expect(asked?.items).not.toHaveProperty("options.user_name");
+	expect(payloads.creation.shape.creation.safeParse(asked?.items).success).toBe(true);
+});
+
+it("names a passkey-add's account no address names in `user_name`, and shows it to webauthn", async () => {
+	const c = creation();
+	const { ctHash: _first, account: _masked, ...rest } = ask;
+	await c.create({ ...rest, basis: "passkey-add", userName: "Example 3fa9c1" });
+	const [asked] = c.asked;
+	expect(asked?.items).not.toHaveProperty("account");
+	expect(asked?.items).toMatchObject({ options: { user_name: "Example 3fa9c1" } });
+	expect(c.names).toEqual(["Example 3fa9c1"]);
+	// sdk-core-wire takes one of the two, an account or a name, for any basis but the first key's.
+	expect(payloads.creation.shape.creation.safeParse(asked?.items).success).toBe(true);
 });

@@ -90,15 +90,15 @@ export async function keyFlow() {
 	const client = { origin: testOrigin };
 	const challenge = () => randomBytes(32).toString("base64url");
 
-	/** A first key reserved and verified for `subject`, as `/key/finish` holds it before its change. */
-	const verified = async (subject: string) => {
+	/** A key reserved and verified for `subject`, as `/key/finish` holds it before its change; a first key unless told. */
+	const verified = async (subject: string, first = true) => {
 		const c = challenge();
 		const handle = freshHandle(randomBytes);
 		const options = cer.creation(c, { handle, name: subject }, []);
 		const attested = await cer.attest(auth.create(options as never, client), c, handle);
 		if (attested.kind !== "attested") throw new Error(attested.reason);
 		const credential = attested.credential;
-		const reserved = await regs.reserve({ subject, credential, first: true, generation: 0 });
+		const reserved = await regs.reserve({ subject, credential, first, generation: 0 });
 		if (!("reservation" in reserved)) throw new Error(reserved.refused);
 		const shown = challenge();
 		const response = auth.get(cer.request(shown, [credential]) as never, client, {});

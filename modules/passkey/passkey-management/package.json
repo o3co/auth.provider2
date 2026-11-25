@@ -39,6 +39,7 @@
 		}
 	},
 	"devDependencies": {
+		"@mod/authority-rules": "workspace:*",
 		"@mod/front-core-wire": "workspace:*",
 		"@mod/issuer": "workspace:*"
 	}

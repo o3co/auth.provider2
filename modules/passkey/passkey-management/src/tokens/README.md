@@ -12,6 +12,7 @@ Internal module of `passkey-management`: a first key's mail tokens, and the answ
 - `codeOf` (random bytes) → a code of eight digits.
 - `tokensOver` (the tokens' store, random bytes, the clock, the token's lifetime, the code's tries) → `issue` (subject, code, when its evidence began) → the token and its end; `attempt` (token, the request's nonce and digest, the subject the identifier names or none, the code) → `claimed` (with the token's own subject and when its evidence began), `used` or `refused`.
 - Its answers: `keep` (the request, the token it claimed, E_sig and the statement); `answered` (the request) → the statement, only while its token is used by it; `recoverable` (nonce) → what a recovery is checked against, the digest and E_sig, never the statement.
+- Its store, the package's: `firstKeyTokens` (`Kept`: create unless held, read, change from what it holds, never moving the lifetime), and its needs `firstKeyTokensNeeds`: never evicted, durable, replicated, confirmed reads, authenticated. The tokens and the answers name a subject.
 
 ## Invariants
 - A token is 32 random bytes, base64url, kept by its SHA-256 under a key no caller sees; its code is kept only bound to it, never alone; it keeps its subject and when its evidence began.

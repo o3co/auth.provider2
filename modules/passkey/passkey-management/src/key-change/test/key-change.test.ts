@@ -3,7 +3,7 @@ import { Unavailable } from "@mod/kernel";
 import type { Flow } from "@mod/transparency-wire";
 import { describe, expect, it } from "vitest";
 import { keyChangePart } from "../../contract.ts";
-import { keyChangesOver } from "../key-change.ts";
+import { type AddedKey, keyChangesOver } from "../key-change.ts";
 import { keyFlow } from "./flow.ts";
 
 const sha256 = (text: string) => createHash("sha256").update(text).digest("base64url");
@@ -236,6 +236,122 @@ describe("a first key's change", () => {
 		expect(w.book.sent[0]?.stage.keyChange).toEqual({
 			statement: "p_5wwYfl5sOtQrwnw4MimfuUx4yvVSMF8VDiOT2jKkI",
 			evidence: "sEEwzKWW5uZNa96UdjoUwblfaWD0INVCWBR3i4sCKf4",
+		});
+	});
+});
+
+describe("a passkey-add's change", () => {
+	/** A first key placed for `s1`, and a second reserved and verified, approved by the first. */
+	async function approvedAdd(w: Awaited<ReturnType<typeof keyFlow>>) {
+		w.book.judgeOnAppend({ verdict: "verified", outcome: "took" });
+		const { change } = await writer(w);
+		const first = await w.verified("s1");
+		await change(first);
+		const registration = (await w.passkeys.publicKeyOf(first.credential))?.registration as string;
+		const k: AddedKey = {
+			...(await w.verified("s1", false)),
+			approved: {
+				statement: "add.jws",
+				assertion: '{"id":"k1"}',
+				credential: first.credential,
+				registration,
+				mark: "statement:sid-1",
+				generation: 0,
+				continuation: { seq: 1, body: '{"id":"k2"}', signature: "c2ln" },
+			},
+		};
+		return { first, k, registration };
+	}
+
+	it("names its approving key as parent, carries the approval and the continuation, and consumes its mark", async () => {
+		const w = await keyFlow();
+		const { k, registration } = await approvedAdd(w);
+		const decided: unknown[] = [];
+		const { change } = await writer({
+			...w,
+			regs: {
+				...w.regs,
+				commit: (q) =>
+					w.regs.commit({
+						...q,
+						decide: (state, held) => {
+							const d = q.decide(state, held);
+							decided.push(d);
+							return d;
+						},
+					}),
+			},
+		});
+		expect(await change(k)).toEqual({ kind: "took", receipts: ["h.p.s"] });
+		const a = k.approved;
+		expect(w.book.sent[1]?.stage).toMatchObject({
+			kind: "keyChange",
+			// The op is the reservation, as the possession names it.
+			op: k.reservation,
+			keyChange: { statement: sha256(k.possession), evidence: sha256(k.assertion) },
+			preimage: {
+				parent: registration,
+				evidence: [
+					{ form: "statement", value: a?.statement },
+					{ form: "assertion", value: a?.assertion },
+					{ form: "statement", value: k.creation },
+					// Canonical JSON of the three, as the rules read a continuation.
+					{
+						form: "continuation",
+						value: '{"body":"{\\"id\\":\\"k2\\"}","seq":1,"signature":"c2ln"}',
+					},
+					{ form: "statement", value: k.possession },
+					{ form: "assertion", value: k.assertion },
+				],
+				content: { variant: "add", credential: k.credential, publicKey: k.publicKey },
+			},
+		});
+		expect(decided).toEqual([
+			expect.objectContaining({
+				eff: {
+					key: { credential: k.credential, publicKey: k.publicKey, by: registration },
+					consume: ["statement:sid-1"],
+				},
+			}),
+		]);
+		expect(await w.passkeys.publicKeyOf(k.credential)).toMatchObject({ subject: "s1" });
+	});
+
+	it("refuses, sending nothing, where its approving key is no longer the one that approved", async () => {
+		const w = await keyFlow();
+		const { k } = await approvedAdd(w);
+		const { change } = await writer(w);
+		const a = k.approved as NonNullable<AddedKey["approved"]>;
+		for (const approved of [
+			{ ...a, registration: "r-later" },
+			{ ...a, credential: "another" },
+		])
+			expect(await change({ ...k, approved })).toEqual({ kind: "refused", reason: "approver" });
+		expect(w.book.sent).toHaveLength(1);
+	});
+
+	it("refuses a second key from one passkey-add, its mark consumed on the flow", async () => {
+		const w = await keyFlow();
+		const { k } = await approvedAdd(w);
+		const { change } = await writer(w);
+		const flow: Flow = { of: "subject", id: "s1" };
+		w.frames.put(
+			flow,
+			{ part: "grants", name: "state" },
+			{ approvals: {}, consumed: ["statement:sid-1"] },
+		);
+		expect(await change(k)).toEqual({ kind: "refused", reason: "used" });
+		expect(w.book.sent).toHaveLength(1);
+	});
+
+	it("refuses a creation of another key generation than the flow's", async () => {
+		const w = await keyFlow();
+		const { k } = await approvedAdd(w);
+		const { change } = await writer(w);
+		const a = k.approved as NonNullable<AddedKey["approved"]>;
+		expect(await change({ ...k, approved: { ...a, generation: 1 } })).toEqual({
+			kind: "refused",
+			reason: "fenced",
 		});
 	});
 });

@@ -13,7 +13,7 @@ Internal module of `passkey-management`: the job of a first key's start that pas
 
 ## Invariants
 - Run apart from the start's answer, so its work, a key held or a mail sent, is never seen in that answer.
-- `settle` first: from the applied state alone it brings the witness's mark and the removals' notices in line, idempotent, so anyone who can start may cause it. A subject it answers as holding a key, or whose mark is left after it (`heldKeys`), gets nothing, as a first key's reservation reads it.
+- `settle` first: from the applied state alone it brings the witness's mark and the removals' notices in line, idempotent, so anyone who can start may cause it unharmed. A subject it answers as holding a key, or whose mark is left after it (`heldKeys`), gets nothing, as a first key's reservation reads it.
 - The address is the contact users verified last; else the `email` one read by subject answers beside `email_verified` true; else none, and no token is written.
 - The mail is sent only once its token is written, so no mail's side comes before its token. Its link carries the token in the fragment, and it expires at the token's end, as issued.
 - An identifier is shown masked: its first character, and an address's domain.

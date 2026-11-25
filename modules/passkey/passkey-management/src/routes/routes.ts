@@ -1,11 +1,12 @@
 import { type HttpRequest, type HttpResponse, jsonAnswer, use } from "@mod/http";
 import { Unavailable } from "@mod/kernel";
-import { requestsPerSource, type Window } from "@mod/rate-limit";
+import { requestsPerSource, sourceKey, type Window } from "@mod/rate-limit";
 import type { FirstKeyStage } from "@mod/sdk-core-wire";
+import type { Started as Approving, Finished } from "../approval/approval.ts";
 import type { Answered, Recovery } from "../mail-side/mail-side.ts";
 import type { Nonces } from "../nonces/nonces.ts";
 import type { Continuation, Registered } from "../registration/registration.ts";
-import type { SealedRequest } from "../sealed/sealed.ts";
+import type { Screen, SealedRequest } from "../sealed/sealed.ts";
 import type { Started } from "../start/start.ts";
 
 /** The one refusal a first key's path answers, whatever the reason, which its log alone tells. */
@@ -196,6 +197,73 @@ export function keyRoutes(p: {
 				if (!statement || !assertion)
 					return malformed("a key's finish is its possession and the new key's assertion");
 				return registeredBy(await p.finish({ statement, assertion }));
+			},
+		},
+	};
+}
+
+/** An approval's start's fields as front-core-wire sizes them; none for any other. */
+function approvalStartOf(fields: HttpRequest["fields"]) {
+	const purpose = fields.single("purpose");
+	const eEnc = fields.single("eEnc");
+	const x = fields.single("eSigX");
+	const y = fields.single("eSigY");
+	if (purpose !== "passkey-add" && purpose !== "passkey-manage") return undefined;
+	if (!bytesOf(eEnc, 65) || !bytesOf(x, 32) || !bytesOf(y, 32)) return undefined;
+	const screen: Screen = {
+		eEnc: eEnc as string,
+		eSig: { kty: "EC", crv: "P-256", x: x as string, y: y as string },
+	};
+	return { purpose, screen } as const;
+}
+
+/** The routes of a passkey-add's approval, each counted per source, taking the screen's JSON across origins. */
+export function approvalRoutes(p: {
+	readonly start: (q: {
+		readonly purpose: "passkey-add" | "passkey-manage";
+		readonly screen: Screen;
+		readonly by: string;
+	}) => Promise<Approving>;
+	readonly finish: (q: { statement: string; assertion: string }) => Promise<Finished>;
+	readonly window: Window;
+}) {
+	const counted = (name: string) => [use(requestsPerSource, { name, window: p.window })];
+	const screen = { takes: ["json" as const], cors: { headers: ["content-type"] }, crossSite };
+	return {
+		approvalStart: {
+			method: "POST" as const,
+			path: "/approval/start",
+			uses: counted("passkey-management.approval-start"),
+			...screen,
+			handle: async (request: HttpRequest): Promise<HttpResponse> => {
+				const q = request.mistyped?.size ? undefined : approvalStartOf(request.fields);
+				if (!q) return malformed("an approval's start is its purpose and the screen's keys");
+				const started = await p.start({ ...q, by: sourceKey(request.source.address) });
+				return started.kind === "statement"
+					? jsonAnswer(200, { statement: started.statement })
+					: denied();
+			},
+		},
+		approvalFinish: {
+			method: "POST" as const,
+			path: "/approval/finish",
+			uses: counted("passkey-management.approval-finish"),
+			...screen,
+			handle: async (request: HttpRequest): Promise<HttpResponse> => {
+				if (request.mistyped?.size)
+					return malformed(
+						"an approval's finish is its statement and the approving key's assertion",
+					);
+				const statement = jwsOf(request.fields.single("statement"), 4096);
+				const assertion = utf8Of(request.fields.single("assertion"), 8192);
+				if (!statement || !assertion)
+					return malformed(
+						"an approval's finish is its statement and the approving key's assertion",
+					);
+				const finished = await p.finish({ statement, assertion });
+				return finished.kind === "completed"
+					? jsonAnswer(200, { sealed: { enc: finished.enc, ct: finished.ct } })
+					: denied();
 			},
 		},
 	};

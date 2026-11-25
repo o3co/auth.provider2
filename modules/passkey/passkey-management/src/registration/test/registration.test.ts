@@ -238,12 +238,12 @@ describe("a first key's registration after its creation", () => {
 		});
 	});
 
-	it("refuses a subject revoked since its creation, and a creation of another basis", async () => {
+	it("refuses a subject revoked since its creation, and a passkey-add's creation no used passkey-add bases", async () => {
 		const w = await stack();
 		const added = await w.created("s3", "passkey-add");
 		expect(await w.registration.register(w.continued(added, w.made(added)))).toEqual({
 			kind: "refused",
-			reason: "basis",
+			reason: "approver",
 		});
 		w.revoke();
 		const later = await w.created("s2");

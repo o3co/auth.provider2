@@ -8,26 +8,22 @@
 - The statements' schemas, the challenge's and a continuation's inputs, the completion's form and the HPKE suite: `sdk-core-wire`. Signing, verifying and sealing: `keys`.
 - The assertion's ceremony, the keys and a pending key's verification: `passkeys`. The frame, leases, takers and abandonments: `transparency`. What a record changes, and its judgment: `authority-rules`.
 - What an item means and who asked it: the module that fills it. The code: the authorization's owner, which gives it to `complete`.
-- Statements `passkey-add` and `passkey-manage`, and a continuation of any stage but `register`: no purpose here takes them, so none is signed. The completion's receipt of its record (A35): not in the completion's schema, so the completion carries none.
+- Statements `passkey-manage`, and a continuation of any stage but `register`: no purpose here takes them, so none is signed. The completion's receipt of its record (A35): not in the completion's schema, so the completion carries none.
 
 ## Offers
-- `approvals`, taken only by a module standing on the promises (`promises`' `stances`):
-  - `issue` (purpose, items, the screen's `eEnc` and `eSig`, the key it is counted by) → the statement (`approval+jwt`), its hash, its challenge; or refused: `items` (a screen key of no point or no thumbprint among them), `limited`, `busy`, `withdrawn`.
-  - `use` (statement; an assertion's JSON text as sent, or a possession's verification) → the approval (hash, purpose, items, subject and credential or the verification, when used, its `eSig`'s thumbprint `esig`); or refused.
-  - `continue` (hash, sequence number, body, the screen's signature, its step, handed the creation as kept) → continued with what the step answered (`again` where another call took it first); or refused, `pending` while another call holds its step.
-  - `complete` (hash, code) → the completion sealed to `eEnc` (HPKE's `enc` and ciphertext) and the approval's record's id on the flow (the code's chain's root), its `recordRef` (`ref`, an ID token's `apr`) and acceptance time (`acceptedAt`, its `auth_time`); or refused.
-  - `completionOf` (hash) → the completion kept, as `complete` answered it, once `publish` marked it gone out; none before. `publish` (hash): marks it so, once its caller let it go (an authorization's code rooted first).
-  - `completeKeyChange` (a used possession's hash, its path's purpose, the log's receipts) → its completion; or refused.
-  - `usedOf` (hash) → a used statement's approval, with its statement's issue time, `completed` once its completion is kept. `creationOf` (hash) → a creation's record until it expires.
-  - `rootOf` (hash) → what a used authorization rests on, for a refresh family to check again: its statement, the assertion as received, its credential; none once its record is gone.
-- Extension point `statementItems` (purpose, the item names it fills, by whom): the purposes are `authorization`, `creation` and `possession`.
+- `approvals`, taken only by a module standing on the promises (`promises`' `stances`); each offer's asks and answers are its internal module's:
+  - `issue`: a statement of one purpose signed and recorded for the screen's keys. `use`: a statement used once, by an assertion (an authorization's, a passkey-add's) or a possession's verification (`statement`).
+  - `usedOf`: a used statement's approval. `creationOf`: a creation's record. `rootOf`: what a used authorization rests on. `passkeyAddOf`: a used passkey-add as its key change takes it. `completionOf` and `publish`: an authorization's completion kept, and marked gone out (`statement`).
+  - `continue`: a creation's continuation, its step run once and answered again alike. `continuationOf`: a creation's last continuation as taken, with what its step answered (`continuation`).
+  - `complete`: an authorization's completion, its approval on the flow first. `completeKeyChange`: a used possession's key-change completion. `completePasskeyAdd`: a used passkey-add's completion, carrying the creation made for it (`completion`).
+- Extension point `statementItems` (purpose, the item names it fills, by whom): the purposes are `authorization`, `passkey-add` (which names no items, so none fills it), `creation` and `possession`.
 - `approvalStore`, the statements' store interface (create unless held, read, change from what it holds), and `approvalStoreNeeds`. `approvalPart`: its part of each subject's flow, which its wiring binds.
 - Operator section: `statement-lifetime` (default 5 minutes), `issue-limit`, `issue-total` and `issue-window` (default 30 a minute per key, 100 000 a minute in all), `max-concurrent` (default 64 signings at once).
 - `./testing`: `approvalsConfig` (`ApprovalsSettings`), and `approvalStoreContract`, the store interface's contract test.
 
 ## Invariants
 - Purposes and items are closed: a purpose is one `sdk-core-wire` names a schema for, an item one its schema names and one module declared it fills. Boot refuses a name no schema holds or two modules fill; `issue`, an item no module declared or the schema refuses.
-- A statement is used once, by one write from issued (internal module `statement`), and only while the Core's ring of this generation verifies it. An authorization's is used only by an assertion over its challenge that verified its user, whatever `passkeys`' section lets through; the same evidence again answers the same approval. A possession's verification is taken as given; its caller checks its user (`verifyPending`).
+- A statement is used once, by one write from issued (internal module `statement`), and only while the Core's ring of this generation verifies it. An authorization's or a passkey-add's is used only by an assertion over its challenge that verified its user, whatever `passkeys`' section lets through; the same evidence again answers the same approval. A possession's verification is taken as given; its caller checks its user (`verifyPending`).
 - A purpose's owner takes the items from the used record (`usedOf`, or `use`'s answer), never from a later request.
 - An authorization's completion is signed only after its approval is taken in on the subject's flow as its owner's `took` (internal module `completion`).
 - Its op is never taken over, as only its owner holds the code: an orphan is marked and abandoned. Only one abandoned before its stage was placed can be completed again, by a later `complete`; one placed is taken in as done, its statement used, with no completion. Any other end, a lost answer or a fault before the completion is kept gives none: the person approves again.
@@ -35,7 +31,7 @@
 - Statements and completions are signed by the Core's ring, apart from the authority's: under `approval+jwt` and `completion+jwt`, their items under one member, never as a token's claims.
 
 ## Data
-- Each statement's record, by its hash, from its issuing to a minute past its expiry: its purpose, bytes, the screen's keys, how far it went, the subject, credential and assertion that used it, the last continuation and the completion. Its part of each subject's flow, in the frames' store: the state's approvals and use-once marks.
+- Each statement's record, by its hash, from its issuing to a minute past its expiry: its purpose, bytes, the screen's keys, how far it went, the subject, credential and assertion that used it, the last continuation (its body as received, up to 8192 bytes, and signature) and the completion. Its part of each subject's flow, in the frames' store: the state's approvals and use-once marks.
 
 ## Depends on
 - `kernel`, `keys` (the Core's ring, sealing), `passkeys` (the assertion), `promises` (its stance), `rate-limit` (issuing counted), `issuer`, `sdk-core-wire` (schemas, inputs), `transparency` and `transparency-wire` (the kind, flow and log's digest); `zod`.

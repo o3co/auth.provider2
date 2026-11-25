@@ -3,22 +3,27 @@ import type { Held, PasskeyGenerations } from "@mod/passkeys";
 import type { SubjectRevocation } from "@mod/subject-revocation";
 import { type Ceremonies, freshHandle } from "@mod/webauthn";
 import { z } from "zod";
+import type { Shown } from "../account.ts";
 import type { Screen } from "../sealed/sealed.ts";
 
 /** A creation asked for the subject its evidence binds: what its statement names, and the screen it is for. */
-export interface CreationAsk {
+export type CreationAsk = {
 	readonly subject: string;
-	/** The identifier, masked: shown, never matched. */
-	readonly account: string;
-	readonly basis: "first-key";
 	/** The evidence's value the screen computes for itself. */
 	readonly evidence: string;
-	/** The sealed request's digest, as the Core opened it: the first key's path's alone. */
-	readonly ctHash: string;
 	readonly screen: Screen;
 	/** When the evidence began (epoch ms): a revocation of the subject since refuses it. */
 	readonly since: number;
-}
+	// The account as shown, never matched (`Shown`): masked as `account`, or named as `userName`.
+} & Shown &
+	(
+		| {
+				readonly basis: "first-key";
+				/** The sealed request's digest, as the Core opened it: the first key's path's alone. */
+				readonly ctHash: string;
+		  }
+		| { readonly basis: "passkey-add" }
+	);
 
 export type Created = Issued | { readonly kind: "refused"; readonly reason: "revoked" };
 
@@ -56,7 +61,12 @@ export function creationOver(p: {
 		const generation = await p.generations.generation(ask.subject);
 		const handle = freshHandle(p.random);
 		const read = options.safeParse(
-			p.ceremonies.creation(unused, { handle, name: ask.account }, held.credentials, "required"),
+			p.ceremonies.creation(
+				unused,
+				{ handle, name: ask.account ?? ask.userName },
+				held.credentials,
+				"required",
+			),
 		);
 		// Of another shape, webauthn changed: a fault, never a creation of guessed values.
 		if (!read.success)
@@ -65,14 +75,15 @@ export function creationOver(p: {
 		return p.approvals.issue({
 			purpose: "creation",
 			items: {
-				account: ask.account,
+				...(ask.account === undefined ? {} : { account: ask.account }),
 				basis: ask.basis,
 				evidence: ask.evidence,
-				ct_hash: ask.ctHash,
+				...(ask.basis === "first-key" ? { ct_hash: ask.ctHash } : {}),
 				subject: ask.subject,
 				kg: generation,
 				options: {
 					user_id: given.user.id,
+					...(ask.userName === undefined ? {} : { user_name: ask.userName }),
 					rp_id: given.rp.id,
 					exclude_credentials: given.excludeCredentials.map((c) => c.id),
 					algorithms: given.pubKeyCredParams.map((c) => c.alg),

@@ -11,6 +11,7 @@ Internal module of `passkey-management`: the first key's path and a key's regist
 ## Offers
 - `firstKeyRoutes` (the nonces, the start, the mail's side, the recovery, the window) → `nonce` (`POST /first-key/nonce`: a stage, `start` or `mail` → `{ nonce }`), `start` (`POST /first-key/start`: the nonce and the screen's keys and sealing, base64url → `{ sealed }`), `mail` (`POST /first-key/mail`: as the start → `{ statement }`) and `recover` (`POST /first-key/recover`: the mail's nonce, its request's digest and E_sig's signature → `{ statement }`).
 - `keyRoutes` (the registration's register and finish, the window) → `continue` (`POST /continue`: the creation, stage `register` alone, a sequence number 1 to 16, the body, E_sig's signature, no `enc` or `ct` → `{ statement }`) and `keyFinish` (`POST /key/finish`: the possession and the assertion → `{ sealed: { enc, ct } }`).
+- `approvalRoutes` (the approval's start and finish, the window) → `approvalStart` (`POST /approval/start`: a purpose, `passkey-add` or `passkey-manage`, and the screen's keys, base64url → `{ statement }`, counted by the source's key) and `approvalFinish` (`POST /approval/finish`: the statement and the approving key's assertion → `{ sealed: { enc, ct } }`).
 
 ## Invariants
 - Each is counted per source, takes JSON alone, across origins with `content-type`, and reads no cookie.

@@ -10,6 +10,7 @@ Internal module of `passkey-management`: the nonces of a first key's stages.
 
 ## Offers
 - `noncesOver` (the nonces' store, random bytes, the lifetime) → `issue` (stage) → a nonce; `use` (nonce, stage, digest) → `first`, `again` (the same request), or `refused`.
+- Its store, the package's: `firstKeyNonces` (`Kept`: create unless held, read, change from what it holds, never moving the lifetime), and its needs `firstKeyNoncesNeeds`: never evicted, durable, replicated, confirmed reads, authenticated. The nonces name no subject.
 
 ## Invariants
 - A nonce is 32 random bytes, base64url; a drawn one already held is drawn again, never shared.

@@ -1,53 +1,9 @@
 import { createHash } from "node:crypto";
-import {
-	challengeInput,
-	continuation,
-	type FirstKeyStage,
-	firstKey,
-	hpke,
-} from "@mod/sdk-core-wire";
+import { challengeInput, continuation, firstKey, hpke } from "@mod/sdk-core-wire";
 import { type Credential, ceremonies } from "@mod/webauthn";
 import { softwareAuthenticator, testOrigin } from "@mod/webauthn/testing";
 import { describe, expect, it } from "vitest";
-import { firstKeyWorld, screen, sha256 } from "./world.ts";
-
-type World = Awaited<ReturnType<typeof firstKeyWorld>>;
-type Screen = Awaited<ReturnType<typeof screen>>;
-const utf8 = (text: string) => new TextEncoder().encode(text);
-const b64 = (bytes: Uint8Array) => Buffer.from(bytes).toString("base64url");
-const payloadOf = (jws: string) =>
-	JSON.parse(Buffer.from(jws.split(".")[1] ?? "", "base64url").toString("utf8"));
-
-/** A request of a first key's stage, sealed by the screen to the Core under its nonce and keys. */
-async function sealed(w: World, s: Screen, stage: FirstKeyStage, plain: unknown) {
-	const asked = await w.post("/first-key/nonce", { stage });
-	const nonce = asked.json.nonce as string;
-	const aad = firstKey.aad(stage, nonce, s.eEnc, s.eSig);
-	const box = await s.seal(
-		w.corePoint,
-		hpke.info.firstKeyRequest,
-		utf8(aad),
-		utf8(JSON.stringify(plain)),
-	);
-	return {
-		nonce,
-		eEnc: s.eEnc,
-		eSigX: s.eSigX,
-		eSigY: s.eSigY,
-		enc: b64(box.enc),
-		ct: b64(box.ct),
-	};
-}
-
-/** What the screen opens of a sealing the Core answered: its plain text, or none. */
-async function opened(s: Screen, box: { enc: string; ct: string }, info: string, aad: string) {
-	const read = await s.open(
-		{ enc: Buffer.from(box.enc, "base64url"), ct: Buffer.from(box.ct, "base64url") },
-		info,
-		utf8(aad),
-	);
-	return read.kind === "opened" ? new TextDecoder().decode(read.plaintext) : undefined;
-}
+import { firstKeyWorld, opened, payloadOf, screen, sealed, sha256 } from "./world.ts";
 
 describe("a first key, from its start to its completion, over real sealing", () => {
 	it("starts, mails a token, creates, registers and completes the key, each answer opened by the screen", async () => {

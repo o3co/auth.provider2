@@ -34,7 +34,8 @@ export default defineModule(
 		takes: [firstKeyEvidence, evidence, ...new Set([...pathTakes, ...keyingTakes])],
 	},
 	(m) => [
-		// A first key's path is outside the new authorization's claim (P1): it breaks none of it.
+		// A first key's path, and a key a live key's passkey-add approves, are outside the new
+		// authorization's claim (P1): neither breaks any of it.
 		m.contribute(stances).by(() => ({
 			promise: promiseNames.newAuthorization,
 			holds: true,
@@ -83,5 +84,7 @@ export default defineModule(
 		m.provide(keying).by((c: Context) => keyingOf(c)),
 		m.contribute(routes).by(async (c) => (await c.get(keying)).continue),
 		m.contribute(routes).by(async (c) => (await c.get(keying)).keyFinish),
+		m.contribute(routes).by(async (c) => (await c.get(keying)).approvalStart),
+		m.contribute(routes).by(async (c) => (await c.get(keying)).approvalFinish),
 	],
 );

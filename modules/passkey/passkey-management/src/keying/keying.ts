@@ -1,13 +1,16 @@
 import { setTimeout as sleep } from "node:timers/promises";
 import { approvals } from "@mod/approvals";
 import type { BuildContext } from "@mod/kernel";
-import { heldKeys, passkeys, registrations } from "@mod/passkeys";
+import { heldKeys, passkeyGenerations, passkeys, registrations } from "@mod/passkeys";
 import { subjectRevocation } from "@mod/subject-revocation";
 import { transparency, transparencyLog } from "@mod/transparency";
+import { users } from "@mod/users";
 import { ceremonies } from "@mod/webauthn";
+import { approvalOver, type Finished, type Started } from "../approval/approval.ts";
+import { creationOver } from "../creation/creation.ts";
 import { keyChangesOver } from "../key-change/key-change.ts";
 import { type Registered, registrationOver } from "../registration/registration.ts";
-import { keyRoutes } from "../routes/routes.ts";
+import { approvalRoutes, keyRoutes } from "../routes/routes.ts";
 import type { Settings } from "../section.ts";
 
 type Context = BuildContext<Settings>;
@@ -22,22 +25,28 @@ export const keyingTakes = [
 	subjectRevocation,
 	transparency,
 	transparencyLog,
+	users,
+	passkeyGenerations,
 ] as const;
 
 /** A look for a key change's end again: soon at first, then every 200 ms, as approvals' writer looks. */
 const lookAgainMs = (look: number) => Math.min(10 * 2 ** look, 200);
 
-/** A registration not answered, written with its reason's word alone. */
+/** A registration or an approval not answered, written under its event with its reason's word alone. */
 const written =
-	<T>(c: Context, answer: (given: T) => Promise<Registered>) =>
+	<T, A extends Registered | Finished | Started>(
+		c: Context,
+		event: "registration_refused" | "approval_refused",
+		answer: (given: T) => Promise<A>,
+	) =>
 	async (given: T) => {
-		const registered = await answer(given);
-		if (registered.kind === "refused")
-			c.log.info("passkey-management.registration_refused", { reason: registered.reason });
-		return registered;
+		const answered = await answer(given);
+		if (answered.kind === "refused")
+			c.log.info(`passkey-management.${event}`, { reason: answered.reason });
+		return answered;
 	};
 
-/** A key's registration after its creation, made from its parts in a build: its two routes. */
+/** A key's approval and its registration after its creation, made from its parts in a build: their routes. */
 export async function keyingOf(c: Context) {
 	const settling = await c.get(passkeys);
 	const keyChange = keyChangesOver({
@@ -57,9 +66,32 @@ export async function keyingOf(c: Context) {
 		revocation: await c.get(subjectRevocation),
 		keyChange,
 	});
-	return keyRoutes({
-		register: written(c, registration.register),
-		finish: written(c, registration.finish),
-		window: { limit: c.section.requests, ms: c.section.window * 1000 },
+	const window = { limit: c.section.requests, ms: c.section.window * 1000 };
+	const approval = approvalOver({
+		approvals: await c.get(approvals),
+		passkeys: settling,
+		users: await c.get(users),
+		create: creationOver({
+			approvals: await c.get(approvals),
+			ceremonies: await c.get(ceremonies),
+			held: await c.get(heldKeys),
+			generations: await c.get(passkeyGenerations),
+			revocation: await c.get(subjectRevocation),
+			random: (n) => c.random.bytes(n),
+		}),
+		// The deployment's name, by default the mail link's host, as long as `account-name` may be.
+		deployment: c.section["account-name"] ?? new URL(c.section["mail-link"]).hostname.slice(0, 50),
 	});
+	return {
+		...keyRoutes({
+			register: written(c, "registration_refused", registration.register),
+			finish: written(c, "registration_refused", registration.finish),
+			window,
+		}),
+		...approvalRoutes({
+			start: written(c, "approval_refused", approval.start),
+			finish: written(c, "approval_refused", approval.finish),
+			window,
+		}),
+	};
 }

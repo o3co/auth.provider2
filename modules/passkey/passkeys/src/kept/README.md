@@ -9,7 +9,11 @@ Internal module of `passkeys`: reading the keys a subject's flow holds, assertin
 - Changing a reservation or a binding: the internal module `registering`. What a Step writes to the keys and the notices: the package's records (its owner of state).
 
 ## Offers
-- `keptOver` (the frames, the credential store, the ceremonies, the verification, `transparency`, the witnessing, the removals) → the package's `Passkeys`. `keysHeld`, `credentialRecord`, `credentialOf`, `counted` and `stored`, for `registering`.
+- `keptOver` (the frames, the credential store, the ceremonies, the verification, `transparency`, the witnessing, the removals) → the package's `Passkeys`:
+  - `assert` (a response, its request's challenge and the credentials it named, `allow`) → subject, credential, its registration's record id (from the read whose key verified it), user verified, backup eligible; or a refusal.
+  - `publicKeyOf` (credential) → an active key's subject, public key and registration's record id.
+  - `settle` (subject) → whether it holds a key.
+- `keysHeld`, `credentialRecord`, `credentialOf`, `counted` and `stored`, for `registering`.
 - `heldOf` → the package's `heldKeys`, which any module may take: `of` (subject) → its keys' credentials, its pending reservation unlapsed (`pending`: the reservation, credential and public key; read with the keys in one read), and whether the witness's mark is set, of whatever generation (after a `settle`, this generation's alone), frozen; nothing written, and the same reads for a subject no flow holds.
 
 ## Invariants

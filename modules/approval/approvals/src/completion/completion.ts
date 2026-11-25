@@ -18,6 +18,7 @@ import {
 	recordOf,
 	type StatementRecord,
 	sha256,
+	statementMark,
 	stored,
 	wireVersion,
 } from "../statement/statement.ts";
@@ -61,9 +62,6 @@ export const approvalKind: OperationKind = {
 	records: () => [],
 	end: () => [],
 };
-
-/** The use-once mark of a statement, as `authority-rules`' fold names it. */
-const statementMark = (sid: string) => `statement:${sid}`;
 
 /** KE-C01 of an approval: its stage made on the state (its key's record), refused once the statement is used. */
 export function deciding(

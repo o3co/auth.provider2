@@ -1,13 +1,14 @@
 import { createHash } from "node:crypto";
 import { Unavailable } from "@mod/kernel";
 import { type Passkeys, passkeyChanges, type Registrations } from "@mod/passkeys";
+import { canonicalText } from "@mod/sdk-core-wire";
 import type { Deciding, Json, OperationKind, Stage, Transparency } from "@mod/transparency";
 import type { Flow, Preimage } from "@mod/transparency-wire";
 import { keyChangePart } from "../contract.ts";
 
 const preimageRecord = { part: keyChangePart, name: "preimage" } as const;
 
-/** A stage kept as this writer kept it, read back: a first key's change, its own op's alone. */
+/** A stage kept as this writer kept it, read back: a key change, its own op's alone. */
 const keptStage = (held: Json | undefined, op: string): Stage | undefined => {
 	const r = held as Partial<Stage> | undefined;
 	return r?.kind === "keyChange" && r.op === op && r.stage === 1 && r.last === true && r.preimage
@@ -28,8 +29,23 @@ export const keyChangeKind: OperationKind = {
 	resend: (_flow, op, held) => keptStage(held.at(-1), op),
 };
 
-/** A first key's change asked: the subject, its verified reservation, the new key, and the ceremony that binds it. */
-export interface FirstKeyChange {
+/** A passkey-add's approval, as its key change carries it: `registration` is the change's parent. */
+export interface Approved {
+	readonly statement: string;
+	readonly assertion: string;
+	readonly credential: string;
+	readonly registration: string;
+	readonly mark: string;
+	readonly generation: number;
+	readonly continuation: {
+		readonly seq: number;
+		readonly body: string;
+		readonly signature: string;
+	};
+}
+
+/** A key added, asked: its reservation, the new key, its ceremony; `approved` by a passkey-add, none for a first key. */
+export interface AddedKey {
 	readonly subject: string;
 	readonly reservation: string;
 	readonly verification: string;
@@ -40,6 +56,7 @@ export interface FirstKeyChange {
 	readonly creation: string;
 	readonly possession: string;
 	readonly assertion: string;
+	readonly approved?: Approved;
 }
 
 /** Why passkeys would not commit a reservation (its `committing`'s words). */
@@ -51,7 +68,9 @@ export type CommitRefusal =
 	| "fenced"
 	| "held"
 	| "taken"
-	| "full";
+	| "full"
+	| "approver"
+	| "used";
 const commitRefusals = new Set<string>([
 	"unknown",
 	"state",
@@ -61,6 +80,8 @@ const commitRefusals = new Set<string>([
 	"held",
 	"taken",
 	"full",
+	"approver",
+	"used",
 ]);
 
 /**
@@ -77,7 +98,7 @@ export type Changed =
 const tries = 4;
 
 /**
- * A first key's change, as its writer (KE-C01, C02, C04): decided on the reservation with its preimage
+ * A key added's change, as its writer (KE-C01, C02, C04): decided on the reservation with its preimage
  * kept in the same write, sent, taken in to its end; the subject's keys settled whenever it took in
  * an end, as passkeys asks of whoever does.
  */
@@ -90,7 +111,7 @@ export function keyChangesOver(p: {
 	readonly looks: number;
 }) {
 	/** Decided on the applied state: a flow open or not taken in is tended first, then decided again. */
-	async function committed(k: FirstKeyChange, flow: Flow, decide: Deciding) {
+	async function committed(k: AddedKey, flow: Flow, decide: Deciding) {
 		for (let tried = 0; tried < tries; tried++) {
 			const { subject, reservation, verification } = k;
 			const answer = await p.registrations.commit({ subject, reservation, verification, decide });
@@ -130,16 +151,29 @@ export function keyChangesOver(p: {
 		}
 		return unavailable();
 	}
-	async function change(k: FirstKeyChange): Promise<Changed> {
+	async function change(k: AddedKey): Promise<Changed> {
 		const { flow, preimage, stage } = stageOf(k);
-		// The writer's part: the new key, first trust, and its stage kept beside the reservation.
-		const decide: Deciding = (_state, held) => ({
-			digest: p.digest(preimage),
-			eff: { key: { credential: k.credential, publicKey: k.publicKey } },
-			records: held.map((_, i) =>
-				i === held.length - 1 ? { value: stage as unknown as Json } : undefined,
-			),
-		});
+		const key = { credential: k.credential, publicKey: k.publicKey };
+		const a = k.approved;
+		// The writer's part: the new key, by its approver if any, its stage kept beside the reservation.
+		const decide: Deciding = (state, held) => {
+			if (a) {
+				// The approving key live under the registration it approved by; one key from one passkey-add.
+				const parent = Object.hasOwn(state.keys, a.registration)
+					? state.keys[a.registration]
+					: undefined;
+				if (parent?.credential !== a.credential) return { refused: "approver" };
+				if (state.consumed.includes(a.mark)) return { refused: "used" };
+				if (a.generation !== state.keyGeneration) return { refused: "fenced" };
+			}
+			return {
+				digest: p.digest(preimage),
+				eff: a ? { key: { ...key, by: a.registration }, consume: [a.mark] } : { key },
+				records: held.map((_, i) =>
+					i === held.length - 1 ? { value: stage as unknown as Json } : undefined,
+				),
+			};
+		};
 		for (let tried = 0; tried < tries; tried++) {
 			const decided = await committed(k, flow, decide);
 			if ("ended" in decided) return { kind: "ended" };
@@ -167,7 +201,7 @@ export function keyChangesOver(p: {
 	 * The receipts a change placed already was answered with, asked again of the log with its stage
 	 * made again alike; none where the log holds no such stage, or holds another under its op.
 	 */
-	async function receipts(k: FirstKeyChange): Promise<readonly string[] | undefined> {
+	async function receipts(k: AddedKey): Promise<readonly string[] | undefined> {
 		const { flow, stage } = stageOf(k);
 		const again = await p.transparency.receiptOf({ flow, op: k.reservation, stage });
 		if ("refused" in again) return again.refused === "unplaced" ? undefined : unavailable();
@@ -180,17 +214,31 @@ export function keyChangesOver(p: {
 }
 
 /** A first key's change's stage, the same bytes for the same change: its preimage, and what its receipt binds. */
-function stageOf(k: FirstKeyChange) {
+function stageOf(k: AddedKey) {
 	const flow: Flow = { of: "subject", id: k.subject };
-	const preimage: Preimage = {
-		v: 1,
-		evidence: [
-			{ form: "statement", value: k.creation },
-			{ form: "statement", value: k.possession },
-			{ form: "assertion", value: k.assertion },
-		],
-		content: { variant: "first", credential: k.credential, publicKey: k.publicKey },
-	};
+	const a = k.approved;
+	const ceremony = [
+		{ form: "statement", value: k.possession },
+		{ form: "assertion", value: k.assertion },
+	] as const;
+	const preimage: Preimage = a
+		? {
+				v: 1,
+				parent: a.registration,
+				evidence: [
+					{ form: "statement", value: a.statement },
+					{ form: "assertion", value: a.assertion },
+					{ form: "statement", value: k.creation },
+					{ form: "continuation", value: canonicalText(a.continuation) },
+					...ceremony,
+				],
+				content: { variant: "add", credential: k.credential, publicKey: k.publicKey },
+			}
+		: {
+				v: 1,
+				evidence: [{ form: "statement", value: k.creation }, ...ceremony],
+				content: { variant: "first", credential: k.credential, publicKey: k.publicKey },
+			};
 	const stage: Stage = {
 		kind: "keyChange",
 		flow,

@@ -8,6 +8,7 @@ import { rateLimit } from "@mod/rate-limit";
 import { operationKinds, stateOwners, transparency, transparencyLog } from "@mod/transparency";
 import { approvalKind, approvalsOwner, completionsOver } from "./completion/completion.ts";
 import { keyChangeCompletionsOver } from "./completion/key-change.ts";
+import { passkeyAddCompletionsOver } from "./completion/passkey-add.ts";
 import { continuationsOver } from "./continuation/continuation.ts";
 import { approvalStore, approvals, statementItems } from "./contract.ts";
 import { type Settings, section } from "./section.ts";
@@ -66,7 +67,8 @@ export default defineModule(
 			});
 			return {
 				...statements,
-				continue: continuationsOver({
+				...continuationsOver({
+					keys: signer,
 					store,
 					now,
 					token: () => Buffer.from(c.random.bytes(16)).toString("base64url"),
@@ -82,6 +84,7 @@ export default defineModule(
 					looks: 18,
 				}),
 				completeKeyChange: keyChangeCompletionsOver({ keys: signer, store, issuer: iss, now }),
+				completePasskeyAdd: passkeyAddCompletionsOver({ keys: signer, store, issuer: iss, now }),
 			};
 		}),
 	],

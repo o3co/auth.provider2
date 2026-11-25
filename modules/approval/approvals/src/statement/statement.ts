@@ -18,6 +18,7 @@ import type {
 	StatementItems,
 	StoredStatement,
 	Used,
+	UsedPasskeyAdd,
 } from "../contract.ts";
 
 /** The wire version this Core writes: the latest `sdk-core-wire` speaks. */
@@ -29,7 +30,7 @@ const id = z.string().min(1);
 /** A statement's record: what it was signed as, and how far it went. */
 const recordShape = z
 	.object({
-		purpose: z.enum(["authorization", "creation", "possession"]),
+		purpose: z.enum(["authorization", "passkey-add", "creation", "possession"]),
 		jws: id,
 		sid: id,
 		/** Its expiry, in ms. */
@@ -39,14 +40,17 @@ const recordShape = z
 		state: z.enum(["issued", "used", "completed"]),
 		subject: id.optional(),
 		credential: id.optional(),
+		/** The id of the asserting key's registration's record on the subject's flow. */
+		registration: id.optional(),
 		verification: id.optional(),
 		/** When it was used, by the kernel's clock, in ms. */
 		usedAt: z.number().optional(),
 		/** The assertion's JSON text that used it, as received, kept for its approval's record on the flow. */
 		assertion: id.optional(),
-		/** The last continuation taken: its sequence number and body's hash. */
+		/** The last continuation taken: its sequence number and body's hash; as sent, its body (UTF-8 text) and `r‖s`. */
 		seq: z.number().int().nonnegative(),
 		body: id.optional(),
+		sent: z.object({ body: z.string(), signature: id }).strict().optional(),
 		/** The call that holds the last continuation's step, and until when (kernel clock, ms). */
 		claimed: z.object({ by: id, until: z.number() }).strict().optional(),
 		/** What the step of the last continuation answered, once it did. */
@@ -93,6 +97,7 @@ export const stored = (r: StatementRecord) => r as unknown as StoredStatement;
 /** Each purpose's items schema, by the names sdk-core-wire gives them. */
 const itemSchemas = {
 	authorization: payloads.statement.shape.approval,
+	"passkey-add": z.object({}).strict(),
 	creation: payloads.creation.shape.creation,
 	possession: payloads.possession.shape.possession,
 } as const;
@@ -122,6 +127,7 @@ export function declaredOf(items: readonly StatementItems[], refuse: (reason: st
 /** The items a statement's payload carries, under its purpose's member. */
 export const itemsIn = (jws: string, purpose: Purpose): ItemsOf[Purpose] => {
 	const payload = JSON.parse(Buffer.from(jws.split(".")[1] ?? "", "base64url").toString("utf8"));
+	if (purpose === "passkey-add") return {};
 	return payload[purpose === "authorization" ? "approval" : purpose];
 };
 
@@ -141,6 +147,9 @@ export interface StatementParts {
 	readonly now: () => number;
 	readonly token: () => string;
 }
+
+/** The use-once mark of a statement in the flow state, as `authority-rules`' fold names it. */
+export const statementMark = (sid: string) => `statement:${sid}`;
 
 /** How long a statement's record outlives the statement, in seconds. */
 const keptPastS = 60;
@@ -168,9 +177,15 @@ export function statementsOver(p: StatementParts) {
 						...screen,
 						nonce: p.token(),
 						purpose: ask.purpose,
-						[ask.purpose]: ask.items,
+						// A passkey-add carries no member of items.
+						...(ask.purpose === "passkey-add" ? {} : { [ask.purpose]: ask.items }),
 					};
-		const schema = { authorization: payloads.statement, ...payloads }[ask.purpose];
+		const schema = {
+			authorization: payloads.statement,
+			"passkey-add": payloads.passkeyAdd,
+			creation: payloads.creation,
+			possession: payloads.possession,
+		}[ask.purpose];
 		const keys =
 			isPoint(ask.screen.eEnc) && tokens.ecThumbprintInput(ask.screen.eSig) !== undefined;
 		return schema.safeParse(payload).success && keys ? { payload, common, screen } : undefined;
@@ -232,6 +247,7 @@ export function statementsOver(p: StatementParts) {
 		items: itemsIn(r.jws, r.purpose),
 		...(r.subject === undefined ? {} : { subject: r.subject }),
 		...(r.credential === undefined ? {} : { credential: r.credential }),
+		...(r.registration === undefined ? {} : { registration: r.registration }),
 		...(r.verification === undefined ? {} : { verification: r.verification }),
 		...(r.usedAt === undefined ? {} : { usedAt: r.usedAt }),
 		...(r.state === "completed" ? { completed: true as const } : {}),
@@ -271,7 +287,8 @@ export function statementsOver(p: StatementParts) {
 			if (r.purpose !== "possession") return { kind: "refused", reason: "purpose" };
 			return marked(hash, { verification: q.verification });
 		}
-		if (r.purpose !== "authorization") return { kind: "refused", reason: "purpose" };
+		if (r.purpose !== "authorization" && r.purpose !== "passkey-add")
+			return { kind: "refused", reason: "purpose" };
 		const assertion = q.assertion;
 		if (r.state !== "issued")
 			return r.assertion === assertion
@@ -287,6 +304,7 @@ export function statementsOver(p: StatementParts) {
 		return marked(hash, {
 			subject: asserted.subject,
 			credential: asserted.credential,
+			registration: asserted.registration,
 			assertion,
 		});
 	}
@@ -302,6 +320,17 @@ export function statementsOver(p: StatementParts) {
 		return used && r.assertion !== undefined && r.credential !== undefined
 			? { statement: r.jws, assertion: r.assertion, credential: r.credential }
 			: undefined;
+	}
+
+	async function passkeyAddOf(hash: string): Promise<UsedPasskeyAdd | undefined> {
+		const r = recordOf(await p.store.read(hash));
+		if (r?.purpose !== "passkey-add" || r.state === "issued" || p.now() > r.exp) return undefined;
+		const { subject, credential, registration, assertion } = r;
+		if (!subject || !credential || !registration || !assertion) return undefined;
+		if (!(await current(p.keys, r.jws))) return undefined;
+		const screen = { eEnc: r.e_enc, eSig: r.e_sig };
+		const mark = statementMark(r.sid);
+		return { statement: r.jws, assertion, subject, credential, registration, screen, mark };
 	}
 
 	/** A creation's record as kept, while its statement lives and this generation's ring verifies it; none for any other purpose. */
@@ -335,7 +364,7 @@ export function statementsOver(p: StatementParts) {
 			: "unknown";
 	}
 
-	return { issue, use, usedOf, rootOf, creationOf, completionOf, publish };
+	return { issue, use, usedOf, rootOf, passkeyAddOf, creationOf, completionOf, publish };
 }
 
 /** The thumbprint of a statement's E_sig: none is a record no statement was issued with, so unavailable. */

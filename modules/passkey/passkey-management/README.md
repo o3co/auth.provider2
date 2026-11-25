@@ -4,6 +4,7 @@
 - Owns the kinds of a first key's evidence beside the email's token: what a kind's module is given and answers, on one contract every kind sits on.
 - Owns a first key's nonces and mail tokens, and the answers of its mail's side: their store interfaces and needs, and its mail's purpose and the values its wording is given.
 - Runs a first key's path: its nonces, its start (§3.13's step 1), its mail's side and its creation (step 3, registration's step 2), and a creation's recovery (§C.4), as the Core's routes.
+- Runs a passkey-add (§3.13's step 1): its approval by a live key, the creation it bases, then the registration every path shares (steps 4 to 6), as the Core's routes.
 
 ## Not here
 - A subject's revocation boundary at the start: its creation is refused once one followed the evidence (internal module `creation`).
@@ -14,26 +15,26 @@
 
 ## Offers
 - Extension point `firstKeyEvidence` (keyed by kind): a `FirstKeyEvidence` names its kind; may `prepare` what the screen needs before it makes the items; `check` (the start, the subject the identifier names or none, its own items) → `passed`, `failed`, or `absent` where its record says the subject holds none, a fault thrown, Unavailable; and may be told the start's end once it checked (`settled`).
-- `firstKeyNonces` and `firstKeyTokens`, the stores' interfaces (`Kept`: create unless held, read, change from what it holds, never moving the lifetime), and their needs (`firstKeyNoncesNeeds`, `firstKeyTokensNeeds`): never evicted, durable, replicated, confirmed reads, authenticated. The nonces name no subject; the tokens and the answers name one.
+- `firstKeyNonces` and `firstKeyTokens`, the stores' interfaces, and their needs `firstKeyNoncesNeeds` and `firstKeyTokensNeeds`, as internal modules `nonces` and `tokens` run on them.
 - `firstKeyMail`: its mail's purpose, `first-key`, declared to `mail`'s `mailPurposes`, and the values its wording is given: `link`, `account`, `minutes`.
 - `keyChangePart`: its part of a subject's flow, a key change's preimage kept for a resend; a store binds it.
-- Operator section: `mail-link` (https), `token-lifetime` (default 15 minutes), `code-tries` (default 3), `nonce-lifetime` (default 2 minutes), `requests` and `window` (default 30 a minute per source), `inbox-only-when-absent` (default off).
-- Routes `POST /first-key/nonce`, `/first-key/start`, `/first-key/mail`, `/first-key/recover` (internal modules `routes`, `start`, `mail-side`), `/continue` and `/key/finish` (internal modules `registration`, `keying`). Metric `auth_first_key_jobs_dropped_total`; lines `passkey-management.start_ended`, `job_dropped`, `job_failed`, `mail_refused`, `recovery_refused`, naming no address, identifier or subject.
-- Declares to `promises`' `evidenceKinds` the inbox, the path's own kind: trusting `inbox`, a 256-bit secret living the token's lifetime, used once; `alone` where no other kind is composed or `inbox-only-when-absent` is on. Its rule over the kinds composed: internal module `evidence`.
+- Operator section: `mail-link` (https), `token-lifetime` (default 15 minutes), `code-tries` (default 3), `nonce-lifetime` (default 2 minutes), `requests` and `window` (default 30 a minute per source), `inbox-only-when-absent` (default off), `account-name` (default the mail link's host).
+- Routes `POST /first-key/nonce`, `/first-key/start`, `/first-key/mail`, `/first-key/recover` (internal modules `routes`, `start`, `mail-side`), `/continue`, `/key/finish`, `/approval/start` and `/approval/finish` (internal modules `registration`, `approval`, `keying`). Metric `auth_first_key_jobs_dropped_total`; lines `passkey-management.start_ended`, `job_dropped`, `job_failed`, `mail_refused`, `recovery_refused`, naming no address, identifier or subject.
+- Declares to `promises`' `evidenceKinds` the inbox, the path's own kind (internal module `evidence`).
 - `./testing`: `passkeyManagementConfig`, `firstKeyStoreContract` (the stores' contract test), `itemsOf` (each kind's items of a start).
 - `FirstKeyStart`: the start's nonce, which the path owns, gives a short life and uses up before any check, and the identifier asked for. `EvidenceAnswer`; `StartOutcome`, how the path ended the start: `passed`, `failed` (its own refusals too) or `unavailable` (a kind's fault or its own).
 
 ## Invariants
+- Where no identifier is asked, a creation's `account` is the address its subject verified last, masked as a first key's mail shows its identifier; with none, its `user_name` is `account-name` and a short mark of the subject, as F1's is (`accountOf`, `nameOf`). Where identifiers are not addresses, a subject's first key and a later one may show apart.
 - A kind answers alike, in shape and work, for a subject of none, one holding none of the kind, and one holding it: a subject of none fails. So does `prepare`, alike too for one identifier each time.
 - `absent` is the kind's record saying the subject holds none; a record lost fails, and a kind asked of everyone never says it. Each answer stays in the path: the screen is answered alike.
 - A kind reads only its own items, under its name in the request's map of kinds, as the screen sent them.
 - `prepare` runs before the nonce is used up; `check` once for each kind after, none past the nonce's life; `settled` once for each start a kind checked, after every kind has answered, a fault among them too; one may never come, and a start not told is not passed.
 - A start answers alike, in shape and work, whatever its subject, evidence and job: what differs, whether the subject holds a key and gets a mail, runs in one job apart from the answer (internal modules `dispatch`, `issuing`), which settles the subject's keys first. A job dropped or lost with its process sends nothing: the person starts again.
-- The job's `settle` brings the witness's mark and the removals' notices in line from the applied state alone, idempotent, so anyone who can start may cause it unharmed. A subject holds a key where it answers so or a mark is left, as a first key's reservation reads it.
 - Boot is refused where `users` looks no one up by identifier, no passkey witness is composed, or webauthn takes no ceremony from the mail link's origin.
-- It writes a first key's change as the kind's writer, and completes it only with a receipt (internal modules `registration`, `key-change`).
+- It writes a key added's change, a first key's or a passkey-add's, as the kind's writer, and completes it only with a receipt (internal modules `registration`, `key-change`).
+- The email's token is always asked, being the path's and no kind; where the inbox alone passes, with no kind composed or one answering `absent` to every kind under `inbox-only-when-absent`, the strength's output says so. The rule over the kinds composed: internal module `evidence`.
 - Boot is refused at `passkey-management` for a kind composed that `promises` holds no declaration of, or holds as past: it would pass unseen by those who rely on the tokens.
-- The path's rule, which its body runs: the email's token is always asked, being the path's and no kind; beside it, every kind composed that does not answer `absent` passes. With no kind composed, the inbox alone passes, and the strength's output says so. One answering `absent` to every kind composed is refused, unless `inbox-only-when-absent` (off by default) is on, which declares in the strength's output that some pass on the inbox alone.
 
 ## Depends on
 - `kernel`, `keys`, `users`, `passkeys`, `passkey-witness`, `approvals`, `webauthn`, `subject-revocation`, `mail`, `promises`, `http`, `rate-limit`, `metrics`, `transparency`, `transparency-wire`, `sdk-core-wire`; `zod`

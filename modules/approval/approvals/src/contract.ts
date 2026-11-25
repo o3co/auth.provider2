@@ -10,11 +10,13 @@ import type {
 import { part } from "./completion/completion.ts";
 
 /** The purposes a statement is signed for: the IdP's own operations, a closed set. */
-export type Purpose = "authorization" | "creation" | "possession";
+export type Purpose = "authorization" | "passkey-add" | "creation" | "possession";
 
 /** Each purpose's items, as sdk-core-wire fixes them. */
 export interface ItemsOf {
 	readonly authorization: AuthorizationItems;
+	/** A passkey-add names no items: only the common fields and the screen's keys. */
+	readonly "passkey-add": Readonly<Record<string, never>>;
 	readonly creation: CreationPayload["creation"];
 	readonly possession: PossessionPayload["possession"];
 }
@@ -55,6 +57,8 @@ export interface Approval {
 	/** By an assertion: the subject and credential it showed. */
 	readonly subject?: string;
 	readonly credential?: string;
+	/** By an assertion: the id of that key's registration's record on the subject's flow, as passkeys answered it. */
+	readonly registration?: string;
 	/** By a possession: the verification passkeys gave the pending key. */
 	readonly verification?: string;
 	/** When it was used, by the kernel's clock, in ms: the same evidence again answers the same time. */
@@ -120,6 +124,58 @@ export interface KeptCreation {
 	readonly screen: Screen;
 }
 
+/**
+ * A passkey-add's completion asked: the statement's hash, the assertion that used it (its JSON text as
+ * received), and, to make one where none is kept, the creation its caller made for it.
+ */
+export interface PasskeyAddAsk {
+	readonly hash: string;
+	readonly assertion: string;
+	readonly creation?: string;
+}
+
+export type PasskeyAddCompleted =
+	| {
+			readonly kind: "completed";
+			/** The completion, sealed to the passkey-add's `eEnc`: HPKE's `enc` and ciphertext, base64url. */
+			readonly enc: string;
+			readonly ct: string;
+	  }
+	| {
+			readonly kind: "refused";
+			/**
+			 * `unknown`: no record, one this generation's ring does not verify, or, asked with no creation,
+			 * none kept yet. `purpose`: no passkey-add. `assertion`: another than the one that used it.
+			 * `unused`: not used. `creation`: none issued here for it with basis `passkey-add`, its hash as
+			 * evidence, its subject and the same screen's keys. `form`: one sdk-core-wire's `passkeyAdd` refuses.
+			 * `withdrawn`: the ring signs no more.
+			 */
+			readonly reason:
+				| "unknown"
+				| "purpose"
+				| "assertion"
+				| "unused"
+				| "expired"
+				| "creation"
+				| "form"
+				| "withdrawn";
+	  };
+
+/**
+ * A used passkey-add as the key change it approves takes it: its statement as signed, the assertion's
+ * JSON text as received, the subject, credential and registration of the key that made it, the screen's
+ * keys, and the flow state's use-once mark of the statement, which that key change consumes.
+ */
+export interface UsedPasskeyAdd {
+	readonly statement: string;
+	readonly assertion: string;
+	readonly subject: string;
+	readonly credential: string;
+	readonly registration: string;
+	readonly screen: Screen;
+	readonly mark: string;
+}
+
 /** A creation's record as kept, apart from a continuation: its statement's bytes, its items and the screen's keys. */
 export interface CreationRecord extends KeptCreation {
 	readonly statement: string;
@@ -145,9 +201,23 @@ export type Continued =
 	  }
 	| {
 			readonly kind: "refused";
-			/** `pending`: another call holds that continuation's step; ask again. */
-			readonly reason: "unknown" | "expired" | "purpose" | "signature" | "seq" | "pending";
+			/**
+			 * `pending`: another call holds that continuation's step; ask again. `body`: one past 8192
+			 * bytes. `signature`: one not the screen's, or not in its one spelling.
+			 */
+			readonly reason: "unknown" | "expired" | "purpose" | "body" | "signature" | "seq" | "pending";
 	  };
+
+/**
+ * A creation's last continuation as taken: its sequence number, its body as received, the screen's
+ * signature (`r‖s`, base64url) and, once kept, what its step answered, all from one read.
+ */
+export interface LastContinuation {
+	readonly seq: number;
+	readonly body: string;
+	readonly signature: string;
+	readonly result?: StepResult;
+}
 
 export type Completed =
 	| {
@@ -180,8 +250,9 @@ export interface Approvals {
 	/** Signs a statement of `purpose` over its items, as the declared modules fill them, and records it. */
 	issue(ask: IssueAsk): Promise<Issued>;
 	/**
-	 * Uses a statement once: an authorization's by an assertion over its challenge, its user verified;
-	 * a possession's by the verification of its pending key. The same evidence again answers alike.
+	 * Uses a statement once: an authorization's or a passkey-add's by an assertion over its challenge,
+	 * its user verified; a possession's by the verification of its pending key. The same evidence again
+	 * answers alike.
 	 */
 	use(
 		p: {
@@ -206,6 +277,12 @@ export interface Approvals {
 		readonly signature: string;
 		readonly step: (kept: KeptCreation) => Promise<StepResult>;
 	}): Promise<Continued>;
+	/**
+	 * A creation's last continuation as taken, with what its step answered, from one read: while its
+	 * statement lives and this generation's ring verifies it; none before one is taken, or for any
+	 * other purpose.
+	 */
+	continuationOf(hash: string): Promise<LastContinuation | undefined>;
 	/** An authorization's completion: its approval taken in on the subject's flow, then signed and sealed. */
 	complete(p: { readonly hash: string; readonly code: string }): Promise<Completed>;
 	/**
@@ -215,6 +292,13 @@ export interface Approvals {
 	 * for another, `other`. The record lives a minute past the statement's expiry, `unknown` after.
 	 */
 	completeKeyChange(ask: KeyChangeAsk): Promise<KeyChangeCompleted>;
+	/**
+	 * A passkey-add's completion, carrying the creation its caller made for it: signed and sealed to its
+	 * screen, and kept on its record whole in one write, the first kept answered to every call after,
+	 * whatever has lapsed since. One is made only for a used passkey-add unexpired that this
+	 * generation's ring verifies, and a creation issued here for it.
+	 */
+	completePasskeyAdd(ask: PasskeyAddAsk): Promise<PasskeyAddCompleted>;
 	/** A used statement's approval; none for any other. */
 	usedOf(hash: string): Promise<Approval | undefined>;
 	/**
@@ -228,6 +312,12 @@ export interface Approvals {
 		| { readonly statement: string; readonly assertion: string; readonly credential: string }
 		| undefined
 	>;
+	/**
+	 * A used passkey-add, until its statement expires and while the Core's ring of this generation
+	 * verifies it; none for any other statement, one not used, or one used before its key's
+	 * registration was kept. The whole ceremony it approves lives within its statement's life.
+	 */
+	passkeyAddOf(hash: string): Promise<UsedPasskeyAdd | undefined>;
 	/**
 	 * A creation's record, whatever its continuations, until its statement expires and while the Core's
 	 * ring of this generation verifies it; none for any other purpose. What its caller holds is its own

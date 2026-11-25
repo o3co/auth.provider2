@@ -40,6 +40,13 @@ export const section = z.strictObject({
 		.pipe(z.number().int().min(1).max(86_400))
 		.prefault("1m")
 		.describe("The window they are counted over, from 1s to 1d."),
+	"account-name": z
+		.string()
+		.regex(/^[^\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}]{1,50}$/u)
+		.optional()
+		.describe(
+			"The deployment's name a passkey shows for an account no address names, beside a short mark of its subject; by default the mail link's host.",
+		),
 	"inbox-only-when-absent": z
 		.boolean()
 		.prefault(false)

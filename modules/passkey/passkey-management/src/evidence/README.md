@@ -13,7 +13,7 @@ Internal module of `passkey-management`: a start's evidence, the kinds composed 
 - `evidenceOver` (the kinds composed, whether one absent on all may pass) → `ask` (the start, the subject or none, the request's items by kind) → `Asked`: `checked` (`passed`, `failed`, `unavailable`), the faults thrown, and `tell` (the start's end) → what the kinds threw telling it.
 - `itemsOf` (the start's plain text as the wire carries it) → the items by kind: its password is the kind `password`'s, the one place the wire's fields become a kind's.
 - `undeclared` (the kinds composed, the kinds declared) → the names composed that no living declaration holds.
-- `inboxKind` (the token's lifetime, alone) → the inbox's kind: trusting `inbox`, a secret of the mail token's bits living its lifetime, `alone` where asked.
+- `inboxKind` (the token's lifetime, alone) → the inbox's kind: trusting `inbox`, a secret of the mail token's bits living its lifetime, `alone` where asked. The path declares it to `promises`' `evidenceKinds`: trusting `inbox`, a 256-bit secret living the token's lifetime, used once; `alone` where no other kind is composed or `inbox-only-when-absent` is on.
 
 ## Invariants
 - With no kind composed, the inbox alone passes. Else every kind not answering `absent` passed: any fault comes to `unavailable`, any failure to `failed`, and one absent on every kind to `failed` unless one absent on all may pass.

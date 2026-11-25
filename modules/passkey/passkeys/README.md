@@ -12,7 +12,7 @@
 - Keys' labels, creation times and renaming: the key management package and `passkey-manage` add them.
 
 ## Offers
-- `passkeys`, which any module may take: `assert` (a response, its request's challenge and the credentials it named, `allow`) → subject, credential, user verified, backup eligible; or a refusal. `publicKeyOf` (credential) → an active key's subject, public key and registration's record id. A key is held in one form, its COSE_Key as `webauthn` attests it: the form its ceremonies assert by and the transparency rules judge by. `settle` (subject) → whether it holds a key.
+- `passkeys`, which any module may take, its asks and answers internal module `kept`'s: `assert`, an assertion by an active key; `publicKeyOf`, an active key's subject, public key and registration; `settle`, the witness's mark and the removals brought in line after a key change. A key is held in one form, its COSE_Key as `webauthn` attests it: the form its ceremonies assert by and the transparency rules judge by.
 - `passkeyGenerations`: `generation` (subject) → its key generation in the applied state, the `kg` an embedder's reset instruction names on L0's path, lagging the log's head until a boundary is taken in (read after a `tend`); L1's embedder reads the monitor's `stateOf` instead (V22).
 - `heldKeys`, read alone: internal module `kept`.
 - `registrations`, taken only by a module standing on the promises (`promises`' `stances`): `reserve` (the key generation its approval names; `first`: only where the subject holds no key; `retrying` one), `verifyPending`, `commit` (KE-C01, its op the reservation), `cancel`, `remove` (KE-C01 of a removal).

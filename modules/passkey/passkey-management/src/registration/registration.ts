@@ -11,7 +11,7 @@ import {
 	isCanonical,
 	keyThumbprint,
 } from "@mod/webauthn";
-import type { Changed, FirstKeyChange } from "../key-change/key-change.ts";
+import type { AddedKey, Changed } from "../key-change/key-change.ts";
 
 /** A continuation of a creation's statement, as the screen signed it. */
 export interface Continuation {
@@ -30,7 +30,14 @@ export type Registered =
 export interface RegistrationParts {
 	readonly approvals: Pick<
 		Approvals,
-		"continue" | "issue" | "creationOf" | "use" | "usedOf" | "completeKeyChange"
+		| "continue"
+		| "issue"
+		| "creationOf"
+		| "use"
+		| "usedOf"
+		| "completeKeyChange"
+		| "passkeyAddOf"
+		| "continuationOf"
 	>;
 	readonly registrations: Pick<Registrations, "reserve" | "verifyPending">;
 	readonly held: { of(subject: string): Promise<Held> };
@@ -38,8 +45,8 @@ export interface RegistrationParts {
 	readonly revocation: Pick<SubjectRevocation, "check">;
 	readonly passkeys: Pick<Passkeys, "publicKeyOf">;
 	readonly keyChange: {
-		change(k: FirstKeyChange): Promise<Changed>;
-		receipts(k: FirstKeyChange): Promise<readonly string[] | undefined>;
+		change(k: AddedKey): Promise<Changed>;
+		receipts(k: AddedKey): Promise<readonly string[] | undefined>;
 	};
 }
 
@@ -68,8 +75,14 @@ const payloadOf = (jws: string): unknown =>
 /** When a statement was issued, in ms, from bytes its record holds. */
 const issuedAt = (jws: string) =>
 	((payloadOf(jws) as { iat?: number } | undefined)?.iat ?? 0) * 1000;
-/** Only the first key's path registers here: a creation of another basis is refused. */
-const firstKey = (c: KeptCreation["items"]) => c.basis === undefined || c.basis === "first-key";
+type Path = "first-key" | "passkey-add";
+/** The paths registered here: the first key's, and a passkey-add's; a creation of another basis is refused. */
+const pathOf = (c: KeptCreation["items"]) =>
+	c.basis === undefined || c.basis === "first-key"
+		? ("first-key" as const)
+		: c.basis === "passkey-add"
+			? ("passkey-add" as const)
+			: undefined;
 
 /**
  * A first key's registration after its creation (§3.13's steps 4 to 6): `register`, the creation's
@@ -85,7 +98,7 @@ export function registrationOver(p: RegistrationParts) {
 	 * holder makes: the same credential and key need no creation's hash beside them.
 	 * Any other pending reservation refuses.
 	 */
-	async function reservedFor(c: KeptCreation["items"], k: Credential) {
+	async function reservedFor(c: KeptCreation["items"], k: Credential, first: boolean) {
 		for (let tried = 0; tried < 2; tried++) {
 			const pending = (await p.held.of(c.subject)).pending;
 			if (pending)
@@ -96,7 +109,7 @@ export function registrationOver(p: RegistrationParts) {
 				subject: c.subject,
 				credential: k,
 				generation: c.kg,
-				first: true,
+				first,
 			});
 			if ("reservation" in reserved) return reserved.reservation;
 			// The flow open meanwhile: nothing kept, the same continuation asked again later.
@@ -112,7 +125,9 @@ export function registrationOver(p: RegistrationParts) {
 		(q: Continuation, hash: string) =>
 		async (kept: KeptCreation): Promise<StepResult> => {
 			const c = kept.items;
-			if (!firstKey(c)) return { refused: "basis" };
+			const path = pathOf(c);
+			if (!path) return { refused: "basis" };
+			if (path === "passkey-add" && !(await approver(c))) return { refused: "approver" };
 			const response = json(q.body);
 			if (response === undefined) return { refused: "malformed" };
 			const challenge = sha256(challengeInput(q.statement, "create"));
@@ -131,7 +146,7 @@ export function registrationOver(p: RegistrationParts) {
 			if (!thumb || !offered.includes(thumb.alg)) return { refused: "key" };
 			if ((await p.revocation.check(c.subject, issuedAt(q.statement))) === "revoked")
 				return { refused: "revoked" };
-			const reservation = await reservedFor(c, k);
+			const reservation = await reservedFor(c, k, path === "first-key");
 			if (typeof reservation !== "string") return reservation;
 			const issued = await p.approvals.issue({
 				purpose: "possession",
@@ -170,35 +185,65 @@ export function registrationOver(p: RegistrationParts) {
 		return refused(result?.refused ?? "step");
 	}
 
+	/** The passkey-add a creation bases while it lives, its approving key active as it approved; none otherwise. */
+	async function approver(c: KeptCreation["items"]) {
+		const added = await p.approvals.passkeyAddOf(c.evidence);
+		if (added?.subject !== c.subject) return undefined;
+		const key = await p.passkeys.publicKeyOf(added.credential);
+		return key?.registration === added.registration ? added : undefined;
+	}
+
 	/** A possession's completion as approvals answers it: the one kept, or one signed with `receipt`. */
-	async function completion(hash: string, receipt?: string): Promise<Registered> {
+	async function completion(
+		hash: string,
+		purpose: "first-key" | "passkey-add",
+		receipt?: string,
+	): Promise<Registered> {
 		const done = await p.approvals.completeKeyChange({
 			hash,
-			purpose: "first-key",
+			purpose,
 			...(receipt === undefined ? {} : { receipt }),
 		});
 		if (done.kind === "completed") return { kind: "completed", enc: done.enc, ct: done.ct };
 		// The ring signing no more for now: the change stands, its completion asked again later.
 		return done.reason === "withdrawn" ? unavailable() : refused(done.reason);
 	}
-	/** The completion approvals keeps for a possession it holds completed: none is signed anew. */
-	const kept = (hash: string) => completion(hash);
+	/** The completion approvals keeps for a possession it holds completed, of either path: none is signed anew. */
+	async function kept(hash: string): Promise<Registered> {
+		const first = await completion(hash, "first-key");
+		return first.kind === "refused" && first.reason === "other"
+			? completion(hash, "passkey-add")
+			: first;
+	}
 	/** A completion signed with the first receipt its change was answered with; never one without. */
-	const receipted = (hash: string, receipts: readonly string[]) => {
+	const receipted = (hash: string, path: Path, receipts: readonly string[]) => {
 		const [receipt] = receipts;
-		return receipt === undefined ? unavailable() : completion(hash, receipt);
+		return receipt === undefined ? unavailable() : completion(hash, path, receipt);
 	};
+
+	/** What a passkey-add's change carries: the passkey-add while it lives, and the continuation that made this possession. */
+	async function approvedFor(c: KeptCreation["items"], creationHash: string, possession: string) {
+		const added = await p.approvals.passkeyAddOf(c.evidence);
+		if (added?.subject !== c.subject) return { refused: "expired" } as const;
+		const sent = await p.approvals.continuationOf(creationHash);
+		const made = (sent?.result as { statement?: unknown } | undefined)?.statement;
+		if (!sent || made !== possession) return { refused: "continuation" } as const;
+		const { statement, assertion, credential, registration, mark } = added;
+		const { seq, body, signature } = sent;
+		const continuation = { seq, body, signature };
+		return { statement, assertion, credential, registration, mark, generation: c.kg, continuation };
+	}
 
 	/**
 	 * A change placed already, by this call's change or another replica's: completed with the receipt
 	 * the log first answered, its stage made again from the key now active; none where it is not.
 	 */
-	async function placed(hash: string, k: Omit<FirstKeyChange, "publicKey">, jkt: string) {
+	async function placed(hash: string, path: Path, k: Omit<AddedKey, "publicKey">, jkt: string) {
 		const key = await p.passkeys.publicKeyOf(k.credential);
 		if (key?.subject !== k.subject || keyThumbprint(key.publicKey)?.jkt !== jkt)
 			return refused("ended");
 		const receipts = await p.keyChange.receipts({ ...k, publicKey: key.publicKey });
-		return receipts ? receipted(hash, receipts) : refused("ended");
+		return receipts ? receipted(hash, path, receipts) : refused("ended");
 	}
 
 	async function finish(q: {
@@ -214,7 +259,8 @@ export function registrationOver(p: RegistrationParts) {
 		if (!read.success) return refused("unknown");
 		const named = read.data.possession;
 		const creation = await p.approvals.creationOf(named.creation_hash);
-		if (!creation || !firstKey(creation.items)) return refused("unknown");
+		const path = creation && pathOf(creation.items);
+		if (!creation || !path) return refused("unknown");
 		const subject = creation.items.subject;
 		const response = json(q.assertion);
 		if (response === undefined) return refused("malformed");
@@ -226,9 +272,9 @@ export function registrationOver(p: RegistrationParts) {
 		});
 		let approval: Approval;
 		if ("refused" in verified) {
-			// Its reservation moved on past verified: a finish asked again once its change was decided.
-			const used = verified.refused === "state" ? await p.approvals.usedOf(hash) : undefined;
-			if (!used || used.purpose !== "possession") return refused(verified.refused);
+			// Its reservation moved on, or another took its place: a finish asked again of a used possession.
+			const used = await p.approvals.usedOf(hash);
+			if (used?.purpose !== "possession") return refused(verified.refused);
 			approval = used;
 		} else {
 			if (!verified.userVerified) return refused("unverified");
@@ -244,6 +290,11 @@ export function registrationOver(p: RegistrationParts) {
 		if (approval.verification === undefined) return refused("unknown");
 		if ((await p.revocation.check(subject, issuedAt(creation.statement))) === "revoked")
 			return refused("revoked");
+		const approved =
+			path === "passkey-add"
+				? await approvedFor(creation.items, named.creation_hash, q.statement)
+				: undefined;
+		if (approved && "refused" in approved) return refused(approved.refused);
 		const k = {
 			subject,
 			reservation: named.reservation_id,
@@ -252,19 +303,21 @@ export function registrationOver(p: RegistrationParts) {
 			creation: creation.statement,
 			possession: q.statement,
 			assertion: q.assertion,
+			...(approved ? { approved } : {}),
 		};
 		const held = await p.held.of(subject);
 		const pending = held.pending;
 		if (pending?.reservation !== named.reservation_id || pending.credential !== named.credential_id)
 			return held.credentials.includes(named.credential_id)
-				? placed(hash, k, named.key_jkt)
+				? placed(hash, path, k, named.key_jkt)
 				: refused("reservation");
 		if (keyThumbprint(pending.publicKey)?.jkt !== named.key_jkt) return refused("key");
+		if (path === "passkey-add" && !(await approver(creation.items))) return refused("approver");
 		const changed = await p.keyChange.change({ ...k, publicKey: pending.publicKey });
 		if (changed.kind === "refused") return refused(changed.reason);
-		if (changed.kind === "took") return receipted(hash, changed.receipts);
+		if (changed.kind === "took") return receipted(hash, path, changed.receipts);
 		// Ended otherwise: taken in by another replica, or closed; only a change the log placed completes.
-		return placed(hash, k, named.key_jkt);
+		return placed(hash, path, k, named.key_jkt);
 	}
 
 	return { register, finish };
