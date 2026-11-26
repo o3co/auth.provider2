@@ -60,7 +60,6 @@ async function world(
 			asked.push(ask);
 			return create(ask);
 		},
-		deployment: "Example",
 	});
 	/** The approving key's assertion over a statement, as the screen's `get()` answers it. */
 	const approve = (statement: string) => {
@@ -241,11 +240,11 @@ describe("a passkey-add's or a passkey-manage's approval", () => {
 		});
 	});
 
-	it("names an account no address names in `userName`, by the deployment and a mark of its subject", async () => {
+	it("asks a creation of an account no address names with no account, the creation naming it", async () => {
 		const { approval, asked, approve, started } = await world([]);
 		const statement = await started();
 		await approval.finish({ statement, assertion: approve(statement) });
-		expect(asked[0]).toMatchObject({ userName: expect.stringMatching(/^Example [0-9a-f]{6}$/) });
+		expect(asked[0]).toMatchObject({ basis: "passkey-add", subject: "s1" });
 		expect(asked[0]).not.toHaveProperty("account");
 	});
 
@@ -313,7 +312,6 @@ describe("a passkey-add's finish, over approvals as it answers", () => {
 			create: async () => {
 				throw new Error("not asked");
 			},
-			deployment: "Example",
 		});
 		expect(await approval.finish({ statement: "t.of.authorization", assertion: "{}" })).toEqual({
 			kind: "refused",

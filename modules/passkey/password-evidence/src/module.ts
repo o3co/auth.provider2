@@ -1,5 +1,5 @@
+import { firstKeyEvidence } from "@mod/first-key";
 import { defineModule } from "@mod/kernel";
-import { firstKeyEvidence } from "@mod/passkey-management";
 import { evidenceKinds, trustedNames } from "@mod/promises";
 import { users } from "@mod/users";
 import { kind, passwordEvidence } from "./evidence.ts";

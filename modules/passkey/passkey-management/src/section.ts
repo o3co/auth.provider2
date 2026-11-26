@@ -2,39 +2,15 @@ import { setting } from "@mod/kernel";
 import { z } from "zod";
 
 export const section = z.strictObject({
-	"mail-link": z
-		.url({ protocol: /^https$/ })
-		.describe(
-			"The login screen's page a first key's mail links to, the token in its fragment. https only.",
-		),
-	"token-lifetime": setting
-		.duration("s")
-		.pipe(z.number().int().min(60).max(3600))
-		.prefault("15m")
-		.describe("How long a first key's mail token lives, from `1m` to `1h` in whole seconds."),
-	"code-tries": z
-		.number()
-		.int()
-		.min(1)
-		.max(10)
-		.prefault(3)
-		.describe(
-			"Wrong codes, or identifiers naming another subject, a token takes before it is revoked.",
-		),
-	"nonce-lifetime": setting
-		.duration("s")
-		.pipe(z.number().int().min(30).max(600))
-		.prefault("2m")
-		.describe(
-			"How long a nonce of a first key's stage lives, from `30s` to `10m` in whole seconds.",
-		),
 	requests: z
 		.number()
 		.int()
 		.min(1)
 		.max(100_000)
 		.prefault(30)
-		.describe("A first key's nonces and starts allowed per source in each window."),
+		.describe(
+			"Requests allowed per source in each window, to each of `/continue`, `/key/finish`, `/approval/start` and `/approval/finish`.",
+		),
 	window: setting
 		.duration("s")
 		.pipe(z.number().int().min(1).max(86_400))
@@ -45,13 +21,7 @@ export const section = z.strictObject({
 		.regex(/^[^\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}]{1,50}$/u)
 		.optional()
 		.describe(
-			"The deployment's name a passkey shows for an account no address names, beside a short mark of its subject; by default the mail link's host.",
-		),
-	"inbox-only-when-absent": z
-		.boolean()
-		.prefault(false)
-		.describe(
-			"Whether one answering `absent` to every kind of evidence composed passes on the inbox alone; declared in the evidence's strength where on.",
+			"The deployment's name a passkey shows for an account no address names, beside a short mark of its subject; by default the relying party ID, its first 50 characters, which may end inside a label: set it where the ID is longer.",
 		),
 });
 

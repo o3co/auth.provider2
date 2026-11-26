@@ -372,6 +372,28 @@ export function messageOf<K extends RequestKind>(kind: K, carried: Carried): Rea
 	return { ok: true, message: message as Message<K> };
 }
 
+/**
+ * The message an operation's HTTP request carries, as `messageOf` reads it, then every field held
+ * to its spec as the encoder holds it: what the Core's route reads before it acts on any field.
+ */
+export function requestOf<K extends RequestKind>(kind: K, carried: Carried): Read<K> {
+	const read = messageOf(kind, carried);
+	if (!read.ok) return read;
+	for (const spec of requests[kind].fields as readonly FieldSpec[]) {
+		const value = (read.message as Record<string, unknown>)[spec.name];
+		// As read, before its bytes could change it: an enum's number held to its count, before its
+		// one byte could wrap it; a text with a lone surrogate refused, never checked as U+FFFD.
+		const error =
+			spec.type === "enum" && !((value as number) < (spec.values ?? 0))
+				? "enumRange"
+				: typeof value === "string" && !value.isWellFormed()
+					? "fieldSyntax"
+					: checkField(spec, bytesOf(spec, value));
+		if (error) return { ok: false, field: spec.name, error };
+	}
+	return read;
+}
+
 /** One field's text, as `messageOf` reads it back. */
 function textOf(spec: FieldSpec, side: OverHttp, value: unknown): string {
 	if (spec.type === "bytes") return Buffer.from(value as Uint8Array).toString("base64url");

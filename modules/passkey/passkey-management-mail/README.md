@@ -1,3 +1,0 @@
-# passkey-management-mail
-
-Words a first key's mail for `passkey-management`: a plain-text template for its purpose, `first-key`, contributed to `mail`'s `mailTemplates`, in English for every locale. It is filled from the values `passkey-management` names in `firstKeyMail` alone: the account (its identifier masked), the link to the mail's side and the minutes it lives. The mail asks the person to open the link on the device the passkey is for and enter the code their start's screen shows, and to ignore it if they did not ask. It comes with `passkey-management` as its axis's default; a deployment changes the wording by replacing this module with its own. It holds nothing. Depends on `kernel`, `mail` and `passkey-management`.

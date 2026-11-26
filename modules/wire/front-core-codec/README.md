@@ -13,6 +13,7 @@
 - `readHeader` (bytes, the body's limit) and `frameSplitter` (the limit, `onFrame`, `onError`): a stream cut into whole frames.
 - `checkField` (spec, bytes): the one check of a field's length and characters both sides run.
 - `operationAt` (method, path, the body's values): the operation a request is, by the body value telling apart those sharing a path, or none. `messageOf` (kind, `Carried`: the body's values, the headers, and apart the source the Front determined) → the message, or the field it cannot carry and the code (`Read`); `carriedOf` (kind, message) → what the Core's route reads, the discriminator first, the declared source apart.
+- `requestOf` (kind, `Carried`) → `Read`: as `messageOf` reads it, every field then held to its spec as the encoder holds it, an enum's number and a text as read (a lone surrogate refused); what a Core's route reads before it acts on any field.
 - `Message`, `WireRequest`, `WireReply`, `Decoded`, `Rejected`, `Header`, `FieldsOf` and `Value`: the values, typed from the schema.
 - `./testing`: `fuzzer` (seed): well-formed frames of a kind and mutations of a frame, reproducible from the seed.
 

@@ -47,6 +47,7 @@ export const features = scoped([
 	"approvals",
 	"passkeys",
 	"passkey-management",
+	"first-key",
 	"sign-up",
 	"client-credentials",
 	"authorize-claims",
@@ -181,7 +182,7 @@ async function configOf(spec: PatternSpec, kernelConfig: any) {
 	const { webauthnConfig } = await testing("@mod/webauthn");
 	const { issuerConfig } = await testing("@mod/issuer");
 	const { authorizeConfig } = await testing("@mod/authorize");
-	const { passkeyManagementConfig } = await testing("@mod/passkey-management");
+	const { firstKeyConfig } = await testing("@mod/first-key");
 	const { tokensConfig } = await testing("@mod/tokens");
 	const { dpopConfig } = await testing("@mod/dpop");
 	const { clientsConfig } = await testing("@mod/clients");
@@ -198,7 +199,7 @@ async function configOf(spec: PatternSpec, kernelConfig: any) {
 		...webauthnConfig({ "rp-id": new URL(spec.screen).hostname, origins: [spec.screen] }),
 		...issuerConfig({ url: spec.origin }),
 		...authorizeConfig({ "screen-url": `${spec.screen}/authorize` }),
-		...passkeyManagementConfig({ "mail-link": `${spec.screen}/first-key` }),
+		...firstKeyConfig({ "mail-link": `${spec.screen}/first-key` }),
 		...tokensConfig({ revocation: "denylist" }, { subjects: "checked" }),
 		// The nonce asked at the authorization server, the module's default, not the tests' `never`.
 		...dpopConfig({ nonce: { ...dpopConfig().dpop.nonce, required: "as" } }),

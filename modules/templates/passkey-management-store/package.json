@@ -11,12 +11,11 @@
 	"dependencies": {
 		"@mod/kernel": "workspace:*",
 		"@mod/passkey-management": "workspace:*",
-		"@mod/records": "workspace:*",
 		"@mod/store": "workspace:*",
-		"@mod/transparency": "workspace:*",
 		"@mod/transparency-frames": "workspace:*"
 	},
 	"devDependencies": {
+		"@mod/transparency": "workspace:*",
 		"@mod/transparency-store": "workspace:*",
 		"vitest": "5.0.5"
 	}

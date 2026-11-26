@@ -5,7 +5,7 @@
 
 ## Not here
 - The password's hash, its check, its work and its waits: `users` and its ledger.
-- When a start passes, and its nonce: `passkey-management`'s path.
+- When a start passes, and its nonce: `first-key`'s path.
 - Bringing hashes in from another IdP: `users`' `usersImport`.
 
 ## Offers
@@ -19,7 +19,7 @@
 - A fault of `users` is thrown on, and nothing is held for the start.
 
 ## Depends on
-- `kernel`, `users`, `passkey-management`, `promises`
+- `kernel`, `users`, `first-key`, `promises`
 
 ## Vocabulary
 - start's end: how the path ended a start over every kind, which the password's waits count.

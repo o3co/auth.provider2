@@ -102,7 +102,7 @@ export type Strength =
  * it.
  */
 export interface EvidenceKind {
-	/** The kind's name, one for each kind, the module's own and kept stable: those who rely on tokens key by it, as `passkey-management` composes by it. */
+	/** The kind's name, one for each kind, the module's own and kept stable: those who rely on tokens key by it, as `first-key` composes by it. */
 	readonly kind: string;
 	/** The module that declares it: the one that checks it, or one that declares a kind no longer composed. */
 	readonly by: string;

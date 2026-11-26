@@ -1,6 +1,6 @@
+import { type FirstKeyEvidence, firstKeyEvidence } from "@mod/first-key";
+import { itemsOf } from "@mod/first-key/testing";
 import { assemble, contract, defineModule, kernelConfig, Unavailable } from "@mod/kernel";
-import { type FirstKeyEvidence, firstKeyEvidence } from "@mod/passkey-management";
-import { itemsOf } from "@mod/passkey-management/testing";
 import { evidence } from "@mod/promises";
 import promisesModule from "@mod/promises/module";
 import secretHashModule from "@mod/secret-hash/module";

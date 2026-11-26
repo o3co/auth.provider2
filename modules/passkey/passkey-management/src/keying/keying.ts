@@ -6,10 +6,16 @@ import { subjectRevocation } from "@mod/subject-revocation";
 import { transparency, transparencyLog } from "@mod/transparency";
 import { users } from "@mod/users";
 import { ceremonies } from "@mod/webauthn";
-import { deploymentOf, nameOf } from "../account.ts";
+import { masked } from "../account.ts";
 import { approvalOver, type Finished, type Started } from "../approval/approval.ts";
-import type { ContinueStage, SignUpAsk, SignUpCreated } from "../contract.ts";
-import { creationOver } from "../creation/creation.ts";
+import type {
+	ContinueStage,
+	FirstKeyCreated,
+	FirstKeyCreationAsk,
+	SignUpAsk,
+	SignUpCreated,
+} from "../contract.ts";
+import { type Created, type CreationAsk, creationOver } from "../creation/creation.ts";
 import { keyChangesOver } from "../key-change/key-change.ts";
 import { deleteStageOver, renameStageOver } from "../managing/managing.ts";
 import { type Registered, registrationOver } from "../registration/registration.ts";
@@ -50,6 +56,37 @@ const written =
 		return answered;
 	};
 
+/**
+ * A first key's creation over the creation's making: its account the identifier masked; issued, or
+ * refused `revoked` or `full`; approvals' other refusals told by their reason alone, then thrown,
+ * `items` a fault and the rest Unavailable, so approvals' words stay here.
+ */
+export function firstKeyCreationsOver(
+	create: (ask: CreationAsk) => Promise<Created>,
+	told: (reason: string) => void,
+) {
+	return {
+		create: async (ask: FirstKeyCreationAsk): Promise<FirstKeyCreated> => {
+			const made = await create({
+				subject: ask.subject,
+				account: masked(ask.identifier),
+				basis: "first-key",
+				evidence: ask.evidence,
+				ctHash: ask.ctHash,
+				screen: ask.screen,
+				since: ask.since,
+			});
+			if (made.kind === "issued") return made;
+			if (made.reason === "revoked" || made.reason === "full")
+				return { kind: "refused", reason: made.reason };
+			told(made.reason);
+			if (made.reason === "items")
+				throw new TypeError("passkey-management: a first key's creation refused its items");
+			throw new Unavailable("passkey-management");
+		},
+	};
+}
+
 /** A key's approval and its registration after its creation, made from its parts in a build: their routes. */
 export async function keyingOf(c: Context) {
 	const settling = await c.get(passkeys);
@@ -79,21 +116,19 @@ export async function keyingOf(c: Context) {
 		generations: await c.get(passkeyGenerations),
 		revocation: await c.get(subjectRevocation),
 		random: (n) => c.random.bytes(n),
+		accountName: c.section["account-name"],
 	});
-	const deployment = deploymentOf(c.section);
 	const approval = approvalOver({
 		approvals: await c.get(approvals),
 		passkeys: settling,
 		users: await c.get(users),
 		create,
-		deployment,
 	});
-	/** A sign-up's creation (F1): its account named by the deployment and a mark of its subject. */
+	/** A sign-up's creation (F1): no identifier names its account, so the creation names it. */
 	const signUp = {
 		create: async (ask: SignUpAsk): Promise<SignUpCreated> => {
 			const made = await create({
 				subject: ask.subject,
-				userName: nameOf(deployment, ask.subject),
 				basis: "sign-up",
 				evidence: ask.tHash,
 				screen: ask.screen,
@@ -107,6 +142,9 @@ export async function keyingOf(c: Context) {
 			throw new Unavailable("passkey-management");
 		},
 	};
+	const firstKey = firstKeyCreationsOver(create, (reason) =>
+		c.log.warn("passkey-management.creation_refused", { reason }),
+	);
 	return {
 		...keyRoutes({
 			finish: written(c, "registration_refused", registration.finish),
@@ -143,5 +181,6 @@ export async function keyingOf(c: Context) {
 			keys: await c.get(keyList),
 		}),
 		signUp,
+		firstKey,
 	};
 }

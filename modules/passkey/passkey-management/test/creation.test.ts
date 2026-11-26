@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import type { IssueAsk } from "@mod/approvals";
 import { payloads } from "@mod/sdk-core-wire";
 import { expect, it } from "vitest";
+import { nameOf } from "../src/account.ts";
 import { creationItems, creationOver } from "../src/creation/creation.ts";
 
 const screen = { eEnc: "E", eSig: { kty: "EC", crv: "P-256", x: "x", y: "y" } } as const;
@@ -15,7 +16,12 @@ const ask = {
 	since: 1000,
 };
 
-function creation(revoked = false, odd = false, full = false) {
+function creation(
+	revoked = false,
+	odd = false,
+	full = false,
+	named: { readonly accountName?: string; readonly rpId?: string } = {},
+) {
 	const asked: IssueAsk[] = [];
 	const checked: [string, number][] = [];
 	const handles: string[] = [];
@@ -33,7 +39,7 @@ function creation(revoked = false, odd = false, full = false) {
 				names.push(user.name);
 				if (odd) return { rp: {} };
 				return {
-					rp: { id: "login.example" },
+					rp: { id: named.rpId ?? "login.example" },
 					user: { id: user.handle },
 					pubKeyCredParams: [{ alg: -7 }, { alg: -8 }],
 					excludeCredentials: exclude.map((id) => ({ id })),
@@ -55,6 +61,7 @@ function creation(revoked = false, odd = false, full = false) {
 			},
 		},
 		random: (n) => randomBytes(n),
+		accountName: named.accountName,
 	});
 	return { create, asked, handles, names, checked };
 }
@@ -115,14 +122,17 @@ it("signs a passkey-add's creation with no ciphertext's hash, its account masked
 	expect(payloads.creation.shape.creation.safeParse(asked?.items).success).toBe(true);
 });
 
-it("names a passkey-add's account no address names in `user_name`, and shows it to webauthn", async () => {
+it("names a passkey-add's account no address names in `user_name`, by the RP ID and a mark of its subject", async () => {
 	const c = creation();
 	const { ctHash: _first, account: _masked, ...rest } = ask;
-	await c.create({ ...rest, basis: "passkey-add", userName: "Example 3fa9c1" });
+	await c.create({ ...rest, basis: "passkey-add" });
 	const [asked] = c.asked;
 	expect(asked?.items).not.toHaveProperty("account");
-	expect(asked?.items).toMatchObject({ options: { user_name: "Example 3fa9c1" } });
-	expect(c.names).toEqual(["Example 3fa9c1"]);
+	expect(asked?.items).toMatchObject({
+		options: { user_name: nameOf("login.example", "s-alice") },
+	});
+	// webauthn's options hold a place for the name, never read: the statement's is the name.
+	expect(c.names).toEqual(["account"]);
 	// sdk-core-wire takes one of the two, an account or a name, for any basis but the first key's.
 	expect(payloads.creation.shape.creation.safeParse(asked?.items).success).toBe(true);
 });
@@ -130,12 +140,12 @@ it("names a passkey-add's account no address names in `user_name`, and shows it 
 it("signs a sign-up's creation for its T, its account named in `user_name` alone", async () => {
 	const c = creation();
 	const { ctHash: _first, account: _masked, ...rest } = ask;
-	await c.create({ ...rest, basis: "sign-up", evidence: "t-hash", userName: "Example 3fa9c1" });
+	await c.create({ ...rest, basis: "sign-up", evidence: "t-hash" });
 	const [asked] = c.asked;
 	expect(asked?.items).toMatchObject({
 		basis: "sign-up",
 		evidence: "t-hash",
-		options: { user_name: "Example 3fa9c1" },
+		options: { user_name: nameOf("login.example", "s-alice") },
 	});
 	expect(asked?.items).not.toHaveProperty("account");
 	expect(payloads.creation.shape.creation.safeParse(asked?.items).success).toBe(true);
@@ -149,7 +159,28 @@ it("refuses a creation of any basis for a subject full, asking nothing", async (
 	});
 	expect(await c.create(ask)).toEqual({ kind: "refused", reason: "full" });
 	const { account: _, ctHash: __, ...rest } = ask;
-	const signUp = { ...rest, userName: "Example", basis: "sign-up" as const };
+	const signUp = { ...rest, basis: "sign-up" as const };
 	expect(await c.create(signUp)).toEqual({ kind: "refused", reason: "full" });
 	expect(c.asked).toEqual([]);
+});
+
+it("names an unnamed account by `account-name` where set, and by at most 50 of a long RP ID, within `user_name`'s 64", async () => {
+	const { ctHash: _first, account: _masked, ...rest } = ask;
+	const set = creation(false, false, false, { accountName: "Example" });
+	await set.create({ ...rest, basis: "sign-up" });
+	expect(set.asked[0]?.items).toMatchObject({
+		options: { user_name: nameOf("Example", "s-alice") },
+	});
+	const rpId = `${"a".repeat(61)}.${"b".repeat(61)}.${"c".repeat(61)}.${"d".repeat(61)}.example`;
+	const long = creation(false, false, false, { rpId });
+	await long.create({ ...rest, basis: "sign-up" });
+	const items = long.asked[0]?.items as { options: { user_name: string } };
+	expect(items.options.user_name).toBe(nameOf(rpId.slice(0, 50), "s-alice"));
+	expect(items.options.user_name.length).toBeLessThanOrEqual(64);
+	expect(payloads.creation.shape.creation.safeParse(items).success).toBe(true);
+	// A first key's masked account is its own: no name made.
+	const first = creation(false, false, false, { accountName: "Example" });
+	await first.create(ask);
+	expect(first.asked[0]?.items).toMatchObject({ account: "a***@example.com" });
+	expect(first.asked[0]?.items).not.toHaveProperty("options.user_name");
 });

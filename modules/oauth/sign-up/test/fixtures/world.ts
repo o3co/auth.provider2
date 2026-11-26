@@ -16,16 +16,8 @@ import { quietRuntime } from "@mod/kernel/testing";
 import { keys } from "@mod/keys";
 import keysModule from "@mod/keys/module";
 import { keysConfig, testHolder } from "@mod/keys/testing";
-import { mail } from "@mod/mail";
-import {
-	firstKeyNonces,
-	firstKeyTokens,
-	keyChangePart,
-	type StoredNonce,
-	type StoredToken,
-} from "@mod/passkey-management";
+import { keyChangePart } from "@mod/passkey-management";
 import passkeyManagement from "@mod/passkey-management/module";
-import { passkeyManagementConfig } from "@mod/passkey-management/testing";
 import { passkeyWitnessStandIn } from "@mod/passkey-witness/testing";
 import {
 	type PasskeyStore,
@@ -49,7 +41,7 @@ import transparencyModule from "@mod/transparency/module";
 import { logBook, memoryFrames } from "@mod/transparency/testing";
 import { type Users, users } from "@mod/users";
 import webauthnModule from "@mod/webauthn/module";
-import { testOrigin, webauthnConfig } from "@mod/webauthn/testing";
+import { webauthnConfig } from "@mod/webauthn/testing";
 import signUp from "../../src/module.ts";
 
 export const sha256 = (text: string) => createHash("sha256").update(text).digest("base64url");
@@ -146,8 +138,6 @@ export async function f1World() {
 		m.provide(transparencyLog).by(() => book.as("w1")),
 		m.provide(passkeyStore).by(() => memoryRecords<StoredCredential>(now) as PasskeyStore),
 		m.provide(approvalStore).by(() => memoryRecords<StoredStatement>(now)),
-		m.provide(firstKeyNonces).by(() => memoryRecords<StoredNonce>(now)),
-		m.provide(firstKeyTokens).by(() => memoryRecords<StoredToken>(now)),
 		m.provide(jarReservations).by(() => memoryRecords<StoredReservation>(now)),
 		m
 			.provide(issuer)
@@ -184,7 +174,6 @@ export async function f1World() {
 					contactsOf: async () => [],
 				}) as unknown as Users,
 		),
-		m.provide(mail).by(() => ({ send: async () => "sent" as const })),
 		m
 			.provide(subjectRevocation)
 			.by(() => ({ check: async () => "valid" }) as unknown as SubjectRevocation),
@@ -275,7 +264,6 @@ export async function f1World() {
 			...kernelConfig(),
 			...keysConfig(),
 			...webauthnConfig(),
-			...passkeyManagementConfig({ "mail-link": `${testOrigin}/first-key` }),
 			...authorizeConfig(),
 			"sign-up": {},
 		},

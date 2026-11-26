@@ -1,11 +1,10 @@
 import { createHash } from "node:crypto";
-import type { Approvals } from "@mod/approvals";
+import type { Approvals, Screen } from "@mod/approvals";
 import { Unavailable } from "@mod/kernel";
 import type { Passkeys } from "@mod/passkeys";
 import type { Users } from "@mod/users";
 import { accountOf } from "../account.ts";
 import type { Created, CreationAsk } from "../creation/creation.ts";
-import type { Screen } from "../sealed/sealed.ts";
 
 /** An approval's start answered: its statement; or refused, its reason for the log alone. */
 export type Started =
@@ -25,8 +24,6 @@ export interface ApprovalParts {
 	readonly passkeys: Pick<Passkeys, "publicKeyOf">;
 	readonly users: Pick<Users, "contactsOf">;
 	readonly create: (ask: CreationAsk) => Promise<Created>;
-	/** The deployment's name an account no address names shows. */
-	readonly deployment: string;
 }
 
 const sha256 = (text: string) => createHash("sha256").update(text).digest("base64url");
@@ -127,7 +124,7 @@ export function approvalOver(p: ApprovalParts) {
 			return refused("approver");
 		const added = await p.approvals.passkeyAddOf(hash);
 		if (!added) return refused("expired");
-		const shown = accountOf(await p.users.contactsOf(subject), p.deployment, subject);
+		const shown = accountOf(await p.users.contactsOf(subject));
 		const created = await p.create({
 			subject,
 			...shown,

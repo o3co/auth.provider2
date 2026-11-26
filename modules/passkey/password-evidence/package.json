@@ -9,8 +9,8 @@
 		"./module": "./src/module.ts"
 	},
 	"dependencies": {
+		"@mod/first-key": "workspace:*",
 		"@mod/kernel": "workspace:*",
-		"@mod/passkey-management": "workspace:*",
 		"@mod/promises": "workspace:*",
 		"@mod/users": "workspace:*"
 	},

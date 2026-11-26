@@ -1,6 +1,6 @@
 import { overHttp, type RequestKind, requests } from "@mod/front-core-wire";
 import { describe, expect, it } from "vitest";
-import { carriedOf, decodeRequest, messageOf, operationAt } from "../src/contract.ts";
+import { carriedOf, decodeRequest, messageOf, operationAt, requestOf } from "../src/contract.ts";
 import { fuzzer } from "../src/testing.ts";
 
 const seed = Number(process.env.WIRE_FUZZ_SEED ?? 20261124);
@@ -177,5 +177,73 @@ describe("an operation over HTTP", () => {
 			ok: true,
 			message: { statement: "fieldSyntax" },
 		});
+	});
+
+	it("holds a read request's every field to its spec, as the encoder does: missing, sized or spelt outside it, named", () => {
+		const nonce = "A".repeat(43);
+		const sealed = {
+			nonce,
+			eEnc: Buffer.alloc(65, 4).toString("base64url"),
+			eSigX: Buffer.alloc(32, 1).toString("base64url"),
+			eSigY: Buffer.alloc(32, 2).toString("base64url"),
+			enc: Buffer.alloc(65, 4).toString("base64url"),
+			ct: Buffer.alloc(17, 3).toString("base64url"),
+		};
+		const kind = operationAt("POST", "/first-key/start", values(sealed));
+		if (!kind) throw new Error("the first key's start");
+		// Every message carried and read back is within its spec.
+		for (let i = 0; i < cases; i++) {
+			const k = pick(kinds);
+			const decoded = decodeRequest(validFrame(k));
+			if (!decoded.ok) throw new Error("a valid frame");
+			expect(requestOf(k, carriedOf(k, decoded.value.message as never)).ok).toBe(true);
+		}
+		expect(requestOf(kind, carried(sealed)).ok).toBe(true);
+		const { ct: _, ...missing } = sealed;
+		for (const [body, field, error] of [
+			[missing, "ct", "fieldLength"],
+			[{ ...sealed, eEnc: Buffer.alloc(64).toString("base64url") }, "eEnc", "fieldLength"],
+			[{ ...sealed, ct: Buffer.alloc(2049).toString("base64url") }, "ct", "fieldLength"],
+			[{ ...sealed, nonce: "A".repeat(42) }, "nonce", "fieldLength"],
+			[{ ...sealed, nonce: `${"A".repeat(42)}+` }, "nonce", "fieldSyntax"],
+		] as const) {
+			// messageOf leaves each of these to the encoder; requestOf refuses it, naming the field.
+			expect(messageOf(kind, carried(body)).ok, field).toBe(true);
+			expect(requestOf(kind, carried(body)), field).toEqual({ ok: false, field, error });
+		}
+	});
+
+	it("refuses an enum's number past its count, never wrapped to a byte within it", () => {
+		const decoded = decodeRequest(validFrame("continue"));
+		if (!decoded.ok) throw new Error("a valid frame");
+		const sent = carriedOf("continue", decoded.value.message as never);
+		for (const seq of ["17", "256", "257", "272"]) {
+			const values = new Map(sent.values);
+			values.set("seq", [seq]);
+			expect(requestOf("continue", { ...sent, values }), seq).toEqual({
+				ok: false,
+				field: "seq",
+				error: "enumRange",
+			});
+		}
+	});
+
+	it("refuses a text with a lone surrogate, never checked as the bytes of U+FFFD", () => {
+		const decoded = decodeRequest(validFrame("continue"));
+		if (!decoded.ok) throw new Error("a valid frame");
+		const sent = carriedOf("continue", decoded.value.message as never);
+		for (const body of ["\ud800", "a\udfffb", "\udc00\ud800"]) {
+			const values = new Map(sent.values);
+			values.set("body", [body]);
+			expect(requestOf("continue", { ...sent, values })).toEqual({
+				ok: false,
+				field: "body",
+				error: "fieldSyntax",
+			});
+		}
+		// A surrogate pair is one character, well formed.
+		const values = new Map(sent.values);
+		values.set("body", ["\ud83d\ude00"]);
+		expect(requestOf("continue", { ...sent, values }).ok).toBe(true);
 	});
 });

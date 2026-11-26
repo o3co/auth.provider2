@@ -1,10 +1,9 @@
-import type { Approvals, Issued } from "@mod/approvals";
+import type { Approvals, Issued, Screen } from "@mod/approvals";
 import type { Held, PasskeyGenerations } from "@mod/passkeys";
 import type { SubjectRevocation } from "@mod/subject-revocation";
 import { type Ceremonies, freshHandle } from "@mod/webauthn";
 import { z } from "zod";
-import type { Shown } from "../account.ts";
-import type { Screen } from "../sealed/sealed.ts";
+import { nameOf } from "../account.ts";
 
 /** A creation asked for the subject its evidence binds: what its statement names, and the screen it is for. */
 export type CreationAsk = {
@@ -14,17 +13,17 @@ export type CreationAsk = {
 	readonly screen: Screen;
 	/** When the evidence began (epoch ms): a revocation of the subject since refuses it. */
 	readonly since: number;
-	// The account as shown, never matched (`Shown`): masked as `account`, or named as `userName`.
-} & Shown &
-	(
-		| {
-				readonly basis: "first-key";
-				/** The sealed request's digest, as the Core opened it: the first key's path's alone. */
-				readonly ctHash: string;
-		  }
-		| { readonly basis: "passkey-add" }
-		| { readonly basis: "sign-up" }
-	);
+	/** The account as shown, never matched: an identifier masked; none, and the creation names it. */
+	readonly account?: string;
+} & (
+	| {
+			readonly basis: "first-key";
+			/** The sealed request's digest, as the Core opened it: the first key's path's alone. */
+			readonly ctHash: string;
+	  }
+	| { readonly basis: "passkey-add" }
+	| { readonly basis: "sign-up" }
+);
 
 export type Created = Issued | { readonly kind: "refused"; readonly reason: "revoked" | "full" };
 
@@ -40,6 +39,8 @@ const options = z.object({
 
 /** A challenge's place held while webauthn gives the options: the screen derives the real one from the statement. */
 const unused = "A".repeat(43);
+/** An unnamed account's place in webauthn's options, never read: the statement's `user_name` is the name. */
+const unnamed = "account";
 
 /**
  * A creation statement made (§3.13's registration, step 2): for a subject its evidence binds and no
@@ -53,6 +54,8 @@ export function creationOver(p: {
 	readonly generations: PasskeyGenerations;
 	readonly revocation: Pick<SubjectRevocation, "check">;
 	readonly random: (bytes: number) => Uint8Array;
+	/** The deployment's name an account no identifier names shows; by default the RP ID. */
+	readonly accountName?: string | undefined;
 }) {
 	return async (ask: CreationAsk): Promise<Created> => {
 		if ((await p.revocation.check(ask.subject, ask.since)) === "revoked")
@@ -67,7 +70,7 @@ export function creationOver(p: {
 		const read = options.safeParse(
 			p.ceremonies.creation(
 				unused,
-				{ handle, name: ask.account ?? ask.userName },
+				{ handle, name: ask.account ?? unnamed },
 				held.credentials,
 				"required",
 			),
@@ -76,6 +79,11 @@ export function creationOver(p: {
 		if (!read.success)
 			throw new TypeError("passkey-management: webauthn's options of another shape");
 		const given = read.data;
+		// Named by the deployment and a mark of its subject, at most 50 of the RP ID, as `user_name` holds 64.
+		const userName =
+			ask.account === undefined
+				? nameOf(p.accountName ?? given.rp.id.slice(0, 50), ask.subject)
+				: undefined;
 		return p.approvals.issue({
 			purpose: "creation",
 			items: {
@@ -87,7 +95,7 @@ export function creationOver(p: {
 				kg: generation,
 				options: {
 					user_id: given.user.id,
-					...(ask.userName === undefined ? {} : { user_name: ask.userName }),
+					...(userName === undefined ? {} : { user_name: userName }),
 					rp_id: given.rp.id,
 					exclude_credentials: given.excludeCredentials.map((c) => c.id),
 					algorithms: given.pubKeyCredParams.map((c) => c.alg),

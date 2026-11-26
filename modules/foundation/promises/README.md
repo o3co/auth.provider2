@@ -17,7 +17,7 @@
 - `promises`: `judgment()`, each promise in `promiseNames`' order (`PromiseJudgment`): whether it holds, its basis (`declared`) and what breaks it (`Breaking`).
 - Section `promises`: `required`, the promises a deployment requires.
 - `trustedNames`: what a first key's evidence trusts, `inbox`, `password`, `device` and `former-idp`; `Trusted`, one of them.
-- Extension point `evidenceKinds` (keyed by kind, the name `passkey-management` keys its `firstKeyEvidence` by): an `EvidenceKind` names the kind, the module that checks it (`by`), what it trusts, its `Strength` (where it changed, the weaker under the same name, as the deployment declares while keys bound under it live), and `past`, only for a kind no longer composed whose keys live on.
+- Extension point `evidenceKinds` (keyed by kind, the name `first-key` keys its `firstKeyEvidence` by): an `EvidenceKind` names the kind, the module that checks it (`by`), what it trusts, its `Strength` (where it changed, the weaker under the same name, as the deployment declares while keys bound under it live), and `past`, only for a kind no longer composed whose keys live on.
 - `EvidenceKind`'s `alone`, one meaning alone: a key may have been bound by this kind with no other beside it. Any kind may carry it.
 - `Strength`, in promises' words: `guesses` (a count per window, on each instance), `secret` (bits, lifetime, used once), `code` (digits, windows either side, guesses), `key` (whether it verifies its user), `issuer` (the issuer, the acr asked).
 - `evidence`: `kinds()`, the kinds declared, by name, frozen; at each start, one `info` line per kind (`promises.evidence`), its strength said in one fixed order.

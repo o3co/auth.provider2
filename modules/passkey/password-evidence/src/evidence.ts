@@ -1,4 +1,4 @@
-import type { FirstKeyEvidence } from "@mod/passkey-management";
+import type { FirstKeyEvidence } from "@mod/first-key";
 import type { Users } from "@mod/users";
 
 /** The kind's name, as it is composed and declared. */

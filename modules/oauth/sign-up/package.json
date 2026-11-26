@@ -29,7 +29,6 @@
 		"@mod/http": "workspace:*",
 		"@mod/issuer": "workspace:*",
 		"@mod/keys": "workspace:*",
-		"@mod/mail": "workspace:*",
 		"@mod/passkey-witness": "workspace:*",
 		"@mod/passkeys": "workspace:*",
 		"@mod/redirect-uris": "workspace:*",

@@ -2020,9 +2020,6 @@ importers:
       '@mod/keys':
         specifier: workspace:*
         version: link:../../foundation/keys
-      '@mod/mail':
-        specifier: workspace:*
-        version: link:../../foundation/mail
       '@mod/passkey-witness':
         specifier: workspace:*
         version: link:../../passkey/passkey-witness
@@ -2358,14 +2355,11 @@ importers:
         specifier: 5.0.5
         version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(vite@8.3.3(@types/node@26.6.5)(yaml@2.9.1))
 
-  modules/passkey/passkey-management:
+  modules/passkey/first-key:
     dependencies:
-      '@mod/approvals':
+      '@mod/front-core-codec':
         specifier: workspace:*
-        version: link:../../approval/approvals
-      '@mod/continuation-wire':
-        specifier: workspace:*
-        version: link:../../wire/continuation-wire
+        version: link:../../wire/front-core-codec
       '@mod/front-core-wire':
         specifier: workspace:*
         version: link:../../wire/front-core-wire
@@ -2384,9 +2378,95 @@ importers:
       '@mod/metrics':
         specifier: workspace:*
         version: link:../../foundation/metrics
+      '@mod/passkey-management':
+        specifier: workspace:*
+        version: link:../passkey-management
       '@mod/passkey-witness':
         specifier: workspace:*
         version: link:../passkey-witness
+      '@mod/passkeys':
+        specifier: workspace:*
+        version: link:../passkeys
+      '@mod/promises':
+        specifier: workspace:*
+        version: link:../../foundation/promises
+      '@mod/rate-limit':
+        specifier: workspace:*
+        version: link:../../foundation/rate-limit
+      '@mod/sdk-core-wire':
+        specifier: workspace:*
+        version: link:../../wire/sdk-core-wire
+      '@mod/users':
+        specifier: workspace:*
+        version: link:../../identity/users
+      '@mod/webauthn':
+        specifier: workspace:*
+        version: link:../webauthn
+      vitest:
+        specifier: 5.0.5
+        version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(vite@8.3.3(@types/node@26.6.5)(yaml@2.9.1))
+      zod:
+        specifier: 4.6.7
+        version: 4.6.7
+    devDependencies:
+      '@mod/approvals':
+        specifier: workspace:*
+        version: link:../../approval/approvals
+      '@mod/authority-rules':
+        specifier: workspace:*
+        version: link:../../foundation/authority-rules
+      '@mod/continuation-wire':
+        specifier: workspace:*
+        version: link:../../wire/continuation-wire
+      '@mod/issuer':
+        specifier: workspace:*
+        version: link:../../oauth/issuer
+      '@mod/refresh':
+        specifier: workspace:*
+        version: link:../../oauth/refresh
+      '@mod/subject-revocation':
+        specifier: workspace:*
+        version: link:../../identity/subject-revocation
+      '@mod/transparency':
+        specifier: workspace:*
+        version: link:../../foundation/transparency
+      '@mod/transparency-wire':
+        specifier: workspace:*
+        version: link:../../wire/transparency-wire
+
+  modules/passkey/first-key-mail:
+    dependencies:
+      '@mod/first-key':
+        specifier: workspace:*
+        version: link:../first-key
+      '@mod/kernel':
+        specifier: workspace:*
+        version: link:../../foundation/kernel
+      '@mod/mail':
+        specifier: workspace:*
+        version: link:../../foundation/mail
+    devDependencies:
+      vitest:
+        specifier: 5.0.5
+        version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(vite@8.3.3(@types/node@26.6.5)(yaml@2.9.1))
+
+  modules/passkey/passkey-management:
+    dependencies:
+      '@mod/approvals':
+        specifier: workspace:*
+        version: link:../../approval/approvals
+      '@mod/continuation-wire':
+        specifier: workspace:*
+        version: link:../../wire/continuation-wire
+      '@mod/front-core-wire':
+        specifier: workspace:*
+        version: link:../../wire/front-core-wire
+      '@mod/http':
+        specifier: workspace:*
+        version: link:../../foundation/http
+      '@mod/kernel':
+        specifier: workspace:*
+        version: link:../../foundation/kernel
       '@mod/passkeys':
         specifier: workspace:*
         version: link:../passkeys
@@ -2414,9 +2494,6 @@ importers:
       '@mod/webauthn':
         specifier: workspace:*
         version: link:../webauthn
-      vitest:
-        specifier: 5.0.5
-        version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(vite@8.3.3(@types/node@26.6.5)(yaml@2.9.1))
       zod:
         specifier: 4.6.7
         version: 4.6.7
@@ -2427,22 +2504,15 @@ importers:
       '@mod/issuer':
         specifier: workspace:*
         version: link:../../oauth/issuer
+      '@mod/keys':
+        specifier: workspace:*
+        version: link:../../foundation/keys
+      '@mod/passkey-witness':
+        specifier: workspace:*
+        version: link:../passkey-witness
       '@mod/refresh':
         specifier: workspace:*
         version: link:../../oauth/refresh
-
-  modules/passkey/passkey-management-mail:
-    dependencies:
-      '@mod/kernel':
-        specifier: workspace:*
-        version: link:../../foundation/kernel
-      '@mod/mail':
-        specifier: workspace:*
-        version: link:../../foundation/mail
-      '@mod/passkey-management':
-        specifier: workspace:*
-        version: link:../passkey-management
-    devDependencies:
       vitest:
         specifier: 5.0.5
         version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(vite@8.3.3(@types/node@26.6.5)(yaml@2.9.1))
@@ -2540,12 +2610,12 @@ importers:
 
   modules/passkey/password-evidence:
     dependencies:
+      '@mod/first-key':
+        specifier: workspace:*
+        version: link:../first-key
       '@mod/kernel':
         specifier: workspace:*
         version: link:../../foundation/kernel
-      '@mod/passkey-management':
-        specifier: workspace:*
-        version: link:../passkey-management
       '@mod/promises':
         specifier: workspace:*
         version: link:../../foundation/promises
@@ -2890,6 +2960,25 @@ importers:
         specifier: workspace:*
         version: link:../../foundation/store
 
+  modules/templates/first-key-store:
+    dependencies:
+      '@mod/first-key':
+        specifier: workspace:*
+        version: link:../../passkey/first-key
+      '@mod/kernel':
+        specifier: workspace:*
+        version: link:../../foundation/kernel
+      '@mod/records':
+        specifier: workspace:*
+        version: link:../../foundation/records
+      '@mod/store':
+        specifier: workspace:*
+        version: link:../../foundation/store
+    devDependencies:
+      vitest:
+        specifier: 5.0.5
+        version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(vite@8.3.3(@types/node@26.6.5)(yaml@2.9.1))
+
   modules/templates/par-store:
     dependencies:
       '@mod/kernel':
@@ -2917,19 +3006,16 @@ importers:
       '@mod/passkey-management':
         specifier: workspace:*
         version: link:../../passkey/passkey-management
-      '@mod/records':
-        specifier: workspace:*
-        version: link:../../foundation/records
       '@mod/store':
         specifier: workspace:*
         version: link:../../foundation/store
-      '@mod/transparency':
-        specifier: workspace:*
-        version: link:../../foundation/transparency
       '@mod/transparency-frames':
         specifier: workspace:*
         version: link:../../foundation/transparency-frames
     devDependencies:
+      '@mod/transparency':
+        specifier: workspace:*
+        version: link:../../foundation/transparency
       '@mod/transparency-store':
         specifier: workspace:*
         version: link:../../foundation/transparency-store

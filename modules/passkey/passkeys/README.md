@@ -8,7 +8,7 @@
 - The ceremonies and the relying party: `webauthn`. Challenges, their lifetimes and use-once marks: the caller's, kept with its request.
 - The key change's preimage, its `bundle` and `resend`, sending it and taking it in: its writer's and `transparency`'s. The fold: `authority-rules`.
 - A reset, emptying a subject's keys: the embedder's signed instruction, put on the log as the boundary record (A11) and taken in through the keys' owner, the fold moving the key generation on (`passkey-reset`).
-- Who may register a key, on what grounds, and for which subject: the caller's, standing on the promises. Keeping the witness's mark: the module contributing `passkeyWitnessing`. Auditing a mark beside no key, the sign of a lost store: the key management package.
+- Who may register a key, on what grounds, and for which subject: the caller's, standing on the promises. Keeping the witness's mark: the module contributing `passkeyWitnessing`. Auditing a mark beside no key, the sign of a lost store: `first-key`.
 - Who may rename a key, and the list's completion: the key management package, `approvals`.
 
 ## Offers

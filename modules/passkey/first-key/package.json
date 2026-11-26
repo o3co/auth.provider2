@@ -1,0 +1,50 @@
+{
+	"name": "@mod/first-key",
+	"private": true,
+	"license": "Apache-2.0",
+	"type": "module",
+	"kind": "feature",
+	"optIn": true,
+	"storeWiring": true,
+	"exports": {
+		".": "./src/contract.ts",
+		"./testing": "./src/testing.ts",
+		"./module": "./src/module.ts"
+	},
+	"dependencies": {
+		"@mod/front-core-codec": "workspace:*",
+		"@mod/front-core-wire": "workspace:*",
+		"@mod/http": "workspace:*",
+		"@mod/kernel": "workspace:*",
+		"@mod/keys": "workspace:*",
+		"@mod/mail": "workspace:*",
+		"@mod/metrics": "workspace:*",
+		"@mod/passkey-management": "workspace:*",
+		"@mod/passkey-witness": "workspace:*",
+		"@mod/passkeys": "workspace:*",
+		"@mod/promises": "workspace:*",
+		"@mod/rate-limit": "workspace:*",
+		"@mod/sdk-core-wire": "workspace:*",
+		"@mod/users": "workspace:*",
+		"@mod/webauthn": "workspace:*",
+		"zod": "4.6.7"
+	},
+	"peerDependencies": {
+		"vitest": "5.0.5"
+	},
+	"peerDependenciesMeta": {
+		"vitest": {
+			"optional": true
+		}
+	},
+	"devDependencies": {
+		"@mod/approvals": "workspace:*",
+		"@mod/authority-rules": "workspace:*",
+		"@mod/continuation-wire": "workspace:*",
+		"@mod/issuer": "workspace:*",
+		"@mod/refresh": "workspace:*",
+		"@mod/subject-revocation": "workspace:*",
+		"@mod/transparency": "workspace:*",
+		"@mod/transparency-wire": "workspace:*"
+	}
+}

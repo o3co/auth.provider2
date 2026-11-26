@@ -17,10 +17,6 @@
 		"@mod/front-core-wire": "workspace:*",
 		"@mod/http": "workspace:*",
 		"@mod/kernel": "workspace:*",
-		"@mod/keys": "workspace:*",
-		"@mod/mail": "workspace:*",
-		"@mod/metrics": "workspace:*",
-		"@mod/passkey-witness": "workspace:*",
 		"@mod/passkeys": "workspace:*",
 		"@mod/promises": "workspace:*",
 		"@mod/rate-limit": "workspace:*",
@@ -32,17 +28,17 @@
 		"@mod/webauthn": "workspace:*",
 		"zod": "4.6.7"
 	},
-	"peerDependencies": {
-		"vitest": "5.0.5"
-	},
-	"peerDependenciesMeta": {
-		"vitest": {
-			"optional": true
-		}
+	"takenBy": {
+		"firstKeyCreations": [
+			"@mod/first-key"
+		]
 	},
 	"devDependencies": {
 		"@mod/authority-rules": "workspace:*",
 		"@mod/issuer": "workspace:*",
-		"@mod/refresh": "workspace:*"
+		"@mod/keys": "workspace:*",
+		"@mod/passkey-witness": "workspace:*",
+		"@mod/refresh": "workspace:*",
+		"vitest": "5.0.5"
 	}
 }
