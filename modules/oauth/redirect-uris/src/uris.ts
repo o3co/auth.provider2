@@ -9,12 +9,17 @@ const withoutPort = (uri: string) =>
 /** A private-use scheme in reverse-domain form (RFC 8252 §7.1), never a script scheme. */
 const reverseDomain = /^[a-z][a-z0-9+-]*(\.[a-z0-9+-]+)+:$/;
 
+/** The longest redirect URI a client sends back, as every way to the Core carries one. */
+const longest = 512;
+/** The longest port a loopback literal matches on, with its colon. */
+const anyPort = ":65535".length;
+
 export function registrable(uri: string): boolean {
-	const control = [...uri].some((ch) => {
-		const code = ch.codePointAt(0) ?? 0;
-		return code < 0x20 || code === 0x7f || /\s/.test(ch);
-	});
-	if (control || uri.includes("\\")) return false;
+	// Visible ASCII alone (0x21 to 0x7e): a URI says any other character percent-encoded.
+	if (!/^[\x21-\x7e]+$/.test(uri) || uri.includes("\\")) return false;
+	// A loopback literal is matched on any port (RFC 8252 §7.3): with the longest, it still fits.
+	if ((loopbackLiteral.test(uri) ? withoutPort(uri).length + anyPort : uri.length) > longest)
+		return false;
 	let parsed: URL;
 	try {
 		parsed = new URL(uri);

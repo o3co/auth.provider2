@@ -1,4 +1,5 @@
 import type { Client, Section } from "@mod/clients";
+import { requests } from "@mod/front-core-wire";
 import { describe, expect, it } from "vitest";
 import {
 	answerTo,
@@ -283,5 +284,42 @@ describe("redirect-uris: the copy client-documents collects", () => {
 
 	it("copies nothing from a document without redirect_uris", () => {
 		expect(redirectsCopy.copy({ client_name: "App" }, from)).toBeUndefined();
+	});
+});
+
+describe("a redirect URI the Front's wire carries back", () => {
+	it("is registrable only where every `redirectUri` the wire carries holds it, a loopback literal on any port", () => {
+		const specs = Object.values(requests).flatMap((op) =>
+			op.fields.filter((f) => f.name === "redirectUri"),
+		);
+		expect(specs.length).toBeGreaterThan(0);
+		const web = (n: number) => `https://app.example/${"a".repeat(n - 20)}`;
+		expect(web(512)).toHaveLength(512);
+		expect(registrable(web(512))).toBe(true);
+		expect(registrable(web(513))).toBe(false);
+		// Matched on any port, a loopback literal leaves room for the longest one.
+		const loop = (n: number) => `http://127.0.0.1/${"a".repeat(n - 17)}`;
+		expect(registrable(loop(506))).toBe(true);
+		expect(registrable(loop(507))).toBe(false);
+		const sent = loop(506).replace("127.0.0.1", "127.0.0.1:65535");
+		expect(matches(loop(506), sent)).toBe(true);
+		const six = (n: number) => `http://[::1]/${"a".repeat(n - 13)}`;
+		expect(registrable(six(506))).toBe(true);
+		expect(registrable(six(507))).toBe(false);
+		// localhost is matched as written, so it may take the whole length, a port in it.
+		const local = `http://localhost:8080/${"a".repeat(512 - 22)}`;
+		expect(local).toHaveLength(512);
+		expect(registrable(local)).toBe(true);
+		expect(matches(local, local.replace(":8080", ":8081"))).toBe(false);
+		for (const spec of specs) {
+			expect(spec.type).toBe("visible");
+			expect(sent.length).toBeLessThanOrEqual(spec.max);
+			expect(web(512).length).toBeLessThanOrEqual(spec.max);
+		}
+		// Visible ASCII alone: any other character percent-encoded, or not registrable.
+		expect(registrable("https://app.example/café")).toBe(false);
+		expect(registrable("https://app.example/caf%C3%A9")).toBe(true);
+		expect(registrable("https://例え.jp/cb")).toBe(false);
+		expect(registrable("https://xn--r8jz45g.jp/cb")).toBe(true);
 	});
 });

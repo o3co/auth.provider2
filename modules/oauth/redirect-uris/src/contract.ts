@@ -17,12 +17,12 @@ export const redirects: Section<Redirects> = {
 					.string()
 					.refine(
 						registrable,
-						"an absolute URI, https with a host right after its //, without a fragment, userinfo, backslash, control characters, or a query named like a response parameter",
+						"an absolute URI of visible ASCII alone (anything else percent-encoded, a host as its A-label), at most 512 characters (a loopback IP literal 506 without its port), https with a host right after its //, without a fragment, userinfo, backslash, or a query named like a response parameter",
 					),
 			)
 			.prefault([])
 			.describe(
-				"The redirect URIs the client may ask for, each matched as written: https with a host right after its //, http to a loopback host, or a private-use reverse-domain scheme, with no fragment, userinfo, backslash or query parameter named like a response parameter.",
+				"The redirect URIs the client may ask for, each matched as written: visible ASCII alone, at most 512 characters (a loopback IP literal 506 without its port); https with a host right after its //, http to a loopback host, or a private-use reverse-domain scheme, with no fragment, userinfo, backslash or query parameter named like a response parameter.",
 			),
 	}),
 };
