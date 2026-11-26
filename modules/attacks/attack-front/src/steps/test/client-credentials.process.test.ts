@@ -10,6 +10,10 @@ import { provider, type World, world } from "./world.ts";
 // the Front holds no client key; it may replay, reroute or re-prove what a client sent through it.
 
 const api = "https://api.example";
+const notTaken = {
+	error: "invalid_request",
+	error_description: "authorization_details are not taken",
+};
 const keyNotTheClients = "the proof's key is not the key the client's assertion was verified with";
 let w: World;
 let mine: MachineClient;
@@ -157,7 +161,17 @@ describe("the compromised Front on a client's own token", () => {
 		});
 	});
 
-	it.todo(
-		"A25: authorization_details on the token endpoint is refused, for each grant (the code's, refresh, the client's own): issued today, reported",
-	);
+	it("A25: the client's request given authorization_details by the Front is refused by the Core, as on every grant", async () => {
+		const front = await w.front();
+		const nonce = await nonceFor(front, mine);
+		front.rewrite({
+			messages: { clientCredentials: (message) => ({ ...message, authorizationDetails: 1 }) },
+		});
+		const answered = await front.post(mine.request("read", api, nonce));
+		expect(answered.wire?.outcome).toBe("refused");
+		expect(answered.body).toEqual(notTaken);
+		// Refused before the grant ran: the client's next request, without it, is issued.
+		front.rewrite({});
+		expect((await front.post(mine.request("read", api, nonce))).status).toBe(200);
+	});
 });

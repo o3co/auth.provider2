@@ -384,6 +384,58 @@ describe("token endpoint", () => {
 		expect(claimsOf(issued.body)).toMatchObject({ sub: "basic", aud: "https://api" });
 	});
 
+	it("refuses authorization_details on every grant, before the grant runs, as PAR does (A25: rich authorization requests are not taken)", async () => {
+		const post = await serve();
+		for (const grant_type of ["client_credentials", "authorization_code", "refresh_token"]) {
+			const refused = await post({ grant_type, authorization_details: '[{"type":"x"}]' }, "basic");
+			expect([refused.status, refused.body]).toEqual([
+				400,
+				{ error: "invalid_request", error_description: "authorization_details are not taken" },
+			]);
+			expect(events.at(-1)).toMatchObject({
+				attributes: { reason: "authorization_details", error: "invalid_request" },
+			});
+		}
+		// Sent empty, it is sent: a request carrying the parameter at all is refused.
+		expect(
+			(await post({ grant_type: "client_credentials", authorization_details: "" }, "basic")).body,
+		).toEqual({
+			error: "invalid_request",
+			error_description: "authorization_details are not taken",
+		});
+		// In JSON, of any type but null, which is as if left out.
+		for (const authorization_details of [[{ type: "x" }], {}, "x", 1, false]) {
+			const json = await post(
+				{ grant_type: "client_credentials", authorization_details },
+				"basic",
+				{
+					as: "json",
+				},
+			);
+			expect(json.body, JSON.stringify(authorization_details)).toMatchObject({
+				error_description: "authorization_details are not taken",
+			});
+		}
+		// Null is as if left out: whatever refuses the request next, it is not this.
+		const leftOut = { grant_type: "client_credentials", authorization_details: null };
+		const nulled = await post(leftOut, "basic", { as: "json" });
+		expect(nulled.body.error_description).not.toBe("authorization_details are not taken");
+		expect(events.at(-1)?.attributes).not.toMatchObject({ reason: "authorization_details" });
+		// Sent twice, it is a repeated parameter first.
+		const twice = new URLSearchParams([
+			["grant_type", "client_credentials"],
+			["authorization_details", "[]"],
+			["authorization_details", "[]"],
+		]);
+		expect((await post(twice, "basic")).body).toEqual({
+			error: "invalid_request",
+			error_description: "repeated parameter",
+		});
+		expect(events.at(-1)).toMatchObject({ attributes: { reason: "repeated_parameter" } });
+		// Without it, the same client is issued.
+		expect((await post({ grant_type: "client_credentials" }, "basic")).status).toBe(200);
+	});
+
 	it("issues a client's default scopes when none is asked, none when it has none, and refuses a client with no default [rfc6749-3.3-b]", async () => {
 		const post = await serve();
 		const noscope = await post({ grant_type: "client_credentials" }, "noscope");

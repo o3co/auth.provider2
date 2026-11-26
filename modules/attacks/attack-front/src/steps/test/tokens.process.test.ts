@@ -22,6 +22,10 @@ afterAll(async () => {
 const rp = () => w.rps[0] as World["rps"][number];
 const thief = dpopKey();
 const wordOf = (error: number) => refusals[error - 1];
+const notTaken = {
+	error: "invalid_request",
+	error_description: "authorization_details are not taken",
+};
 /** The statement an `ok` reply of ② carries. */
 const statementOf = (reply: WireReply) =>
 	reply.outcome === "ok"
@@ -101,6 +105,38 @@ describe("the compromised Front on PAR and the tokens", () => {
 			},
 		});
 		expect((await front.post(rp().par(session.jar))).status).toBe(201);
+	});
+
+	it("A25: the RP's code exchange and refresh given authorization_details by the Front are refused by the Core", async () => {
+		const victim = await w.person();
+		const front = await w.front();
+		const { session, s } = await w.started(victim, rp(), front);
+		const approved = await victim.screen.approve(front, s, [victim.credential]);
+		if (stopped(approved)) throw new Error(JSON.stringify(approved));
+		const asked = await front.post(rp().token(session, approved.code));
+		front.rewrite({
+			messages: {
+				token: (message) => ({ ...message, authorizationDetails: 1 }),
+				refresh: (message) => ({ ...message, authorizationDetails: 1 }),
+			},
+		});
+		const exchange = await front.post(rp().token(session, approved.code, asked.dpopNonce));
+		expect([exchange.wire?.outcome, exchange.body]).toEqual(["refused", notTaken]);
+		// Refused before the grant ran, so the code is unspent: the RP's own exchange is issued.
+		front.rewrite({});
+		const tokens = await front.post(rp().token(session, approved.code, asked.dpopNonce));
+		expect(tokens.status, JSON.stringify(tokens.body)).toBe(200);
+		const { refresh_token } = tokens.body as { refresh_token: string };
+		front.rewrite({
+			messages: { refresh: (message) => ({ ...message, authorizationDetails: 1 }) },
+		});
+		const refreshed = await front.post(rp().refresh(session, refresh_token, asked.dpopNonce));
+		expect([refreshed.wire?.outcome, refreshed.body]).toEqual(["refused", notTaken]);
+		// Its control: the same refresh without the Front's rewrite is taken, the token unspent.
+		front.rewrite({});
+		expect((await front.post(rp().refresh(session, refresh_token, asked.dpopNonce))).status).toBe(
+			200,
+		);
 	});
 
 	it("F-14: a refresh under the Front's DPoP key is refused (the family's dpop_jkt); the code sent again ends the family", async () => {

@@ -42,6 +42,13 @@ const oauthParameters = new Set([
 const mistypedOf = ({ json, mistyped }: HttpRequest) =>
 	[...(mistyped ?? [])].find((name) => oauthParameters.has(name) && json?.[name] !== null);
 
+/** Whether a request carries `authorization_details`: a form's field, or a JSON member of any type but null (as if left out). */
+const carriesDetails = ({ fields, json }: HttpRequest) =>
+	fields.has("authorization_details") ||
+	(json !== undefined &&
+		Object.hasOwn(json, "authorization_details") &&
+		json.authorization_details !== null);
+
 /** The refusal of a request whose OAuth parameter is mistyped, before any grant runs; none for another. */
 export const mistypedRefusal = (request: HttpRequest) => {
 	const mistyped = mistypedOf(request);
@@ -222,6 +229,11 @@ export function tokenEndpoint(parts: EndpointParts): Pick<Route, "handle" | "una
 			}
 			const mistyped = mistypedRefusal(request);
 			if (mistyped) return refuse({ reason: "mistyped_parameter", ...mistyped });
+			// Rich authorization requests (RFC 9396) are not taken, on any grant (A25), as PAR refuses them.
+			if (carriesDetails(request)) {
+				const description = "authorization_details are not taken";
+				return refuse({ reason: "authorization_details", error: "invalid_request", description });
+			}
 			const { param } = readerOf(request);
 			const grantType = param("grant_type");
 			if (!grantType) {
