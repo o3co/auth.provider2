@@ -54,6 +54,8 @@ const issuedAt = (jws: string) =>
 	).iat * 1000;
 
 const refused = (why: string) => ({ refused: why }) as const;
+/** What the client is told of its key bound to another family (Q27): its own key's use, which it may know. */
+const boundTold = "the DPoP key is bound to another refresh family";
 
 /**
  * Founds refresh families with code redemptions (proposal 3.9): the root read before the bundle
@@ -129,7 +131,7 @@ export function founding(p: FoundingParts): FamilyMaker {
 			// One family a key (Q27): a key the index holds, its family live or not, until that family's end.
 			if ((await p.records.read(nameOf.key(asked.binding.confirmation))) !== undefined) {
 				keyBound(asked.subject, asked.clientId, asked.binding);
-				return refused("the key is bound to another family");
+				return { ...refused("the key is bound to another family"), told: boundTold };
 			}
 			const generation = await generationOf(root.statement);
 			if (generation === undefined) return refused("the statement it rests on does not verify");

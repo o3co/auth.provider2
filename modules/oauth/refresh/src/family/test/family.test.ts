@@ -146,6 +146,7 @@ describe("a family, founded with a code's redemption", () => {
 		await founded(w);
 		expect(await w.maker.part({ ...request, code: "code-2" })).toEqual({
 			refused: "the key is bound to another family",
+			told: "the DPoP key is bound to another refresh family",
 		});
 		// Recorded for the operator: whose, which client, which key; never a token.
 		expect(w.audited).toEqual([
@@ -325,6 +326,7 @@ describe("a family, founded with a code's redemption", () => {
 		await expect(founded(w)).rejects.toThrow("claims-selection down");
 		expect(await w.maker.part({ ...request, code: "code-2" })).toEqual({
 			refused: "the key is bound to another family",
+			told: "the DPoP key is bound to another refresh family",
 		});
 		w.records.move(lifetimeMs + 120_000);
 		expect(await w.maker.part({ ...request, code: "code-3" })).not.toHaveProperty("refused");

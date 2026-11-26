@@ -21,7 +21,7 @@ import {
 } from "./redemption-record/redemption-record.ts";
 import type { CodeStore, RedemptionRecords } from "./store/store.ts";
 
-/** One answer for every refused code, so it tells nothing about why. */
+/** One answer for every refused code, so it tells nothing about why (but a family's `told`). */
 const refused: GrantOutcome = {
 	kind: "error",
 	error: "invalid_grant",
@@ -193,7 +193,8 @@ export function codeGrant(parts: {
 			const founded = founds
 				? await family.part(familyOf(record, client.id, redemption))
 				: undefined;
-			if (founded && "refused" in founded) return refused;
+			if (founded && "refused" in founded)
+				return founded.told === undefined ? refused : { ...refused, description: founded.told };
 			const parts = [...idParts, ...(founded ? [founded] : [])];
 			// One bundle, rooted in the code's approval by its code. The token ends no later than its
 			// session, nor later than the allowance before its record's end.

@@ -498,14 +498,14 @@ const idTokenMaker = (asked: IdTokenRequest[], name = "id-tokens", fails = false
 const familyMaker = (
 	asked: FamilyRequest[],
 	revoked: string[],
-	refuse?: string,
+	refuse?: string | { readonly refused: string; readonly told?: string },
 	name = "families",
 ) =>
 	defineModule({ name, replicaSafe: true, takes: [] }, (m) => [
 		m.contribute(families).by(() => ({
 			part: async (request) => {
 				asked.push(request);
-				if (refuse) return { refused: refuse };
+				if (refuse) return typeof refuse === "string" ? { refused: refuse } : refuse;
 				return {
 					frame: "family" as const,
 					prepare: async () => ({ prepared: "f", digest: "family-digest" }),
@@ -642,13 +642,47 @@ describe("a refresh family, founded with a redemption", () => {
 
 	it("refused, uses the code up and answers it as every refused code, issuing nothing", async () => {
 		const s = await serve({
-			extra: [familyMaker([], [], "the key is bound to another live family")],
+			extra: [familyMaker([], [], "the key is bound to another family")],
 			grants: ["authorization_code", "refresh_token"],
 		});
 		const code = await rootedIssue(s, s.facts, founding);
 		expect((await s.redeem(code)).body).toEqual(refusedBody);
 		expect(keptOf(s, code)?.state).toBe("consumed");
 		expect((await s.redeem(code)).body).toEqual(refusedBody);
+	});
+
+	it("refused with a word the client may know, tells it that alone, the code used up all the same", async () => {
+		const told = "the DPoP key is bound to another refresh family";
+		const s = await serve({
+			extra: [familyMaker([], [], { refused: "the key is bound to another family", told })],
+			grants: ["authorization_code", "refresh_token"],
+		});
+		const code = await rootedIssue(s, s.facts, founding);
+		expect((await s.redeem(code)).body).toEqual({ ...refusedBody, error_description: told });
+		expect(keptOf(s, code)?.state).toBe("consumed");
+		// The code used up: asked again, it is told nothing of why.
+		expect((await s.redeem(code)).body).toEqual(refusedBody);
+	});
+
+	it("tells nothing, the family never asked, to a redemption not the code's own: another verifier, redirect URI, key, or no proof", async () => {
+		const told = "the DPoP key is bound to another refresh family";
+		const asked: FamilyRequest[] = [];
+		const s = await serve({
+			extra: [dpopKind, familyMaker(asked, [], { refused: "bound", told })],
+			grants: ["authorization_code", "refresh_token"],
+		});
+		const cases: [string, Record<string, string>, Binding | undefined][] = [
+			["another verifier", { code_verifier: "w".repeat(43) }, dpop("held")],
+			["another redirect URI", { redirect_uri: "https://app.example/other" }, dpop("held")],
+			["another key", {}, dpop("other")],
+			["no proof", {}, undefined],
+		];
+		for (const [label, extra, proved] of cases) {
+			const code = await rootedIssue(s, { ...s.facts, binding: dpop("held") }, founding);
+			expect((await s.redeem(code, extra, proved)).body, label).toEqual(refusedBody);
+			expect(keptOf(s, code)?.state, label).toBe("consumed");
+		}
+		expect(asked).toEqual([]);
 	});
 
 	it("is ended with the token when the code comes again, by the code's digest its redemption record keeps", async () => {

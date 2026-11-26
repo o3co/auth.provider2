@@ -73,10 +73,14 @@ export interface FamilyRequest extends ApprovedFacts {
 export interface FamilyMaker {
 	/**
 	 * Read before the bundle starts: a failure to read fails the redemption, recording nothing; a
-	 * family it may not found (its key gone, or bound to another live family) is `refused`, the code
-	 * used up and answered as every refused code is.
+	 * family it may not found (its key gone, or bound to another family) is `refused`, the code
+	 * used up and answered as every refused code is, `invalid_grant`. `told` alone is said to the
+	 * client, as its description: only for a refusal the client caused itself and may know (how it
+	 * uses its own key); any other is told nothing of why.
 	 */
-	part(request: FamilyRequest): Promise<BundlePart | { readonly refused: string }>;
+	part(
+		request: FamilyRequest,
+	): Promise<BundlePart | { readonly refused: string; readonly told?: string }>;
 	/**
 	 * Ends the family a redemption by this code's digest founded, or that it founds later, given the
 	 * code's subject while its record still names it (none: no family is founded from it any more).
