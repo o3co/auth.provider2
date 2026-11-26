@@ -7,8 +7,10 @@ import {
 	opIds,
 	type Preimage,
 	type recordKinds,
+	schemas,
 } from "@mod/transparency-wire";
 import type { Placed, ResetAnswer, Stage, TransparencyLog } from "./contract.ts";
+import { issuePaths } from "./issues.ts";
 
 const digest = (text: string) => createHash("sha256").update(text).digest("base64url");
 const flowKey = (flow: Flow) => `${flow.of}:${flow.id}`;
@@ -62,20 +64,26 @@ export function logBook(now: () => number) {
 	});
 	const place = (flow: Flow, fields: Record<string, unknown>, writer: Record<string, unknown>) => {
 		const placed = onFlow(flow);
-		n += 1;
 		const record = {
 			v: 1,
 			flow,
 			stage: 1,
 			last: true,
 			...fields,
-			id: `r${n}`,
+			id: `r${n + 1}`,
 			writer,
 			position: placed.length + 1,
 			shard: "s1",
-			n,
+			n: n + 1,
 			acceptedAt: now(),
 		} as unknown as Placed["record"];
+		// Off the wire's form, it is the caller's stage that is wrong: told here, where it is made.
+		const read = schemas.record.safeParse(record);
+		if (!read.success) {
+			const at = issuePaths(read.error.issues).join(", ");
+			throw new TypeError(`memory log: a record off the wire's form, at ${at}`);
+		}
+		n += 1;
 		const p: Placed = { record };
 		placed.push(p);
 		return p;

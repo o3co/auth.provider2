@@ -1,6 +1,7 @@
 import { type Envelope, emptyState, type FlowState, fold, ruleSchemas } from "@mod/authority-rules";
 import { isUnavailable, Unavailable } from "@mod/kernel";
-import { type Flow, schemas } from "@mod/transparency-wire";
+import { type Flow, judgments, schemas } from "@mod/transparency-wire";
+import { z } from "zod";
 import type {
 	FrameRead,
 	FrameStore,
@@ -36,6 +37,12 @@ import {
 	type Written,
 	whileClosed,
 } from "../frame/frame.ts";
+import { type Issue, issuePaths } from "../issues.ts";
+
+/** A record's judgment, as the wire words its verdict and outcome. */
+const findingForm = z
+	.object({ verdict: z.enum(judgments.verdicts), outcome: z.enum(judgments.outcomes) })
+	.strict();
 
 /** How long past its read a write that is no owner's may still commit, on the store clock. */
 const writeWindowMs = 10_000;
@@ -86,61 +93,90 @@ export function transparencyOver(p: {
 	readonly kinds: readonly OperationKind[];
 	readonly owners: readonly StateOwner[];
 	readonly leaseMs: number;
+	/** Where an answer off the wire's forms is told, by what it was and where, never an id. */
+	readonly warn?: (event: string, fields: Readonly<Record<string, string>>) => void;
 }): Transparency {
 	const { frames, owners, leaseMs } = p;
 	/** The log's axis, its answers held to the wire's forms (the driver's card): else unavailable. */
-	const offForm = (): never => {
+	type Where = Readonly<Record<string, string>>;
+	const offForm = (where: Where, paths?: readonly string[]): never => {
+		// The first few paths, as many as the log answers off the form would make the line its own.
+		const told = paths && [
+			...paths.slice(0, 8),
+			...(paths.length > 8 ? [`+${paths.length - 8}`] : []),
+		];
+		p.warn?.("transparency.answer_off_form", told ? { ...where, paths: told.join(", ") } : where);
 		throw new Unavailable("transparency");
 	};
 	const read = <T>(
-		schema: { safeParse(v: unknown): { success: boolean; data?: T } },
+		schema: {
+			safeParse(v: unknown): { success: boolean; data?: T; error?: { issues: readonly Issue[] } };
+		},
 		v: unknown,
+		where: Where,
 	) => {
+		let parsed: ReturnType<typeof schema.safeParse>;
 		try {
-			const parsed = schema.safeParse(v);
-			return parsed.success ? (parsed.data as T) : offForm();
-		} catch (error) {
-			if (isUnavailable(error)) throw error;
-			return offForm();
+			parsed = schema.safeParse(v);
+		} catch {
+			// Whatever an answer's reading throws, its own Unavailable too, is the answer off the form.
+			return offForm(where);
 		}
+		return parsed.success
+			? (parsed.data as T)
+			: offForm(where, issuePaths(parsed.error?.issues ?? []));
 	};
 	/** What an adapter's object holds, read once: one whose reading throws is off the form. */
-	const fields = <T>(take: () => T): T => {
+	const fields = <T>(take: () => T, where: Where): T => {
 		try {
 			return take();
 		} catch {
-			return offForm();
+			return offForm(where);
 		}
 	};
-	const answered = <A extends { readonly result: string }>(answer: A): A =>
-		fields(() => answer.result) === "accepted"
-			? (read(schemas.appendAnswer, answer) as unknown as A)
+	const answered = <A extends { readonly result: string }>(answer: A, of: string): A => {
+		const where = { answer: of };
+		return fields(() => answer.result, where) === "accepted"
+			? (read(schemas.appendAnswer, answer, where) as unknown as A)
 			: answer;
+	};
 	const log: TransparencyLog = {
 		writer: p.log.writer,
 		digest: (preimage) => p.log.digest(preimage),
-		append: async (stage, prev) => answered(await p.log.append(stage, prev)),
+		append: async (stage, prev) => answered(await p.log.append(stage, prev), "append"),
 		head: (flow) => p.log.head(flow),
 		of: (flow, op) => p.log.of(flow, op),
-		reset: async (instruction) => answered(await p.log.reset(instruction)),
+		reset: async (instruction) => answered(await p.log.reset(instruction), "reset"),
 		at: async (flow, position) => {
 			const placed = await p.log.at(flow, position);
 			if (placed === undefined) return undefined;
+			const where = { answer: "record", flow: flow.of, position: String(position) };
+			const of = (member: string) => ({ ...where, member });
 			// Each member read once, its own or inherited, so a getter's answer is the one checked and kept.
-			const held = fields(() => ({
-				record: placed.record as unknown,
-				finding: placed.finding,
-				changes: placed.changes,
-			}));
-			const record = read(schemas.record, held.record) as Placed["record"];
+			const held = fields(
+				() => ({
+					record: placed.record as unknown,
+					finding: placed.finding,
+					changes: placed.changes,
+				}),
+				where,
+			);
+			const record = read(schemas.record, held.record, of("record")) as Placed["record"];
 			const at = record as { readonly flow?: Flow; readonly position?: number };
 			if (at.flow?.of !== flow.of || at.flow.id !== flow.id || at.position !== position)
-				return offForm();
-			return {
+				return offForm(of("record"), ["flow", "position"]);
+			const finding =
+				held.finding === undefined ? undefined : read(findingForm, held.finding, of("finding"));
+			const changes =
+				held.changes === undefined
+					? undefined
+					: read(ruleSchemas.changes, held.changes, of("changes"));
+			const taken: Placed = {
 				record,
-				...(held.finding === undefined ? {} : { finding: held.finding }),
-				...(held.changes === undefined ? {} : { changes: held.changes }),
+				...(finding === undefined ? {} : { finding }),
+				...(changes === undefined ? {} : { changes: changes as NonNullable<Placed["changes"]> }),
 			};
+			return taken;
 		},
 	};
 	const kinds = new Map(p.kinds.map((k) => [k.name, k]));
@@ -622,7 +658,11 @@ export function transparencyOver(p: {
 					const placed = await log.at(q.flow, at);
 					if (!placed?.finding) return { refused: "unjudged" as const };
 					const r = placed.record;
-					if (r.id !== answer.id || !("op" in r) || r.op !== q.op) return offForm();
+					if (r.id !== answer.id || !("op" in r) || r.op !== q.op)
+						return offForm({ answer: "append", flow: q.flow.of, position: String(at) }, [
+							"id",
+							"op",
+						]);
 					return stage.last ? { answer, ending: endingOf(takenOf(placed)) } : { answer };
 				}
 				if ("position" in taken) {

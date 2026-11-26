@@ -1,5 +1,5 @@
 import type { Finding } from "@mod/authority-rules";
-import { isUnavailable } from "@mod/kernel";
+import { isUnavailable, Unavailable } from "@mod/kernel";
 import { opIds } from "@mod/transparency-wire";
 import { beforeEach, describe, expect, it } from "vitest";
 import { memoryFrames } from "../../../test/fixtures/frames.ts";
@@ -45,7 +45,11 @@ function makeWorld() {
 	const log = logBook(store.clock.now);
 	const replica = (
 		instance: string,
-		p: { kinds?: (typeof keyChange)[]; log?: (l: TransparencyLog) => TransparencyLog } = {},
+		p: {
+			kinds?: (typeof keyChange)[];
+			log?: (l: TransparencyLog) => TransparencyLog;
+			warn?: (event: string, fields: Readonly<Record<string, string>>) => void;
+		} = {},
 	) =>
 		transparencyOver({
 			frames: store.frames,
@@ -53,6 +57,7 @@ function makeWorld() {
 			kinds: p.kinds ?? [issue, keyChange],
 			owners,
 			leaseMs,
+			...(p.warn ? { warn: p.warn } : {}),
 		});
 	for (const [part, value] of Object.entries(seeded)) {
 		store.put(flow, { part, name: "state" }, value as unknown as Json);
@@ -614,8 +619,12 @@ describe("a record the log answers off the wire's form", () => {
 });
 
 describe("what a log's adapter answers, held to the wire's forms", () => {
+	const warned: unknown[] = [];
 	const through = (at?: TransparencyLog["at"], append?: TransparencyLog["append"]) =>
 		world.replica("w1", {
+			warn: (event, fields) => {
+				warned.push({ event, ...fields });
+			},
 			log: (l) => ({
 				writer: l.writer,
 				digest: (preimage) => l.digest(preimage),
@@ -649,11 +658,17 @@ describe("what a log's adapter answers, held to the wire's forms", () => {
 
 	it("answers unavailable for a record at another position than asked, or a tick, taking in nothing", async () => {
 		world.log.monitor(flow, "denial", { revoke: "k1" });
+		warned.length = 0;
+		const record = { event: "transparency.answer_off_form", answer: "record", flow: "subject" };
 		const moved = through(async (f, position) => {
 			const placed = await world.log.as("w1").at(f, position);
 			return placed && ({ ...placed, record: { ...placed.record, position: 2 } } as never);
 		});
 		await expect(moved.step({ flow })).rejects.toSatisfy(isUnavailable);
+		expect(warned).toEqual([
+			{ ...record, position: "1", member: "record", paths: "flow, position" },
+		]);
+		warned.length = 0;
 		const tick = through(
 			async () =>
 				({
@@ -670,10 +685,16 @@ describe("what a log's adapter answers, held to the wire's forms", () => {
 				}) as never,
 		);
 		await expect(tick.step({ flow })).rejects.toSatisfy(isUnavailable);
+		// A record of the wire's, at no flow: told by where, never by the answer's id.
+		expect(warned).toEqual([
+			{ ...record, position: "1", member: "record", paths: "flow, position" },
+		]);
+		expect(JSON.stringify(warned)).not.toContain("t1");
 		expect(world.frame()?.applied ?? 0).toBe(0);
 	});
 
 	it("answers unavailable for an accepted append answer off the form", async () => {
+		warned.length = 0;
 		const t = through(undefined, async (stage, prev) => {
 			const answer = await world.log.as("w1").append(stage, prev);
 			return { ...answer, extra: 1 } as never;
@@ -689,5 +710,67 @@ describe("what a log's adapter answers, held to the wire's forms", () => {
 		await expect(
 			t.send({ flow, op: "o9", stage: { ...bundleStage("o9"), stage: 1, last: false }, prev: 0 }),
 		).rejects.toSatisfy(isUnavailable);
+		// The answer's own keys are never told: a key it adds is off the form at its top.
+		expect(warned).toEqual([
+			{ event: "transparency.answer_off_form", answer: "append", paths: "(top)" },
+		]);
+	});
+
+	it("tells a judgment whose member's reading throws unavailable as off the form", async () => {
+		world.log.monitor(flow, "denial", { revoke: "k1" });
+		warned.length = 0;
+		const t = through(async (f, position) => {
+			const placed = await world.log.as("w1").at(f, position);
+			const finding = {
+				get verdict(): never {
+					throw new Unavailable("adapter");
+				},
+				outcome: "took",
+			};
+			return placed && ({ ...placed, finding } as never);
+		});
+		await expect(t.step({ flow })).rejects.toMatchObject({ what: "transparency" });
+		expect(warned).toMatchObject([{ answer: "record", member: "finding" }]);
+	});
+
+	it("tells at most eight paths of an answer off the form at many, and how many more", async () => {
+		world.log.monitor(flow, "denial", { revoke: "k1" });
+		warned.length = 0;
+		const t = through(async (f, position) => {
+			const placed = await world.log.as("w1").at(f, position);
+			if (!placed) return placed;
+			const tokens = Array.from({ length: 20 }, () => ({ frame: 1, digest: 1 }));
+			return { ...placed, record: { ...placed.record, tokens } } as never;
+		});
+		await expect(t.step({ flow })).rejects.toSatisfy(isUnavailable);
+		const { paths } = warned[0] as { paths: string };
+		expect(paths.split(", ")).toHaveLength(9);
+		expect(paths).toMatch(/^tokens\.0\.\w+, .*, \+\d+$/);
+	});
+
+	it("answers unavailable for a judgment or changes off their form, telling where, never whose", async () => {
+		world.log.monitor(flow, "denial", { revoke: "k1" });
+		for (const [over, field] of [
+			[{ finding: { verdict: "maybe", outcome: "took" } }, "finding"],
+			[{ changes: { revoke: 7 } }, "changes"],
+		] as const) {
+			warned.length = 0;
+			const t = through(async (f, position) => {
+				const placed = await world.log.as("w1").at(f, position);
+				return placed && ({ ...placed, ...over } as never);
+			});
+			await expect(t.step({ flow }), field).rejects.toSatisfy(isUnavailable);
+			expect(warned).toEqual([
+				{
+					event: "transparency.answer_off_form",
+					answer: "record",
+					flow: "subject",
+					position: "1",
+					member: field,
+					paths: field === "finding" ? "verdict" : "revoke",
+				},
+			]);
+		}
+		expect(world.frame()?.applied ?? 0).toBe(0);
 	});
 });

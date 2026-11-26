@@ -64,7 +64,14 @@ export default defineModule(
 			const refused = registrationRefusals(frames.parts, kinds, owners);
 			if (refused.length > 0) c.refuseAll(refused);
 			const log = await c.get(transparencyLog);
-			const t = transparencyOver({ frames, log, kinds, owners, leaseMs: c.section.lease });
+			const t = transparencyOver({
+				frames,
+				log,
+				kinds,
+				owners,
+				leaseMs: c.section.lease,
+				warn: (event, fields) => c.log.warn(event, fields),
+			});
 			// Every replica goes round the client flows: an op whose owner fell is closed by any.
 			c.every(c.section.tending, () => clientTending(t, frames));
 			return t;
