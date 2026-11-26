@@ -1,4 +1,4 @@
-import { type AuditEvent, audit } from "@mod/audit";
+import type { AuditEvent } from "@mod/audit";
 import { auditStandIn } from "@mod/audit/testing";
 import clientAllowanceModule from "@mod/client-allowance/module";
 import { allowancesFor } from "@mod/client-allowance/testing";

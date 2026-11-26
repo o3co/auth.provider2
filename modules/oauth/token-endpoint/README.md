@@ -13,9 +13,9 @@
 ## Offers
 - Route `POST /oauth/token`: a form, JSON or no body (any other `415`); cross-origin requests from the operator's origins (`http`) may send `content-type` and `dpop`, and read `dpop-nonce`, `www-authenticate` and `retry-after`.
 - Provides `grants`' `composedGrants` (the grant types it dispatches to) and `targets`.
-- Where the token endpoint is: its absolute URL on the origin `issuer` names its endpoints on (`endpointOrigin`), the public origin wherever one is written.
-- `oauthError`, `errorDescription` and `authenticateClient`, for other OAuth endpoints too, as its internal module `answers` says.
-- For tests (`./testing`): `grantCaller` calls a contributed grant as the endpoint does once the client is in, the grant allowed and the binding read, beside `client-allowance`, refusing a mistyped parameter and asking the rule's `untargeted` first; `grantInput` is what it hands the grant.
+- Where the token endpoint is (`tokenEndpointLocation`): its absolute URL on the origin `issuer` names its endpoints on (`endpointOrigin`), the public origin wherever one is written.
+- `oauthError`, `errorDescription`, `authenticateClient` and `refusedAuthenticationAnswer`, for other OAuth endpoints too, as its internal module `answers` says.
+- For tests (`./testing`): `grantCaller` (a module providing `grantCalls`) calls a contributed grant as the endpoint does once the client is in, the grant allowed and the binding read, beside `client-allowance`, refusing a mistyped parameter and asking the rule's `untargeted` first; `grantInput` is what it hands the grant.
 - `issuer`'s metadata items: `token_endpoint`, `grant_types_supported`, `token_endpoint_auth_methods_supported` and `token_endpoint_auth_signing_alg_values_supported` (left out when `clients` names none).
 - Audit events once the client is authenticated, with `client`, `source` (when determined) and `grant_type` (when dispatched to): `token.issued`, and `token.issued.failure` with `reason` and `error` (the code answered); declared in `./audit-events`, listed in the audit event reference.
 - Its kind of operation, `token-endpoint.bundle`, in `transparency`'s `operationKinds`; its stances in `promises`' `stances` on `core-compromise-contained`, `no-client-subject-token` and `front-compromise-client-token`, as `built-in`'s card says.
@@ -31,7 +31,6 @@
 - Once a grant has built its answer, before any of it goes out, its one subject issued through `issue` passes `tokens`' fences (`issuanceFencing`): refused, it is a refused issuance (`invalid_grant`, `tokens`' description); unavailable, `503`, losing a refresh token the grant rotated (only where a fence writes, as `subject-revocation` says, and its store does not answer). An answer under no subject or two is the grant's fault, `500`. None of the bundle is answered but passed.
 - A repeated parameter is `invalid_request` unless the rule's `repeated` answers it, as is an OAuth parameter sent in JSON as neither a string nor `null` (as if left out); `assertion` is its grant's to define.
 - A body the grant does not take is `invalid_request`; a request with no body is read as a form.
-- A grant type nothing dispatches to is `unsupported_grant_type`, and is never named in the audit or the log.
 - A grant `client-allowance` does not allow the client is `unauthorized_client`.
 - The binding is read through `sender-binding`: its refusal is answered with its own code and headers, unavailable as `503`, and two bindings are `invalid_request`. A client that must bind and shows none is `invalid_request`, and one bound by a kind it does not name `unauthorized_client`.
 - A grant's `429` carries its wait as `retry-after`, in whole seconds, at least one.

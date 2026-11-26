@@ -1,6 +1,6 @@
 import type { AccessGrant } from "@mod/tokens";
 import { expect, it } from "vitest";
-import { bundleOf, issuanceFor } from "../src/route/issuance.ts";
+import { bundleOf, issuanceFor } from "../issuance.ts";
 
 it("throws a session issuance's failure on, even where revoking the token fails too", async () => {
 	const failing = (why: string) => async () => Promise.reject(new Error(why));
