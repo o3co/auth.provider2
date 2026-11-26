@@ -1,0 +1,20 @@
+{
+	"name": "@mod/references",
+	"private": true,
+	"license": "Apache-2.0",
+	"kind": "verification",
+	"type": "module",
+	"scripts": {
+		"configuration": "node src/write.ts"
+	},
+	"exports": {
+		".": "./src/contract.ts"
+	},
+	"dependencies": {
+		"@mod/guard-imports": "workspace:*"
+	},
+	"devDependencies": {
+		"@o3co/ts.hocon": "1.14.3",
+		"vitest": "5.0.5"
+	}
+}
