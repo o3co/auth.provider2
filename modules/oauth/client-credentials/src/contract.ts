@@ -37,6 +37,8 @@ export function clientCredentials(
 		readsAmbient: "none",
 		targets: true,
 		subjectKind: "client",
+		// Its token is bound to the key that signed the client's assertion, the proof by that same key.
+		keyHold: "assertion",
 		handle: async ({ client, param, binding, authenticated, issue, target }) => {
 			if (client.kind !== "confidential") return { kind: "error", error: "unauthorized_client" };
 			if (limits.suspended.includes(client.id)) {

@@ -111,12 +111,13 @@ describe("client credentials", () => {
 			requests: 60,
 			suspended: [],
 		});
-		expect([grant.grantType, grant.readsAmbient, grant.targets, grant.subjectKind]).toEqual([
-			"client_credentials",
-			"none",
-			true,
-			"client",
-		]);
+		expect([
+			grant.grantType,
+			grant.readsAmbient,
+			grant.targets,
+			grant.subjectKind,
+			grant.keyHold,
+		]).toEqual(["client_credentials", "none", true, "client", "assertion"]);
 	});
 
 	it("issues a client of a signed version a token for itself, within its own ceiling, for five minutes [rfc6749-4.4.3-a] [rfc6749-5.1-a] [rfc6749-5.1-b] [rfc6749-3.3-a]", async () => {

@@ -26,6 +26,7 @@ const issued: CodeRecord = {
 	root: "root-1",
 	amr: ["pwd"],
 	authenticatedAt: 0,
+	binding: { member: "jkt", confirmation: "held", tokenType: "DPoP" },
 };
 const params: Record<string, string> = {
 	code: "c1",
@@ -57,6 +58,7 @@ it("ends the token no later than the allowance before its redemption record ends
 	const input = {
 		client: { id: "app" },
 		param: (name: string) => params[name],
+		binding: issued.binding,
 		target: (audience: readonly string[]) => ({ kind: "audience", audience }),
 		admits: async () => ({ kind: "allowed" }),
 		issue: async (bundle: { readonly root?: string }, from?: { notAfter?: number }) => {

@@ -110,6 +110,8 @@ export function refreshGrant(p: GrantParts): Grant {
 		readsAmbient: "none",
 		targets: true,
 		subjectKind: "user",
+		// Its tokens are held to the family's key, which the code's authorization named ahead (Q27).
+		keyHold: "family",
 		handle: async ({ client, param, binding, admits, issue, target }) => {
 			const token = param("refresh_token");
 			if (!token) return malformed("refresh_token is required");

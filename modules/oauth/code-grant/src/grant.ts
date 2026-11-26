@@ -109,6 +109,8 @@ export function codeGrant(parts: {
 		grantType: codeGrantType,
 		readsAmbient: "none",
 		targets: true,
+		// A code is redeemed only with a proof by the key its authorization asked for ahead.
+		keyHold: "authorization",
 		handle: async ({ client, param, admits, issue, binding, target }) => {
 			const code = param("code");
 			const redirectUri = param("redirect_uri");
@@ -119,11 +121,12 @@ export function codeGrant(parts: {
 			if (!verifierShape.test(verifier)) return malformed("malformed code_verifier");
 			const name = store.nameOf(code);
 			// Presented by its own client, at its redirect URI, with its verifier, and proved by the key
-			// the authorization asked for ahead: or by no key, where it asked for none.
+			// the authorization asked for ahead: a code that asked for no key is never redeemed.
 			const presented = (r: CodeRecord) =>
 				r.clientId === client.id &&
 				r.redirectUri === redirectUri &&
 				sameSecret(s256(verifier), r.challenge) &&
+				r.binding !== undefined &&
 				sameBinding(binding, r.binding);
 			// Asked before use, by whoever may redeem it; with the code's one audience, the rule only refuses.
 			const peeked = await store.update(name, () => undefined);

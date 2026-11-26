@@ -255,6 +255,7 @@ function assembly(options: Options = {}) {
 			...(options.recorded === false ? [] : [recordedTo(recorded)]),
 			codeGrantModule,
 			reader,
+			dpopKind,
 			...(options.extra ?? []),
 		],
 		config: {
@@ -310,6 +311,8 @@ async function serve(options: Options = {}) {
 		audience: ["https://api"],
 		session: session.id,
 		subject: "alice",
+		// Every code asks for a key ahead, as authorize's always does (its JAR's dpop_jkt).
+		binding: dpop("held"),
 	};
 	/** A code, rooted in its approval's record as its issuer roots it. */
 	const issue = async (scope = facts.scope) => {
@@ -317,11 +320,11 @@ async function serve(options: Options = {}) {
 		await app.get(codes).root(code, "root-of-the-approval");
 		return code;
 	};
-	/** Redeems through the grant harness, answering as the token endpoint would. */
+	/** Redeems through the grant harness, answering as the token endpoint would: proved by the key the facts ask for, another, or `none`. */
 	const redeem = async (
 		code: string,
 		extra: Record<string, string> = {},
-		binding?: Binding,
+		binding: Binding | "none" = dpop("held"),
 	): Promise<{ status: number; body: Record<string, unknown> }> => {
 		const params = {
 			grant_type: "authorization_code",
@@ -332,7 +335,7 @@ async function serve(options: Options = {}) {
 		};
 		const outcome = await app
 			.get(grantCalls)
-			.call("authorization_code", "app", params, binding ? { binding } : {})
+			.call("authorization_code", "app", params, binding === "none" ? {} : { binding })
 			.catch((error: unknown) => {
 				if (isUnavailable(error)) return undefined;
 				throw error;
@@ -393,7 +396,12 @@ async function handleDirectly(
 	};
 	if (!grant) throw new Error("no authorization_code grant");
 	const issuing = { ...s.app.get(accessTokenIssuance), ...s.app.get(accessTokens) };
-	return grant.handle({ ...grantInput(issuing, grant, client, params), ...over });
+	// Proved by the key the facts ask for ahead, unless told otherwise: its issuing holds that binding.
+	const binding = "binding" in over ? over.binding : dpop("held");
+	return grant.handle({
+		...grantInput(issuing, grant, client, params, binding ? { binding } : {}),
+		...over,
+	});
 }
 
 it("gives the access token the code's amr, authentication time and acr, issued from its session", async () => {
@@ -438,7 +446,7 @@ it("issues one bundle rooted in the code's approval, carrying the root's referen
 
 describe("the binding the authorization asked for ahead", () => {
 	it("redeems a code only with a proof by the key it asked for, the token holding that key", async () => {
-		const s = await serve({ extra: [dpopKind] });
+		const s = await serve();
 		const bound = await rootedIssue(s, { ...s.facts, binding: dpop("held") });
 		const answer = await s.redeem(bound, {}, dpop("held"));
 		expect(answer).toMatchObject({ status: 200, body: { token_type: "DPoP" } });
@@ -447,28 +455,33 @@ describe("the binding the authorization asked for ahead", () => {
 	});
 
 	it("tells a proof by another key nothing of the policies, using the code up", async () => {
-		const s = await serve({ extra: [dpopKind, policy(() => false)] });
+		const s = await serve({ extra: [policy(() => false)] });
 		const bound = await rootedIssue(s, { ...s.facts, binding: dpop("held") });
 		expect((await s.redeem(bound, {}, dpop("other"))).body).toEqual(refusedBody);
 		expect(keptOf(s, bound)?.state).toBe("consumed");
 	});
 
-	it("refuses, using the code up, a proof by another key, no proof, or a proof for a code that asked none", async () => {
+	it("refuses, using the code up, a proof by another key, no proof, and a code that asked for no key, proved or not", async () => {
 		const s = await serve();
-		const cases: [string, Binding | undefined, Binding | undefined][] = [
+		const { binding: _asked, ...unbound } = s.facts;
+		const cases: [string, Binding | undefined, Binding | "none"][] = [
 			["another key", dpop("held"), dpop("other")],
-			["no proof", dpop("held"), undefined],
+			["no proof", dpop("held"), "none"],
 			["a proof for a code that asked none", undefined, dpop("held")],
+			["no proof for a code that asked none", undefined, "none"],
 		];
 		for (const [label, asked, proved] of cases) {
-			const code = await rootedIssue(s, {
-				...s.facts,
-				...(asked ? { binding: asked } : {}),
-			});
+			const code = await rootedIssue(s, { ...unbound, ...(asked ? { binding: asked } : {}) });
 			expect((await s.redeem(code, {}, proved)).body, label).toEqual(refusedBody);
 			expect(keptOf(s, code)?.state, label).toBe("consumed");
-			expect((await s.redeem(code, {}, asked)).body, label).toEqual(refusedBody);
+			expect((await s.redeem(code, {}, asked ?? "none")).body, label).toEqual(refusedBody);
 		}
+	});
+
+	it("declares its client's tokens held to the key the authorization asked for ahead", async () => {
+		const s = await serve();
+		const grant = s.app.get(grantsSeen).find((g) => g.grantType === "authorization_code");
+		expect(grant?.keyHold).toBe("authorization");
 	});
 });
 
@@ -668,14 +681,14 @@ describe("a refresh family, founded with a redemption", () => {
 		const told = "the DPoP key is bound to another refresh family";
 		const asked: FamilyRequest[] = [];
 		const s = await serve({
-			extra: [dpopKind, familyMaker(asked, [], { refused: "bound", told })],
+			extra: [familyMaker(asked, [], { refused: "bound", told })],
 			grants: ["authorization_code", "refresh_token"],
 		});
-		const cases: [string, Record<string, string>, Binding | undefined][] = [
+		const cases: [string, Record<string, string>, Binding | "none"][] = [
 			["another verifier", { code_verifier: "w".repeat(43) }, dpop("held")],
 			["another redirect URI", { redirect_uri: "https://app.example/other" }, dpop("held")],
 			["another key", {}, dpop("other")],
-			["no proof", {}, undefined],
+			["no proof", {}, "none"],
 		];
 		for (const [label, extra, proved] of cases) {
 			const code = await rootedIssue(s, { ...s.facts, binding: dpop("held") }, founding);
@@ -1329,7 +1342,7 @@ describe("the redemption hooks", () => {
 		if (!grant) throw new Error("no authorization_code grant");
 		const issuing = { ...s.app.get(accessTokenIssuance), ...s.app.get(accessTokens) };
 		const params = { code, redirect_uri: "https://app.example/cb", code_verifier: verifier };
-		const input = grantInput(issuing, grant, directClient, params);
+		const input = grantInput(issuing, grant, directClient, params, { binding: dpop("held") });
 		const issued: string[] = [];
 		const outcome = await grant
 			.handle({

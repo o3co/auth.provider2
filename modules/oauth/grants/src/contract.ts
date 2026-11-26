@@ -90,6 +90,9 @@ export interface GrantInput {
 	>;
 }
 
+/** How a grant holds the tokens it issues to a client to a key of that client's (`Grant.keyHold`). */
+export type KeyHold = "authorization" | "family" | "assertion";
+
 export interface Grant {
 	readonly grantType: string;
 	/** The bodies the grant takes; a form only when left out. */
@@ -106,6 +109,15 @@ export interface Grant {
 	 * `client` for the client's own. A declaration the token endpoint reads, never a proof.
 	 */
 	readonly subjectKind?: SubjectKind;
+	/**
+	 * How each access token and refresh credential it issues to a client is held to a key of that
+	 * client's, so one who relays the request cannot use what it gets without the key: `authorization`,
+	 * to the key the client's signed authorization named ahead; `family`, to its family's key, which
+	 * that authorization named; `assertion`, to the key that signed the client's assertion, proved by
+	 * that same key. Left out, the grant declares no such hold. An ID token is held by none. A
+	 * declaration the token endpoint reads, never a proof.
+	 */
+	readonly keyHold?: KeyHold;
 	/**
 	 * For a request that names no client and carries nothing a client authenticates with: the client
 	 * the grant's own credential identifies, with what it checked to tell (`identified`), or its

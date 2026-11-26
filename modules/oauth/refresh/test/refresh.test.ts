@@ -72,8 +72,8 @@ it("founds families for code-grant, refreshes them as a grant, revokes them by t
 	stop = () => app.stop(1000);
 	const s = app.get(seen);
 	expect(s.families).toHaveLength(1);
-	expect(s.grants.map((g) => [g.grantType, g.subjectKind, g.targets])).toEqual([
-		["refresh_token", "user", true],
+	expect(s.grants.map((g) => [g.grantType, g.subjectKind, g.targets, g.keyHold])).toEqual([
+		["refresh_token", "user", true, "family"],
 	]);
 	expect(s.kinds.map((k) => k.hint)).toEqual(["refresh_token"]);
 	// A root key removed ends its families here (Q46): told by passkeys' settle.

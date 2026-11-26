@@ -13,7 +13,10 @@ export interface CodeFacts {
 	readonly subject: string;
 	/** The authentication context class the issuer judged met; carried to the token as it is. */
 	readonly acr?: string;
-	/** The binding the authorization asked for ahead (`dpop_jkt`): the code's tokens hold it, and none other. */
+	/**
+	 * The binding the authorization asked for ahead (`dpop_jkt`): the code's tokens hold it, and none
+	 * other. A code without one is never redeemed.
+	 */
 	readonly binding?: Binding;
 }
 

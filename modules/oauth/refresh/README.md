@@ -10,7 +10,7 @@
 - Which families a root key's removal or a reset ends on the log: the flow's fold drops them, and a refresh of one is refused as its op is decided.
 
 ## Offers
-- A contribution to `code-grant`'s `families` (internal module `family`) and the `refresh_token` grant to `grants` (internal module `grant`).
+- A contribution to `code-grant`'s `families` (internal module `family`) and the `refresh_token` grant to `grants` (internal module `grant`), declaring `keyHold` `family`.
 - A `token-revocation` revocable kind `refresh_token`: only its client revokes it, with its family.
 - A contribution to `passkeys`' `passkeyRemovals` (internal module `rooted`): a root key (its approval's passkey) removed ends the families rooted in it here, a subject emptied all of its (Q46). It holds `passkeys`, which collects it as it builds, by a late reference.
 - A contribution to `transparency`'s `stateOwners`: the state's families on a subject's flow, in its part `familiesPart`, which its store wiring binds (internal module `state`).
