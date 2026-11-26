@@ -129,6 +129,48 @@ describe("a round trip", () => {
 			"wire: body fieldSyntax",
 		);
 	});
+
+	it("refuses a field given as another type than its own, never sending it as an empty one", () => {
+		const decoded = decodeRequest(validFrame("continue"));
+		if (!decoded.ok || decoded.value.kind !== "continue") throw new Error("a valid frame");
+		const { message } = decoded.value;
+		for (const [name, value] of [
+			["body", 5],
+			["body", ["x"]],
+			["statement", { toString: () => "a.b.c" }],
+			["sig", "AAAA"],
+			["enc", [1, 2]],
+		] as const)
+			expect(
+				() => encodeRequest("continue", 1, { ...message, [name]: value } as never),
+				name,
+			).toThrow(`wire: ${name} fieldSyntax`);
+		// Absent, a field of no least length is empty, as before.
+		const { sig: _, ...absent } = message;
+		expect(() => encodeRequest("continue", 1, absent as never)).not.toThrow();
+	});
+
+	it("refuses a reply's field outside its spec as given: its enum past its count, a text malformed or of another type", () => {
+		const refused = { error: 254, detail: "", dpopNonce: "", retryAfter: "" };
+		expect(() =>
+			encodeReply({ outcome: "refused", id: 1, message: refused } as never),
+		).not.toThrow();
+		for (const [message, code] of [
+			[{ ...refused, error: 255 }, "error enumRange"],
+			[{ ...refused, error: 256 }, "error enumRange"],
+			[{ ...refused, detail: "a\ud800" }, "detail fieldSyntax"],
+			[{ ...refused, detail: 5 }, "detail fieldSyntax"],
+		] as const)
+			expect(() => encodeReply({ outcome: "refused", id: 1, message } as never)).toThrow(
+				`wire: ${code}`,
+			);
+		expect(() =>
+			encodeReply({ outcome: "rejected", id: 1, message: { code: 256 } } as never),
+		).toThrow("wire: code enumRange");
+		expect(() =>
+			encodeReply({ outcome: "ok", id: 1, message: { body: "{}", dpopNonce: "" } } as never),
+		).toThrow("wire: body fieldSyntax");
+	});
 });
 
 describe("random frames and mutations of well-formed ones", () => {

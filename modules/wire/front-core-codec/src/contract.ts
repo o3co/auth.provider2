@@ -107,7 +107,8 @@ export class WireEncodeError extends Error {
 
 /**
  * A value held to its spec as given, before its bytes could change it: an enum's number to its
- * count, never wrapped to its one byte; a text whole, a lone surrogate never sent as U+FFFD.
+ * count, never wrapped to its one byte; a text whole, a lone surrogate never sent as U+FFFD; bytes
+ * as bytes and a text as a string, a value of another type never sent as an empty one.
  */
 function givenError(spec: FieldSpec, value: unknown): WireErrorName | undefined {
 	if (spec.type === "enum") {
@@ -116,7 +117,10 @@ function givenError(spec: FieldSpec, value: unknown): WireErrorName | undefined 
 			? undefined
 			: "enumRange";
 	}
-	return typeof value === "string" && !value.isWellFormed() ? "fieldSyntax" : undefined;
+	// Absent, a field is empty, as before; given, it is of its type, never read as an empty one.
+	if (value === undefined || value === null) return undefined;
+	if (spec.type === "bytes") return value instanceof Uint8Array ? undefined : "fieldSyntax";
+	return typeof value === "string" && value.isWellFormed() ? undefined : "fieldSyntax";
 }
 
 function bytesOf(spec: FieldSpec, value: unknown): Uint8Array {
@@ -345,6 +349,8 @@ function fieldValue(
 	side: OverHttp,
 	text: string,
 ): { readonly value: unknown } | { readonly error: WireErrorName } {
+	// A value carried as no text names nothing, whatever its type claims.
+	if (typeof text !== "string") return { error: "fieldSyntax" };
 	if (spec.type === "enum") {
 		const texts = side.enumTexts?.[spec.name];
 		const value = texts

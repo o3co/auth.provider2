@@ -8,7 +8,7 @@
 - Reading what a field means: the Core's verifier of each. The connection and who may reach it, and reading or writing HTTP itself (bodies, headers, statuses): the http axis's adapters.
 
 ## Offers
-- `encodeRequest` (kind, id, message) and `encodeReply` (reply): a frame, each field held to its spec, an enum's number and a text as given (never wrapped to a byte, never a lone surrogate sent as U+FFFD); a field outside it throws `WireEncodeError`, naming the field and the code, for the honest side's own log.
+- `encodeRequest` (kind, id, message) and `encodeReply` (reply): a frame, each field held to its spec, an enum's number and a text as given (never wrapped to a byte, never a lone surrogate sent as U+FFFD), bytes as bytes and a text as a string (an absent field empty, a value of another type refused); a field outside it throws `WireEncodeError`, naming the field and the code, for the honest side's own log.
 - `decodeRequest` and `decodeReply` (bytes): a `Decoded` value, the frame's kind or outcome, its id and its fields, or the code it is rejected with and the id its header gave. They never throw.
 - `readHeader` (bytes, the body's limit) and `frameSplitter` (the limit, `onFrame`, `onError`): a stream cut into whole frames.
 - `checkField` (spec, bytes): the one check of a field's length and characters both sides run.
@@ -18,6 +18,7 @@
 - `./testing`: `fuzzer` (seed): well-formed frames of a kind and mutations of a frame, reproducible from the seed.
 
 ## Invariants
+- A frame's id is written as its low 32 bits (`id >>> 0`), not refused: the caller keeps it within, as front-relay's ids are.
 - A frame is read whole or rejected: a wrong version, kind or length, a truncated body or field, a field's length or characters outside its spec, an enum past its count and bytes after the last field each have their code; no piece of the input goes into a rejection.
 - Only canonical frames are read: a frame read encodes back to the same bytes.
 - A stream's splitter stops at the first header whose version or length is wrong, calling `onError` once and reading nothing after, before the body is waited for.

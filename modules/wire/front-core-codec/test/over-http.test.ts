@@ -246,4 +246,30 @@ describe("an operation over HTTP", () => {
 		values.set("body", ["\ud83d\ude00"]);
 		expect(requestOf("continue", { ...sent, values }).ok).toBe(true);
 	});
+
+	it("refuses a value carried as no text, never throwing, whatever its type claims", () => {
+		const decoded = decodeRequest(validFrame("continue"));
+		if (!decoded.ok) throw new Error("a valid frame");
+		const sent = carriedOf("continue", decoded.value.message as never);
+		for (const [name, value] of [
+			["ct", 5],
+			["sig", { toString: () => "AAAA" }],
+			["body", 7],
+			["seq", 1],
+		] as const) {
+			const values = new Map(sent.values) as Map<string, unknown>;
+			values.set(name, [value]);
+			const carried = { ...sent, values } as never;
+			expect(messageOf("continue", carried), name).toEqual({
+				ok: false,
+				field: name,
+				error: "fieldSyntax",
+			});
+			expect(requestOf("continue", carried), name).toEqual({
+				ok: false,
+				field: name,
+				error: "fieldSyntax",
+			});
+		}
+	});
 });
