@@ -1,5 +1,8 @@
-import { Unavailable } from "@mod/kernel";
+import { setTimeout as sleep } from "node:timers/promises";
+import { issuer } from "@mod/issuer";
+import { type BuildContext, Unavailable } from "@mod/kernel";
 import type { Keys } from "@mod/keys";
+import { keys } from "@mod/keys";
 import { canonicalText, hpke, typs } from "@mod/sdk-core-wire";
 import type {
 	Deciding,
@@ -9,8 +12,9 @@ import type {
 	StateOwner,
 	Transparency,
 } from "@mod/transparency";
+import { transparency, transparencyLog } from "@mod/transparency";
 import type { Flow, Preimage } from "@mod/transparency-wire";
-import type { ApprovalStore, Completed } from "../contract.ts";
+import { type ApprovalStore, approvalPart, approvalStore, type Completed } from "../contract.ts";
 import {
 	completionIn,
 	current,
@@ -21,10 +25,11 @@ import {
 	statementMark,
 	stored,
 	wireVersion,
-} from "../statement/statement.ts";
+} from "../record/record.ts";
+import type { Settings } from "../section.ts";
 
 /** approvals' part of a subject's flow: the state's fields it holds. */
-export const part = "approvals";
+const part = approvalPart;
 const stateRecord = { part, name: "state" } as const;
 
 type FlowState = Parameters<StateOwner["write"]>[0];
@@ -240,5 +245,32 @@ export function completionsOver(p: CompletionParts) {
 		if ("refused" in placed) return refused(placed.refused);
 		if (!(await takenIn(flow, op))) return refused("ended");
 		return sealed(q.hash, r, q.code, placed);
+	};
+}
+
+const lookAgainMs = (look: number) => Math.min(10 * 2 ** look, 200);
+
+/** What an authorization's completion takes, which the package names among its own takes. */
+export const completionTakes = [
+	keys,
+	issuer,
+	transparency,
+	transparencyLog,
+	approvalStore,
+] as const;
+
+/** An authorization's completion, made in a build. */
+export async function completionOf(c: BuildContext<Settings>) {
+	return {
+		complete: completionsOver({
+			transparency: await c.get(transparency),
+			digest: (await c.get(transparencyLog)).digest,
+			keys: await c.get(keys),
+			store: await c.get(approvalStore),
+			issuer: (await c.get(issuer)).url,
+			now: c.clock.now,
+			pause: (look) => sleep(lookAgainMs(look)),
+			looks: 18,
+		}),
 	};
 }

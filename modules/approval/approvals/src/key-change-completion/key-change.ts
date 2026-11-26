@@ -1,6 +1,10 @@
+import { issuer } from "@mod/issuer";
+import type { BuildContext } from "@mod/kernel";
 import type { Keys } from "@mod/keys";
+import { keys } from "@mod/keys";
 import { canonicalText, hpke, payloads, typs } from "@mod/sdk-core-wire";
 import type { ApprovalStore, ItemsOf, KeyChangeAsk, KeyChangeCompleted } from "../contract.ts";
+import { approvalStore } from "../contract.ts";
 import {
 	creationIn,
 	current,
@@ -11,7 +15,8 @@ import {
 	sha256,
 	stored,
 	wireVersion,
-} from "../statement/statement.ts";
+} from "../record/record.ts";
+import type { Settings } from "../section.ts";
 
 const refused = (reason: Extract<KeyChangeCompleted, { kind: "refused" }>["reason"]) =>
 	({ kind: "refused", reason }) as const;
@@ -132,5 +137,22 @@ export function keyChangeCompletionsOver(p: {
 		const after = recordOf(saved?.after) ?? recordOf(await p.store.read(ask.hash));
 		if (!after) return refused("unknown");
 		return keptFor(after, asked) ?? refused("other");
+	};
+}
+
+/** What a key change's completion takes, which the package names among its own takes. */
+export const keyChangeCompletionTakes = [keys, issuer, approvalStore] as const;
+
+/** A key change's completion, made in a build. */
+export async function keyChangeCompletionOf(c: BuildContext<Settings>) {
+	const store = await c.get(approvalStore);
+	const iss = (await c.get(issuer)).url;
+	return {
+		completeKeyChange: keyChangeCompletionsOver({
+			keys: await c.get(keys),
+			store,
+			issuer: iss,
+			now: c.clock.now,
+		}),
 	};
 }

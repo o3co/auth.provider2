@@ -9,7 +9,7 @@ import {
 	sha256,
 	stored,
 	wireVersion,
-} from "../statement/statement.ts";
+} from "../record/record.ts";
 import { paddedFor } from "./padded.ts";
 
 const refused = (reason: Extract<PasskeyAddCompleted, { kind: "refused" }>["reason"]) =>

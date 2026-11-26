@@ -8,7 +8,6 @@ import type {
 	PossessionPayload,
 	SigningKey,
 } from "@mod/sdk-core-wire";
-import { part } from "./completion/completion.ts";
 
 /** The purposes a statement is signed for: the IdP's own operations, a closed set. */
 export type Purpose =
@@ -586,4 +585,4 @@ export const approvalStoreNeeds = {
 } as const;
 
 /** approvals' part of each subject's flow, which its wiring binds. */
-export const approvalPart = part;
+export const approvalPart = "approvals";

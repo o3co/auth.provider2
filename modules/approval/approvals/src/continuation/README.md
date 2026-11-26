@@ -15,6 +15,7 @@ Internal module of `approvals`: the screen's continuations, each taken once in o
 - `continueSealed` (a passkey-manage's hash, stage, number 1 to 16, the sealing, its step, handed `KeptManage`: the hash, `used` (the passkey-manage as its key change takes it, `UsedApproval`: statement, assertion, subject, approving key, screen, mark), and `until`, when its record is gone (60 seconds past the statement's expiry), past which none of its steps runs; and `OpenedBody`) → as `continue`; or refused, also `sealed`.
   - `OpenedBody`: the stage, the body read, its hash, the signature kept with the number, `heldUntil` (when this call's hold of its step ends).
 - `takenOverAfterMs`, through the package's `./testing`: how long after a call took a continuation's step another may take it, none kept: its hold and the 2 seconds past it.
+- `continuationOf` (the build context) → those three; `continuationTakes`, which its package names among its own takes.
 
 ## Invariants
 - A creation's statement is continued by `register`, a T by `sign-up` alone (F1): only a T its owner allowed it at its issue (`continues`), number 1, the body `{}`.
@@ -30,4 +31,4 @@ Internal module of `approvals`: the screen's continuations, each taken once in o
 - A delete's number is taken with the longest credential ID's bytes among the subject's keys then and the key it names (`pad`, from `passkeys`' list), kept with it: its answers, taken or not, made again on any later run, are padded by that or the longest now.
 
 ## Depends on
-- `sdk-core-wire` (the register input, HPKE's info), `continuation-wire` (the sign-up and sealed stages' inputs, bodies and plaintext), `keys` (opening), `passkeys` (the keys' list, a delete's pad); the package's `statement` (the record). The register input moves to `continuation-wire` once its users have (the same bytes; `sdk-core-wire`'s is then taken out).
+- `sdk-core-wire` (the register input, HPKE's info), `continuation-wire` (the sign-up and sealed stages' inputs, bodies and plaintext), `keys` (opening), `passkeys` (the keys' list, a delete's pad), `kernel` (the build context); the package's `record`. The register input moves to `continuation-wire` once its users have (the same bytes; `sdk-core-wire`'s is then taken out).

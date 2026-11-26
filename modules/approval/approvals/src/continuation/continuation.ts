@@ -1,8 +1,10 @@
 import { createPublicKey, verify, type webcrypto } from "node:crypto";
 import { continuations } from "@mod/continuation-wire";
-import { Unavailable } from "@mod/kernel";
+import { type BuildContext, Unavailable } from "@mod/kernel";
 import type { Keys } from "@mod/keys";
+import { keys } from "@mod/keys";
 import type { KeyList } from "@mod/passkeys";
+import { keyList } from "@mod/passkeys";
 import { hpke, type SigningKey } from "@mod/sdk-core-wire";
 import type {
 	ApprovalStore,
@@ -13,6 +15,7 @@ import type {
 	OpenedBody,
 	StepResult,
 } from "../contract.ts";
+import { approvalStore } from "../contract.ts";
 import {
 	current,
 	issuedAtOf,
@@ -23,7 +26,8 @@ import {
 	sha256,
 	statementMark,
 	stored,
-} from "../statement/statement.ts";
+} from "../record/record.ts";
+import type { Settings } from "../section.ts";
 
 /** Whether `signature` (ES256, r‖s, base64url) is the screen's over `input`. */
 function signedBy(key: SigningKey, input: string, signature: string): boolean {
@@ -304,4 +308,18 @@ export function continuationsOver(p: {
 			run({ ...q, stage: "sign-up" }),
 		continueSealed,
 	};
+}
+
+/** What the continuations take, which the package names among its own takes. */
+export const continuationTakes = [keys, keyList, approvalStore] as const;
+
+/** The continuations, made in a build. */
+export async function continuationOf(c: BuildContext<Settings>) {
+	return continuationsOver({
+		keys: await c.get(keys),
+		list: await c.get(keyList),
+		store: await c.get(approvalStore),
+		now: c.clock.now,
+		token: () => Buffer.from(c.random.bytes(16)).toString("base64url"),
+	});
 }

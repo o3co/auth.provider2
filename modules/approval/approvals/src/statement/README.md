@@ -8,7 +8,7 @@ Internal module of `approvals`: issuing statements, using each once, and reading
 - Reads a statement's record for its callers: a used one's approval, a creation's record, what a used authorization rests on, a used passkey-add as its key change takes it; and marks an authorization's completion kept as gone out, giving it from then on.
 
 ## Not here
-- Continuations (`continuation`). Making a completion, and the flow (`completion`).
+- Continuations (`continuation`). An authorization's completion, and the flow (`completion`); a key change's (`key-change-completion`); a passkey-add's and a passkey-manage's (`passkey-completion`). The record's shape and its reads (`record`).
 
 ## Offers
 - `statementsOver` (`StatementParts`) → `issue`, `use`, `usedOf`, `creationOf`, `rootOf`, `passkeyAddOf`, `keptChangeOf`, `signUpOf`, `signUpSubject`, `completionOf`, `publish`, as `approvals` offers them:
@@ -21,7 +21,8 @@ Internal module of `approvals`: issuing statements, using each once, and reading
     - Read while the records are kept, a minute past each statement's expiry, whatever expired, while this generation's ring verifies the possession; none for a possession not used, one its creation's last continuation did not make, or a passkey-add another subject used.
   - `signUpOf` (T's hash) → its sign-up as kept (F1): its statement, the subject, the creation its step answered and the credential its key change kept, each once kept; none where none began, or this generation's ring does not verify it. `signUpSubject` (T's hash, subject) → the subject kept for its begun sign-up, the first one written; none where none began.
   - `completionOf` (hash) → the completion kept, as `complete` answered it, once `publish` marked it gone out; none before. `publish` (hash): marks it so, once its caller let it go (an authorization's code rooted first).
-- `declaredOf` (the declarations, a refusal) → each purpose's declared names. `statementMark` (a statement's id) → its use-once mark, as `authority-rules`' fold names it. `itemNames`, `itemsIn`, `challengeOf`, `sha256`; the record's shape (`recordOf`, `stored`).
+- `declaredOf` (the declarations, a refusal) → each purpose's declared names. `itemNames`, `challengeOf`.
+- `statementOf` (the build context) → those, a name no schema holds or two modules fill refusing boot (`declaredOf`); `statementTakes`, which its package names among its own takes.
 
 ## Invariants
 - `issue` checks the items against the declared names and the purpose's schema, and the screen's `eEnc` as a P-256 point, before anything is counted or signed; counts all statements and the caller's key in `issue-window`; refuses past `max-concurrent` signings in this process.
@@ -30,11 +31,7 @@ Internal module of `approvals`: issuing statements, using each once, and reading
 - A use writes once, from issued to used, holding what used it and when: an assertion's subject, credential, the key's registration as `passkeys` answered it, and JSON text as sent, or a verification. A record used before it held the registration names none. Its answer is the approval only where the record holds that same evidence; any other is `used`.
 - A T whose sign-up began is used only once its key change kept the credential it registered (`signUp.credential`), and only by that credential's assertion, of the subject made for it where one is kept: refused `used` before the assertion is asked (by the credential it names), after it, and in the write that uses it.
 - An authorization's, a passkey-add's or a passkey-manage's is used only by an assertion over its challenge that verified its user, whatever `passkeys`' section lets through; the same evidence again answers the same approval. A possession's verification is taken as given; its caller checks its user (`verifyPending`).
-- A record of another shape is read as a store that cannot tell: unavailable.
 - A use reads the record by the hash of the bytes presented, and takes them only where they are the bytes recorded and the Core's ring of this generation verifies them.
 
-## Data
-- Each statement's record: its purpose, bytes, the screen's keys, how far it went, the subject, credential and assertion that used it, the last continuation (its body as received, up to 8192 bytes, and signature; a sealed one's body hash alone) and its step's answer (a sealed list's up to about 60 kB), and the completion.
-
 ## Depends on
-- `keys` (`prepare`, `sign`), `passkeys` (`assert`), `rate-limit` (`hit`), `sdk-core-wire` (schemas, canonical text, the challenge's input).
+- `keys` (`prepare`, `sign`), `passkeys` (`assert`), `rate-limit` (`hit`), `issuer`, `kernel` (the build context), `sdk-core-wire` (schemas, canonical text, the challenge's input); the package's `record`.

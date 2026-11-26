@@ -10,9 +10,9 @@ import type { Stage } from "@mod/transparency";
 import { ceremonies, keyThumbprint } from "@mod/webauthn";
 import { testOrigin } from "@mod/webauthn/testing";
 import { describe, expect, it } from "vitest";
-import { approvalKind, deciding } from "../src/completion/completion.ts";
-import { recordOf } from "../src/statement/statement.ts";
-import { screenKeys, sha256, world } from "./fixtures/world.ts";
+import { screenKeys, sha256, world } from "../../../test/fixtures/world.ts";
+import { recordOf } from "../../record/record.ts";
+import { approvalKind, deciding } from "../completion.ts";
 
 const items = {
 	client_id: "c1",

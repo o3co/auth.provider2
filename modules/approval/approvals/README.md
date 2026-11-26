@@ -16,7 +16,7 @@
   - `usedOf`: a used statement's approval. `creationOf`: a creation's record. `rootOf`: what a used authorization rests on. `passkeyAddOf`: a used passkey-add as its key change takes it. `keptChangeOf`: what a used possession's key change was made of, to its records' end. `completionOf` and `publish`: an authorization's completion kept, and marked gone out (`statement`).
   - `continue`: a creation's continuation, its step run once and answered again alike. `continueSignUp`: a T's sign-up (F1), the same, on a T its owner allowed. `continueSealed`: a used passkey-manage's sealed `delete` or `rename`, opened here, the same (`continuation`).
   - `signUpOf`: a T's sign-up as kept. `signUpSubject`: the subject made for it, kept once (`statement`).
-  - `complete`: an authorization's completion, its approval on the flow first. `completeKeyChange`: a used possession's key-change completion. `completePasskeyAdd`: a used passkey-add's, carrying the creation made for it. `completePasskeyManage`: a passkey-manage's list of keys, for a caller that checked the approving key (`completion`).
+  - `complete`: an authorization's completion, its approval on the flow first (`completion`). `completeKeyChange`: a used possession's key-change completion (`key-change-completion`). `completePasskeyAdd`: a used passkey-add's, carrying the creation made for it. `completePasskeyManage`: a passkey-manage's list of keys, for a caller that checked the approving key (`passkey-completion`).
 - Extension point `statementItems` (purpose, the item names it fills, by whom): the purposes are `authorization`, `passkey-add` and `passkey-manage` (which name no items, so none fills them), `creation` and `possession`.
 - `approvalStore`, the statements' store interface (create unless held, read, change from what it holds), and `approvalStoreNeeds`. `approvalPart`: its part of each subject's flow, which its wiring binds.
 - Operator section: `statement-lifetime` (default 5 minutes), `issue-limit`, `issue-total` and `issue-window` (default 30 a minute per key, 100 000 a minute in all), `max-concurrent` (default 64 signings at once).
@@ -24,14 +24,14 @@
 
 ## Invariants
 - Purposes and items are closed: a purpose is one `sdk-core-wire` names a schema for, an item one its schema names and one module declared it fills. Boot refuses a name no schema holds or two modules fill; `issue`, an item no module declared or the schema refuses.
-- A statement is used once, by one write from issued, and only while the Core's ring of this generation verifies it, by the evidence its purpose takes (internal module `statement`). A T whose sign-up began is used only by the credential its key change kept on it (F1). A purpose's owner takes the items from the used record (`usedOf`, or `use`'s answer), never from a later request.
+- A statement is used once, and only while the Core's ring of this generation verifies it, by the evidence its purpose takes (internal module `statement`). A T whose sign-up began is used only by the credential its key change kept on it (F1). A purpose's owner takes the items from the used record (`usedOf`, or `use`'s answer), never from a later request.
 - An authorization's completion is signed only after its approval is taken in on the subject's flow as its owner's `took` (internal module `completion`).
 - Its op is never taken over, as only its owner holds the code: an orphan is marked and abandoned. Only one abandoned before its stage was placed can be completed again, by a later `complete`; one placed is taken in as done, its statement used, with no completion. Any other end, a lost answer or a fault before the completion is kept gives none: the person approves again.
-- A continuation's step is run by the one call that took its sequence number, and its answer kept with it before the next number is taken; it is run again only where that call's hold lapsed with none kept (internal module `continuation`).
+- A continuation's step is run by the one call that took its sequence number; it is run again only where that call's hold lapsed with none kept (internal module `continuation`).
 - Statements and completions are signed by the Core's ring, apart from the authority's: under `approval+jwt` and `completion+jwt`, their items under one member, never as a token's claims.
 
 ## Data
-- Each statement's record, by its hash, from its issuing to a minute past its expiry (internal module `statement`). Its part of each subject's flow, in the frames' store: the state's approvals and use-once marks.
+- Each statement's record, by its hash, from its issuing to a minute past its expiry (internal module `record`). Its part of each subject's flow, in the frames' store: the state's approvals and use-once marks.
 
 ## Left to you
 - No two replicas' kernel clocks differ by more than 2 seconds, at any instant, not only while a call holds a step: another call takes a lapsed hold only 2 seconds past its end (internal module `continuation`).

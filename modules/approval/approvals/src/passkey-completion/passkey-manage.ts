@@ -11,7 +11,7 @@ import {
 	sha256,
 	stored,
 	wireVersion,
-} from "../statement/statement.ts";
+} from "../record/record.ts";
 import { longestOf } from "./padded.ts";
 
 const refused = (reason: Extract<PasskeyManageCompleted, { kind: "refused" }>["reason"]) =>
