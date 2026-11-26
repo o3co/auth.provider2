@@ -10,7 +10,7 @@ Internal module of `transparency`: the intent frame's pure core (kernel-spec §5
 
 ## Offers
 - `frameOf`, `Frame`, `Intent`, `At`, `Taken`, `Written`, `End`, `Ending`, `Refused`; `sealed`, `intentOf`, `isOpen`, `isOwner`, `isOrphan`.
-- `decided` (KE-C01), `closedByOwner` and `rebased` (the owner's KE-C02), `stepped` (KE-C04 with the end-of-intent table), `marked` (KE-C14), `takenOver` (KE-C10), `abandonStage` (KE-C09), `whileClosed`.
+- `decided` (KE-C01), `closedByOwner` and `rebased` (the owner's KE-C02), `stepped` (KE-C04 with the end-of-intent table), `endingOf` (how a last stage ends its op, which `applied` answers too), `marked` (KE-C14), `takenOver` (KE-C10), `abandonStage` (KE-C09), `whileClosed`.
 
 ## Invariants
 - Pure: a frame, who reads it at which store time, and the event's input in; the next frame, or a refusal, out. An owner's write carries `ownerUntil`, its last store-clock ms before the lease ends.

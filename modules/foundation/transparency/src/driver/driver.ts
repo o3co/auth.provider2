@@ -20,6 +20,7 @@ import {
 	abandonStage,
 	closedByOwner,
 	decided,
+	endingOf,
 	type Frame,
 	frameOf,
 	intentOf,
@@ -28,6 +29,7 @@ import {
 	isOwner,
 	marked,
 	rebased,
+	sealed,
 	stepped,
 	type Taken,
 	takenOver,
@@ -328,9 +330,32 @@ export function transparencyOver(p: {
 	}
 
 	async function step(unit: IntentUnit, own?: string) {
+		const answer = await stepOn(unit, own);
+		if ("through" in answer || ("refused" in answer && answer.refused === "far"))
+			throw new TypeError("transparency: a step bound to no position");
+		return answer;
+	}
+
+	/**
+	 * A step; bound `through` a position, read in the same snapshot its write is held to: sealed,
+	 * then taken in through it already (whatever is open after it), and only then the next record.
+	 */
+	async function stepOn(
+		unit: IntentUnit,
+		own?: string,
+		bound?: { readonly through: number; readonly kind: string; readonly mayStep: boolean },
+	) {
 		if ("op" in unit) return opStep(unit, own);
 		const { flow } = unit;
 		const { snap, kind } = await withKind(unit);
+		if (bound !== undefined) {
+			if (!sealed(snap.frame, snap.at)) return { refused: "sealed" as const };
+			const open = intentOf(snap.frame, snap.at);
+			if (open && open.op === own && open.kind !== bound.kind)
+				throw new TypeError("transparency: an op asked of another kind than its intent's");
+			if (snap.frame.applied >= bound.through) return { through: true as const };
+			if (!bound.mayStep) return { refused: "far" as const };
+		}
 		if (unregistered(snap)) return { refused: "stuck" as const };
 		const placed = await log.at(flow, snap.frame.applied + 1);
 		if (!placed) return { refused: "atHead" as const };
@@ -569,6 +594,57 @@ export function transparencyOver(p: {
 		},
 		async reset(q) {
 			return { answer: await log.reset(q.instruction) };
+		},
+		async applied(q) {
+			const kind = kinds.get(q.kind);
+			if (!kind) throw new TypeError(`no kind of operation ${q.kind} is registered`);
+			if (kind.bundle) throw new TypeError("transparency: applied takes no bundle's stage");
+			if (q.flow.of !== "subject") return notSubject;
+			const { stage } = q;
+			if (stage.kind === "abandonment")
+				throw new TypeError("transparency: applied takes no abandonment");
+			if (stage.op !== q.op || stage.flow.of !== q.flow.of || stage.flow.id !== q.flow.id)
+				throw new TypeError("a stage asked again names another op or flow");
+			const unit: IntentUnit = { flow: { of: "subject", id: q.flow.id } };
+			// As `receiptOf`: the log's first answer, placing nothing.
+			if ((await log.of(q.flow, q.op)).stages === 0) return { refused: "unplaced" as const };
+			const answer = await log.append(stage, neverAHead);
+			if (answer.result === "refused" && answer.refusal === "prevMismatch")
+				return { refused: "unplaced" as const };
+			if (answer.result !== "accepted") return { answer };
+			const at = answer.position;
+			let reads = 0;
+			// The flow taken in through its position, never past it: each step bound in its own snapshot.
+			for (let steps = 0; ; ) {
+				const bound = { through: at, kind: q.kind, mayStep: steps < tendSteps };
+				const taken = await stepOn(unit, q.op, bound);
+				if ("through" in taken) {
+					const placed = await log.at(q.flow, at);
+					if (!placed?.finding) return { refused: "unjudged" as const };
+					const r = placed.record;
+					if (r.id !== answer.id || !("op" in r) || r.op !== q.op) return offForm();
+					return stage.last ? { answer, ending: endingOf(takenOf(placed)) } : { answer };
+				}
+				if ("position" in taken) {
+					steps += 1;
+					reads = 0;
+					continue;
+				}
+				const word = taken.refused;
+				// The log's `at` not yet showing what its append answered: a judgment still to come.
+				if (word === "atHead") return { refused: "unjudged" as const };
+				if (
+					word === "unjudged" ||
+					word === "waits" ||
+					word === "stuck" ||
+					word === "sealed" ||
+					word === "far"
+				)
+					return { refused: word };
+				// Moved, late, or another's record taken in first: read again.
+				reads += 1;
+				if (reads >= kindReads) return { refused: "moved" as const };
+			}
 		},
 		async receiptOf(q) {
 			// A subject's flow alone: an unconditional append names no previous position to hold it back.

@@ -257,7 +257,7 @@ export function whileClosed(f: Frame, at: At): { readonly closed: true } | Refus
 const acceptable = (j: Finding) =>
 	(j.verdict === "verified" || j.verdict === "unsupported") && j.outcome === "took";
 /** How a last stage ends its op: a noEffect reports the op did not take, however it is judged. */
-const endingOf = (r: Taken): Ending => {
+export const endingOf = (r: Taken): "took" | "didNotTake" | "held" => {
 	if (r.finding.verdict === "held") return "held";
 	return r.kind !== "noEffect" && acceptable(r.finding) ? "took" : "didNotTake";
 };

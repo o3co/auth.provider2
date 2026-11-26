@@ -19,13 +19,11 @@ function writer(w: Flowing, now = () => 0) {
 				settled.push(subject);
 				return w.passkeys.settle(subject);
 			},
-			publicKeyOf: (id) => w.passkeys.publicKeyOf(id),
 		},
 		digest: w.log.digest,
 		pause: async () => {},
 		looks: 3,
 		now,
-		log: w.log,
 	});
 	return { ...over, settled };
 }
@@ -153,29 +151,41 @@ describe("a key deleted's change", () => {
 		expect(after.settled).toEqual(["s1"]);
 	});
 
-	it("reads its judgment only from the very record its receipt names, in the wire's form", async () => {
+	it("waits on a non-take a live owner on another replica holds, then answers it, settling nothing", async () => {
+		const { w, first, second, r2, deleting } = await twoKeys();
+		w.book.judgeOnAppend({ verdict: "verified", outcome: "didNotTake" });
+		const d = deleting(first.credential, { credential: second.credential, registration: r2 });
+		// Sent, then its writer gone before taking it in: its intent pending, its lease live.
+		const stalled = writer({
+			...w,
+			transparency: {
+				...w.transparency,
+				step: async () => {
+					throw new Error("gone");
+				},
+			},
+		});
+		await expect(stalled.remove(d)).rejects.toThrow("gone");
+		const elsewhere = writer({ ...w, transparency: await w.replica("w2") });
+		await expect(elsewhere.removed(d)).rejects.toThrow(/unavailable/);
+		// Past the lease, any replica takes it in and answers it.
+		w.advance(6_000);
+		expect(await elsewhere.removed(d)).toEqual({ kind: "didNotTake" });
+		expect(elsewhere.settled).toEqual([]);
+	});
+
+	it("answers a deletion taken though its key is held again since, as the flow applied it", async () => {
 		const { w, first, second, r2, deleting } = await twoKeys();
 		const d = deleting(first.credential, { credential: second.credential, registration: r2 });
 		expect(await writer(w).remove(d)).toMatchObject({ kind: "took" });
-		const answering = (change: (record: Record<string, unknown>) => object) =>
-			writer({
-				...w,
-				log: {
-					...w.log,
-					at: async (f: Flow, position: number) => {
-						const placed = await w.log.at(f, position);
-						return placed && ({ ...placed, record: change(placed.record) } as never);
-					},
-				},
-			});
-		for (const change of [
-			(r: Record<string, unknown>) => ({ ...r, op: "another" }),
-			(r: Record<string, unknown>) => ({ ...r, id: "r99" }),
-			(r: Record<string, unknown>) => ({ ...r, v: 2 }),
-			(r: Record<string, unknown>) => ({ ...r, flow: { of: "client", id: "s1" } }),
-		])
-			await expect(answering(change).removed(d)).rejects.toThrow(/unavailable/);
-		expect(await writer(w).removed(d)).toMatchObject({ kind: "took" });
+		// The same credential held again under another registration: no look at the key is asked.
+		const held = w.frames.value(flow, keysRecord) as { keys: Record<string, object> };
+		const kept = held.keys[r2] as object;
+		w.frames.put(flow, keysRecord, {
+			...held,
+			keys: { ...held.keys, again: { ...kept, credential: first.credential } },
+		} as never);
+		expect(await writer(w).removed(d)).toEqual({ kind: "took", receipts: ["h.p.s"] });
 	});
 
 	it("deletes the approving key itself while another is left", async () => {

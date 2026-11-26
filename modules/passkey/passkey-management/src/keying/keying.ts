@@ -61,7 +61,6 @@ export async function keyingOf(c: Context) {
 		pause: (look) => sleep(lookAgainMs(look)),
 		looks: 18,
 		now: c.clock.now,
-		log: await c.get(transparencyLog),
 	});
 	const registration = registrationOver({
 		approvals: await c.get(approvals),

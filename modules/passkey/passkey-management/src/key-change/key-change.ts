@@ -2,15 +2,8 @@ import { createHash } from "node:crypto";
 import { Unavailable } from "@mod/kernel";
 import { type Decided, type Passkeys, passkeyChanges, type Registrations } from "@mod/passkeys";
 import { canonicalText } from "@mod/sdk-core-wire";
-import type {
-	Deciding,
-	Json,
-	OperationKind,
-	Stage,
-	Transparency,
-	TransparencyLog,
-} from "@mod/transparency";
-import { type Flow, type Preimage, schemas } from "@mod/transparency-wire";
+import type { Deciding, Json, OperationKind, Stage, Transparency } from "@mod/transparency";
+import type { Flow, Preimage } from "@mod/transparency-wire";
 import { keyChangePart } from "../contract.ts";
 
 const preimageRecord = { part: keyChangePart, name: "preimage" } as const;
@@ -134,13 +127,12 @@ const tries = 4;
 /** A key added or deleted's change, as its writer (KE-C01, C02, C04): as the card says. */
 export function keyChangesOver(p: {
 	readonly registrations: Pick<Registrations, "commit" | "remove">;
-	readonly transparency: Pick<Transparency, "send" | "step" | "tend" | "receiptOf">;
-	readonly passkeys: Pick<Passkeys, "settle" | "publicKeyOf">;
+	readonly transparency: Pick<Transparency, "send" | "step" | "tend" | "receiptOf" | "applied">;
+	readonly passkeys: Pick<Passkeys, "settle">;
 	readonly digest: (preimage: Preimage) => string;
 	readonly pause: (look: number) => Promise<void>;
 	readonly looks: number;
 	readonly now: () => number;
-	readonly log: Pick<TransparencyLog, "at">;
 }) {
 	/** Decided on the applied state: a flow open or not taken in is tended first, then decided again. */
 	async function committed<R extends string>(
@@ -274,51 +266,25 @@ export function keyChangesOver(p: {
 		return receiptsOf(flow, k.reservation, stage);
 	}
 
-	/** Its flow taken in, as its op's owner, until `applied` holds (the card's stand-in). */
-	async function appliedBy(flow: Flow, op: string, applied: () => Promise<boolean>) {
-		for (let look = 0; look < p.looks; look++) {
-			if (await applied()) return;
-			const stepped = await p.transparency.step({ flow, own: op });
-			if ("position" in stepped) continue;
-			if (stepped.refused === "atHead") return;
-			if (stepped.refused === "moved" || stepped.refused === "late") continue;
-			if (!["unjudged", "waits"].includes(stepped.refused)) return unavailable();
-			await p.pause(look);
-		}
-		return unavailable();
-	}
-
-	/** A deletion placed already: its outcome as the log judged it, its flow taken in and settled; thrown while unjudged. */
+	/** A deletion placed already: its outcome as the flow applied it, taken in through its position and settled; thrown while unjudged. */
 	async function removed(d: DeletedKey): Promise<Removed> {
 		const { flow, stage } = deletionStageOf(d);
-		const again = await p.transparency.receiptOf({ flow, op: d.op, stage });
-		if ("refused" in again) return again.refused === "unplaced" ? { kind: "none" } : unavailable();
-		if (again.answer.result !== "accepted") return unavailable();
-		const { id, position } = again.answer;
-		const placed = await p.log.at(flow, position);
-		const read = placed && recordOf(placed);
-		const named = read && "position" in read.record ? read.record : undefined;
-		const same =
-			named?.id === id &&
-			named.op === d.op &&
-			named.flow.of === flow.of &&
-			named.flow.id === flow.id &&
-			named.position === position;
-		if (placed && !same) return unavailable();
-		const finding = read?.finding;
-		if (!finding) return unavailable();
-		// As the fold applies one: of a verdict it takes, and took.
-		const took =
-			["verified", "unsupported"].includes(finding.verdict) && finding.outcome === "took";
-		if (!took) {
-			await p.transparency.step({ flow, own: d.op });
-			return { kind: "didNotTake" };
+		for (let look = 0; look < p.looks; look++) {
+			const got = await p.transparency.applied({ kind: keyChangeKind.name, flow, op: d.op, stage });
+			if ("refused" in got) {
+				if (got.refused === "unplaced") return { kind: "none" };
+				if (got.refused !== "unjudged" && got.refused !== "waits") return unavailable();
+				if (look < p.looks - 1) await p.pause(look);
+				continue;
+			}
+			if (got.answer.result !== "accepted") return unavailable();
+			if (got.ending === undefined)
+				throw new TypeError("passkey-management: a deletion's stage is its last");
+			if (got.ending !== "took") return { kind: "didNotTake" };
+			await p.passkeys.settle(d.subject);
+			return { kind: "took", receipts: got.answer.receipts };
 		}
-		// The key it took was live just before it: gone from the applied state, it is applied.
-		const gone = async () => (await p.passkeys.publicKeyOf(d.credential))?.subject !== d.subject;
-		await appliedBy(flow, d.op, gone);
-		await p.passkeys.settle(d.subject);
-		return { kind: "took", receipts: again.answer.receipts };
+		return unavailable();
 	}
 
 	async function receiptsOf(flow: Flow, op: string, stage: Stage) {
@@ -399,15 +365,6 @@ function deletionStageOf(d: DeletedKey) {
 	};
 	return { flow, preimage, stage };
 }
-
-const recordOf = <F>(placed: { readonly record: unknown; readonly finding?: F }) => {
-	try {
-		const parsed = schemas.record.safeParse(placed.record);
-		return parsed.success ? { record: parsed.data, finding: placed.finding } : undefined;
-	} catch {
-		return undefined;
-	}
-};
 
 const unavailable = (): never => {
 	throw new Unavailable("passkey-management");

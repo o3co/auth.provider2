@@ -302,6 +302,26 @@ export interface Transparency {
 		readonly stage: Stage;
 	}): Promise<{ readonly answer: AppendAnswer } | Refused<"notSubject" | "unplaced">>;
 	/**
+	 * A subject's flow's stage of `kind` the log placed already, its op's own and not a bundle's: the
+	 * flow taken in through its position, never past it, each step bound in the snapshot its write is
+	 * held to, and answered with the log's first answer and, its op's last stage, how its op ended.
+	 * Taken in already, nothing is written. As `receiptOf`, a stage the log does not hold is refused
+	 * (`unplaced`). On the replica holding its op's lease it takes in as the op's owner: a writer
+	 * awaiting its own end then sees its position passed, or none. A bundle's kind, an abandonment, or
+	 * a stage of another op, flow or kind than its intent's is the caller's TypeError.
+	 */
+	applied(p: {
+		readonly kind: string;
+		readonly flow: Flow;
+		readonly op: string;
+		readonly stage: Stage;
+	}): Promise<
+		| { readonly answer: AppendAnswer; readonly ending?: "took" | "didNotTake" | "held" }
+		| Refused<
+				"notSubject" | "unplaced" | "unjudged" | "waits" | "stuck" | "sealed" | "moved" | "far"
+		  >
+	>;
+	/**
 	 * An idle replica's turn on a flow: takes it in to its head, claims an orphan, sends an abandonment;
 	 * on a client's flow, so for the next open ops its record lists, going round them turn by turn.
 	 */
