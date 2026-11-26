@@ -17,4 +17,4 @@ Internal module of `token-endpoint`: calling a contributed grant directly, as th
 - Its `issue` signs through `tokens` at once, the bundle recorded nowhere: recording is the endpoint's own step, checked in its tests. It is given `tokens`' `admits`, `prepare` and `sign`, and its revoking by reference (`CallerTokens`), and says the endpoint's stance.
 
 ## Depends on
-- `clients`, `grants`, `http` (the request type), `kernel`, `promises`, `sender-binding` (the binding type), `tokens`; `route` (the grant's input, the mistyped refusal, the refused answer, the answered body), `built-in` (the targets rule, the stance)
+- `clients`, `grants`, `http` (the request type), `kernel`, `promises`, `sender-binding` (the binding type), `tokens`; `route` (the grant's input, the mistyped refusal, the answered body), `issuance` (`Issuing`, the bundle and its check, the refused answer), `built-in` (the targets rule, the stance)

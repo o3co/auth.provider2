@@ -21,9 +21,9 @@ import {
 } from "@mod/tokens";
 import { clientSubjectStance, keyHoldStance, tokenEndpointStance } from "../built-in/stance.ts";
 import { composedRule, targetTakes, unread } from "../built-in/targets.ts";
+import { answeredIssued, bundleOf, type Issuing, refusedAnswer } from "../issuance/issuance.ts";
 import { answeredBody } from "../route/answer.ts";
 import { grantInputOf, mistypedRefusal, tokenPath } from "../route/endpoint.ts";
-import { answeredIssued, bundleOf, type Issuing, refusedAnswer } from "../route/issuance.ts";
 
 /** Calls a contributed grant directly, as the token endpoint does once the request has passed it. */
 export interface GrantCalls {

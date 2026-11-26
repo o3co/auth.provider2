@@ -7,7 +7,7 @@ Internal module of `token-endpoint`: what the package contributes of its own, th
 - The stances the package contributes, those on the client's own token and on a client's token held to a key derived from what the grants declare, never from their names.
 
 ## Not here
-- Handling the request and what a grant issues through (`route`).
+- Handling the request (`route`) and what a grant issues through (`issuance`).
 
 ## Offers
 - `composedRule` (the build context) → the one rule contributed to `targetRules`, or `unread` (the default audience, the request unread) when none is; two refuse boot.

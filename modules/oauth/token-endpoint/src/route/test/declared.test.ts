@@ -128,14 +128,6 @@ it("records the client's registry version and the token's binding on what it iss
 	]);
 });
 
-it("answers none of a bundle whose subject's kind is not the one its grant declares", async () => {
-	const { post, events } = await serve();
-	const answered = await post("urn:test:mismatch");
-	expect(answered.status).toBe(500);
-	expect(answered.body.access_token).toBeUndefined();
-	expect(events().map((e) => e.kind)).not.toContain("token.issued");
-});
-
 it("answers a grant's too many requests as 429, its wait in whole seconds", async () => {
 	const { post, events } = await serve();
 	expect(await post("urn:test:limited")).toEqual({

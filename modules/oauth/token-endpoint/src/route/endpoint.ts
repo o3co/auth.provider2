@@ -10,7 +10,6 @@ import type { IssuanceFencing, SubjectKind } from "@mod/tokens";
 import { challenged, oauthError, refusedAuthenticationAnswer } from "../answers/answers.ts";
 import events from "../audit-events.ts";
 import { identifiedClient, identifierOf } from "../identified/identified.ts";
-import { answeredBody } from "./answer.ts";
 import {
 	answeredIssued,
 	bundleOf,
@@ -18,7 +17,8 @@ import {
 	type Issuing,
 	issuanceFor,
 	refusedAnswer,
-} from "./issuance.ts";
+} from "../issuance/issuance.ts";
+import { answeredBody } from "./answer.ts";
 
 export const tokenPath = "/oauth/token";
 

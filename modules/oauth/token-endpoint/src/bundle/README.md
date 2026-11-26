@@ -6,7 +6,7 @@ Internal module of `token-endpoint`: the issuance bundle (A40), its owner's run 
 - Runs one bundle a grant's `issue` asks: the policies judge it, its start is recorded with the request's evidence, its access token and parts prepared with the start's acceptance time as their `iat`, the bundle appended once, each token signed after its receipts, and answered once taken in as its owner's `took`.
 
 ## Not here
-- What a grant issues, the binding, the session issuances and the fences (`route`). Frames, leases, the end of an op and abandonment records (`transparency`). The token's texts and signing (`tokens`).
+- What a grant issues, the binding and the session issuances (`issuance`), and the fences (`route`). Frames, leases, the end of an op and abandonment records (`transparency`). The token's texts and signing (`tokens`).
 
 ## Offers
 - `bundleKind`: the kind of operation `token-endpoint.bundle`, a bundle (never taken over), holding no records of its own.
