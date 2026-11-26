@@ -1,6 +1,7 @@
 import type { Client } from "@mod/clients";
 import { overHttp } from "@mod/front-core-wire";
 import type { HttpRequest } from "@mod/http";
+import { testRequest } from "@mod/http/testing";
 import { typs } from "@mod/sdk-core-wire";
 import type { BindingOutcome, SenderBindings } from "@mod/sender-binding";
 import { describe, expect, it } from "vitest";
@@ -93,11 +94,11 @@ function harness(
 			return `t${n}`;
 		},
 	});
-	const send = async (form: Record<string, string>) => {
-		const fields = new Map(Object.entries(form).map(([k, v]) => [k, [v]]));
-		const request = {
-			fields: { single: (name: string) => fields.get(name)?.[0] },
-		} as unknown as HttpRequest;
+	const send = async (form: Record<string, string> | readonly (readonly [string, string])[]) => {
+		const pairs = Array.isArray(form) ? form : Object.entries(form);
+		const fields = new Map<string, string[]>();
+		for (const [k, v] of pairs) fields.set(k, [...(fields.get(k) ?? []), v]);
+		const request: HttpRequest = testRequest({ method: "POST", path: parPath, fields });
 		const r = await push(request);
 		return {
 			status: r.status,
@@ -218,6 +219,46 @@ describe("a pushed authorization request", () => {
 		expect(await h.send({ request: jar(claims()), authorization_details: "other" })).toMatchObject({
 			json: { error: "invalid_request" },
 		});
+	});
+
+	it("refuses any parameter sent twice before reading one (RFC 6749 §3.1): authorization_details twice among them", async () => {
+		const h = harness();
+		const twice = (name: string, value: string) =>
+			h.send([
+				["request", jar(claims())],
+				[name, value],
+				[name, value],
+			]);
+		for (const [name, value] of [
+			["authorization_details", "[]"],
+			["request_uri", "other"],
+			["client_id", "c1"],
+			["dpop_jkt", "jkt"],
+		] as const)
+			expect(await twice(name, value), name).toMatchObject({
+				status: 400,
+				json: { error: "invalid_request", error_description: "repeated parameter" },
+			});
+		expect(
+			await h.send([
+				["request", jar(claims())],
+				["request", jar(claims())],
+			]),
+		).toMatchObject({
+			status: 400,
+			json: { error: "invalid_request", error_description: "repeated parameter" },
+		});
+		expect(h.store.kept.size).toBe(0);
+		// Before the client is authenticated: an unauthenticated push sent so is this refusal, not a 401.
+		const stranger = harness({ authenticated: false });
+		expect(
+			await stranger.send([
+				["request", jar(claims())],
+				["scope", "a"],
+				["scope", "a"],
+			]),
+		).toMatchObject({ status: 400, json: { error_description: "repeated parameter" } });
+		expect((await stranger.send({ request: jar(claims()) })).status).toBe(401);
 	});
 
 	it("serves the path the wire's par operation names", () => {

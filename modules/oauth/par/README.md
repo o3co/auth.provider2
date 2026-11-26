@@ -16,6 +16,7 @@
 - `./testing`: `parConfig` (`ParSettings`), and `pushedRequestsContract`, the store interface's contract test.
 
 ## Invariants
+- A push carries no parameter twice (RFC 6749 §3.1, §3.2): one sent twice is `invalid_request` ("repeated parameter"), read before any other and before the client's authentication, so none passes as if left out. Through a Front, a name the wire's `par` does not carry is dropped there, never reaching the Core.
 - A push carries its JAR alone (no parameter but inside it): one sending `request_uri` or `authorization_details` is refused (RFC 9126 §2.1), and a `client_id` beside the authentication must be the client's.
 - The JAR is taken by `authorize`'s check (`jarVerified`) with `jar-max-lifetime`: the authenticated client's (`iss` and `client_id`), for this issuer, with a `jti` and an `exp` not past and at most `jar-max-lifetime` away; it names a `dpop_jkt` too.
 - The header-only way of asking a DPoP binding (RFC 9449 §10.1) is not taken: the JAR names the key, a push with no proof is taken (its tokens are bound to the JAR's key), and a proof of the binding it asks is taken only where it is of that key; its expiry is checked again after the proof.

@@ -40,6 +40,8 @@ const badObject = (description: string) => refused(400, "invalid_request_object"
 export function pushing(p: PushParts) {
 	return async (request: HttpRequest): Promise<HttpResponse> => {
 		const field = (name: string) => request.fields.single(name);
+		// RFC 6749 §3.1, §3.2: no parameter is sent twice; read first, so none is read as if left out.
+		if (request.fields.repeated().length > 0) return bad("repeated parameter");
 		// RFC 9126 §2.1: a pushed request names no request_uri; rich authorization requests are not taken.
 		if (field("request_uri") !== undefined) return bad("a pushed request names no request_uri");
 		if (field("authorization_details") !== undefined)
