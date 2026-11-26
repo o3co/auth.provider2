@@ -7,7 +7,7 @@ import { entry } from "./pattern.ts";
  */
 export async function registered(
 	rp: RelyingParty,
-	grants: readonly string[] = ["authorization_code"],
+	grants: readonly string[] = ["authorization_code", "refresh_token"],
 ) {
 	const { clientKeysFor } = await entry("@mod/client-assertion", "./testing");
 	const { redirectsFor } = await entry("@mod/redirect-uris", "./testing");

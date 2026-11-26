@@ -72,11 +72,15 @@ export function attestedKey(attestationObject: string): { spki: Uint8Array; alg:
 	return { spki: new Uint8Array(spki), alg };
 }
 
-/** A browser at `origin` holding a software authenticator. */
-export function browser(origin: string) {
-	const authenticator = softwareAuthenticator();
+/** A browser at `origin` holding a software authenticator, the same one wherever the person goes. */
+export function browser(
+	origin: string,
+	authenticator: ReturnType<typeof softwareAuthenticator> = softwareAuthenticator(),
+): Browser {
 	const at = { origin };
 	return {
+		/** The same person's browser on a page of another origin, the same authenticator in it. */
+		at: (elsewhere: string) => browser(elsewhere, authenticator),
 		/** The origin the page is served from. */
 		origin,
 		/** `navigator.credentials.create`: the response's JSON as the page sends it, its credential id and new key. */
@@ -123,4 +127,14 @@ export function browser(origin: string) {
 	};
 }
 
-export type Browser = ReturnType<typeof browser>;
+export interface Browser {
+	readonly at: (elsewhere: string) => Browser;
+	readonly origin: string;
+	readonly create: (options: PublicKeyCredentialCreationOptions) => {
+		readonly json: string;
+		readonly id: string;
+		readonly spki: Uint8Array;
+		readonly alg: number;
+	};
+	readonly get: (options: PublicKeyCredentialRequestOptions) => string;
+}

@@ -54,12 +54,41 @@ export interface Provider {
 	readonly parUrl: string;
 }
 
-/** An authorization the relying party started: what it keeps in its session and the JAR it signed. */
+/** A DPoP proof of a key: the method, the URL, the nonce the server gave if any, the access token it goes with. */
+export type Proof = (htm: string, htu: string, nonce?: string, accessToken?: string) => string;
+
+/**
+ * An authorization the relying party started: what it keeps in its session, the JAR it signed, and the
+ * session's own DPoP key (a family is bound to one key, and a key to one family: Q27).
+ */
 export interface Started {
 	readonly state: string;
 	readonly nonce: string;
 	readonly verifier: string;
 	readonly jar: string;
+	readonly dpopJkt: string;
+	readonly proof: Proof;
+}
+
+/** A DPoP key's proofs (RFC 9449). */
+export function dpopKey(): { readonly jkt: string; readonly proof: Proof } {
+	const key = p256();
+	return {
+		jkt: thumbprint(key.jwk),
+		proof: (htm, htu, nonce, accessToken) =>
+			es256(
+				key.privateKey,
+				{ alg: "ES256", typ: typs.dpop, jwk: key.jwk },
+				{
+					jti: randomUUID(),
+					htm,
+					htu,
+					iat: now(),
+					...(nonce !== undefined && { nonce }),
+					...(accessToken !== undefined && { ath: b64u(sha256(accessToken)) }),
+				},
+			),
+	};
 }
 
 /**
@@ -70,8 +99,6 @@ export interface Started {
 export function relyingParty(provider: Provider, clientId: string, redirectUri: string) {
 	const client = p256();
 	const kid = `${clientId}-key`;
-	const dpopKey = p256();
-	const dpopJkt = thumbprint(dpopKey.jwk);
 	const assertion = () =>
 		es256(
 			client.privateKey,
@@ -89,30 +116,17 @@ export function relyingParty(provider: Provider, clientId: string, redirectUri: 
 		client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
 		client_assertion: assertion,
 	};
-	const proof = (htm: string, htu: string, nonce?: string, accessToken?: string) =>
-		es256(
-			dpopKey.privateKey,
-			{ alg: "ES256", typ: typs.dpop, jwk: dpopKey.jwk },
-			{
-				jti: randomUUID(),
-				htm,
-				htu,
-				iat: now(),
-				...(nonce !== undefined && { nonce }),
-				...(accessToken !== undefined && { ath: b64u(sha256(accessToken)) }),
-			},
-		);
 	return {
 		clientId,
 		redirectUri,
 		/** The public key the operator registers for the client. */
 		publicKey: { ...client.jwk, kid, alg: "ES256", use: "sig" },
-		dpopJkt,
 		/** A new authorization: its state, nonce and PKCE verifier, and the JAR naming them. */
 		authorization: (items: Record<string, unknown> = {}): Started => {
 			const state = b64u(randomBytes(16));
 			const nonce = b64u(randomBytes(16));
 			const verifier = b64u(randomBytes(32));
+			const dpop = dpopKey();
 			const jar = es256(
 				client.privateKey,
 				{ alg: "ES256", typ: typs.jar, kid },
@@ -120,7 +134,7 @@ export function relyingParty(provider: Provider, clientId: string, redirectUri: 
 					iss: clientId,
 					aud: provider.issuer,
 					iat: now(),
-					exp: now() + 300,
+					exp: now() + 60,
 					jti: randomUUID(),
 					client_id: clientId,
 					redirect_uri: redirectUri,
@@ -131,11 +145,11 @@ export function relyingParty(provider: Provider, clientId: string, redirectUri: 
 					nonce,
 					code_challenge: b64u(sha256(verifier)),
 					code_challenge_method: "S256",
-					dpop_jkt: dpopJkt,
+					dpop_jkt: dpop.jkt,
 					...items,
 				},
 			);
-			return { state, nonce, verifier, jar };
+			return { state, nonce, verifier, jar, dpopJkt: dpop.jkt, proof: dpop.proof };
 		},
 		/** The JAR pushed (PAR, RFC 9126), authenticated by an assertion. */
 		par: (jar: string): Sent => ({
@@ -146,21 +160,21 @@ export function relyingParty(provider: Provider, clientId: string, redirectUri: 
 				client_assertion: assertion(),
 			},
 		}),
-		/** The code's exchange, with the verifier, an assertion and a DPoP proof under `nonce` if the provider asked one. */
-		token: (code: string, verifier: string, nonce?: string): Sent => ({
+		/** The session's code exchange: its verifier, an assertion, its DPoP proof under `nonce` if the provider asked one. */
+		token: (started: Started, code: string, nonce?: string): Sent => ({
 			path: "/oauth/token",
 			body: {
 				grant_type: "authorization_code",
 				code,
 				redirect_uri: redirectUri,
-				code_verifier: verifier,
+				code_verifier: started.verifier,
 				client_assertion_type: authenticated.client_assertion_type,
 				client_assertion: assertion(),
 			},
-			headers: { dpop: proof("POST", provider.tokenUrl, nonce) },
+			headers: { dpop: started.proof("POST", provider.tokenUrl, nonce) },
 		}),
-		/** A refresh, with an assertion and a DPoP proof. */
-		refresh: (refreshToken: string, nonce?: string): Sent => ({
+		/** The session's refresh, with an assertion and its DPoP proof. */
+		refresh: (started: Started, refreshToken: string, nonce?: string): Sent => ({
 			path: "/oauth/token",
 			body: {
 				grant_type: "refresh_token",
@@ -168,10 +182,8 @@ export function relyingParty(provider: Provider, clientId: string, redirectUri: 
 				client_assertion_type: authenticated.client_assertion_type,
 				client_assertion: assertion(),
 			},
-			headers: { dpop: proof("POST", provider.tokenUrl, nonce) },
+			headers: { dpop: started.proof("POST", provider.tokenUrl, nonce) },
 		}),
-		/** A DPoP proof of this client's key, for a request of its own making. */
-		proof,
 		/** A client assertion, for a request of its own making. */
 		assertion,
 		/**

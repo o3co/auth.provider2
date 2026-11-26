@@ -7,6 +7,7 @@
 - A token's standard verification (its issuer's JWKS, `iss`, `aud`, `exp`): the RP's OIDC library, before these checks.
 - Fetching the status every τ_sdk, keeping each signer set's newest version, and closing the sessions of records the status later denies: the caller's loop around `checkReceipt` for now.
 - The login screen's side: `login-screen`.
+- The RP's DPoP keys, its own: one that refreshes makes a key for each session, each refresh family, as the provider binds a key to one family (Q27): a key given to a second family has that family's code exchange refused (`invalid_grant`), the code used up.
 - A deployment at L0, whose receipts no log signs: R16 and R18 hold claim 3, which needs a signed receipt, so an RP there calls neither `checkReceipt` nor `checkCallback`, though its ID tokens still carry `esig` and `apr`.
 - The receipt's `iss` (the log's name) against an expected one: `ReceiptCheck` names no expected log yet; the log's keys bind it for now.
 

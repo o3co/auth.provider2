@@ -50,15 +50,15 @@ it("signs a person up (F1) and logs them in through an honest Front, the RP's ch
 		// The page POSTs the code and T's state to the RP's redirect URI, not through the Front (R3).
 		expect(rp.callbackFaults(approved, started)).toEqual([]);
 		// The AS asks for a nonce first (RFC 9449 §8), and the proof carrying it is taken.
-		const asked = await front.post(rp.token(approved.code, started.verifier));
+		const asked = await front.post(rp.token(started, approved.code));
 		expect(asked).toMatchObject({ status: 400, body: { error: "use_dpop_nonce" } });
 		expect(asked.dpopNonce).toBeTypeOf("string");
-		const answered = await front.post(rp.token(approved.code, started.verifier, asked.dpopNonce));
+		const answered = await front.post(rp.token(started, approved.code, asked.dpopNonce));
 		expect(answered.status, JSON.stringify(answered.body)).toBe(200);
 		const tokens = answered.body as { id_token: string; access_token: string; token_type: string };
 		expect(tokens.token_type).toBe("DPoP");
 		// The access token is bound to the RP's DPoP key, as T's dpop_jkt asked (claim 2's honest side).
-		expect(claimsOf(tokens.access_token)).toMatchObject({ cnf: { jkt: rp.dpopJkt } });
+		expect(claimsOf(tokens.access_token)).toMatchObject({ cnf: { jkt: started.dpopJkt } });
 		expect(rp.idTokenFaults(tokens.id_token, started, approved.code, core.jwks)).toEqual([]);
 		expect(claimsOf(tokens.id_token).sub).toBeTypeOf("string");
 	} finally {

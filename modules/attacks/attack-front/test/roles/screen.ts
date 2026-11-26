@@ -76,19 +76,36 @@ export interface Started {
  * passkeys made and used in the browser. Each step answers its value, or where it stopped. The RP's
  * form_post endpoint (R12) is not played: the callback goes to the RP, never through the Front.
  */
-export function loginScreen(pins: Pins, browser: Browser, rpName = "The RP") {
+export function loginScreen(
+	pins: Pins,
+	browser: Browser,
+	page: { readonly rpName?: string; readonly rpId?: string } = {},
+) {
+	const rpName = page.rpName ?? "The RP";
+	// WebAuthn's RP id: the page's host, unless the page asks for a domain above it.
+	const rpId = page.rpId ?? new URL(browser.origin).hostname;
 	const sdk = { ring: pins.ring, issuer: pins.issuer };
 
-	/** ② The login's start, for the JAR the RP gave: T read against the JAR the screen holds. */
+	/**
+	 * ② The login's start, for the JAR the RP gave, sent as it is or by the request_uri PAR gave for it:
+	 * T read against the JAR the screen holds.
+	 */
 	const start = async (
 		front: BadFront,
 		clientId: string,
 		jar: string,
+		requestUri?: string,
 	): Promise<Started | Stopped> => {
 		const keys = await screenKeys();
 		const answered = await front.post({
 			path: "/login/start",
-			body: { clientId, request: jar, eEnc: keys.eEnc, eSigX: keys.eSig.x, eSigY: keys.eSig.y },
+			body: {
+				clientId,
+				...(requestUri === undefined ? { request: jar } : { requestUri }),
+				eEnc: keys.eEnc,
+				eSigX: keys.eSig.x,
+				eSigY: keys.eSig.y,
+			},
 		});
 		if (answered.status !== 200) return refusedAt("/login/start", answered);
 		const read = answers.read("authorization", answered.body);
@@ -180,7 +197,7 @@ export function loginScreen(pins: Pins, browser: Browser, rpName = "The RP") {
 	): Promise<Callback | Stopped> => {
 		const { t, keys } = started;
 		const options = await authorization.assertionOptions(t, {
-			rpId: new URL(browser.origin).hostname,
+			rpId,
 			...(credentials !== undefined && { credentials }),
 		});
 		if ("error" in options) return sdkRefused("authorization.assertionOptions", options.error);
