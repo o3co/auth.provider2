@@ -75,6 +75,14 @@ export interface AuthMethod {
 	 * its assertion.
 	 */
 	readonly assertion?: true;
+	/**
+	 * Set for a method whose credentials need a private key the client alone holds, a signature by an
+	 * asymmetric algorithm: one who relays a request has no such key, as it may have a shared secret
+	 * sent or used to sign. Boot refuses it where it names no signing algorithm, or one not an
+	 * asymmetric JWS algorithm named exactly; its algorithms are held as checked. Left out, the method
+	 * declares no such hold. A declaration, never a proof.
+	 */
+	readonly keyHeld?: true;
 	/** The client id the request claims through this method, if it uses this method at all. */
 	claimed(request: HttpRequest): string | undefined;
 	/** Whether the request carries this method's credentials only in part, or in a form it does not take. */

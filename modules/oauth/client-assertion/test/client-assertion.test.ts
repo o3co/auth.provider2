@@ -24,7 +24,7 @@ import { tokenEndpointLocation } from "@mod/token-endpoint";
 import { CompactSign, EncryptJWT, FlattenedSign, type JWTPayload, SignJWT } from "jose";
 import { describe, expect, it } from "vitest";
 import { clientKeys, type Jwk, type SpentAssertions, spentAssertions } from "../src/contract.ts";
-import { assertionMethod, assertionType } from "../src/method.ts";
+import { assertionMethod, assertionType, type Parts } from "../src/method.ts";
 import assertionModule from "../src/module.ts";
 import { section } from "../src/section.ts";
 import { clientAssertionConfig, clientKeysFor } from "../src/testing.ts";
@@ -200,6 +200,13 @@ describe("private_key_jwt", () => {
 			expect(lastWarned()).toBe("audience");
 		}
 		expect(await tried(c, { jti: "kept" })).toBe("app");
+	});
+
+	it("declares its credentials need a key the client alone holds, an asymmetric signature, which clients' boot check holds it to", async () => {
+		expect(assertionMethod({ algorithms: ["ES256"] } as unknown as Parts).keyHeld).toBe(true);
+		// Composed with its default algorithms, the declaration passes clients' check.
+		const { c } = await boot();
+		expect(c.methods()).toContain("private_key_jwt");
 	});
 
 	it("names the asymmetric algorithms an assertion may be signed with: by default FAPI 2.0's, any other only where named [oidc-discovery-3-ad]", async () => {

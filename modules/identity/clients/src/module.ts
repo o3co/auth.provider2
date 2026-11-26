@@ -130,6 +130,9 @@ export default defineModule(
 		}),
 		m.provide(clients).by(async (c) => {
 			const methods = await c.collect(authMethods);
+			// Each method's algorithms held as checked: a contribution is frozen one level alone.
+			for (const method of methods)
+				if (method.signingAlgorithms) Object.freeze(method.signingAlgorithms);
 			// Refused before the registered clients are read: assembly builds `registered` on its own all
 			// the same, so its refusals are reported with these in the one boot.
 			const issues = methodIssues(methods);

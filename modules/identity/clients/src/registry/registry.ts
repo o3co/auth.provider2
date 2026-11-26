@@ -107,7 +107,22 @@ export function methodIssues(methods: readonly AuthMethod[]): { where: string; r
 				: algorithms?.length === 0
 					? [{ where, reason: "names an empty list of signing algorithms" }]
 					: [];
-		return [...unsigned, ...unnamed];
+		// A key the client alone holds signs by an asymmetric JWS algorithm named exactly: any other
+		// name (an HMAC, a MAC of its own) may be a shared secret's.
+		const asymmetric = (alg: string) =>
+			/^(?:(?:RS|PS|ES)(?:256|384|512)|ES256K|EdDSA|Ed25519|Ed448)$/.test(alg);
+		const unheld =
+			method.keyHeld === true &&
+			((algorithms ?? []).length === 0 || !(algorithms ?? []).every(asymmetric))
+				? [
+						{
+							where,
+							reason:
+								"says its credentials need a key the client alone holds, but names no signing algorithm, or one not asymmetric",
+						},
+					]
+				: [];
+		return [...unsigned, ...unnamed, ...unheld];
 	});
 }
 

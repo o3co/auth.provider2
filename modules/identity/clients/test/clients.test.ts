@@ -771,6 +771,32 @@ describe("clients", () => {
 		expect(c.signingAlgorithms()).toEqual(["ES256"]);
 	});
 
+	it("refuses at boot a method saying its credentials need a key the client alone holds, yet naming no signing algorithm, or one not asymmetric", async () => {
+		for (const named of [
+			{},
+			{ signingAlgorithms: ["HS256"] },
+			{ signingAlgorithms: ["ES256", "HS512"] },
+			{ signingAlgorithms: [" HS256"] },
+			{ signingAlgorithms: ["HMAC-SHA256"] },
+			{ signingAlgorithms: ["none"] },
+		]) {
+			const refused = await refusalsOf(boot([method("keyed", { keyHeld: true, ...named })]));
+			expect(
+				refused.map((r) => [r.where, r.reason]),
+				JSON.stringify(named),
+			).toContainEqual([
+				"clients.methods.keyed",
+				"says its credentials need a key the client alone holds, but names no signing algorithm, or one not asymmetric",
+			]);
+		}
+		const algorithms = ["ES256", "PS256"];
+		const c = await boot([method("keyed", { keyHeld: true, signingAlgorithms: algorithms })]);
+		expect(c.methods()).toContain("keyed");
+		// Held as checked: the list cannot be widened past boot.
+		expect(() => algorithms.push("HS256")).toThrow(TypeError);
+		expect(c.signingAlgorithms()).toEqual(["ES256", "PS256"]);
+	});
+
 	it("refuses at boot a method naming an empty list of signing algorithms", async () => {
 		const refused = await refusalsOf(boot([method("signer", { signingAlgorithms: [] })]));
 		expect(refused.map((r) => [r.where, r.reason])).toEqual([

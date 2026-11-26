@@ -1,7 +1,7 @@
 # client-assertion
 
 ## Responsibilities
-- Contributes `private_key_jwt` (RFC 7523) to `clients`: the client signs a JWT with one of its keys, used once.
+- Contributes `private_key_jwt` (RFC 7523) to `clients`: the client signs a JWT with one of its keys, used once; the method declares `keyHeld`, under asymmetric algorithms alone.
 - Contributes the client metadata section that holds the client's keys, its internal module `keys`.
 - Decides, for the modules that ask, which key a client's assertion was verified with and whether a JWT is signed by one of its keys.
 
