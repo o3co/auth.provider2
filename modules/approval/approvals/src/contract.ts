@@ -182,7 +182,11 @@ export interface OpenedBody {
 	readonly bodyHash: string;
 	/** E_sig's signature (`r‖s`, base64url) as the write that took its number kept it: one for that number. */
 	readonly signature: string;
-	/** When this call's hold of its step ends (kernel clock, ms): past it, another call may take it over. */
+	/**
+	 * When this call's hold of its step ends (kernel clock, ms): past it, a step that must not decide
+	 * beside another call checks it and decides nothing more (a delete's does); 2 seconds past it,
+	 * another call may take it over.
+	 */
 	readonly heldUntil: number;
 }
 
@@ -337,12 +341,13 @@ export type Continued =
 	| {
 			readonly kind: "refused";
 			/**
-			 * `pending`: another call holds that continuation's step; ask again. `body`: one past 8192
-			 * bytes, or a sign-up's other than `{}`. `signature`: one not the screen's, or not in its one
-			 * spelling. `purpose`: a statement its stage does not continue, or a T whose owner did not allow
-			 * it. `used`: a T no longer issued. `seq`: a number not the next, or a sign-up's other than 1.
-			 * `sealed`: a sealed continuation of another length, of no used passkey-manage this
-			 * generation's ring verifies, or that does not open, read or verify as its stage's.
+			 * `pending`: another call holds that continuation's step, or its hold ended up to 2 seconds ago;
+			 * ask again. `body`: one past 8192 bytes, or a sign-up's other than `{}`. `signature`: one not the
+			 * screen's, or not in its one spelling. `purpose`: a statement its stage does not continue, or a T
+			 * whose owner did not allow it. `used`: a T no longer issued. `seq`: a number not the next, or a
+			 * sign-up's other than 1. `sealed`: a sealed continuation of another length, of no used
+			 * passkey-manage this generation's ring verifies, or that does not open, read or verify as its
+			 * stage's.
 			 */
 			readonly reason:
 				| "unknown"

@@ -1,3 +1,4 @@
+import { takenOverAfterMs } from "@mod/approvals/testing";
 import { allowed, effectOf, emptyState, type FlowState, fold } from "@mod/authority-rules";
 import { continuations } from "@mod/continuation-wire";
 import { challengeInput, hpke } from "@mod/sdk-core-wire";
@@ -244,7 +245,7 @@ describe("a key deleted by a passkey-manage, from the approval to the log, over 
 		expect(Object.values(keysOf(k)).map((x) => x.credential)).toContain(second.id);
 		// Judged since; asked again past the first run's hold, nobody having taken it in.
 		k.w.book.judge(flow, position, { verdict: "verified", outcome: "took" });
-		k.w.advance(30_001);
+		k.w.advance(takenOverAfterMs + 1);
 		const again = await k.w.post("/continue", fields);
 		expect(again.status).toBe(200);
 		expect((await read(m.s, m.hash, again.json)).payload).toMatchObject({
@@ -276,7 +277,7 @@ describe("a key deleted by a passkey-manage, from the approval to the log, over 
 		const fields = await deleting(k, m.s, m.statement, 1, k.key.id);
 		k.w.statements.fallAfter(m.hash, 1);
 		await expect(k.w.post("/continue", fields)).rejects.toThrow("fell");
-		k.w.advance(30_001);
+		k.w.advance(takenOverAfterMs + 1);
 		const again = await k.w.post("/continue", fields);
 		expect(again.status).toBe(200);
 		expect((await read(m.s, m.hash, again.json)).payload).toMatchObject({
@@ -296,7 +297,7 @@ describe("a key deleted by a passkey-manage, from the approval to the log, over 
 		const flow = { of: "subject", id: "s1" } as const;
 		const placed = k.w.book.records(flow).length;
 		expect(Object.values(keysOf(k)).map((x) => x.credential)).toEqual([k.key.id]);
-		k.w.advance(30_001);
+		k.w.advance(takenOverAfterMs + 1);
 		const again = await k.w.post("/continue", fields);
 		expect(again.status).toBe(200);
 		expect((await read(m.s, m.hash, again.json)).payload).toMatchObject({
@@ -376,7 +377,7 @@ describe("a key deleted, at its edges", () => {
 		const placed = k.w.book.records(flow).length;
 		expect(Object.values(keysOf(k)).map((x) => x.credential)).toEqual([k.key.id]);
 		expect(k.w.told).toEqual([]);
-		k.w.advance(30_001);
+		k.w.advance(takenOverAfterMs + 1);
 		const again = await k.w.post("/continue", fields);
 		const answer = (await read(m.s, m.hash, again.json)).payload;
 		expect(answer).toMatchObject({
@@ -444,7 +445,7 @@ describe("a person's keys listed and one renamed, from the approval to the list 
 		await expect(k.w.post("/continue", fields)).rejects.toThrow("fell");
 		// Meanwhile the same continuation is held: asked again later.
 		expect((await k.w.post("/continue", fields)).status).not.toBe(200);
-		k.w.advance(30_001);
+		k.w.advance(takenOverAfterMs + 1);
 		const again = await k.w.post("/continue", fields);
 		expect(again.status).toBe(200);
 		const read1 = await read(m.s, m.hash, again.json);

@@ -3,6 +3,8 @@ import type { z } from "zod";
 import type { ApprovalStore, StoredStatement } from "./contract.ts";
 import type { section } from "./section.ts";
 
+export { takenOverAfterMs } from "./continuation/continuation.ts";
+
 export type ApprovalsSettings = z.input<typeof section>;
 
 /** The approvals part of a test's configuration. */

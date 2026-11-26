@@ -1,3 +1,4 @@
+import { takenOverAfterMs } from "@mod/approvals/testing";
 import { Unavailable } from "@mod/kernel";
 import { challengeInput } from "@mod/sdk-core-wire";
 import { softwareAuthenticator } from "@mod/webauthn/testing";
@@ -93,7 +94,7 @@ describe("a first key's registration after its creation", () => {
 		await expect(failing.register(asked)).rejects.toThrow(Unavailable);
 		const first = (await w.parts.held.of("s1")).pending;
 		// Once the first call's hold lapsed, the same continuation runs its step again.
-		w.advance(30_001);
+		w.advance(takenOverAfterMs + 1);
 		const possession = possessionOf(await failing.register(asked));
 		const again = (await w.parts.held.of("s1")).pending;
 		expect(again).toEqual(first);

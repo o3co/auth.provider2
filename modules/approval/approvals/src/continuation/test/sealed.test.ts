@@ -3,7 +3,7 @@ import { hpke } from "@mod/sdk-core-wire";
 import { describe, expect, it } from "vitest";
 import { screenKeys, sha256, world } from "../../../test/fixtures/world.ts";
 import type { OpenedBody, StepResult } from "../../contract.ts";
-import { continuationsOver } from "../continuation.ts";
+import { continuationsOver, takenOverAfterMs } from "../continuation.ts";
 
 type World = Awaited<ReturnType<typeof world>>;
 type Screen = ReturnType<typeof screenKeys>;
@@ -133,7 +133,7 @@ describe("a sealed continuation", () => {
 		).rejects.toThrow("fell");
 		const kept = (w.statements.value(m.hash) as { sig: string }).sig;
 		// The same number and body, signed and sealed again: another signature.
-		w.advance(30_001);
+		w.advance(takenOverAfterMs + 1);
 		const again = await sealed(w, m.screen, m.hash, 1, renamed("one"));
 		const { handed, step } = stepping();
 		await w.approvals.continueSealed({
@@ -326,7 +326,7 @@ describe("a sealed continuation", () => {
 			throw new Error("fell");
 		};
 		await expect(w.approvals.continueSealed({ ...q, step: fell })).rejects.toThrow("fell");
-		w.advance(30_001);
+		w.advance(takenOverAfterMs + 1);
 		// Its record held by a store past its end (its expiry moved back): still none runs past it.
 		await w.statements.store.change(m.hash, (r) => ({
 			value: {
@@ -453,5 +453,72 @@ describe("a sealed continuation", () => {
 				step: stepping().step,
 			}),
 		).rejects.toThrow();
+	});
+});
+
+describe("a lapsed hold, taken over", () => {
+	const fell = async () => {
+		throw new Error("fell");
+	};
+	const box = async (w: World, m: Awaited<ReturnType<typeof used>>) => {
+		const sealing = await sealed(
+			w,
+			m.screen,
+			m.hash,
+			1,
+			{ credential_id: credentialId },
+			{ stage: "delete" },
+		);
+		return { hash: m.hash, stage: "delete" as const, seq: 1, sealed: sealing };
+	};
+
+	it("takes a lapsed hold again only 2 seconds past its end; between, its completion is refused", async () => {
+		const w = await world();
+		const m = await used(w);
+		const q = await box(w, m);
+		await expect(w.approvals.continueSealed({ ...q, step: fell })).rejects.toThrow("fell");
+		const pending = { kind: "refused", reason: "pending" };
+		w.advance(30_001);
+		expect(await w.approvals.continueSealed({ ...q, step: stepping().step })).toEqual(pending);
+		const bodyHash = sha256(
+			continuations.bodyText("delete", { credential_id: credentialId }) as string,
+		);
+		const continued = { stage: "delete" as const, seq: 1, bodyHash, credential: credentialId };
+		expect(
+			await w.approvals.completePasskeyManage({
+				hash: m.hash,
+				continued: { ...continued, receipt: "h.p.s" },
+			}),
+		).toEqual({ kind: "refused", reason: "continued" });
+		w.advance(1_999);
+		expect(await w.approvals.continueSealed({ ...q, step: stepping().step })).toEqual(pending);
+		w.advance(1);
+		expect(await w.approvals.continueSealed({ ...q, step: stepping().step })).toMatchObject({
+			kind: "continued",
+			again: true,
+		});
+	});
+
+	it("hands its step the end of its hold, never the 2 seconds past it", async () => {
+		const w = await world();
+		const m = await used(w);
+		const q = await box(w, m);
+		const { handed, step } = stepping();
+		const taken = (w.statements.value(m.hash) as { exp: number }).exp - 5 * 60_000;
+		await w.approvals.continueSealed({ ...q, step });
+		expect(handed).toMatchObject([{ opened: { heldUntil: taken + 30_000 } }]);
+	});
+
+	it("takes again, before its record's end, a number taken at the statement's expiry", async () => {
+		const w = await world();
+		const m = await used(w);
+		const q = await box(w, m);
+		w.advance(5 * 60_000);
+		await expect(w.approvals.continueSealed({ ...q, step: fell })).rejects.toThrow("fell");
+		w.advance(takenOverAfterMs + 1);
+		expect(await w.approvals.continueSealed({ ...q, step: stepping().step })).toMatchObject({
+			kind: "continued",
+			again: true,
+		});
 	});
 });

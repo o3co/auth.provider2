@@ -1,5 +1,6 @@
 import { continuations } from "@mod/continuation-wire";
 import { describe, expect, it } from "vitest";
+import { takenOverAfterMs } from "../src/continuation/continuation.ts";
 import type { KeptSignUp, SignUpResult } from "../src/contract.ts";
 import { screenKeys, sha256, world } from "./fixtures/world.ts";
 
@@ -204,7 +205,7 @@ describe("a T's sign-up (F1)", () => {
 		);
 		await new Promise((r) => setTimeout(r, 0));
 		// Its hold lapses within T's life: another call runs the step again and keeps its answer.
-		w.advance(31_000);
+		w.advance(takenOverAfterMs + 1);
 		const kept = { kind: "continued", result: { creation: fast.statement } };
 		expect(await signUp(w, t, async () => ({ creation: fast.statement }))).toMatchObject(kept);
 		release();

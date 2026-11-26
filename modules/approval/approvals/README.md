@@ -20,20 +20,22 @@
 - Extension point `statementItems` (purpose, the item names it fills, by whom): the purposes are `authorization`, `passkey-add` and `passkey-manage` (which name no items, so none fills them), `creation` and `possession`.
 - `approvalStore`, the statements' store interface (create unless held, read, change from what it holds), and `approvalStoreNeeds`. `approvalPart`: its part of each subject's flow, which its wiring binds.
 - Operator section: `statement-lifetime` (default 5 minutes), `issue-limit`, `issue-total` and `issue-window` (default 30 a minute per key, 100 000 a minute in all), `max-concurrent` (default 64 signings at once).
-- `./testing`: `approvalsConfig` (`ApprovalsSettings`), and `approvalStoreContract`, the store interface's contract test.
+- `./testing`: `approvalsConfig` (`ApprovalsSettings`), `approvalStoreContract`, the store interface's contract test, and `takenOverAfterMs` (internal module `continuation`).
 
 ## Invariants
 - Purposes and items are closed: a purpose is one `sdk-core-wire` names a schema for, an item one its schema names and one module declared it fills. Boot refuses a name no schema holds or two modules fill; `issue`, an item no module declared or the schema refuses.
-- A statement is used once, by one write from issued (internal module `statement`), and only while the Core's ring of this generation verifies it. An authorization's, a passkey-add's or a passkey-manage's is used only by an assertion over its challenge that verified its user, whatever `passkeys`' section lets through; the same evidence again answers the same approval. A possession's verification is taken as given; its caller checks its user (`verifyPending`).
-- A purpose's owner takes the items from the used record (`usedOf`, or `use`'s answer), never from a later request.
-- A T whose sign-up began is used only by the credential its key change kept on it (F1).
+- A statement is used once, by one write from issued, and only while the Core's ring of this generation verifies it, by the evidence its purpose takes (internal module `statement`). A T whose sign-up began is used only by the credential its key change kept on it (F1). A purpose's owner takes the items from the used record (`usedOf`, or `use`'s answer), never from a later request.
 - An authorization's completion is signed only after its approval is taken in on the subject's flow as its owner's `took` (internal module `completion`).
 - Its op is never taken over, as only its owner holds the code: an orphan is marked and abandoned. Only one abandoned before its stage was placed can be completed again, by a later `complete`; one placed is taken in as done, its statement used, with no completion. Any other end, a lost answer or a fault before the completion is kept gives none: the person approves again.
 - A continuation's step is run by the one call that took its sequence number, and its answer kept with it before the next number is taken; it is run again only where that call's hold lapsed with none kept (internal module `continuation`).
 - Statements and completions are signed by the Core's ring, apart from the authority's: under `approval+jwt` and `completion+jwt`, their items under one member, never as a token's claims.
 
 ## Data
-- Each statement's record, by its hash, from its issuing to a minute past its expiry: its purpose, bytes, the screen's keys, how far it went, the subject, credential and assertion that used it, the last continuation (its body as received, up to 8192 bytes, and signature; a sealed one's body hash alone) and its step's answer (a sealed list's up to about 60 kB), and the completion. Its part of each subject's flow, in the frames' store: the state's approvals and use-once marks.
+- Each statement's record, by its hash, from its issuing to a minute past its expiry (internal module `statement`). Its part of each subject's flow, in the frames' store: the state's approvals and use-once marks.
+
+## Left to you
+- No two replicas' kernel clocks differ by more than 2 seconds, at any instant, not only while a call holds a step: another call takes a lapsed hold only 2 seconds past its end (internal module `continuation`).
+- Once another call took a hold, no replica's wall clock goes back to its end or before while the call stopped under it may resume, with no bound: one that did would decide beside the call that took it. No clock lifts this; only a fence that is no clock would.
 
 ## Depends on
 - `kernel`, `keys` (the Core's ring, sealing, opening), `passkeys` (the assertion, the keys' list), `promises` (its stance), `rate-limit` (issuing counted), `issuer`, `sdk-core-wire` (schemas, inputs), `continuation-wire` (a continuation's inputs, the sealed stages), `transparency` and `transparency-wire` (the kind, flow and log's digest); `zod`.

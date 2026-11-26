@@ -44,8 +44,14 @@ function signedBy(key: SigningKey, input: string, signature: string): boolean {
 /** The purposes whose ceremony goes on by continuations: a creation's, its registration. */
 const continued = new Set(["creation"]);
 
-/** How long a call that took a continuation's step holds it, in ms: past it, the same continuation runs the step again. */
+/** How long a call that took a continuation's step holds it, in ms: past it and `handoverMs`, another call runs the step again. */
 const claimMs = 30_000;
+
+/** How long past a hold's end, in ms, before another call takes it: the most two replicas' clocks differ (the package's card, Left to you). */
+const handoverMs = 2_000;
+
+/** How long after a call took a continuation's step another call may take it, where none was kept: a moment past it. */
+export const takenOverAfterMs = claimMs + handoverMs;
 
 /** The most a continuation's body holds, in UTF-8 bytes: what `front-core-wire`'s `continue` carries. */
 const maxBodyBytes = 8192;
@@ -109,7 +115,7 @@ export function continuationsOver(p: {
 			if (!now) return undefined;
 			const claimed = { by, until: p.now() + claimMs };
 			const next = now.seq === seq - 1 && (now.seq === 0 || now.result !== undefined);
-			const free = now.claimed === undefined || now.claimed.until < p.now();
+			const free = now.claimed === undefined || now.claimed.until + handoverMs < p.now();
 			const same = now.seq === seq && now.body === body && now.result === undefined;
 			if (!next && !(same && free)) return undefined;
 			// A sign-up is taken only while its T may begin one, on either path; its taking marks it begun.

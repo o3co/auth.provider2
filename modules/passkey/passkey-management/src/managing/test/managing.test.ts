@@ -1,7 +1,8 @@
 import type { Approvals, KeptManage, OpenedBody, StepResult } from "@mod/approvals";
+import { Unavailable } from "@mod/kernel";
 import { describe, expect, it } from "vitest";
 import type { ContinueAsk } from "../../contract.ts";
-import type { Removed } from "../../key-change/key-change.ts";
+import type { DeletedKey, Removed } from "../../key-change/key-change.ts";
 import { deleteStageOver, renameStageOver } from "../managing.ts";
 
 const kept: KeptManage = {
@@ -141,5 +142,28 @@ describe("a passkey-manage's delete", () => {
 		expect(completed).toMatchObject([
 			{ continued: { stage: "delete", credential: "approver", receipt: "r.p.s" } },
 		]);
+	});
+
+	it("hands its key change the end of its call's hold, as approvals handed it, apart from the statement's", async () => {
+		const asked: DeletedKey[] = [];
+		const stage = deleteStageOver({
+			approvals: {
+				continueSealed: async (q) => {
+					const result: StepResult = await q.step(keptDelete, { ...deleting, heldUntil: 7 });
+					return { kind: "continued", seq: q.seq, again: false, result } as const;
+				},
+				completePasskeyManage: async () => ({ kind: "completed", enc: "E", ct: "C" }) as const,
+			},
+			keyChange: {
+				removed: async () => ({ kind: "none" }) as const,
+				remove: async (d) => {
+					asked.push(d);
+					return { kind: "ended" } as const;
+				},
+			},
+		});
+		// Its removal ended with nothing judged: the stage cannot answer.
+		await expect(stage.continue(asking)).rejects.toThrow(Unavailable);
+		expect(asked.map((d) => [d.heldUntil, d.until])).toEqual([[7, 9_999_999_999_000]]);
 	});
 });

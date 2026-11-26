@@ -29,8 +29,12 @@ Internal module of `approvals`: issuing statements, using each once, and reading
 - The record is kept a minute past the statement's expiry, so a late use reads as expired.
 - A use writes once, from issued to used, holding what used it and when: an assertion's subject, credential, the key's registration as `passkeys` answered it, and JSON text as sent, or a verification. A record used before it held the registration names none. Its answer is the approval only where the record holds that same evidence; any other is `used`.
 - A T whose sign-up began is used only once its key change kept the credential it registered (`signUp.credential`), and only by that credential's assertion, of the subject made for it where one is kept: refused `used` before the assertion is asked (by the credential it names), after it, and in the write that uses it.
+- An authorization's, a passkey-add's or a passkey-manage's is used only by an assertion over its challenge that verified its user, whatever `passkeys`' section lets through; the same evidence again answers the same approval. A possession's verification is taken as given; its caller checks its user (`verifyPending`).
 - A record of another shape is read as a store that cannot tell: unavailable.
 - A use reads the record by the hash of the bytes presented, and takes them only where they are the bytes recorded and the Core's ring of this generation verifies them.
+
+## Data
+- Each statement's record: its purpose, bytes, the screen's keys, how far it went, the subject, credential and assertion that used it, the last continuation (its body as received, up to 8192 bytes, and signature; a sealed one's body hash alone) and its step's answer (a sealed list's up to about 60 kB), and the completion.
 
 ## Depends on
 - `keys` (`prepare`, `sign`), `passkeys` (`assert`), `rate-limit` (`hit`), `sdk-core-wire` (schemas, canonical text, the challenge's input).
