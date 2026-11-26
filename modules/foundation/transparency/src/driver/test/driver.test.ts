@@ -14,7 +14,7 @@ import {
 	reservationRecord,
 	seeded,
 } from "../../../test/fixtures/registrations.ts";
-import type { Json, Stage, TransparencyLog } from "../../contract.ts";
+import type { FrameStore, Json, Stage, TransparencyLog } from "../../contract.ts";
 import { transparencyOver } from "../driver.ts";
 
 const flow = { of: "subject", id: "s1" } as const;
@@ -48,11 +48,12 @@ function makeWorld() {
 		p: {
 			kinds?: (typeof keyChange)[];
 			log?: (l: TransparencyLog) => TransparencyLog;
+			frames?: (f: FrameStore) => FrameStore;
 			warn?: (event: string, fields: Readonly<Record<string, string>>) => void;
 		} = {},
 	) =>
 		transparencyOver({
-			frames: store.frames,
+			frames: (p.frames ?? ((f) => f))(store.frames),
 			log: (p.log ?? ((l) => l))(log.as(instance)),
 			kinds: p.kinds ?? [issue, keyChange],
 			owners,
@@ -91,6 +92,43 @@ const decideIssue = (op = "op1") =>
 		op,
 		decide: () => ({ digest: "d1".padEnd(43, "0"), eff: bundleEff, records: [] }),
 	});
+/** A frame store whose writes are told, each with what it wrote and how it was answered. */
+const recording =
+	(writes: { next: unknown; answer: string }[]) =>
+	(f: FrameStore): FrameStore => ({
+		...f,
+		write: async (read, next, deadline) => {
+			const answer = await f.write(read, next, deadline);
+			writes.push({ next, answer });
+			return answer;
+		},
+	});
+/** A gate a call waits at until a test opens it, `reached` once the call is there: a record in flight. */
+function gate() {
+	let open = () => {};
+	let arrive = () => {};
+	const shut = new Promise<void>((r) => {
+		open = r;
+	});
+	const reached = new Promise<void>((r) => {
+		arrive = r;
+	});
+	return { shut, reached, arrive: () => arrive(), open: () => open() };
+}
+/** A log whose appends wait at `g` before they reach the log. */
+const parking =
+	(g: ReturnType<typeof gate>) =>
+	(l: TransparencyLog): TransparencyLog => ({
+		...l,
+		append: async (stage, prev) => {
+			g.arrive();
+			await g.shut;
+			return l.append(stage, prev);
+		},
+	});
+/** The key change's kind with no resend: its orphan is marked, never taken over. */
+const { resend: _resend, ...keyNoResend } = keyChange;
+
 const decideKey = (who = world.w1) =>
 	who.decide({
 		kind: "key",
@@ -243,6 +281,51 @@ describe("the key change's reservation is the writer's record, held to the frame
 		expect(world.res().state).toBe("ended");
 		expect(world.frame()).toMatchObject({ intent: { state: "closed" } });
 	});
+
+	it.each([
+		["confirm", verified, "active"],
+		["release", held, "ended"],
+	] as const)(
+		"writes nothing of a Step whose reservation another writer moved: the %s and the frame go together",
+		async (_, finding, after) => {
+			// KE-C04's one write: the frame, the owners' records and the kind's records, or none of them.
+			await decideKey();
+			await world.w1.send({ flow, op: "res1", stage: keyStage(flow, reservation), prev: 0 });
+			world.log.judge(flow, 1, finding);
+			const keys = world.part("keys");
+			const writes: { next: unknown; answer: string }[] = [];
+			const w1 = world.replica("w1", { frames: recording(writes) });
+			world.store.beforeWrite(() =>
+				world.store.put(flow, reservationRecord, reservation as unknown as Json),
+			);
+			expect(await w1.step({ flow, own: "res1" })).toEqual({ refused: "moved" });
+			expect(world.frame()).toMatchObject({ applied: 0, intent: { op: "res1", state: "pending" } });
+			expect(world.res()).toEqual(reservation);
+			expect(world.part("keys")).toEqual(keys);
+			writes.length = 0;
+			expect(await w1.step({ flow, own: "res1" })).toMatchObject({ position: 1 });
+			// One write carries the frame, the owners' records and the reservation's end.
+			expect(writes.map((w) => w.answer)).toEqual(["written"]);
+			const next = writes[0]?.next as {
+				frame: unknown;
+				records: ({ value?: unknown } | undefined)[];
+			};
+			expect(next.frame).toMatchObject({ applied: 1 });
+			const values = next.records.map((r) => r?.value);
+			expect(values).toContainEqual({ ...reservation, state: after });
+			// The keys owner's record takes the key in (record r1) only where it took.
+			const keyed = expect.objectContaining({
+				keys: expect.objectContaining({ r1: expect.objectContaining({ credential: "c2" }) }),
+			});
+			if (after === "active") expect(values).toContainEqual(keyed);
+			else expect(values).not.toContainEqual(keyed);
+			expect(world.frame()).toMatchObject({
+				applied: 1,
+				intent: { state: after === "active" ? "done" : "closed" },
+			});
+			expect(world.res().state).toBe(after);
+		},
+	);
 
 	it("closes the op without a record on its first stage's prevMismatch, releasing the version to decide again", async () => {
 		await decideKey();
@@ -446,6 +529,49 @@ describe("the flow holds what an op did, though another op's intent came between
 		world.log.judge(flow, 3, verified);
 		await world.w2.tend(flow);
 		expect(world.frame()).toMatchObject({ applied: 3, intent: { op: "op1", state: "closed" } });
+	});
+
+	it("decides an op again after its empty abandonment with other content, taking that content in", async () => {
+		// Nothing of op1 is on the flow but its empty abandonment: its next decision may differ.
+		const other = { family: { approval: "a2" }, consume: ["code:a2"] };
+		const decideOther = () =>
+			world.w1.decide({
+				kind: "issue",
+				flow,
+				op: "op1",
+				decide: () => ({ digest: "d2".padEnd(43, "0"), eff: other, records: [] }),
+			});
+		async function emptyAbandonment() {
+			await decideIssue("op1");
+			world.store.clock.set(leaseMs);
+			await world.w2.tend(flow);
+			await world.w2.tend(flow);
+			world.log.judge(flow, 1, verified);
+			await world.w3.tend(flow);
+			world.store.clock.set(0);
+		}
+		await emptyAbandonment();
+		expect(await decideOther()).toEqual({ prev: 1 });
+		expect(world.frame()).toMatchObject({
+			intent: { op: "op1", state: "pending", digest: "d2".padEnd(43, "0"), eff: other },
+		});
+		await world.w1.send({ flow, op: "op1", stage: bundleStage("op1"), prev: 1 });
+		world.log.judge(flow, 2, verified);
+		expect(await world.w1.step({ flow, own: "op1" })).toMatchObject({
+			end: { op: "op1", ending: "took", owner: true },
+		});
+		expect(world.part("grants").consumed).toEqual(["code:a2"]);
+		// Left alone instead, its abandonment is the next attempt and names the new digest.
+		world = makeWorld();
+		await emptyAbandonment();
+		await decideOther();
+		world.store.clock.set(leaseMs);
+		await world.w2.tend(flow);
+		await world.w3.tend(flow);
+		expect(world.log.sent.at(-1)?.stage).toMatchObject({
+			op: opIds.abandonment("op1", 2),
+			abandons: { op: "op1", attempt: 2, digest: "d2".padEnd(43, "0") },
+		});
 	});
 });
 
@@ -772,5 +898,115 @@ describe("what a log's adapter answers, held to the wire's forms", () => {
 			]);
 		}
 		expect(world.frame()?.applied ?? 0).toBe(0);
+	});
+});
+
+// The 0.23 checks (模型が狭めている所): records in flight land after other events, as the models'
+// `fly` and `Land`, which no test here reached while every append was placed in its own call.
+describe("records in flight: a stage landing after the events its sender did not see", () => {
+	/** A key intent of w1's, left alone and marked by w2 (no resend: never taken over). */
+	async function markedKey() {
+		await decideKey();
+		world.store.clock.set(leaseMs);
+		const w2 = world.replica("w2", { kinds: [issue, keyNoResend] });
+		expect(await w2.tend(flow)).toEqual({ stepped: 0, did: "marked" });
+		return w2;
+	}
+
+	it("sends no abandonment where the key record lands between the read that showed it abandoning and the head (KE-C09's one read)", async () => {
+		await markedKey();
+		// The owner's key record was in flight: it lands, is judged and is taken in, inside the head's read.
+		let landed = false;
+		const w3 = world.replica("w3", {
+			kinds: [issue, keyNoResend],
+			log: (l) => ({
+				...l,
+				head: async (f) => {
+					if (!landed) {
+						landed = true;
+						// w1's own append, sent before its lease ended: the driver does nothing between its owner check and it.
+						await world.log.as("w1").append(keyStage(flow, reservation), 0);
+						world.log.judge(flow, 1, verified);
+						expect(await world.w2.step({ flow })).toMatchObject({ position: 1 });
+					}
+					return l.head(f);
+				},
+			}),
+		});
+		expect(await w3.tend(flow)).toEqual({ stepped: 0 });
+		expect(world.log.records(flow)).toHaveLength(1);
+		expect(world.frame()).toMatchObject({ applied: 1 });
+		expect(world.res().state).toBe("active");
+	});
+
+	it("never places an abandonment in flight after the key record that landed first (Step023's lateAbn)", async () => {
+		await markedKey();
+		const g = gate();
+		const w3 = world.replica("w3", { kinds: [issue, keyNoResend], log: parking(g) });
+		const sending = w3.tend(flow);
+		await g.reached;
+		// w1's own append in flight, landing now.
+		await world.log.as("w1").append(keyStage(flow, reservation), 0);
+		world.log.judge(flow, 1, verified);
+		await world.w2.tend(flow);
+		g.open();
+		expect(await sending).toMatchObject({
+			did: "abandonment",
+			answer: { result: "refused", refusal: "prevMismatch" },
+		});
+		expect(world.log.records(flow)).toHaveLength(1);
+		expect(world.res().state).toBe("active");
+	});
+
+	it("takes a bundle in that lands after its intent was marked, keeping it abandoning, then abandons its family", async () => {
+		await decideIssue();
+		const g = gate();
+		const w1 = world.replica("w1", { log: parking(g) });
+		const sending = w1.send({ flow, op: "op1", stage: bundleStage("op1"), prev: 0 });
+		await g.reached;
+		world.store.clock.set(leaseMs);
+		expect(await world.w2.tend(flow)).toEqual({ stepped: 0, did: "marked" });
+		g.open();
+		expect(await sending).toMatchObject({ answer: { result: "accepted", position: 1 } });
+		world.log.judge(flow, 1, verified);
+		expect(await world.w2.tend(flow)).toMatchObject({
+			stepped: 1,
+			did: "abandonment",
+			answer: { result: "accepted", position: 2 },
+		});
+		expect(world.frame()).toMatchObject({ intent: { state: "abandoning", family: "r1" } });
+		world.log.judge(flow, 2, verified);
+		await world.w3.tend(flow);
+		expect(world.frame()).toMatchObject({ applied: 2, intent: { state: "closed" } });
+		expect(world.part("families").families).toEqual({});
+	});
+
+	it("lets an owner whose lease ended while its first stage was in flight close nothing on its prevMismatch", async () => {
+		await decideKey();
+		const g = gate();
+		const w1 = world.replica("w1", { log: parking(g) });
+		const sending = w1.send({ flow, op: "res1", stage: keyStage(flow, reservation), prev: 0 });
+		await g.reached;
+		world.store.clock.set(leaseMs);
+		world.log.monitor(flow, "confirmation", {});
+		g.open();
+		// Its close is written on its old read, past its lease: refused, so no end is answered.
+		const sent = await sending;
+		expect(sent).toEqual({ answer: { v: 1, result: "refused", refusal: "prevMismatch" } });
+		expect(world.frame()).toMatchObject({ applied: 0, intent: { state: "pending", by: "w1" } });
+		expect(world.res().state).toBe("verified");
+	});
+
+	it("ends the reservation in the Step's write that takes its op's abandonment in", async () => {
+		const w2 = await markedKey();
+		expect(await w2.tend(flow)).toMatchObject({ did: "abandonment", answer: { position: 1 } });
+		world.log.judge(flow, 1, verified);
+		const writes: { next: unknown; answer: string }[] = [];
+		const w3 = world.replica("w3", { kinds: [issue, keyNoResend], frames: recording(writes) });
+		expect(await w3.step({ flow })).toMatchObject({ position: 1, end: { ending: "abandoned" } });
+		expect(writes.map((w) => w.answer)).toEqual(["written"]);
+		expect(JSON.stringify(writes[0]?.next)).toContain('"state":"ended"');
+		expect(world.frame()).toMatchObject({ applied: 1, intent: { state: "closed" } });
+		expect(world.res().state).toBe("ended");
 	});
 });

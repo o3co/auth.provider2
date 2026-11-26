@@ -127,3 +127,49 @@ describe("transparency-local's log under a failing store", () => {
 		});
 	});
 });
+
+// Two replicas over one store: here, where the helper giving a second writer over one store lives.
+describe("transparency-local's log, appended to by two replicas", () => {
+	it("answers another replica's resend of a placed stage as first placed, though a record came after it", async () => {
+		// The writer is not part of the content: a taker's resend (KE-C10) is the same stage.
+		const { logAs } = await over();
+		const w1 = logAs("w1", judgingAs().judging);
+		const w2 = logAs("w2", judgingAs().judging);
+		const flow = subjectFlow();
+		const stage = abandonment(flow);
+		const first = await w1.append(stage, 0);
+		expect(await w1.append(abandonment(flow), 1)).toMatchObject({ position: 2 });
+		expect(await w2.append(stage, 0)).toEqual(first);
+		const other = { ...stage, preimage: { ...stage.preimage, content: { other: true } } };
+		expect(await w2.append(other, 2)).toEqual({
+			v: 1,
+			result: "refused",
+			refusal: "sameIdOther",
+		});
+		expect(await w2.head(flow)).toBe(2);
+	});
+
+	it("places one record when two replicas append the same stage at once, each answered as first placed", async () => {
+		// Two replicas sending one abandonment (KE-C09, any replica): one record, both answered alike.
+		const writes: unknown[] = [];
+		const { logAs } = await over(async (real, ...args) => {
+			const written = await real(...args);
+			writes.push(written);
+			return written;
+		});
+		const held: Finding = { verdict: "held", outcome: "took" };
+		const w1 = logAs("w1", judgingAs(took).judging);
+		const w2 = logAs("w2", judgingAs(held).judging);
+		const flow = subjectFlow();
+		const stage = abandonment(flow);
+		const [a, b] = await Promise.all([w1.append(stage, 0), w2.append(stage, 0)]);
+		expect(a).toMatchObject({ result: "accepted", position: 1 });
+		expect(b).toEqual(a);
+		// Both judged before either wrote; the record keeps its winner's judgment alone.
+		const winner = "id" in a && String(a.id).startsWith("w1") ? took : held;
+		expect((await w1.at(flow, 1))?.finding).toEqual(winner);
+		// They raced: one write lost to the other's, its next try finding the stage placed.
+		expect(writes.filter((w) => w === "moved")).toHaveLength(1);
+		expect(await w1.head(flow)).toBe(1);
+	});
+});

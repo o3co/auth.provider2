@@ -41,7 +41,8 @@ describe("the key change's end", () => {
 		expect(end("v1", "took")).toEqual([{ value: { ...reservation, state: "active" } }]);
 		expect(end("v1", "held")).toEqual([{ value: { ...reservation, state: "ended" } }]);
 		expect(end("v1", "abandoned")).toEqual([{ value: { ...reservation, state: "ended" } }]);
-		// Refused, or not taken: still verified, to be decided again.
+		// Refused: still verified, to be decided again. Not taken: still verified, but its version is
+		// never decided again (its record is on the flow); a retry replaces it.
 		expect(end("v1", "didNotTake")).toEqual([undefined]);
 		expect(end("v1", "refused")).toEqual([undefined]);
 	});

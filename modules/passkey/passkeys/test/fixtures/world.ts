@@ -103,7 +103,12 @@ export function memoryFrames(parts: readonly string[]) {
 
 /** A log in memory: conditional appends, and the monitor's findings a test gives. */
 export function memoryLog(now: () => number): TransparencyLog & {
-	judge(flow: Flow, position: number, verdict: "verified" | "held"): void;
+	judge(
+		flow: Flow,
+		position: number,
+		verdict: "verified" | "held",
+		outcome?: "took" | "didNotTake",
+	): void;
 	boundary(flow: Flow): void;
 } {
 	const flows = new Map<string, Placed[]>();
@@ -181,10 +186,10 @@ export function memoryLog(now: () => number): TransparencyLog & {
 			} as unknown as Placed["record"];
 			placed.push({ record, finding: { verdict: "verified", outcome: "took" }, changes: {} });
 		},
-		judge(flow, position, verdict) {
+		judge(flow, position, verdict, outcome = "took") {
 			const placed = onFlow(flow);
 			const p = placed[position - 1] as Placed;
-			placed[position - 1] = { ...p, finding: { verdict, outcome: "took" } };
+			placed[position - 1] = { ...p, finding: { verdict, outcome } };
 		},
 	};
 }
@@ -406,11 +411,12 @@ export async function world(
 		stage: Stage,
 		prev: number,
 		verdict: "verified" | "held" = "verified",
+		outcome: "took" | "didNotTake" = "took",
 	) => {
 		const flow = { of: "subject", id: subject } as const;
 		const sent = await t.send({ flow, op, stage, prev });
 		if (!("answer" in sent) || sent.answer.result !== "accepted") throw new Error("not sent");
-		log.judge(flow, sent.answer.position, verdict);
+		log.judge(flow, sent.answer.position, verdict, outcome);
 		return t.step({ flow, own: op });
 	};
 	/** A key registered for `subject` from the reservation to the Step; `by` the key that approved it. */
