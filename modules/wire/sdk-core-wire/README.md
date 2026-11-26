@@ -13,7 +13,7 @@
 - `typs`: the `typ` of a JAR, every statement (T, a creation, a possession: `approval+jwt`), the completion's answer (`completion+jwt`), a client assertion and a DPoP proof. `purposes`: `authorization`, `creation`, `possession`, `passkey-add`, `passkey-manage`.
 - `hpke`: the suite (`DHKEM(P-256, HKDF-SHA256)`, `HKDF-SHA256`, `AES-128-GCM`), each sealing's info (the completion, the first key's request and code, a continuation's body), `completionAad` (purpose, statement's hash), and `completionBuckets`, `completionLimits`, `paddedCompletion` and `unpaddedCompletion`: how a passkey-add's or passkey-manage's completion is padded before it is sealed (internal module `completions`).
 - `jarClaims`: an authorization's closed set of `items`, those a JAR must carry (`required`), and its `envelope`, the claims that are no item (`prompt` among them, which the Core reads before T is made).
-- `itemsFromJar` (payload, the JAR's hash): T's items, or an error naming the claim unknown or missing, or the value not allowed.
+- `itemsFromJar` (payload, the JAR's hash): T's items, or an error naming the claim unknown or missing, or the value not allowed; each claim an ID token's or userinfo's request asks by `null` written as `{}`.
 - `payloads`: the schemas of T, the completion's answer, the `creation`, `possession`, `passkeyAdd` and `passkeyManage` statements, and what the first key's start, mail and answer seal. Types: `StatementPayload`, `CompletionPayload`, `CreationPayload`, `PossessionPayload`, `AuthorizationAnswer`, `AuthorizationItems`, `SigningKey`, `FirstKeyStage`.
 - `payloads.answers`: the answers' forms the Front carries unread, whose names `front-core-wire` gives each operation: `authorization` (②'s), `statement`, `sealed` and `nonce`.
 - `payloads.completions`: `passkeyAdd`, `passkeyManage` and `keyChange` (internal module `completions`). `payloads.completion` is the authorization's, its `purpose` and ⑤'s `receipt` optional.
@@ -23,6 +23,7 @@
 ## Invariants
 - A protocol (G33): types, frozen constants, fixed schemas and the functions that build by them; no I/O, clock, randomness or state.
 - Every payload refuses a field it does not know; T's items are a closed set, and a JAR with any other claim beside its envelope yields no items.
+- T's `claims` holds no null: T is signed whole, and its signer writes none. A claim an ID token's or userinfo's request asks by `null` is written `{}`, as both ask it in the default manner (OIDC Core §5.5.1), on both sides alike; any other null in `claims` is `item:claims`, though §5.5 has a member not understood ignored. A stricter reading, kept as a deviation.
 - The identifier goes in a statement masked alone, for display; a creation names its account by `account` or `user_name`, one alone: the first key's path by `account`, F1's by `user_name` (its subject has none), passkey-add's by either.
 - A creation's `basis` fixes what its evidence hashes: the mail token (`first-key`), the approved `passkey-add` statement, or the T read before signing up (`sign-up`); `ct_hash` is `first-key`'s alone, a creation with no basis read as such.
 - ②'s answer: T, its get challenge (SHA-256 of `challengeInput(T, "get")`, which the screen recomputes and uses) and `create`, an unsigned hint for F1.

@@ -73,6 +73,21 @@ describe("authorization.read", () => {
 		expect(await authorization.read(changed, jar, options)).toEqual({ error: "items" });
 	});
 
+	it("reads T asking a claim by {} where its JAR asks it by null, and refuses T holding a null", async () => {
+		const { ring, t, options } = await world();
+		const jar = jarOf({ ...jarPayload, claims: { id_token: { email: null } } });
+		const approval = {
+			...t.approval,
+			claims: { id_token: { email: {} } },
+			jar_hash: await digest(jar),
+		};
+		const asked = await signCompact(ring, { ...t, approval }, { typ: typs.statement });
+		expect(await authorization.read(asked, jar, options)).toMatchObject({ t: { compact: asked } });
+		const held = { ...approval, claims: { id_token: { email: null } } };
+		const nulled = await signCompact(ring, { ...t, approval: held }, { typ: typs.statement });
+		expect(await authorization.read(nulled, jar, options)).toEqual({ error: "payload" });
+	});
+
 	it("refuses a JAR of the same claims whose bytes differ: its hash is another", async () => {
 		const { tCompact, options, jar } = await world();
 		expect(await authorization.read(tCompact, `${jar}x`, options)).toEqual({ error: "items" });

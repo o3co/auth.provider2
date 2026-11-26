@@ -48,6 +48,55 @@ describe("the items T approves, from a JAR", () => {
 			expect(itemsFromJar({ ...jar, prompt }, "h"), JSON.stringify(prompt)).toEqual(read);
 	});
 
+	it("reads a claim asked by null, at an ID token's or userinfo's request, as asked by {} (OIDC Core §5.5.1)", () => {
+		const asked = {
+			id_token: { email: null },
+			userinfo: { name: null, given_name: { essential: true } },
+		};
+		const read = itemsFromJar({ ...jar, claims: asked }, "h");
+		expect("items" in read && read.items.claims).toEqual({
+			id_token: { email: {} },
+			userinfo: { name: {}, given_name: { essential: true } },
+		});
+		// The same items as the {} spelling, and the JAR's own payload left as it was.
+		expect(read).toEqual(
+			itemsFromJar(
+				{
+					...jar,
+					claims: {
+						id_token: { email: {} },
+						userinfo: { name: {}, given_name: { essential: true } },
+					},
+				},
+				"h",
+			),
+		);
+		expect(asked.id_token.email).toBeNull();
+	});
+
+	it("refuses any null left in claims, where none reads as a request asked in the default manner", () => {
+		for (const claims of [
+			null,
+			{ id_token: null },
+			{ other: null },
+			{ id_token: { email: { essential: true, purpose: null } } },
+			{ id_token: { email: { value: null } } },
+			{ id_token: { foo: { x: null } } },
+			{ id_token: { nickname: [null] } },
+			{ verified_claims: { claims: { given_name: null } } },
+		]) {
+			expect(itemsFromJar({ ...jar, claims }, "h"), JSON.stringify(claims)).toEqual({
+				error: "item:claims",
+			});
+		}
+		// T's own schema refuses a statement whose claims hold a null, as the screen reads it.
+		const made = itemsFromJar({ ...jar, claims: { id_token: { email: null } } }, "h");
+		if (!("items" in made)) throw new Error(made.error);
+		const held = { ...made.items, claims: { id_token: { email: null } } };
+		expect(payloads.statement.shape.approval.safeParse(held).success).toBe(false);
+		expect(payloads.statement.shape.approval.safeParse(made.items).success).toBe(true);
+	});
+
 	it("refuses a claim outside the closed set, authorization_details among them", () => {
 		expect(itemsFromJar({ ...jar, authorization_details: [] }, "h")).toEqual({
 			error: "unknown_item:authorization_details",

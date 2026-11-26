@@ -511,6 +511,23 @@ describe("a login's start (②)", () => {
 		expect(h.asked).toHaveLength(1);
 	});
 
+	it("takes a claim asked by null into T as asked by {}, and refuses before T any null left in claims", async () => {
+		const h = harness();
+		const asking = { id_token: { email: null } };
+		const asked = await h.body(h.fields(jar(claims({ scope: "openid read", claims: asking }))));
+		expect(asked.status).toBe(200);
+		expect(h.asked[0]?.items).toMatchObject({ claims: { id_token: { email: {} } } });
+		const left = { id_token: { email: { essential: true, purpose: null } } };
+		const refused = await h.body(
+			h.fields(jar(claims({ jti: "j9", scope: "openid read", claims: left }))),
+		);
+		expect(refused).toMatchObject({
+			status: 400,
+			json: { error: "invalid_request_object", error_description: "item:claims" },
+		});
+		expect(h.asked).toHaveLength(1);
+	});
+
 	it("refuses before T any claims where no module reads them", async () => {
 		const h = harness({ claims: claimsUnread });
 		const asking = { id_token: { email: null } };

@@ -1,5 +1,5 @@
 import { defineModule } from "@mod/kernel";
-import { challengeInput, payloads, typs } from "@mod/sdk-core-wire";
+import { challengeInput, itemsFromJar, payloads, typs } from "@mod/sdk-core-wire";
 import { tokens } from "@mod/transparency-wire";
 import { describe, expect, it } from "vitest";
 import {
@@ -27,6 +27,23 @@ describe("issuing a statement", () => {
 		expect(t.hash).toBe(sha256(t.statement));
 		expect(t.challenge).toBe(sha256(challengeInput(t.statement, "get")));
 		expect(w.statements.value(t.hash)).toMatchObject({ state: "issued", jws: t.statement });
+	});
+
+	it("signs T whose JAR asks a claim by null, as itemsFromJar writes it ({}), and refuses a null before it is signed", async () => {
+		const w = await world();
+		const { jar_hash: _hash, ...jar } = items;
+		const made = itemsFromJar({ ...jar, claims: { id_token: { email: null } } }, "jh");
+		if (!("items" in made)) throw new Error(made.error);
+		const t = await issued(w, { items: made.items } as Partial<IssueAsk>);
+		expect(await w.keys.verify("core", t.statement, typs.statement)).toMatchObject({
+			kind: "valid",
+		});
+		expect(payloadOf(t.statement).approval.claims).toEqual({ id_token: { email: {} } });
+		const held = { ...made.items, claims: { id_token: { email: null } } };
+		expect(await w.approvals.issue({ ...(await askOf()), items: held } as IssueAsk)).toMatchObject({
+			kind: "refused",
+			reason: "items",
+		});
 	});
 
 	it("refuses one longer than its asker carries, as long, before it is signed or kept; one of that very length it signs", async () => {

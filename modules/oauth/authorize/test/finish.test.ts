@@ -2,7 +2,7 @@ import type { Approval, Completed, Used } from "@mod/approvals";
 import type { Client } from "@mod/clients";
 import type { CodeFacts } from "@mod/code-grant";
 import { testRequest } from "@mod/http/testing";
-import { payloads } from "@mod/sdk-core-wire";
+import { itemsFromJar, payloads } from "@mod/sdk-core-wire";
 import { describe, expect, it } from "vitest";
 import { codeNeedsOver } from "../src/code-needs/code-needs.ts";
 import { claimsUnselected, type FinishParts, finishing } from "../src/finish/finish.ts";
@@ -270,6 +270,26 @@ describe("a login's finish (⑤⑥)", () => {
 			"publish",
 		]);
 		expect(h.issued[0]).toMatchObject({ scope: ["openid", "read"], nonce: "n" });
+	});
+
+	it("hands the claims' reader T's claims as the start writes them: a claim asked by null, as {}", async () => {
+		const { jar_hash: _hash, ...jar } = items;
+		const made = itemsFromJar({ ...jar, claims: { id_token: { email: null } } }, "jh");
+		if (!("items" in made)) throw new Error(made.error);
+		const selection = {
+			idToken: { names: [], constraints: [] },
+			userinfo: { names: [], constraints: [] },
+		};
+		const h = harness({
+			scope: "openid read",
+			scopes: ["openid", "read"],
+			claims: made.items.claims,
+			picked: { kind: "selected", selection },
+		});
+		expect((await h.send()).status).toBe(200);
+		expect(h.log).toContain(
+			`select alice openid read ${JSON.stringify({ id_token: { email: {} } })}`,
+		);
 	});
 
 	it("opens no session where a sub the claims ask is not the subject's, and selects nothing for a request not OpenID's", async () => {

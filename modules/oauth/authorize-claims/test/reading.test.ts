@@ -47,6 +47,17 @@ describe("an OpenID request's claims", () => {
 		expect(calls).toHaveLength(2);
 	});
 
+	it("select alike a claim asked by null and by {}, as T holds the one itemsFromJar writes", async () => {
+		const asked = async (claims: unknown) => {
+			const { r, calls } = reading();
+			await r.select(client, "alice", ["openid"], claims, undefined);
+			return calls[0];
+		};
+		const byNull = { id_token: { email: null }, userinfo: { name: null } };
+		const byEmpty = { id_token: { email: {} }, userinfo: { name: {} } };
+		expect(await asked(byEmpty)).toEqual(await asked(byNull));
+	});
+
 	it("answer a sub asked of another subject, and an essential acr the login does not meet", async () => {
 		const { r } = reading();
 		const sub = { id_token: { sub: { value: "bob" } } };

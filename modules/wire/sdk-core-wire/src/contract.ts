@@ -93,6 +93,13 @@ const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789
 
 const sextet = (text: string, at: number) => alphabet.indexOf(text.charAt(at));
 
+/** Whether a JSON value holds a null anywhere: as an object's member or an array's element. */
+const holdsNull = (value: unknown): boolean =>
+	value === null ||
+	(Array.isArray(value)
+		? value.some(holdsNull)
+		: typeof value === "object" && Object.values(value as object).some(holdsNull));
+
 const approval = z
 	.object({
 		client_id: z.string().min(1),
@@ -102,7 +109,11 @@ const approval = z
 		state: z.string().min(1),
 		scope: z.string().min(1),
 		resource: z.string().min(1).optional(),
-		claims: z.unknown().optional(),
+		// No null anywhere: T is signed whole, and its signer writes no null (a claim asked by null is read as {}).
+		claims: z
+			.unknown()
+			.refine((claims) => !holdsNull(claims))
+			.optional(),
 		nonce: z.string().min(1),
 		code_challenge: z.string().min(1),
 		code_challenge_method: z.literal("S256"),
@@ -297,6 +308,26 @@ export function canonicalText(value: unknown): string {
 	return JSON.stringify(value);
 }
 
+const isObject = (value: unknown): value is Readonly<Record<string, unknown>> =>
+	typeof value === "object" && value !== null && !Array.isArray(value);
+
+/**
+ * A `claims` parameter with each claim an ID token's or userinfo's request asks by null written as
+ * {} (OIDC Core §5.5.1: both ask it in the default manner); anything else as given. A copy.
+ */
+function askedInDefault(claims: unknown): unknown {
+	if (!isObject(claims)) return claims;
+	const read: Record<string, unknown> = { ...claims };
+	for (const member of ["id_token", "userinfo"]) {
+		const asked = read[member];
+		if (!isObject(asked)) continue;
+		read[member] = Object.fromEntries(
+			Object.entries(asked).map(([name, request]) => [name, request === null ? {} : request]),
+		);
+	}
+	return read;
+}
+
 /**
  * The items T approves, from a JAR's payload and its hash, by the one rule both sides run and compare
  * exactly: an error names the claim that is unknown or missing, or the value that is not allowed.
@@ -314,6 +345,7 @@ export function itemsFromJar(
 	}
 	const items: Record<string, unknown> = { jar_hash: jarHash };
 	for (const key of authorizationItems) if (payload[key] !== undefined) items[key] = payload[key];
+	if (payload.claims !== undefined) items.claims = askedInDefault(payload.claims);
 	const read = approval.safeParse(items);
 	return read.success
 		? { items: read.data }
