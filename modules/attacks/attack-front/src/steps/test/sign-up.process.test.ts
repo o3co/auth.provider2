@@ -88,6 +88,27 @@ describe("the claims parameter's bridge (F-21)", () => {
 		});
 	});
 
+	it("composed: a claim asked in the null form (OpenID Connect Core §5.5's plain ask) is read end to end, the screen's SDK taking T and the RP the ID token", async () => {
+		// The form RPs send most: a member asked with no constraint, written as null.
+		expect(await login(w, { claims: { id_token: { email: null } } })).toEqual({ faults: [] });
+		// Beside a constraint the finish holds it to: the null form is read as an ask, not dropped.
+		const other = await login(w, {
+			claims: { id_token: { email: null, sub: { value: "someone-else" } } },
+		});
+		expect(other).toMatchObject({
+			stopped: "core",
+			at: "/login/finish",
+			answered: { body: { error_description: "the login is not of the subject asked" } },
+		});
+		// Any other null in the parameter is no form §5.5 gives: refused before T, never a server error.
+		const stray = await login(w, { claims: { id_token: { email: { value: null } } } });
+		expect(stray).toMatchObject({
+			stopped: "core",
+			at: "/login/start",
+			answered: { status: 400, body: { error: "invalid_request_object" } },
+		});
+	});
+
 	it("not composed: the document names no such parameter, and a claims request is refused before T", async () => {
 		expect(bare.core.metadata).not.toHaveProperty("claims_parameter_supported");
 		const asked = await login(bare, { claims: { id_token: { auth_time: { essential: true } } } });
