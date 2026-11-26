@@ -327,6 +327,45 @@ describe("a committed record", () => {
 		ok(schemas.record, { ...bundleRecord, flow: { of: "subject", id: "__proto__" } });
 	});
 
+	it("refuses a record whose id is over 63 bytes in UTF-8, as a refresh token carries a family's id within the wire's 128", () => {
+		ok(schemas.record, { ...bundleRecord, id: "r".repeat(63) });
+		no(schemas.record, { ...bundleRecord, id: "r".repeat(64) });
+		// Bytes, not characters: 21 three-byte characters are 63 bytes, 22 are 66.
+		ok(schemas.record, { ...bundleRecord, id: "記".repeat(21) });
+		no(schemas.record, { ...bundleRecord, id: "記".repeat(22) });
+		// Two-byte and four-byte characters, and a lone surrogate counted as U+FFFD's three.
+		ok(schemas.record, { ...bundleRecord, id: `${"é".repeat(31)}a` });
+		no(schemas.record, { ...bundleRecord, id: "é".repeat(32) });
+		ok(schemas.record, { ...bundleRecord, id: `${"😀".repeat(15)}abc` });
+		no(schemas.record, { ...bundleRecord, id: "😀".repeat(16) });
+		ok(schemas.record, { ...bundleRecord, id: "\ud800".repeat(21) });
+		no(schemas.record, { ...bundleRecord, id: "\ud800".repeat(22) });
+		// The log's accepted answer, whose id a family takes.
+		const accepted = {
+			v: 1,
+			result: "accepted",
+			position: 5,
+			shard: "s1",
+			n: 17,
+			acceptedAt: 1,
+			receipts: [jws],
+		};
+		ok(schemas.appendAnswer, { ...accepted, id: "r".repeat(63) });
+		no(schemas.appendAnswer, { ...accepted, id: "r".repeat(64) });
+		no(schemas.judgment, {
+			v: 1,
+			id: "r".repeat(64),
+			flow: subject,
+			position: 5,
+			shard: "s1",
+			n: 17,
+			verdict: "verified",
+			outcome: "took",
+		});
+		// Any other id keeps its own bounds: a subject's flow id of 64 bytes is read.
+		ok(schemas.record, { ...bundleRecord, flow: { of: "subject", id: "s".repeat(64) } });
+	});
+
 	it("refuses a kind its writer may not write, and a field it does not know", () => {
 		no(schemas.record, { ...denialRecord, writer: core });
 		no(schemas.record, { ...bundleRecord, writer: { role: "monitor", key: "mon-1" } });

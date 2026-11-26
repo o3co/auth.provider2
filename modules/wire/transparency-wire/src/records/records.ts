@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { canonical, unique } from "../text/text.ts";
+import { canonical, unique, utf8Length } from "../text/text.ts";
 import { flows, frames, recordKinds, speaks } from "../words/words.ts";
 
 /**
@@ -43,13 +43,19 @@ export const opIds = Object.freeze({
 
 export const v = z.literal(speaks[0]);
 export const id = z.string().min(1);
+/** The most bytes a record's id holds in UTF-8: a refresh token carries a family's id (its bundle record's). */
+const recordIdBytes = 63;
 /**
  * A record's id, as its log gives it: never `__proto__`, as a flow's state names its items by it and
- * a store refuses that key, so a log naming one is told apart here, at the boundary.
+ * a store refuses that key; and at most 63 bytes in UTF-8, as a refresh token carries a family's id in
+ * base64url beside its 43-character secret within the Front wire's 128. A log naming another is told
+ * apart here, at the boundary.
  */
-export const recordId = id.refine((x) => x !== "__proto__", {
-	message: "a record's id is never __proto__",
-});
+export const recordId = id
+	.refine((x) => x !== "__proto__", { message: "a record's id is never __proto__" })
+	.refine((x) => utf8Length(x) <= recordIdBytes, {
+		message: `a record's id is at most ${recordIdBytes} bytes in UTF-8`,
+	});
 export const count = z.number().int().nonnegative();
 export const ordinal = z.number().int().positive();
 /** SHA-256, base64url without padding. */

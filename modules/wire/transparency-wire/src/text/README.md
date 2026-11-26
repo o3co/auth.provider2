@@ -12,7 +12,7 @@ Internal module of `transparency-wire`: the one JSON reading, the canonical spel
 ## Offers
 - `readJson` (text) → the value, or why it is refused (`not_json`, `duplicate_key:<key>`, `number`): what `tokens.parse` gives.
 - `canonical` (value): object keys sorted, undefined members left out.
-- `bytesOf` (base64url) → bytes; `textOf` (bytes) → text; `coordinate` (43 base64url characters) → a 32-byte value; `onP256` (x, y).
+- `utf8Length` (text) → the bytes it takes in UTF-8. `bytesOf` (base64url) → bytes; `textOf` (bytes) → text; `coordinate` (43 base64url characters) → a 32-byte value; `onP256` (x, y).
 - `isObject`; `unique` (list, key): whether no two items share a key.
 
 ## Invariants

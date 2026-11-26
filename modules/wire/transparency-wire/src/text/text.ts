@@ -84,6 +84,16 @@ const modP = (n: bigint) => ((n % p256.p) + p256.p) % p256.p;
 export const onP256 = (x: bigint, y: bigint) =>
 	x < p256.p && y < p256.p && modP(y * y) === modP(x * x * x - 3n * x + p256.b);
 
+/** How many bytes a text takes in UTF-8, a lone surrogate as the three of U+FFFD. */
+export function utf8Length(text: string): number {
+	let bytes = 0;
+	for (const char of text) {
+		const point = char.codePointAt(0) ?? 0;
+		bytes += point < 0x80 ? 1 : point < 0x800 ? 2 : point < 0x10000 ? 3 : 4;
+	}
+	return bytes;
+}
+
 /** Bytes from their one unpadded base64url spelling; none for any other. */
 export function bytesOf(text: string): number[] | undefined {
 	const rest = text.length % 4;

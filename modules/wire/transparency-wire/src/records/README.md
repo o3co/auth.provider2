@@ -13,11 +13,12 @@ Internal module of `transparency-wire`: a record and its append: what a writer s
 ## Offers
 - `appendRefusals`; `opIds` (`stop`, `reset`, `abandonment`); `sealing` (the HPKE suite, `info`, and `aad` of a flow, an op and a stage).
 - Schemas: `appendRequest`, `appendAnswer`, `record` (a written record, or the log's `tick`), `preimage`, `recordRef`; for the modules built on it, `written`, `writer`, `keySet`, `approvalDigests`, `keyChangeDigests`.
-- Field forms: `v`, `id`, `recordId` (a record's id: `id` but never `__proto__`), `count`, `ordinal`, `digest`, `base64url`, `flow`, `ecKey` (a P-256 public key), `keyed` (a key with its `kid`); `coreKinds`.
+- Field forms: `v`, `id`, `recordId` (a record's id: `id` but never `__proto__`, and at most 63 bytes in UTF-8), `count`, `ordinal`, `digest`, `base64url`, `flow`, `ecKey` (a P-256 public key), `keyed` (a key with its `kid`); `coreKinds`.
 - Types: `AppendRequest`, `AppendAnswer`, `LogRecord`, `Preimage`, `RecordRef`, `Writer`, `Flow`.
 
 ## Invariants
 - A record's id is never `__proto__` where the wire carries the record's own id: a record, a tick, the log's accepted answer, a receipt, a judgment, a stateOf's results, and the checkpoint's and the status's id lists and reasons. A flow's state names its items by record ids and a store refuses that key, so a log naming one is off its form: such a record is not there, and is never named in a checkpoint, a status or a judgment.
+- A record's id, where the wire carries it, is at most 63 bytes in UTF-8: a refresh token is a family's id (its bundle record's) in base64url beside a 43-character secret, within the Front wire's `refreshToken` of 128 characters (front-core-wire). Owner, 2026-11-26.
 - A reference to a record (a preimage's root or parent, a confirmation's registration) stays `id`: one no record can have dangles and is judged so. Any other `id` (a flow's, a key's, an op's, a shard's) may be `__proto__`.
 - Only a reader that holds what it reads to these forms is kept from such a record: a log adapter that does not, the Core's take-in trusting it, is not.
 - A record names its writer role's kinds alone.
