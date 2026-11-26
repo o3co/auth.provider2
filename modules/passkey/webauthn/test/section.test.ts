@@ -22,6 +22,30 @@ it("refuses a relying party ID some origin's host does not end in, at a label", 
 	expect(accepts("rp.example.", ["https://rp.example"])).toBe(false);
 });
 
+it("takes a relying party ID of 253 characters, a domain's longest name, and refuses a longer one", () => {
+	const longest = `${"a".repeat(63)}.${"b".repeat(63)}.${"c".repeat(63)}.${"d".repeat(58)}.rp`;
+	expect(longest).toHaveLength(253);
+	expect(accepts(longest, [`https://${longest}`])).toBe(true);
+	expect(accepts(`e.${longest}`, [`https://e.${longest}`])).toBe(false);
+});
+
+it("takes a relying party ID only as a domain, whatever origins it serves: lowercase LDH labels, an A-label for an internationalized one", () => {
+	expect(accepts("xn--eckwd4c7c.xn--zckzah", ["https://xn--eckwd4c7c.xn--zckzah"])).toBe(true);
+	for (const rpId of [
+		"\u0000".repeat(3),
+		"rp .example",
+		"rp_x.example",
+		"-rp.example",
+		"rp-.example",
+		"rp..example",
+		".rp.example",
+		"例え.jp",
+		`${"a".repeat(64)}.example`,
+	])
+		expect(accepts(rpId, [app]), JSON.stringify(rpId)).toBe(false);
+	expect(accepts("rp.example", [app])).toBe(true);
+});
+
 it("refuses a single label above an origin's host, which a browser holds a public suffix", () => {
 	expect(accepts("example", ["https://rp.example"])).toBe(false);
 });

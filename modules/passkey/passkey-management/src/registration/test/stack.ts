@@ -1,4 +1,4 @@
-import { createHash, generateKeyPairSync, randomBytes, sign } from "node:crypto";
+import { createHash, generateKeyPairSync, type KeyObject, randomBytes, sign } from "node:crypto";
 import { approvalStore, approvals, type StoredStatement, statementItems } from "@mod/approvals";
 import approvalsModule from "@mod/approvals/module";
 import { continuations } from "@mod/continuation-wire";
@@ -88,7 +88,14 @@ export function screen() {
  * A key's registration after its creation over approvals, passkeys, transparency, webauthn and keys
  * in memory: each append judged took at once, a subject's creation issued as the mail's side would.
  */
-export async function stack(given: { readonly passkeys?: Record<string, unknown> } = {}) {
+export async function stack(
+	given: {
+		readonly passkeys?: Record<string, unknown>;
+		/** The Core's key of generation 1, PS256 where it is RSA, in place of the shared P-256 one. */
+		readonly core?: { readonly kid: string; readonly key: KeyObject };
+		readonly issuer?: string;
+	} = {},
+) {
 	let clock = 1_800_000_000_000;
 	const now = () => clock;
 	const frames = memoryFrames(["passkeys", "approvals", familiesPart, keyChangePart]);
@@ -102,9 +109,10 @@ export async function stack(given: { readonly passkeys?: Record<string, unknown>
 		m.provide(transparencyLog).by(() => book.as("w1")),
 		m.provide(passkeyStore).by(() => credentials as PasskeyStore),
 		m.provide(approvalStore).by(() => statements),
-		m
-			.provide(issuer)
-			.by(() => ({ url: "https://issuer.example", endpointOrigin: "https://issuer.example" })),
+		m.provide(issuer).by(() => {
+			const url = given.issuer ?? "https://issuer.example";
+			return { url, endpointOrigin: new URL(url).origin };
+		}),
 		m.contribute(statementItems).by(() => creationItems),
 		m.contribute(statementItems).by(() => possessionItems),
 		m.contribute(statementItems).by(() => ({ purpose: "authorization", names: [], by: "beside" })),
@@ -122,7 +130,7 @@ export async function stack(given: { readonly passkeys?: Record<string, unknown>
 			familiesOwning,
 			rateLimitStandIn,
 			keysModule,
-			testHolder(),
+			testHolder(given.core ? { [given.core.kid]: given.core.key } : {}),
 			transparencyModule,
 			webauthnModule,
 			passkeysModule,
@@ -130,7 +138,22 @@ export async function stack(given: { readonly passkeys?: Record<string, unknown>
 		],
 		config: {
 			...kernelConfig(),
-			...keysConfig(),
+			...keysConfig(
+				given.core
+					? {
+							core: {
+								generation: 1,
+								keys: [
+									{
+										generation: 1,
+										kid: given.core.kid,
+										alg: given.core.key.asymmetricKeyType === "rsa" ? "PS256" : "ES256",
+									},
+								],
+							},
+						}
+					: {},
+			),
 			...webauthnConfig(),
 			passkeys: given.passkeys ?? {},
 		},

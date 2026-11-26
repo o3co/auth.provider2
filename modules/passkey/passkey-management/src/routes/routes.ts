@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { continuations } from "@mod/continuation-wire";
+import { requests } from "@mod/front-core-wire";
 import { type HttpRequest, type HttpResponse, jsonAnswer, use } from "@mod/http";
 import { Unavailable } from "@mod/kernel";
 import { requestsPerSource, sourceKey, type Window } from "@mod/rate-limit";
@@ -131,6 +132,14 @@ export function firstKeyRoutes(p: {
 /** A sealed continuation's ciphertext: its padded plaintext and the AEAD's tag, one length for every body. */
 const sealedBytes = continuations.plainBytes + 16;
 
+/** The most a field of a wire operation carries, as front-core-wire holds it: the route takes no more. */
+const maxOf = (kind: "continue" | "keyFinish" | "approvalFinish", name: string) => {
+	const field = (requests[kind].fields as readonly { name: string; max: number }[]).find(
+		(f) => f.name === name,
+	);
+	if (field === undefined) throw new TypeError(`front-core-wire's ${kind} has no ${name}`);
+	return field.max;
+};
 /** A compact JWS of at most `max` characters; none for any other text. */
 const jwsOf = (text: string | undefined, max: number) =>
 	text !== undefined &&
@@ -144,7 +153,7 @@ const utf8Of = (text: string | undefined, max: number) =>
 
 /** A continuation's fields as front-core-wire sizes them, its stage one `continuation-wire` names; none for any other. */
 function continuationOf(fields: HttpRequest["fields"]) {
-	const statement = jwsOf(fields.single("statement"), 8192);
+	const statement = jwsOf(fields.single("statement"), maxOf("continue", "statement"));
 	const stage = continuations.stages.find((name) => name === fields.single("stage"));
 	const seq = fields.single("seq");
 	if (!statement || !stage) return undefined;
@@ -158,7 +167,8 @@ function continuationOf(fields: HttpRequest["fields"]) {
 			return undefined;
 		return { stage, statement, seq: Number(seq), sealed: { enc: enc as string, ct: ct as string } };
 	}
-	if (!utf8Of(body, 8192) || !bytesOf(sig, 64) || enc !== "" || ct !== "") return undefined;
+	if (!utf8Of(body, maxOf("continue", "body")) || !bytesOf(sig, 64) || enc !== "" || ct !== "")
+		return undefined;
 	return {
 		stage,
 		statement,
@@ -248,8 +258,14 @@ export function keyRoutes(p: {
 			handle: async (request: HttpRequest): Promise<HttpResponse> => {
 				if (request.mistyped?.size)
 					return malformed("a key's finish is its possession and the new key's assertion");
-				const statement = jwsOf(request.fields.single("statement"), 4096);
-				const assertion = utf8Of(request.fields.single("assertion"), 8192);
+				const statement = jwsOf(
+					request.fields.single("statement"),
+					maxOf("keyFinish", "statement"),
+				);
+				const assertion = utf8Of(
+					request.fields.single("assertion"),
+					maxOf("keyFinish", "assertion"),
+				);
 				if (!statement || !assertion)
 					return malformed("a key's finish is its possession and the new key's assertion");
 				return registeredBy(await p.finish({ statement, assertion }));
@@ -310,8 +326,14 @@ export function approvalRoutes(p: {
 					return malformed(
 						"an approval's finish is its statement and the approving key's assertion",
 					);
-				const statement = jwsOf(request.fields.single("statement"), 4096);
-				const assertion = utf8Of(request.fields.single("assertion"), 8192);
+				const statement = jwsOf(
+					request.fields.single("statement"),
+					maxOf("approvalFinish", "statement"),
+				);
+				const assertion = utf8Of(
+					request.fields.single("assertion"),
+					maxOf("approvalFinish", "assertion"),
+				);
 				if (!statement || !assertion)
 					return malformed(
 						"an approval's finish is its statement and the approving key's assertion",

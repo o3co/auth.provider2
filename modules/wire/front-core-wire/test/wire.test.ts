@@ -75,6 +75,7 @@ describe("the frame and its answers", () => {
 		expect([code("login_required"), code("invalid_request_uri"), code("invalid_target")]).toEqual([
 			14, 15, 16,
 		]);
+		expect(code("unauthorized_client")).toBe(17);
 	});
 
 	it("holds every word frozen", () => {

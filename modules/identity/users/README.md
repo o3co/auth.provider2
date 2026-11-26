@@ -22,7 +22,7 @@
 - `./testing`: contract tests for users, user ledgers (those holding passwords and those holding none) and the Store interface, configuration builders, and the Store interface in memory.
 
 ## Invariants
-- A subject is 1 to 255 ASCII characters: one outside that refuses boot in the settings (the identifier's, where `subject` is left out), is unavailable in a ledger's answer, and is none when looked up without asking the ledger.
+- A subject is 1 to 255 visible ASCII characters: one outside that refuses boot in the settings (the identifier's, where `subject` is left out), is unavailable in a ledger's answer, and is none when looked up without asking the ledger.
 - Identifiers match exactly, never folded or trimmed, and a password as typed, with no Unicode normalization; an empty identifier or subject, or an identifier past 255 bytes (a fixed guard), is none, and the ledger is not asked; `create` throws TypeError on either identifier, and the settings refuse one past 255 bytes.
 - A password check waits as its identifier's failures say, an unknown identifier as a known one, at most 4 checks of one identifier held, so at most 4 × `longest`; one more is Unavailable, unchecked, as is an identifier not held where the `capacity` held keep failures not forgotten (internal module `waits`). That holds the failed checks stated over availability: a password is checked only as a first key's evidence, and no module logs in by one, so a full table stops that path alone.
 - Boot is refused on identifiers that differ only in case, Unicode normal form or surrounding whitespace, on two identifiers with one subject, and on more than one ledger or a ledger beside `registered` users.

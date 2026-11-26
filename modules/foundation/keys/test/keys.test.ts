@@ -1,4 +1,4 @@
-import { generateKeyPairSync, type KeyObject } from "node:crypto";
+import { createPublicKey, generateKeyPairSync, type KeyObject } from "node:crypto";
 import { assemble, BootRefused, defineModule, kernelConfig } from "@mod/kernel";
 import { quietRuntime, recordingLog } from "@mod/kernel/testing";
 import { promiseNames, stances } from "@mod/promises";
@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { keys, pkcs1v15Deprecated, type Signed } from "../src/contract.ts";
 import keysModule from "../src/module.ts";
 import { section as keysSection } from "../src/section.ts";
-import { keysConfig, testHolder } from "../src/testing.ts";
+import { keysConfig, rsaModulusCeiling, testHolder } from "../src/testing.ts";
 
 const january = Date.parse("2026-01-01T00:00:00Z");
 let now = january;
@@ -401,6 +401,77 @@ describe("keys", () => {
 		for (const [name, [section, where]] of Object.entries(cases)) {
 			expect(await refusedAt(section, has), name).toEqual([where]);
 		}
+	});
+
+	it("refuses a Core key of RSA over 8192 bits, keys' ceiling, past generations' among them, and takes one at it", async () => {
+		// An 8200-bit RSA public key, made once (an RSA key that size takes seconds to make).
+		const big = createPublicKey({
+			key: Buffer.from(
+				"MIIEIzANBgkqhkiG9w0BAQEFAAOCBBAAMIIECwKCBAIA82QqawSn6AdJOTVJJcHw2jJYW9M9p3XP6XVtxIu9p6Jca7" +
+					"92dQ8Njjdif5ophJAC49Pb2ayZaxNlPdiyJvleL0mIvynLW/77Sjkwo5Ewf0vBa/Q7x5vaG41d39cnqQb2/P87GgEI" +
+					"ZvJt+ddkyiS1guqIlo1nTLlRiafxjtlKCFuaF4+VdVqzl7eiZxvxGJC647wVty/GEJX8wJXL/xT2OckWgRWn5b59F4" +
+					"aA4+e8TQBlr4YHTT4wV01lXBKB1Yt+7X8cT1Y5DAra3RbE/BObvP2XrdmRMiTbm8v53r6xdKVayP0huB0d3l/BCL+x" +
+					"dXeNBUrolpKvRyH7+5DueujXdzgmjDBVlcnAI3z4Zy4rYWb9lTNpOOGpQt8ZSkdINAit5bJ/RZOxxF0bjNiUV6/6At" +
+					"1xeogBQS5iKB+qRF0UNixV3mmC4n0Ifh4n31nA9VNhceKDFba58SDAUSZ/YQBMrBMuD26eac8HYrMJFJLqc1NSDSms" +
+					"BRLvtwao3yam3/fLgat+fGpSgwrdLyE/CRD34+XNQf8KIYCrUNd5mNGXzyrw+CI51+qDnmCIhSYxb1AIrfRa8SjI1Q" +
+					"Eu5MyWcfNbS9ORCEjnYE7V7llRz5cgDfrN55aVKZAKaZVY3pZBt2uS0+nVwzKqOFRUOYYSYUHTUZrhn0bDId0A9izm" +
+					"V552fIOICAYa1sUVF80GarqcuJ9p+2b5fb5J56+7Rvl9kfrShPskxGJMWwwi32sdllvtmkN2XJqVtV4tL4cthLaytt" +
+					"sWqMOFQc4LiC2nR+WO+PCIeGvG47kj5EBi3cTVCJlh4RUa2t0b/RbFSvaKs6fM+MDwJ2dHFVqsPD4H4130aYlqr73t" +
+					"HrSd0E11Hf1Fj99CRYfQzBcJe2qGpiB+qkc1xH7FiwO11RNMEfymcY/WPVeDA3bkLBCnZyPkO+gn0Fw6BOvxdW/0dJ" +
+					"iLxbCQoKT1CZ74ie2dL6p2JUgkhgLmV/SLmoAtrbv1WMAAJi3/ofgHBbRA5pq+hR90kAGSqGcEgAMl4BTkQ/Z2vMZj" +
+					"NPnv5dYT7j05cCF7QSuMJXUt0+nEBTJXBGqLzVSQCpr4SW+ezV+b7nV9YJj/c3Xbt1SpXMm2vRX+U6wsNRCy/1YGM0" +
+					"JH9c9SGP6syU1s3PDUY575xCdn64cQnUFjYHCx3I587tndTpXMd1KBqdhZBipKGdj+DKP+uGZW9DC6+CzRCScpA5zJ" +
+					"ZHMteIKI0FKkXFxuaXcZ8Tk9TYI1QK65ceME6orU/MMVQQ+u11n6efL6YNhhV8UBu+/rE1xiYTmjLKXyUimqgcwLrF" +
+					"ckF+3vajZW/l9yTp461BpaxZgm9muRthnHjKZJlNHNuK4b2AAK7EaJtrCj2zcCAwEAAQ==",
+				"base64",
+			),
+			format: "der",
+			type: "spki",
+		});
+		expect(big.asymmetricKeyDetails?.modulusLength).toBeGreaterThan(rsaModulusCeiling);
+		const core = {
+			generation: 2,
+			keys: [
+				{ generation: 1, kid: "big", alg: "PS256" },
+				{ generation: 2, kid: "core-test", alg: "ES256" },
+			],
+		};
+		const coreKey = generateKeyPairSync("ec", { namedCurve: "P-256" }).privateKey;
+		expect(await refusalsAt(sectionWith({ core }), { ...held, big, "core-test": coreKey })).toEqual(
+			[
+				{
+					where: "keys.core.keys.0.kid",
+					reason: `an RSA key of 8200 bits: a Core key is of ${rsaModulusCeiling} bits at most`,
+				},
+			],
+		);
+		// One of 8192 bits, the ceiling itself, made once too: taken.
+		const atCeiling = createPublicKey({
+			key: Buffer.from(
+				"MIIEIjANBgkqhkiG9w0BAQEFAAOCBA8AMIIECgKCBAEAzo7aZYlwnlffrHYt6Uy/7z0q6zrzWqJUi2V4+1smsMVkKE" +
+					"hml5RfFY1pBTXBH2vMyvD3UWLGw+On2uu7XQLXLXJ4lC52eooJOS5prkfLLLEhvJeUSuda6W0ORRjgrh5YuFKJY78+" +
+					"da+nZVQ0sI6fH47ykHGgavofp1nibBEecCoI0n2PJXPAYB9AMJD6Buh4DpTBYX3I9f/4hQBBqgmpYfKYt6c440msi0" +
+					"EYta84u7GvMbUjwY+OrK7QElCWrY32auFCYjlqHh8tV3BT1m+kYAOJwCbQD7DOhh8DSC7BDJ22rhKNmg3+I0VUMsgw" +
+					"yX5Obwm1q5wdC3eXQY5hpD3wKDjGssxBrbqgEJF7g7lc0R+lEk6r8eJTqaRf8sSDuxm1mHNKhn+sqjXI0quvH/lBvV" +
+					"vVmP2v70dstzasGfFUTQk0J+k7GbpT1X1zWd321F48KX9aROMDpZHnKkrMY2CVC6evNCvx5tgyU4r9yixWo/iyklDm" +
+					"WQ5+eY+fZRvLriem4/kRHat/DA4R8inoHOs7aQoP96JHLAJAoZ60DGjLRWBiT0UYvkUihjxF7GhhNKeeg/dGTi40rG" +
+					"Tj6LZ2N388LxVuk9XS6wnEdgb3i/jIE0qx6xLMHsalcfzs2co34/0FrigKHi4Qde2zdAsqP4v0udrjuVCFPmEiMQrR" +
+					"2lMs2Nzb7UHEhslJbpW3dmYf5WCBzU7PU9FQHTcMn3IfYoHAg4SkLLx7WvFwMLbr84ZssLpFfYQjjn1+VlLnIEOWwB" +
+					"vk1Hx0oPrn+g/dIsKWxy8dlmeiE/JaXGuYiKWX4sc4I0ZF74i6nE3AD4elvRL3JtgkEAFBQWe3GWUiw70Xuw3TRRr/" +
+					"txuw5hI8k6UMUVATfwo62zq/YTa7GrCOwD/Kx69ATOwSeiRZ+k11wxK+aMRjsUrufavNOq/DJqvO5XsKIq6xtZvNyL" +
+					"ElWBqIUBgdHSNZONtUF7X64DxOEBA7hGG+2nQlSAF7bRF73p2vZb6E3LgKyabdYYHOpNX5zUiB3+XnZvvZkGIDNOf7" +
+					"6SepiNzTJFSPuf5t5vPVoVb3FMsPIPmtklGMKEsX5vAzdKv1YLB7luCxZM7e2rPm7RULu2a1F96oTB/ye4V4EjWvyI" +
+					"pTkIYZfYCVzgNFj1zsr5QjcpUZxzNonVhdby34j5DNFiRc3tWXF2+VfMGNnJsqklZLlT6sDmfmV5OA5hCw4MJjvlpu" +
+					"RmSCiKsEx0vpSENSigRcp/kz1PA4WoDPt5YqRkgHHoc8o6RhZZe84hps55MF/NayaJNErNh1vbspNhjFpZkqufCoyY" +
+					"s8TdwrL/Cs89D+5CTFWYoPGqET8gnDkFCrQAV53+/xbc3eBkiA+xJy3xXvrwIDAQAB",
+				"base64",
+			),
+			format: "der",
+			type: "spki",
+		});
+		expect(atCeiling.asymmetricKeyDetails?.modulusLength).toBe(rsaModulusCeiling);
+		const k = await boot(sectionWith({ core }), { ...held, big: atCeiling, "core-test": coreKey });
+		expect(k.coreRing(1)?.length).toBe(1);
 	});
 
 	it("says of a key not of its alg's kind which alg it is to match, and of one not held where to hold it", async () => {

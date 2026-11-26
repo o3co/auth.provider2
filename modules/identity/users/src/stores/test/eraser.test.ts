@@ -1,6 +1,6 @@
 import type { SubjectReading } from "@mod/erasure-extensions";
 import { expect, it } from "vitest";
-import { contactSubjectOf } from "../../ledger.ts";
+import { contactSubjectOf } from "../../contacts/contacts.ts";
 import type { ContactStore } from "../../store.ts";
 import { memoryUsersStores } from "../../testing.ts";
 import { usersEraser } from "../eraser.ts";

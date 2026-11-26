@@ -16,12 +16,25 @@ const app = /^android:apk-key-hash:[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$/;
 const servesHost = (rpId: string, host: string) =>
 	host === rpId || (host.endsWith(`.${rpId}`) && rpId.includes("."));
 
+/** A domain's name: lowercase LDH labels of 1 to 63 characters, no hyphen at either end, joined by dots. */
+const domain =
+	/^(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$/;
+
 export const section = z
 	.strictObject({
 		"rp-id": z
 			.string()
-			.min(1)
-			.describe("The relying party ID: each web origin's host, or a domain each one lies under."),
+			// Always a domain (WebAuthn's RP ID is a valid domain string): lowercase LDH labels of 1 to 63
+			// characters joined by dots, 253 at most (RFC 1035 §2.3.4), an internationalized one as its
+			// A-label (xn--); what the Core signs is sized for no longer.
+			.regex(
+				domain,
+				"a domain: lowercase letters, digits and hyphens in labels of 1 to 63, by dots",
+			)
+			.max(253)
+			.describe(
+				"The relying party ID, a domain of 253 characters at most (an internationalized one as its A-label): each web origin's host, or a domain each one lies under.",
+			),
 		"rp-name": z
 			.string()
 			.min(1)

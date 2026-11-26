@@ -63,6 +63,10 @@ describe("users' import", () => {
 		expect(await importer.record(record)).toBe("imported");
 		expect(await u.contactsOf("s-alice")).toHaveLength(1);
 		expect(await importer.record({ subject: "s-bob" })).toBe("imported");
+		// An internationalized address, as mail takes it, is kept as well.
+		const intl = { subject: "s-yuki", identifier: "yuki", verifiedEmail: "ユーザー@例え.jp" };
+		expect(await importer.record(intl)).toBe("imported");
+		expect(await u.contactsOf("s-yuki")).toEqual([{ kind: "email", value: "ユーザー@例え.jp" }]);
 	});
 
 	it("keeps a password's hash with the identifier where the ledger holds passwords, and none where it holds none", async () => {

@@ -147,11 +147,13 @@ describe("core-wire", () => {
 			jsonAnswer(400, { error: "made_up" }),
 			// RFC 8707's word, the token endpoint's answer to a resource it issues for no audience.
 			jsonAnswer(400, { error: "invalid_target", error_description: "one resource at most" }),
+			// The token endpoint's word for a grant its client may not use (RFC 6749 §5.2), relayed as it is.
+			jsonAnswer(400, { error: "unauthorized_client", error_description: "not this grant" }),
 		];
 		const app = await started([token(() => answers.shift() ?? { status: 500 })]);
 		const front = await client(app.port);
 		const messages = [];
-		for (const id of [1, 2, 3, 4, 5])
+		for (const id of [1, 2, 3, 4, 5, 6])
 			messages.push((await front.send("token", id, tokenMessage())).message);
 		expect(messages).toEqual([
 			{ error: word("invalid_grant"), detail: "used once", dpopNonce: "", retryAfter: "" },
@@ -161,6 +163,12 @@ describe("core-wire", () => {
 			{
 				error: word("invalid_target"),
 				detail: "one resource at most",
+				dpopNonce: "",
+				retryAfter: "",
+			},
+			{
+				error: word("unauthorized_client"),
+				detail: "not this grant",
 				dpopNonce: "",
 				retryAfter: "",
 			},

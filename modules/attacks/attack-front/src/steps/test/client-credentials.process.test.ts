@@ -134,7 +134,7 @@ describe("the compromised Front on a client's own token", () => {
 	});
 
 	it.todo(
-		"F-11: an assertion verified by a key fetched at the client's jwks_uri issues nothing (unauthorized_client): waits for the word to cross the wire",
+		"F-11: an assertion verified by a key fetched at the client's jwks_uri issues nothing (unauthorized_client, which now crosses the wire): waits for a jwks_uri the child Core can fetch, an https server the harness serves and the Core trusts",
 	);
 
 	it("F-12 (outside the claims): the scope rewritten in the body, within the client's ceiling, is what is issued", async () => {

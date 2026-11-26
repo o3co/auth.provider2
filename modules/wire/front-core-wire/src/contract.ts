@@ -31,7 +31,7 @@ export const version = 1;
 /** A frame's header: version, kind or outcome, id and the body's length. */
 export const headerLength = 10;
 /** The greatest request body; every kind's fields at their greatest fit within it. */
-export const maxRequestBody = 24 * 1024;
+export const maxRequestBody = 48 * 1024;
 /** The greatest reply body. */
 export const maxReplyBody = 64 * 1024;
 
@@ -192,7 +192,7 @@ export const requests = Object.freeze({
 		code: 0x0e,
 		fields: Object.freeze([
 			source,
-			field("statement", "jws", 1, 8192),
+			field("statement", "jws", 1, 32768),
 			field("stage", "enum", 1, 1, 4),
 			field("seq", "enum", 1, 1, 17),
 			field("body", "utf8", 0, 8192),
@@ -205,7 +205,7 @@ export const requests = Object.freeze({
 		code: 0x0f,
 		fields: Object.freeze([
 			source,
-			field("statement", "jws", 1, 4096),
+			field("statement", "jws", 1, 5120),
 			field("assertion", "utf8", 1, 8192),
 		] as const),
 	}),
@@ -250,7 +250,8 @@ export const replies = Object.freeze({
  * The OAuth errors a refusal names; a refusal's `error` is a word's place plus one, so a word added
  * goes last. `login_required`: a `prompt=none` the subject is not logged in for (OIDC Core
  * §3.1.2.6); `invalid_request_uri`: a pushed request's `request_uri` unknown, used or expired
- * (RFC 9126 §4, RFC 9101 §7); `invalid_target`: a `resource` no audience is issued for (RFC 8707 §2).
+ * (RFC 9126 §4, RFC 9101 §7); `invalid_target`: a `resource` no audience is issued for (RFC 8707 §2);
+ * `unauthorized_client`: a grant its client may not use (RFC 6749 §5.2).
  */
 export const refusals = Object.freeze([
 	"invalid_request",
@@ -269,6 +270,7 @@ export const refusals = Object.freeze([
 	"login_required",
 	"invalid_request_uri",
 	"invalid_target",
+	"unauthorized_client",
 ] as const);
 
 /** An enum field carried as text: the value each text gives, and the value any other text gives; without `other`, any other is refused. */

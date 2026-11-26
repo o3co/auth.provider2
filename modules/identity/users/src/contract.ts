@@ -89,9 +89,13 @@ export function acceptedAttributes(values: unknown): UserAttributes {
 	});
 }
 
-/** A subject's shape, as OpenID Connect Core §2 bounds `sub`: 1 to 255 ASCII characters. */
+/**
+ * A subject's shape: 1 to 255 ASCII characters, as OpenID Connect Core §2 bounds `sub`, each visible
+ * (0x21 to 0x7e): no space or control character, which a token, a log line or a statement would carry
+ * escaped or misread.
+ */
 export const isWellFormedSubject = (value: unknown): value is string =>
-	typeof value === "string" && /^\p{ASCII}{1,255}$/u.test(value);
+	typeof value === "string" && /^[\x21-\x7e]{1,255}$/.test(value);
 
 export type Verified = { readonly kind: "user"; readonly user: User } | { readonly kind: "none" };
 /** What the user ledger answers when it cannot look users up by subject; never read as none. */

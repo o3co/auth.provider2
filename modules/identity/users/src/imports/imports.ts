@@ -6,7 +6,8 @@ import {
 	isWellFormedSubject,
 	type UsersImport,
 } from "../contract.ts";
-import { identifierFits, type UserSource } from "../registered.ts";
+import { identifierFits } from "../identifier/identifier.ts";
+import type { UserSource } from "../registered.ts";
 
 /** A record's keys: any other refuses it, so nothing brought is dropped unseen. */
 const keys = new Set(["subject", "identifier", "passwordHash", "verifiedEmail"]);

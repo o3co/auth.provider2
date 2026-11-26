@@ -11,25 +11,25 @@ import {
 	userAttribute,
 	type Verified,
 } from "./contract.ts";
-
-/** The longest identifier users takes, in UTF-8 bytes: a fixed guard on what is held and sent, past an email's 254. */
-export const maxIdentifierBytes = 255;
-/** Whether an identifier is within the bound; one past it is none, refused, or malformed, never asked for. */
-export const identifierFits = (identifier: string) =>
-	Buffer.byteLength(identifier) <= maxIdentifierBytes;
+import { identifierFits, maxIdentifierBytes } from "./identifier/identifier.ts";
 
 export const record = z
 	.strictObject({
 		identifier: z
 			.string()
 			.min(1)
-			.refine(identifierFits, `at most ${maxIdentifierBytes} bytes`)
+			.refine(
+				identifierFits,
+				`at most ${maxIdentifierBytes} bytes, with no control character or lone surrogate`,
+			)
 			.describe("What the user logs in with, matched exactly."),
 		subject: z
 			.string()
 			.min(1)
 			.optional()
-			.describe("The subject, 1 to 255 ASCII characters; the identifier when left out."),
+			.describe(
+				"The subject, 1 to 255 visible ASCII characters (no space or control character); the identifier when left out.",
+			),
 		"password-hash": z
 			.string()
 			.refine(
@@ -68,7 +68,7 @@ export const record = z
 		if (subject === "" || isWellFormedSubject(subject)) return;
 		context.addIssue({
 			code: "custom",
-			message: "1 to 255 ASCII characters (the identifier's, where subject is left out)",
+			message: "1 to 255 visible ASCII characters (the identifier's, where subject is left out)",
 			path: ["subject"],
 		});
 	});

@@ -169,18 +169,42 @@ it("refuses to start on an empty identifier or subject, or a plain password, nam
 	]);
 });
 
-it("refuses to start on a subject that is not 1 to 255 ASCII characters, the identifier standing in where it is left out [oidc-core-2-c]", async () => {
+it("refuses to start on a subject that is not 1 to 255 visible ASCII characters, the identifier standing in where it is left out [oidc-core-2-c]", async () => {
 	const where = async (registered: unknown[]) =>
 		((await boot(registered).catch((error) => error)) as BootRefused).refusals.map((r) => r.where);
 	for (const user of [
 		testUser("a", "p", { subject: "s-é" }),
 		testUser("a", "p", { subject: "s".repeat(256) }),
 		testUser("アリス", "p"),
+		// A space or a control character: a statement, a token or a log line would carry it escaped.
+		testUser("a", "p", { subject: "s alice" }),
+		testUser("a", "p", { subject: "s\u0000" }),
+		testUser("a", "p", { subject: "s\u007f" }),
+		testUser("a b", "p"),
 	]) {
 		expect(await where([user]), JSON.stringify(user)).toEqual(["users.registered.0.subject"]);
 	}
 	const named = await boot([testUser("アリス", "p", { subject: "s-alice" })]);
 	expect((await named.get(users).bySubject("s-alice")).kind).toBe("user");
+});
+
+it("refuses an identifier holding a character JSON escapes: a C0 control, DEL or a lone surrogate; non-ASCII is taken", async () => {
+	const where = async (registered: unknown[]) =>
+		((await boot(registered).catch((error) => error)) as BootRefused).refusals?.map(
+			(r) => r.where,
+		) ?? [];
+	for (const identifier of [
+		"a\u0000@example.com",
+		"a@ex\u001fample.com",
+		"a\u007f",
+		"a\ud800@x.example",
+	])
+		expect(
+			await where([testUser(identifier, "p", { subject: "s-1" })]),
+			JSON.stringify(identifier),
+		).toEqual(["users.registered.0.identifier"]);
+	const app = await boot([testUser("ユーザー@例え.jp", "p", { subject: "s-intl" })]);
+	expect((await app.get(users).byIdentifier?.("ユーザー@例え.jp"))?.kind).toBe("user");
 });
 
 it("refuses to start on an attribute value users does not accept, naming the attribute but never the value [guarantee-8-a]", async () => {
@@ -332,6 +356,25 @@ describe("records", () => {
 		await stores.contacts.store.save("t", one as unknown as StoredContacts, "endless");
 		expect(await u.contactsOf("s")).toEqual([{ kind: "email", value: "a@example.com" }]);
 		expect(await u.contactsOf("t")).toEqual([]);
+	});
+
+	it("keeps and reads an address only as mail takes it: no other, nor one past 254 bytes; an internationalized one taken", async () => {
+		const { u, stores } = open();
+		await u.verifiedContact("i", { kind: "email", value: "ユーザー@例え.jp" });
+		expect(await u.contactsOf("i")).toEqual([{ kind: "email", value: "ユーザー@例え.jp" }]);
+		const long = `a@${"x".repeat(2000)}.example`;
+		for (const value of [long, "a@", "not an address", "a\u0000@example.com"])
+			await expect(
+				u.verifiedContact("s", { kind: "email", value }),
+				value.slice(0, 20),
+			).rejects.toBeInstanceOf(TypeError);
+		// One stored otherwise, as a store written by another version could hold: not read.
+		const stored = [
+			{ kind: "email", value: long },
+			{ kind: "email", value: "a@example.com" },
+		];
+		await stores.contacts.store.save("u", stored as unknown as StoredContacts, "endless");
+		expect(await u.contactsOf("u")).toEqual([{ kind: "email", value: "a@example.com" }]);
 	});
 
 	it("writes only a contact's kind and value", async () => {

@@ -1,3 +1,4 @@
+import { rsaModulusCeiling } from "@mod/keys/testing";
 import { hpke } from "@mod/sdk-core-wire";
 import { expect, it } from "vitest";
 import { world } from "../../../test/fixtures/world.ts";
@@ -45,4 +46,9 @@ it("refuses boot for an issuer past the wire's limit, and boots at it", async ()
 	await expect(world({ issuer: `${at}a` })).rejects.toMatchObject({
 		refusals: [expect.objectContaining({ reason: expect.stringMatching(/issuer/) })],
 	});
+});
+
+it("bounds a Core key's RSA as keys does: the completion's limit is keys' own ceiling", () => {
+	// Each word has its owner (sdk-core-wire's limit, keys' ceiling); a key keys takes fits the completion.
+	expect(hpke.completionLimits.rsaBits).toBe(rsaModulusCeiling);
 });

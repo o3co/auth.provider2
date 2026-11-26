@@ -144,8 +144,14 @@ describe("each operation over HTTP", () => {
 			["ct", 0, 2064],
 		]);
 		expect(requests.continue.fields.find((f) => f.name === "seq")).toMatchObject({ values: 17 });
+		// A creation's statement at its largest (worker-2's wire-fit survey, §A.2, §A.3): fifteen excluded
+		// IDs of 1023 bytes under a Core key's RSA of 8192 bits, kid 128 and issuer 256, 31151; a
+		// possession of a 1023-byte ID under that key, 4511. Each limit holds it with a margin.
 		expect(requests.continue.fields.find((f) => f.name === "statement")).toMatchObject({
-			max: 8192,
+			max: 32768,
+		});
+		expect(requests.keyFinish.fields.find((f) => f.name === "statement")).toMatchObject({
+			max: 5120,
 		});
 		expect(requests.firstKeyRecover.fields.map((f) => [f.name, f.min, f.max])).toEqual([
 			["source", 0, 45],

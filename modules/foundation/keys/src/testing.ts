@@ -81,3 +81,6 @@ export function testHolder(given: Readonly<Record<string, KeyObject>> = {}): Mod
 		m.contribute(keyHolders).by(() => holder),
 	]);
 }
+
+/** For a test tying another module's bound to it: the most bits a Core key's RSA may have. */
+export { rsaModulusCeiling } from "./rings/ring.ts";

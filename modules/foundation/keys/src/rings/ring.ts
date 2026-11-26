@@ -39,6 +39,8 @@ export interface Rings {
 
 /** The least modulus of an RSA key, in bits (RFC 7518 §3.3, §3.5). */
 const rsaModulusFloor = 2048;
+/** The greatest modulus of a Core key's RSA, in bits: what the Core signs is sized for no larger. */
+export const rsaModulusCeiling = 8192;
 
 const rsa = (key: KeyObject) =>
 	key.asymmetricKeyType === "rsa" &&
@@ -142,6 +144,14 @@ export function readRings(s: Section, holder: KeyHolder): Rings | { readonly ref
 			refused.push({
 				where,
 				reason: `the key held for it is not of the kind ${at(...path, "alg")} names`,
+			});
+			return undefined;
+		}
+		const modulus = key.asymmetricKeyDetails?.modulusLength ?? 0;
+		if (path[0] === "core" && key.asymmetricKeyType === "rsa" && modulus > rsaModulusCeiling) {
+			refused.push({
+				where,
+				reason: `an RSA key of ${modulus} bits: a Core key is of ${rsaModulusCeiling} bits at most`,
 			});
 			return undefined;
 		}

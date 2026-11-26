@@ -40,7 +40,7 @@
 - Boot is refused at `passkey-management` for a kind composed that `promises` holds no declaration of, or holds as past: it would pass unseen by those who rely on the tokens.
 
 ## Depends on
-- `kernel`, `keys`, `users`, `passkeys`, `passkey-witness`, `approvals`, `webauthn`, `subject-revocation`, `mail`, `promises`, `http`, `rate-limit`, `metrics`, `transparency`, `transparency-wire`, `sdk-core-wire`; `zod`
+- `kernel`, `keys`, `users`, `passkeys`, `passkey-witness`, `approvals`, `webauthn`, `subject-revocation`, `mail`, `promises`, `http`, `rate-limit`, `metrics`, `transparency`, `transparency-wire`, `sdk-core-wire`, `front-core-wire`; `zod`
 
 ## Vocabulary
 - first key: a subject's first passkey, issued through the first key's path to a subject holding none.
