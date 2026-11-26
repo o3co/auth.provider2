@@ -102,7 +102,8 @@ export function badFront(wire: Wire, source: string) {
 	): Promise<Answered> => {
 		// The rewrites as they stand when the request comes: one setting for its message and its reply.
 		const now = rewrites;
-		const read = messageOf(kind, { values, headers, source });
+		// Its requests' bodies are texts alone: none is sent as no text.
+		const read = messageOf(kind, { values, headers, source, mistyped: new Set() });
 		if (!read.ok) return invalidRequest;
 		const change = now.messages?.[kind] as
 			| ((message: Message<K>) => Message<K> | Promise<Message<K>>)

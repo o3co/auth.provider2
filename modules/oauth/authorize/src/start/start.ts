@@ -139,7 +139,11 @@ function withoutPrompt(claims: Readonly<Record<string, unknown>>) {
 export function starting(p: StartParts) {
 	return async (request: HttpRequest): Promise<HttpResponse> => {
 		// Every field held to front-core-wire's spec before any is acted on, as the Front's are.
-		const sent = requestOf("loginStart", { values: request.fields, headers: new Map() });
+		const sent = requestOf("loginStart", {
+			values: request.fields,
+			headers: new Map(),
+			mistyped: request.mistyped ?? new Set(),
+		});
 		if (!sent.ok) return bad("the start's fields are not front-core-wire's");
 		const { message } = sent;
 		// Each field sent, by its name in front-core-wire, as the Front carries it: an empty one is not sent.

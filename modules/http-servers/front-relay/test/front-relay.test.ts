@@ -220,13 +220,26 @@ describe("front-relay", () => {
 		expect(json.status).toBe(415);
 		const form = await post(`${url}/login/finish`, { statement: "a.b.c", assertion: "x" });
 		expect(form.status).toBe(415);
+		// A field sent as no text is not carried, never read as absent: refused, naming the field.
 		const mistyped = await fetch(`${url}/login/finish`, {
 			method: "POST",
 			body: JSON.stringify({ statement: "a.b.c", assertion: 1 }),
 			headers: { "content-type": "application/json" },
 		});
 		expect(mistyped.status).toBe(400);
+		expect(await mistyped.json()).toEqual({
+			error: "invalid_request",
+			error_description: "assertion: fieldSyntax",
+		});
 		expect(core.seen).toEqual([]);
+		// A name the wire gives no field under is ignored, of no text as of a text.
+		const extra = await fetch(`${url}/login/finish`, {
+			method: "POST",
+			body: JSON.stringify({ statement: "a.b.c", assertion: "x", extra: 1, more: null }),
+			headers: { "content-type": "application/json" },
+		});
+		expect(extra.status).not.toBe(400);
+		expect(core.seen).toHaveLength(1);
 	});
 
 	it("lets the listed origin call the login screen's operations across origins, and no one the token endpoint", async () => {

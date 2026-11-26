@@ -312,6 +312,8 @@ export interface Carried {
 	readonly values: ReadonlyMap<string, readonly string[]>;
 	readonly headers: ReadonlyMap<string, string>;
 	readonly source?: string;
+	/** The body's names whose value is no text, every reader of a body to give: a wire field under one is not carried, never absent. */
+	readonly mistyped: ReadonlySet<string>;
 }
 
 /** A message read from HTTP, or the field it cannot carry and the code of why. */
@@ -384,6 +386,8 @@ export function messageOf<K extends RequestKind>(kind: K, carried: Carried): Rea
 			continue;
 		}
 		const header = side.headerNames?.[spec.name];
+		if (!header && carried.mistyped.has(nameOf(side, spec.name)))
+			return { ok: false, field: spec.name, error: "fieldSyntax" };
 		const sent = header
 			? [carried.headers.get(header) ?? ""]
 			: carried.values.get(nameOf(side, spec.name));
@@ -435,5 +439,9 @@ export function carriedOf<K extends RequestKind>(kind: K, message: Message<K>): 
 		else if (header) headers.set(header, text);
 		else values.set(nameOf(side, spec.name), [text]);
 	}
-	return source === undefined ? { values, headers } : { values, headers, source };
+	// What it writes is texts alone: no member of no text.
+	const mistyped = new Set<string>();
+	return source === undefined
+		? { values, headers, mistyped }
+		: { values, headers, source, mistyped };
 }

@@ -67,14 +67,13 @@ export function relayFallback(link: CoreLink, log: Log): Fallback {
 			if (kind === undefined) return notFound;
 			const json = request.json !== undefined;
 			if (json !== (overHttp.operations[kind].body === "json")) return unsupported;
-			// The member's name is the request's, so the answer names none.
-			if (request.mistyped?.size) return refused("body", "a member that is not a string");
 			// The source is the one the Front's trusted proxies determined, never one the request names.
 			const { source } = request;
 			const read = messageOf(kind, {
 				values: request.fields,
 				headers: request.headers,
 				...(source.determined && { source: source.address }),
+				mistyped: request.mistyped ?? new Set(),
 			});
 			if (!read.ok) return refused(read.field, read.error);
 			try {

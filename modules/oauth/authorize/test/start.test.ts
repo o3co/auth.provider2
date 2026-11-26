@@ -174,9 +174,9 @@ function harness(
 			},
 		}),
 	});
-	const send = (fields: Record<string, string>) =>
+	const send = (fields: Record<string, unknown>) =>
 		start(testRequest({ json: fields, source: { address: "192.0.2.1" } }));
-	const body = (fields: Record<string, string>) =>
+	const body = (fields: Record<string, unknown>) =>
 		send(fields).then((r) => ({ status: r.status, json: (r.body as { json: unknown }).json }));
 	const fields = (request: string, x = b64(32)) => ({
 		clientId: "c1",
@@ -295,6 +295,9 @@ describe("a login's start (②)", () => {
 			{ request: "not a jws" },
 			{ request: `a.${"b".repeat(8189)}.c` },
 			{ eSigX: respelled(sent.eSigX) },
+			// A field sent as no text is not carried, never read as no JAR or no request_uri.
+			{ request: 5 },
+			{ requestUri: {} },
 		]) {
 			expect(await h.body({ ...sent, ...off })).toEqual(refused);
 		}

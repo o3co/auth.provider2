@@ -12,7 +12,7 @@
 - `decodeRequest` and `decodeReply` (bytes): a `Decoded` value, the frame's kind or outcome, its id and its fields, or the code it is rejected with and the id its header gave. They never throw.
 - `readHeader` (bytes, the body's limit) and `frameSplitter` (the limit, `onFrame`, `onError`): a stream cut into whole frames.
 - `checkField` (spec, bytes): the one check of a field's length and characters both sides run.
-- `operationAt` (method, path, the body's values): the operation a request is, by the body value telling apart those sharing a path, or none. `messageOf` (kind, `Carried`: the body's values, the headers, and apart the source the Front determined) → the message, or the field it cannot carry and the code (`Read`); `carriedOf` (kind, message) → what the Core's route reads, the discriminator first, the declared source apart.
+- `operationAt` (method, path, the body's values): the operation a request is, by the body value telling apart those sharing a path, or none. `messageOf` (kind, `Carried`: the body's values, the headers, the body's names of no text, and apart the source the Front determined) → the message, or the field it cannot carry and the code (`Read`); `carriedOf` (kind, message) → what the Core's route reads, the discriminator first, the declared source apart.
 - `requestOf` (kind, `Carried`) → `Read`: as `messageOf` reads it, every field then held to its spec as the encoder holds it, an enum's number and a text as read (a lone surrogate refused); what a Core's route reads before it acts on any field.
 - `Message`, `WireRequest`, `WireReply`, `Decoded`, `Rejected`, `Header`, `FieldsOf` and `Value`: the values, typed from the schema.
 - `./testing`: `fuzzer` (seed): well-formed frames of a kind and mutations of a frame, reproducible from the seed.
@@ -24,6 +24,7 @@
 - A stream's splitter stops at the first header whose version or length is wrong, calling `onError` once and reading nothing after, before the body is waited for.
 - A decoded field is a copy, so a buffer reused by the caller changes nothing read.
 - Every message `carriedOf` writes, `messageOf` reads back the same. The declared source is read from `Carried`'s own member alone, never from the body or a header. It refuses a name sent twice, an enum text its `texts` lack where no `other` is, a number not in plain decimal, and bytes not in the one base64url text of them; a field's length and characters stay the encoder's to check.
+- A wire field the body sent as no text (a name in `Carried`'s `mistyped`, which every reader of a body gives, empty where none) is refused, naming the field, never read as absent; any other name of no text is ignored, as an unknown text is.
 
 ## Depends on
 - `front-core-wire` (the schema).

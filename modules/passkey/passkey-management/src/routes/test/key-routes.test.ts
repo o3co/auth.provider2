@@ -43,7 +43,9 @@ describe("a key's finish route", () => {
 			json: { sealed: { enc: "E", ct: "C" } },
 		});
 		expect((await done.post(done.r.keyFinish, { statement: jws })).status).toBe(400);
-		expect((await done.post(done.r.keyFinish, { ...finish, extra: null })).status).toBe(400);
+		// A field sent as no text is not carried; a name the wire gives no field is ignored.
+		expect((await done.post(done.r.keyFinish, { ...finish, assertion: 1 })).status).toBe(400);
+		expect((await done.post(done.r.keyFinish, { ...finish, extra: null })).status).toBe(200);
 		const refused = routesOver({ kind: "refused", reason: "reservation" });
 		expect((await refused.post(refused.r.keyFinish, finish)).body).toEqual({
 			json: { error: "access_denied" },

@@ -16,6 +16,7 @@ const carried = (
 ) => ({
 	values: values(body),
 	headers: new Map(Object.entries(headers)),
+	mistyped: new Set<string>(),
 	...(source === undefined ? {} : { source }),
 });
 
@@ -271,5 +272,25 @@ describe("an operation over HTTP", () => {
 				error: "fieldSyntax",
 			});
 		}
+	});
+
+	it("refuses a field the body sent as no text, never reading it as absent, and ignores any other name", () => {
+		const decoded = decodeRequest(validFrame("continue"));
+		if (!decoded.ok) throw new Error("a valid frame");
+		const sent = carriedOf("continue", decoded.value.message as never);
+		for (const name of ["body", "sig", "enc", "ct", "statement"]) {
+			const values = new Map(sent.values);
+			values.delete(name);
+			const carried = { ...sent, values, mistyped: new Set([name]) };
+			const refused = { ok: false, field: name, error: "fieldSyntax" };
+			expect(messageOf("continue", carried), name).toEqual(refused);
+			expect(requestOf("continue", carried), name).toEqual(refused);
+		}
+		// A name the wire gives no field under, sent as no text, is ignored, as an unknown text is.
+		expect(requestOf("continue", { ...sent, mistyped: new Set(["extra", "source"]) }).ok).toBe(
+			true,
+		);
+		// None named, as before.
+		expect(requestOf("continue", { ...sent, mistyped: new Set() }).ok).toBe(true);
 	});
 });

@@ -73,7 +73,11 @@ const malformed = new Set(["unknown", "expired", "used", "purpose", "malformed"]
 export function finishing(p: FinishParts) {
 	return async (request: HttpRequest): Promise<HttpResponse> => {
 		// Every field held to front-core-wire's spec before any is acted on, as the Front's are.
-		const read = requestOf("loginFinish", { values: request.fields, headers: new Map() });
+		const read = requestOf("loginFinish", {
+			values: request.fields,
+			headers: new Map(),
+			mistyped: request.mistyped ?? new Set(),
+		});
 		if (!read.ok) return bad("the finish's fields are not front-core-wire's");
 		const { statement, assertion } = read.message;
 		const used = await p.approvals.use({ statement, assertion });

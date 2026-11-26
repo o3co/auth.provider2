@@ -20,7 +20,11 @@ const crossSite =
 
 /** A request's message as front-core-codec reads it, every field held to front-core-wire's spec; none for any other. */
 function read<K extends RequestKind>(kind: K, request: HttpRequest) {
-	const read: Read<K> = requestOf(kind, { values: request.fields, headers: new Map() });
+	const read: Read<K> = requestOf(kind, {
+		values: request.fields,
+		headers: new Map(),
+		mistyped: request.mistyped ?? new Set(),
+	});
 	return read.ok ? read.message : undefined;
 }
 

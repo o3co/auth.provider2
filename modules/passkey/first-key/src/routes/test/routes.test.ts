@@ -69,6 +69,9 @@ describe("the first key's routes", () => {
 		expect(given.status).toBe(200);
 		expect((given.body as { json: { nonce: string } }).json.nonce).toMatch(/^[A-Za-z0-9_-]{43}$/);
 		expect((await post("/first-key/nonce", { stage: "other" })).status).toBe(400);
+		// A field sent as no text is not carried; a name the wire gives no field is ignored.
+		expect((await post("/first-key/nonce", { stage: 0 })).status).toBe(400);
+		expect((await post("/first-key/nonce", { stage: "start", extra: 1 })).status).toBe(200);
 	});
 
 	it("answers a start its sealed code, a nonce used again access_denied, and fields of another size invalid", async () => {

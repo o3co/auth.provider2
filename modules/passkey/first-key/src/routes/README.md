@@ -14,6 +14,7 @@ Internal module of `first-key`: the first key's path as the Core's routes.
 ## Invariants
 - Each is counted per source under its own name (`first-key.nonce`, `.start`, `.mail`, `.recover`), takes JSON alone, across origins with `content-type`, and reads no cookie.
 - A request whose fields `requestOf` refuses, missing, repeated, of a size or characters the wire does not give, or bytes not in their one base64url text, is `invalid_request`, with an `error_description`, before any nonce is used; every refusal of the path itself is `access_denied` alone, its reason never told.
+- A field sent as a member of no text is `invalid_request`, as `requestOf` refuses it; a member under a name the wire gives no field is ignored, of no text as of a text.
 - A start or a mail's side whose opening the keys' holder withdrew is Unavailable.
 
 ## Depends on
