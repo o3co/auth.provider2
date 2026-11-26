@@ -427,6 +427,12 @@ it("gives the access token the code's amr, authentication time and acr, issued f
 	]);
 });
 
+it("declares every token it issues a person's, for the token endpoint's stance on no client subject token", async () => {
+	const s = await serve();
+	const grant = s.app.get(grantsSeen).find((g) => g.grantType === "authorization_code");
+	expect(grant?.subjectKind).toBe("user");
+});
+
 it("issues one bundle rooted in the code's approval, carrying the root's reference unread", async () => {
 	const s = await serve();
 	const bundles: BundleRequest[] = [];

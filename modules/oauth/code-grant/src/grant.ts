@@ -109,6 +109,7 @@ export function codeGrant(parts: {
 		grantType: codeGrantType,
 		readsAmbient: "none",
 		targets: true,
+		subjectKind: "user",
 		// A code is redeemed only with a proof by the key its authorization asked for ahead.
 		keyHold: "authorization",
 		handle: async ({ client, param, admits, issue, binding, target }) => {
