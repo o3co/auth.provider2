@@ -14,6 +14,7 @@
 	"dependencies": {
 		"@mod/approvals": "workspace:*",
 		"@mod/continuation-wire": "workspace:*",
+		"@mod/front-core-codec": "workspace:*",
 		"@mod/front-core-wire": "workspace:*",
 		"@mod/http": "workspace:*",
 		"@mod/kernel": "workspace:*",

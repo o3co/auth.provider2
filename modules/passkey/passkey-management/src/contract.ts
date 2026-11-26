@@ -3,7 +3,7 @@ import type { ContinuationStageName } from "@mod/continuation-wire";
 import { contract, extensionPoint } from "@mod/kernel";
 import type { SigningKey } from "@mod/sdk-core-wire";
 
-/** A continuation as `/continue` read it, by the wire's sizes: the statement, its hash, and what the screen signed. */
+/** A continuation as `/continue` read it, by the wire's spec: the statement, its hash, and what the screen signed. */
 export type ContinueAsk = {
 	readonly stage: ContinuationStageName;
 	/** The request's source, as its rate is counted (`rate-limit`'s `sourceKey`). */

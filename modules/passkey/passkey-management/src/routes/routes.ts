@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
 import type { Screen } from "@mod/approvals";
 import { continuations } from "@mod/continuation-wire";
-import { requests } from "@mod/front-core-wire";
+import { type Read, requestOf } from "@mod/front-core-codec";
+import { overHttp, type RequestKind } from "@mod/front-core-wire";
 import { type HttpRequest, type HttpResponse, jsonAnswer, use } from "@mod/http";
 import { requestsPerSource, sourceKey, type Window } from "@mod/rate-limit";
 import type { Started as Approving, Finished } from "../approval/approval.ts";
@@ -13,13 +14,21 @@ const denied = () => jsonAnswer(400, { error: "access_denied" });
 const malformed = (description: string) =>
 	jsonAnswer(400, { error: "invalid_request", error_description: description });
 
-/** A field's bytes from its unpadded base64url, of a length within the wire's bounds; none for any other. */
-function bytesOf(text: string | undefined, min: number, max = min): Uint8Array | undefined {
-	if (text === undefined || !/^[A-Za-z0-9_-]*$/.test(text)) return undefined;
-	const bytes = Buffer.from(text, "base64url");
-	// One spelling alone: a text that does not read back as given names no bytes.
-	if (bytes.toString("base64url") !== text) return undefined;
-	return bytes.length >= min && bytes.length <= max ? new Uint8Array(bytes) : undefined;
+/** A request's message as front-core-codec reads it, every field held to front-core-wire's spec; none for any other. */
+function read<K extends RequestKind>(kind: K, request: HttpRequest) {
+	// A member of no string is none of the wire's fields, and one sent there is not the wire's.
+	if (request.mistyped?.size) return undefined;
+	const read: Read<K> = requestOf(kind, { values: request.fields, headers: new Map() });
+	return read.ok ? read.message : undefined;
+}
+
+/** A field's bytes as the screen sent them, their one base64url text. */
+const textOf = (bytes: Uint8Array) => Buffer.from(bytes).toString("base64url");
+
+/** A wire enum's word for its number, as front-core-wire's texts give it; none for a number no text names. */
+function wordOf(kind: RequestKind, name: string, n: number | undefined): string | undefined {
+	const texts = overHttp.operations[kind].enumTexts?.[name]?.texts ?? {};
+	return Object.entries(texts).find(([, value]) => value === n)?.[0];
 }
 
 const crossSite =
@@ -28,50 +37,21 @@ const crossSite =
 /** A sealed continuation's ciphertext: its padded plaintext and the AEAD's tag, one length for every body. */
 const sealedBytes = continuations.plainBytes + 16;
 
-/** The most a field of a wire operation carries, as front-core-wire holds it: the route takes no more. */
-const maxOf = (kind: "continue" | "keyFinish" | "approvalFinish", name: string) => {
-	const field = (requests[kind].fields as readonly { name: string; max: number }[]).find(
-		(f) => f.name === name,
-	);
-	if (field === undefined) throw new TypeError(`front-core-wire's ${kind} has no ${name}`);
-	return field.max;
-};
-/** A compact JWS of at most `max` characters; none for any other text. */
-const jwsOf = (text: string | undefined, max: number) =>
-	text !== undefined &&
-	text.length <= max &&
-	/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(text)
-		? text
-		: undefined;
-/** A UTF-8 text of 1 to `max` bytes; none for any other. */
-const utf8Of = (text: string | undefined, max: number) =>
-	text !== undefined && text.length > 0 && Buffer.byteLength(text) <= max ? text : undefined;
-
-/** A continuation's fields as front-core-wire sizes them, its stage one `continuation-wire` names; none for any other. */
-function continuationOf(fields: HttpRequest["fields"]) {
-	const statement = jwsOf(fields.single("statement"), maxOf("continue", "statement"));
-	const stage = continuations.stages.find((name) => name === fields.single("stage"));
-	const seq = fields.single("seq");
-	if (!statement || !stage) return undefined;
-	if (seq === undefined || !/^[1-9][0-9]?$/.test(seq) || Number(seq) > 16) return undefined;
-	const [body, sig, enc, ct] = ["body", "sig", "enc", "ct"].map(
-		(name) => fields.single(name) ?? "",
-	);
+/** A continuation, its stage one `continuation-wire` names, its number never 0, clear or sealed as its stage is; none for any other. */
+function continuationOf(request: HttpRequest) {
+	const q = read("continue", request);
+	const word = wordOf("continue", "stage", q?.stage);
+	const stage = continuations.stages.find((name) => name === word);
+	if (!q || !stage || q.seq === 0) return undefined;
+	const { statement, seq, body, sig, enc, ct } = q;
 	// A sealed stage's body and signature come in its sealing alone; any other's in the clear, unsealed.
 	if ((continuations.sealed as readonly string[]).includes(stage)) {
-		if (body !== "" || sig !== "" || !bytesOf(enc, 65) || !bytesOf(ct, sealedBytes))
+		if (body !== "" || sig.length > 0 || enc.length !== 65 || ct.length !== sealedBytes)
 			return undefined;
-		return { stage, statement, seq: Number(seq), sealed: { enc: enc as string, ct: ct as string } };
+		return { stage, statement, seq, sealed: { enc: textOf(enc), ct: textOf(ct) } };
 	}
-	if (!utf8Of(body, maxOf("continue", "body")) || !bytesOf(sig, 64) || enc !== "" || ct !== "")
-		return undefined;
-	return {
-		stage,
-		statement,
-		seq: Number(seq),
-		body: body as string,
-		signature: sig as string,
-	} as const;
+	if (body === "" || sig.length !== 64 || enc.length > 0 || ct.length > 0) return undefined;
+	return { stage, statement, seq, body, signature: textOf(sig) } as const;
 }
 
 /** The stages contributed, by their word: boot refuses a stage two modules contribute. */
@@ -90,7 +70,7 @@ const formOf = (stage: string) =>
 
 /**
  * `POST /continue`, each stage handed to the module that continues it: the fields read by the
- * wire's sizes, a stage none continues refused, its answer of the form the wire gives its stage;
+ * wire's spec, a stage none continues refused, its answer of the form the wire gives its stage;
  * any refusal in one word, its reason to `refused` alone.
  */
 export function continueRoute(p: {
@@ -106,8 +86,7 @@ export function continueRoute(p: {
 		cors: { headers: ["content-type"] },
 		crossSite,
 		handle: async (request: HttpRequest): Promise<HttpResponse> => {
-			// A member of no string is none of the wire's fields, and one sent there is not the wire's.
-			const q = request.mistyped?.size ? undefined : continuationOf(request.fields);
+			const q = continuationOf(request);
 			if (!q)
 				return malformed(
 					"a continuation is a statement, a stage, a sequence number, and its body and E_sig's signature, sealed for a sealed stage",
@@ -152,35 +131,22 @@ export function keyRoutes(p: {
 			uses: counted("passkey-management.key-finish"),
 			...screen,
 			handle: async (request: HttpRequest): Promise<HttpResponse> => {
-				if (request.mistyped?.size)
-					return malformed("a key's finish is its possession and the new key's assertion");
-				const statement = jwsOf(
-					request.fields.single("statement"),
-					maxOf("keyFinish", "statement"),
-				);
-				const assertion = utf8Of(
-					request.fields.single("assertion"),
-					maxOf("keyFinish", "assertion"),
-				);
-				if (!statement || !assertion)
-					return malformed("a key's finish is its possession and the new key's assertion");
-				return registeredBy(await p.finish({ statement, assertion }));
+				const q = read("keyFinish", request);
+				if (!q) return malformed("a key's finish is its possession and the new key's assertion");
+				return registeredBy(await p.finish({ statement: q.statement, assertion: q.assertion }));
 			},
 		},
 	};
 }
 
-/** An approval's start's fields as front-core-wire sizes them; none for any other. */
-function approvalStartOf(fields: HttpRequest["fields"]) {
-	const purpose = fields.single("purpose");
-	const eEnc = fields.single("eEnc");
-	const x = fields.single("eSigX");
-	const y = fields.single("eSigY");
-	if (purpose !== "passkey-add" && purpose !== "passkey-manage") return undefined;
-	if (!bytesOf(eEnc, 65) || !bytesOf(x, 32) || !bytesOf(y, 32)) return undefined;
+/** An approval's start: its purpose and the screen's keys; none for any other. */
+function approvalStartOf(request: HttpRequest) {
+	const q = read("approvalStart", request);
+	const purpose = wordOf("approvalStart", "purpose", q?.purpose);
+	if (!q || (purpose !== "passkey-add" && purpose !== "passkey-manage")) return undefined;
 	const screen: Screen = {
-		eEnc: eEnc as string,
-		eSig: { kty: "EC", crv: "P-256", x: x as string, y: y as string },
+		eEnc: textOf(q.eEnc),
+		eSig: { kty: "EC", crv: "P-256", x: textOf(q.eSigX), y: textOf(q.eSigY) },
 	};
 	return { purpose, screen } as const;
 }
@@ -204,7 +170,7 @@ export function approvalRoutes(p: {
 			uses: counted("passkey-management.approval-start"),
 			...screen,
 			handle: async (request: HttpRequest): Promise<HttpResponse> => {
-				const q = request.mistyped?.size ? undefined : approvalStartOf(request.fields);
+				const q = approvalStartOf(request);
 				if (!q) return malformed("an approval's start is its purpose and the screen's keys");
 				const started = await p.start({ ...q, by: sourceKey(request.source.address) });
 				return started.kind === "statement"
@@ -218,23 +184,12 @@ export function approvalRoutes(p: {
 			uses: counted("passkey-management.approval-finish"),
 			...screen,
 			handle: async (request: HttpRequest): Promise<HttpResponse> => {
-				if (request.mistyped?.size)
+				const q = read("approvalFinish", request);
+				if (!q)
 					return malformed(
 						"an approval's finish is its statement and the approving key's assertion",
 					);
-				const statement = jwsOf(
-					request.fields.single("statement"),
-					maxOf("approvalFinish", "statement"),
-				);
-				const assertion = utf8Of(
-					request.fields.single("assertion"),
-					maxOf("approvalFinish", "assertion"),
-				);
-				if (!statement || !assertion)
-					return malformed(
-						"an approval's finish is its statement and the approving key's assertion",
-					);
-				const finished = await p.finish({ statement, assertion });
+				const finished = await p.finish({ statement: q.statement, assertion: q.assertion });
 				return finished.kind === "completed"
 					? jsonAnswer(200, { sealed: { enc: finished.enc, ct: finished.ct } })
 					: denied();

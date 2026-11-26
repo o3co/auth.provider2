@@ -134,10 +134,15 @@ describe("`/continue`, each stage to the module that continues it", () => {
 		for (const wrong of [
 			{ seq: "0" },
 			{ seq: "17" },
+			{ seq: "256" },
+			{ seq: "272" },
 			{ seq: "01" },
 			{ sig: b64(63) },
 			{ body: "" },
 			{ body: "x".repeat(8193) },
+			// A text the wire carries no such way: a control character, a lone surrogate.
+			{ body: "a\u0001b" },
+			{ body: "a\ud800b" },
 			{ statement: "a.b" },
 			{ enc: null },
 			{ ct: [] },

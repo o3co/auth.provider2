@@ -24,7 +24,7 @@
 - A key a passkey-add approves breaks none of the new authorization's claim (P1): its stance holds it.
 
 ## Depends on
-- `kernel`, `users`, `passkeys`, `approvals`, `webauthn`, `subject-revocation`, `promises`, `http`, `rate-limit`, `transparency`, `transparency-wire`, `sdk-core-wire`, `front-core-wire`, `continuation-wire`; `zod`
+- `kernel`, `users`, `passkeys`, `approvals`, `webauthn`, `subject-revocation`, `promises`, `http`, `rate-limit`, `transparency`, `transparency-wire`, `sdk-core-wire`, `front-core-wire`, `front-core-codec`, `continuation-wire`; `zod`
 
 ## Vocabulary
 - first key: a subject's first passkey, issued through the first key's path to a subject holding none; here, a creation's basis.
