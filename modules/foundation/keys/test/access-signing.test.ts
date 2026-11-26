@@ -78,6 +78,13 @@ describe("accessTokenSigning", () => {
 		await expect(
 			k.sign(k.prepare("authority", "JWT"), bytes({ sub: "a", list: [{ item: null }] })),
 		).rejects.toThrow(/claims are null: list\[0\]\.item$/);
+		// A null that is an array's element itself, at the top or nested, is a null claim too.
+		await expect(
+			k.sign(k.prepare("authority", "JWT"), bytes({ sub: "a", nickname: [null] })),
+		).rejects.toThrow(/claims are null: nickname\[0\]$/);
+		await expect(
+			k.sign(k.prepare("authority", "JWT"), bytes({ sub: "a", deep: { list: ["x", [null]] } })),
+		).rejects.toThrow(/claims are null: deep\.list\[1\]\[0\]$/);
 		await expect(access.sign(access.prepare(), claims)).rejects.not.toThrow(/kept-value/);
 		// keys logs the claims it refused by their paths, as the caller's failure is logged by its kind alone.
 		expect(recorded.lines().find((line) => line.event === "keys.null_claims")).toEqual({

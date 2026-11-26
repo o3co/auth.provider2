@@ -42,10 +42,14 @@ export function jsonOf(bytes: Uint8Array): unknown {
 	}
 }
 
-/** The key paths of the claims whose value is null, in objects at any depth, arrays' among them. */
+/** The key paths of the claims whose value is null at any depth: an object's member or an array's element. */
 function nullClaims(value: unknown, at = "", found: string[] = []): string[] {
 	if (Array.isArray(value)) {
-		for (const [i, item] of value.entries()) nullClaims(item, `${at}[${i}]`, found);
+		for (const [i, item] of value.entries()) {
+			// An element that is null is a null claim, as an object's member is.
+			if (item === null) found.push(`${at}[${i}]`);
+			else nullClaims(item, `${at}[${i}]`, found);
+		}
 	} else if (typeof value === "object" && value !== null) {
 		for (const [key, claim] of Object.entries(value)) {
 			const path = at ? `${at}.${key}` : key;
