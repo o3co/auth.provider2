@@ -10,7 +10,7 @@ import type {
 	Transparency,
 	TransparencyLog,
 } from "@mod/transparency";
-import type { Flow, Preimage } from "@mod/transparency-wire";
+import { type Flow, type Preimage, schemas } from "@mod/transparency-wire";
 import { keyChangePart } from "../contract.ts";
 
 const preimageRecord = { part: keyChangePart, name: "preimage" } as const;
@@ -294,7 +294,18 @@ export function keyChangesOver(p: {
 		const again = await p.transparency.receiptOf({ flow, op: d.op, stage });
 		if ("refused" in again) return again.refused === "unplaced" ? { kind: "none" } : unavailable();
 		if (again.answer.result !== "accepted") return unavailable();
-		const finding = (await p.log.at(flow, again.answer.position))?.finding;
+		const { id, position } = again.answer;
+		const placed = await p.log.at(flow, position);
+		const read = placed && recordOf(placed);
+		const named = read && "position" in read.record ? read.record : undefined;
+		const same =
+			named?.id === id &&
+			named.op === d.op &&
+			named.flow.of === flow.of &&
+			named.flow.id === flow.id &&
+			named.position === position;
+		if (placed && !same) return unavailable();
+		const finding = read?.finding;
 		if (!finding) return unavailable();
 		// As the fold applies one: of a verdict it takes, and took.
 		const took =
@@ -388,6 +399,15 @@ function deletionStageOf(d: DeletedKey) {
 	};
 	return { flow, preimage, stage };
 }
+
+const recordOf = <F>(placed: { readonly record: unknown; readonly finding?: F }) => {
+	try {
+		const parsed = schemas.record.safeParse(placed.record);
+		return parsed.success ? { record: parsed.data, finding: placed.finding } : undefined;
+	} catch {
+		return undefined;
+	}
+};
 
 const unavailable = (): never => {
 	throw new Unavailable("passkey-management");

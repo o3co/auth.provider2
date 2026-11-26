@@ -8,7 +8,8 @@ import { z } from "zod";
  * The parts read, as the state's JSON names them: `keyGeneration` (the subject's key generation, a
  * whole number from 0) and `keys` (a plain object, one own entry for each key the state holds at its
  * position, its value naming the key's credential id as `credential`, in canonical base64url). Each
- * entry is read by its own key, so an entry the log named `__proto__` is one entry too.
+ * entry is read by its own key; a key `__proto__`, which no record id is (transparency-wire refuses
+ * it), makes the whole read none.
  */
 
 const sextets = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
@@ -40,7 +41,8 @@ export function credentialsOf(state: unknown): readonly string[] | undefined {
 	const keys = state.keys;
 	if (!isPlain(keys)) return undefined;
 	const ids: string[] = [];
-	for (const [, entry] of Object.entries(keys)) {
+	for (const [name, entry] of Object.entries(keys)) {
+		if (name === "__proto__") return undefined;
 		// The entry's own `credential` alone: one it inherits is none.
 		if (!isPlain(entry) || !Object.hasOwn(entry, "credential")) return undefined;
 		const read = credential.safeParse(entry.credential);

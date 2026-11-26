@@ -16,7 +16,7 @@
 ## Invariants
 - A protocol (G33): types, frozen constants, fixed schemas and the functions that read by them; no I/O, clock, randomness or state. It depends on no package of the workspace (G2, G6).
 - A state is taken as unknown, as JSON gives it, and read as its JSON names the parts: `keyGeneration`, and `keys` (plain objects alone) with one own entry per held key naming its `credential` in canonical base64url. Every other part is left unread, so a state gaining a part changes no read.
-- An entry is read by its own key (`__proto__` too), never one inherited; an entry naming no credential id makes the whole read none, never a shorter list.
+- An entry is read by its own key, never one inherited; an entry naming no credential id, or a key `__proto__` (no record id is one: transparency-wire refuses it), makes the whole read none, never a shorter list.
 
 ## Depends on
 - Nothing in the workspace; `zod` (a peer).

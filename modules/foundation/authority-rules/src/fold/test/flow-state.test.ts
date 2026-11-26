@@ -54,8 +54,8 @@ describe("the fold's state, read as flow-state-wire reads it", () => {
 		expect(keyGenerationOf(carried(erased))).toBe(1);
 	});
 
-	it("gives a key the log named __proto__ as any other", () => {
+	it("carries a state naming an item __proto__, which no record id is, as one a receiver reads as none", () => {
 		const state = carried(added(emptyState, "__proto__", "AQID"));
-		expect(credentialsOf(state)).toEqual(["AQID"]);
+		expect(credentialsOf(state)).toBeUndefined();
 	});
 });

@@ -31,8 +31,9 @@ const chain = z.array(id);
 const placed = { position: z.number().int().positive(), acceptedAt: count };
 
 /**
- * Items by id, read entry by entry so every own key stays one, `__proto__` too (a record id the log
- * may give): a plain record schema would drop it, and the state read back would differ from the fold's.
+ * Items by id, read entry by entry so every own key stays one: no record id is `__proto__`
+ * (transparency-wire refuses it, and the Core takes in no record off that form), yet a plain record
+ * schema would drop such a key silently, and the state read back would differ from the one given.
  */
 const items = <T extends z.ZodType>(item: T) =>
 	z.preprocess(

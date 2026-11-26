@@ -20,7 +20,7 @@ Internal module of `transparency-wire`: a record and its append: what a writer s
 - A record's id is never `__proto__` where the wire carries the record's own id: a record, a tick, the log's accepted answer, a receipt, a judgment, a stateOf's results, and the checkpoint's and the status's id lists and reasons. A flow's state names its items by record ids and a store refuses that key, so a log naming one is off its form: such a record is not there, and is never named in a checkpoint, a status or a judgment.
 - A record's id, where the wire carries it, is well-formed UTF-16 (no lone surrogate: a store refuses one, and a refresh token's base64url of its UTF-8 would not give it back) and at most 63 bytes in UTF-8: a refresh token is a family's id (its bundle record's) in base64url beside a 43-character secret, within the Front wire's `refreshToken` of 128 characters (front-core-wire). Owner, 2026-11-26.
 - A reference to a record (a preimage's root or parent, a confirmation's registration) stays `id`: one no record can have dangles and is judged so. Any other `id` (a flow's, a key's, an op's, a shard's) may be `__proto__`.
-- Only a reader that holds what it reads to these forms is kept from such a record: a log adapter that does not, the Core's take-in trusting it, is not.
+- These forms refuse such a record only where a reader holds what it reads to them; whether an adapter or a consumer checks its input is that module's contract.
 - A record names its writer role's kinds alone.
   - A Core writer's record carries its preimage sealed to each key of the monitors' set and, once committed, each ciphertext's hash and the key set's version the log checked; any other writer's carries its signed body.
   - A `monitor` flow's id is its shard's.

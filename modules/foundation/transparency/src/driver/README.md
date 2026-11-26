@@ -17,10 +17,12 @@ Internal module of `transparency`: the frame's I/O around its pure core, the `tr
 - What the flow holds of an op (its last stage, its abandonments, its stages for `rebase`, and for a client's op whether it is ever decided again) comes from the log's `of`; a client's op closed with nothing on the log is kept among its flow's record's closed, which `decide` refuses as `ended`. An open intent of a kind not registered here is stepped, claimed and ended by no event (`stuck`).
 - A Step applies `fold` once, on the state the owners' records hold, each owner mapping the result back to its records; the kind's records the end writes go in the same write.
 - `send` checks the owner before the append, and a first stage's prevMismatch, or a client's op's stage refused `abandoned`, closes the op without a record. `rebase` re-checks on the flow taken in to its head: it moves the previous position, or closes.
+- What the log answers is held to `transparency-wire`'s forms: a record at `at` (the very flow and position asked, taken in as read; a record id never `__proto__`), an accepted append's or reset's answer. One off them, or one whose reading throws, is never taken in: its event is unavailable, the take-in meeting it writing nothing (steps a `tend` committed before stay; an append or reset the log already placed stays placed; on a client's flow the turn's other ops are tended first).
+- A log adding a record field or a `v` needs its Cores upgraded first: until then, its records are off the form.
 - `receiptOf`, on a subject's flow alone, appends after a position no head reaches: the log answers a stage it holds as first placed, before it reads the position, and refuses any other there (`unplaced`), so it never places one; an op the log's `of` holds no stage of is `unplaced` unasked, and a stage naming another op or flow is a TypeError. It reads and writes no frame.
 - `receiptOf` places nothing whatever order the log checks in, as no head is ever its previous position; a placed stage's receipt comes back only where the log checks the same id first, as transparency-wire's card promises, which every log's adapter keeps.
 - `tend` takes the flow in to its head (as the apply phase of an op it took over), then takes over an orphan its kind can resend and no one took over yet, marks any other, or sends the abandoning op's next abandonment.
 - A registration naming a record of a part not its own, or writing another count of records than it read, is a TypeError.
 
 ## Depends on
-- `authority-rules` (`fold`, `emptyState`, the state's schema); the internal module `frame`.
+- `authority-rules` (`fold`, `emptyState`, the state's schema), `transparency-wire` (`schemas.record`); the internal module `frame`.

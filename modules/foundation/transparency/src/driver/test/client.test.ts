@@ -1,4 +1,5 @@
 import type { Finding } from "@mod/authority-rules";
+import { isUnavailable } from "@mod/kernel";
 import { opIds } from "@mod/transparency-wire";
 import { beforeEach, describe, expect, it } from "vitest";
 import { memoryFrames } from "../../../test/fixtures/frames.ts";
@@ -253,7 +254,7 @@ describe("tending a client's flow: each op its record lists, its own unit", () =
 				kind: "issue",
 				flow: publisher,
 				op: "o",
-				decide: () => ({ digest: "d", eff: {}, records: [] }),
+				decide: () => ({ digest: "d".padEnd(43, "0"), eff: {}, records: [] }),
 			}),
 		).toEqual({ refused: "notSubject" });
 	});
@@ -309,5 +310,60 @@ describe("tending a client's flow by the ops its record lists, however far back"
 		expect(world.frame("late")).toBeUndefined();
 		expect(await world.listed()).toHaveLength(64);
 		expect(await world.listed()).not.toContain("late");
+	});
+});
+
+describe("a client's flow with a record off the wire's form", () => {
+	it("tends every other op of the turn, then answers unavailable", async () => {
+		await decide("o1");
+		await world.w1.send({ flow, op: "o1", stage: start("o1"), prev: 0 });
+		await decide("o2");
+		await world.w1.send({ flow, op: "o2", stage: start("o2"), prev: 0 });
+		world.log.judge(flow, 1, verified);
+		world.log.judge(flow, 2, verified);
+		// o1's own record, as an adapter that does not hold what it answers to the wire's form gives it.
+		const off = world.replica("w1", (l) => ({
+			...l,
+			writer: l.writer,
+			digest: l.digest,
+			append: l.append,
+			head: l.head,
+			of: l.of,
+			reset: l.reset,
+			at: async (f, position) => {
+				const placed = await l.at(f, position);
+				return placed && position === 1
+					? ({ ...placed, record: { ...placed.record, v: 2 } } as never)
+					: placed;
+			},
+		}));
+		await expect(off.tend(flow)).rejects.toSatisfy(isUnavailable);
+		// o2, behind it in the turn, was tended all the same: its own record taken in.
+		expect(world.frame("o2")).toMatchObject({ applied: 2 });
+		expect(world.frame("o1")).toMatchObject({ applied: 0 });
+	});
+
+	it("answers unavailable for a well-formed record of another flow or position than asked", async () => {
+		await decide("o1");
+		await world.w1.send({ flow, op: "o1", stage: start("o1"), prev: 0 });
+		world.log.judge(flow, 1, verified);
+		const elsewhere = world.replica("w9", (l) => ({
+			...l,
+			writer: l.writer,
+			digest: l.digest,
+			append: l.append,
+			head: l.head,
+			of: l.of,
+			reset: l.reset,
+			at: async (f, position) => {
+				const placed = await l.at(f, position);
+				return (
+					placed &&
+					({ ...placed, record: { ...placed.record, flow: { of: "client", id: "c9" } } } as never)
+				);
+			},
+		}));
+		await expect(elsewhere.step({ flow, own: "o1" })).rejects.toSatisfy(isUnavailable);
+		expect(world.frame("o1")).toMatchObject({ applied: 0 });
 	});
 });

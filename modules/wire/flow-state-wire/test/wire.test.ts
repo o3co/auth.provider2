@@ -33,9 +33,13 @@ describe("credentialsOf", () => {
 			expect(credentialsOf(state), JSON.stringify(state)).toBeUndefined();
 	});
 
-	it("reads an entry by its own key, one the log named __proto__ too, and none it inherits", () => {
+	it("reads an entry by its own key, none it inherits, and no state naming a key __proto__, which no record id is", () => {
 		const state: unknown = JSON.parse('{"keys":{"__proto__":{"credential":"AQID"}}}');
-		expect(credentialsOf(state)).toEqual(["AQID"]);
+		expect(credentialsOf(state)).toBeUndefined();
+		const beside: unknown = JSON.parse(
+			'{"keys":{"r1":{"credential":"AQID"},"__proto__":{"credential":"BAUG"}}}',
+		);
+		expect(credentialsOf(beside)).toBeUndefined();
 		const inherited = Object.create({ keys: { r1: key("AQID") } });
 		expect(credentialsOf(inherited)).toBeUndefined();
 		// Keys inheriting an entry are no plain object, so none; a credential an entry inherits is none.

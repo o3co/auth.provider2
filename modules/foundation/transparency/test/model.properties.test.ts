@@ -142,7 +142,7 @@ function world() {
 					decide: (_s, recs) =>
 						key && (recs[0] as unknown as Reservation)?.version !== op
 							? { refused: "notReserved" }
-							: { digest: `d${op}`, eff, records: key ? [undefined] : [] },
+							: { digest: `d${op}`.padEnd(43, "0"), eff, records: key ? [undefined] : [] },
 				});
 				return;
 			}

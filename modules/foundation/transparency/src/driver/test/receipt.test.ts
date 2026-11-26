@@ -42,7 +42,7 @@ async function placed(op: string) {
 		kind: "issue",
 		flow,
 		op,
-		decide: () => ({ digest: "d1", eff: {}, records: [] }),
+		decide: () => ({ digest: "d1".padEnd(43, "0"), eff: {}, records: [] }),
 	});
 	if (!("prev" in decided)) throw new Error(decided.refused);
 	return world.w1.send({ flow, op, stage: stageOf(op), prev: decided.prev });
@@ -64,7 +64,7 @@ describe("a stage's receipt asked again", () => {
 			kind: "issue",
 			flow,
 			op: "op1",
-			decide: () => ({ digest: "d1", eff: {}, records: [] }),
+			decide: () => ({ digest: "d1".padEnd(43, "0"), eff: {}, records: [] }),
 		});
 		const frame = structuredClone(world.store.value(flow));
 		for (const op of ["op1", "op2"])

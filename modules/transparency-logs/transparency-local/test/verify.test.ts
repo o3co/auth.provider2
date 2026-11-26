@@ -89,7 +89,10 @@ describe("a screen's continuation, as a browser's WebCrypto makes it", () => {
 		const other = continuations.of("register", digestOf("creation"), 2, digestOf("body"));
 		expect(verifiedEsig({ x, y }, other, signed)).toBe(false);
 		expect(verifiedEsig({ x: y, y: x }, input, signed)).toBe(false);
-		expect(verifiedEsig({ x, y }, input, `${signed.slice(0, -2)}AA`)).toBe(false);
+		// One bit of the signature flipped: always another signature, whatever it ends in.
+		const bytes = Buffer.from(signed, "base64url");
+		bytes[bytes.length - 1] = (bytes[bytes.length - 1] ?? 0) ^ 1;
+		expect(verifiedEsig({ x, y }, input, bytes.toString("base64url"))).toBe(false);
 		expect(verifiedEsig({ x: "", y }, input, signed)).toBe(false);
 	});
 });

@@ -388,7 +388,7 @@ describe("a bundle, owned by the token endpoint (A40)", () => {
 			frame,
 			prepare: async (acceptedAt: number) => {
 				made.push({ frame, at: acceptedAt });
-				return { prepared: `${frame}-prepared`, digest: `${frame}-digest` };
+				return { prepared: `${frame}-prepared`, digest: sha256(`${frame}-digest`) };
 			},
 			sign: async (prepared: unknown, receipt: string) => {
 				made.push({ frame, receipt });
@@ -409,8 +409,8 @@ describe("a bundle, owned by the token endpoint (A40)", () => {
 		const subject = { of: "subject", id: "alice" } as const;
 		const [start, bundle] = world.book.records(subject).map((p) => p.record);
 		expect(bundle?.tokens?.slice(1)).toEqual([
-			{ frame: "idToken", digest: "idToken-digest" },
-			{ frame: "family", digest: "family-digest" },
+			{ frame: "idToken", digest: sha256("idToken-digest") },
+			{ frame: "family", digest: sha256("family-digest") },
 		]);
 		// Prepared before the bundle is recorded, signed only after, each with its own receipt.
 		expect(made).toEqual([
@@ -428,7 +428,7 @@ describe("a bundle, owned by the token endpoint (A40)", () => {
 			frame,
 			prepare: async () => {
 				made.push(`${frame} prepared`);
-				return { prepared: frame, digest: `${frame}-digest` };
+				return { prepared: frame, digest: sha256(`${frame}-digest`) };
 			},
 			sign: async (prepared: unknown) => `${String(prepared)}-signed`,
 			commit: async () => {
@@ -499,7 +499,7 @@ describe("a bundle, owned by the token endpoint (A40)", () => {
 			},
 		}));
 		world.book.judgeOnAppend({ verdict: "verified", outcome: "took" });
-		const ready = { ...failing, prepare: async () => ({ prepared: "p", digest: "d" }) };
+		const ready = { ...failing, prepare: async () => ({ prepared: "p", digest: sha256("d") }) };
 		await expect(
 			world.run(await world.replica("w1"))({ ...asked, parts: [ready] }),
 		).rejects.toSatisfy(isUnavailable);
@@ -512,7 +512,7 @@ describe("a bundle, owned by the token endpoint (A40)", () => {
 		let falls = 1;
 		const part = {
 			frame: "idToken" as const,
-			prepare: async () => ({ prepared: "p", digest: "d" }),
+			prepare: async () => ({ prepared: "p", digest: sha256("d") }),
 			sign: async (_prepared: unknown, receipt: string) => {
 				receipts.push(receipt);
 				if (falls-- > 0) throw new Unavailable("keys");
@@ -552,7 +552,7 @@ describe("a bundle, owned by the token endpoint (A40)", () => {
 		let falls = 1;
 		const part = (frame: "idToken" | "family", delayMs: number) => ({
 			frame,
-			prepare: async () => ({ prepared: frame, digest: `${frame}-d` }),
+			prepare: async () => ({ prepared: frame, digest: sha256(`${frame}-d`) }),
 			sign: async (_prepared: unknown, receipt: string) => {
 				await new Promise((resolve) => setTimeout(resolve, delayMs));
 				events.push(`${frame} ${receipt}`);
@@ -592,7 +592,7 @@ describe("a bundle, owned by the token endpoint (A40)", () => {
 		let signed = 0;
 		const part = {
 			frame: "idToken" as const,
-			prepare: async () => ({ prepared: "p", digest: "d" }),
+			prepare: async () => ({ prepared: "p", digest: sha256("d") }),
 			sign: async () => {
 				signed++;
 				throw new Unavailable("keys");
@@ -615,7 +615,7 @@ describe("a bundle, owned by the token endpoint (A40)", () => {
 		let fails = false;
 		const part = {
 			frame: "family" as const,
-			prepare: async () => ({ prepared: "f", digest: "f-d" }),
+			prepare: async () => ({ prepared: "f", digest: sha256("f-d") }),
 			sign: async (_prepared: unknown, _receipt: string, placed: { id: string }) => {
 				events.push(`sign ${placed.id}`);
 				return "refresh-token";

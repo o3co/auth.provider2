@@ -1,4 +1,5 @@
 import type { Finding } from "@mod/authority-rules";
+import { isUnavailable } from "@mod/kernel";
 import { opIds } from "@mod/transparency-wire";
 import { beforeEach, describe, expect, it } from "vitest";
 import { memoryFrames } from "../../../test/fixtures/frames.ts";
@@ -83,7 +84,7 @@ const decideIssue = (op = "op1") =>
 		kind: "issue",
 		flow,
 		op,
-		decide: () => ({ digest: "d1", eff: bundleEff, records: [] }),
+		decide: () => ({ digest: "d1".padEnd(43, "0"), eff: bundleEff, records: [] }),
 	});
 const decideKey = (who = world.w1) =>
 	who.decide({
@@ -93,7 +94,7 @@ const decideKey = (who = world.w1) =>
 		decide: (_state, [r]) =>
 			(r as unknown as Reservation)?.state === "verified"
 				? {
-						digest: "dk",
+						digest: "dk".padEnd(43, "0"),
 						eff: { key: { credential: "c2", publicKey: "p2" } },
 						records: [undefined],
 					}
@@ -295,7 +296,7 @@ describe("orphans: the Mark, the takeover and the abandonment record", () => {
 			stage: {
 				kind: "abandonment",
 				op: opIds.abandonment("op1", 1),
-				abandons: { op: "op1", attempt: 1, digest: "d1" },
+				abandons: { op: "op1", attempt: 1, digest: "d1".padEnd(43, "0") },
 			},
 		});
 		world.log.judge(flow, 2, verified);
@@ -460,7 +461,7 @@ describe("what a replica does not run", () => {
 
 	it("refuses every event on a flow neither a subject's nor a client's", async () => {
 		const client = { of: "publisher", id: "p1" } as const;
-		const decide = () => ({ digest: "d", eff: {}, records: [] });
+		const decide = () => ({ digest: "d".padEnd(43, "0"), eff: {}, records: [] });
 		expect(await world.w1.decide({ kind: "issue", flow: client, op: "o", decide })).toEqual({
 			refused: "notSubject",
 		});
@@ -560,5 +561,133 @@ describe("a reset", () => {
 		await world.w1.reset({ instruction: instruction() });
 		await world.w3.step({ flow });
 		expect(world.part("keys")).toEqual(seeded.keys);
+	});
+});
+
+describe("a record the log answers off the wire's form", () => {
+	it("is never taken in: its step is unavailable and the frame stays where it was", async () => {
+		world.log.monitor(flow, "denial", {});
+		// A log adapter that does not hold what it answers to the wire's form: here, a record id `__proto__`.
+		const untrusting = world.replica("w9", {
+			log: (l) => ({
+				...l,
+				writer: l.writer,
+				digest: l.digest,
+				append: l.append,
+				head: l.head,
+				of: l.of,
+				reset: l.reset,
+				at: async (f, position) => {
+					const placed = await l.at(f, position);
+					return placed && { ...placed, record: { ...placed.record, id: "__proto__" } };
+				},
+			}),
+		});
+		await expect(untrusting.step({ flow })).rejects.toSatisfy(isUnavailable);
+		expect(world.frame()?.applied ?? 0).toBe(0);
+		// A record whose reading throws is off the form as well: unavailable, never another failure.
+		const throwing = world.replica("w8", {
+			log: (l) => ({
+				...l,
+				writer: l.writer,
+				digest: l.digest,
+				append: l.append,
+				head: l.head,
+				of: l.of,
+				reset: l.reset,
+				at: async (f, position) => {
+					const placed = await l.at(f, position);
+					if (!placed) return placed;
+					const record = Object.defineProperty({ ...placed.record }, "id", {
+						get: () => {
+							throw new Error("adapter fault");
+						},
+					});
+					return { ...placed, record };
+				},
+			}),
+		});
+		await expect(throwing.step({ flow })).rejects.toSatisfy(isUnavailable);
+		// Read as the log gave it, the same record is taken in.
+		expect(await world.w1.step({ flow })).toMatchObject({ position: 1 });
+	});
+});
+
+describe("what a log's adapter answers, held to the wire's forms", () => {
+	const through = (at?: TransparencyLog["at"], append?: TransparencyLog["append"]) =>
+		world.replica("w1", {
+			log: (l) => ({
+				writer: l.writer,
+				digest: (preimage) => l.digest(preimage),
+				append: append ?? ((stage, prev) => l.append(stage, prev)),
+				head: (f) => l.head(f),
+				of: (f, op) => l.of(f, op),
+				reset: (instruction) => l.reset(instruction),
+				at: at ?? ((f, position) => l.at(f, position)),
+			}),
+		});
+
+	it("takes in a record whose finding and changes the adapter gives by getters, as any other", async () => {
+		world.log.monitor(flow, "denial", { revoke: "k1" });
+		const t = through(async (f, position) => {
+			const placed = await world.log.as("w1").at(f, position);
+			if (!placed) return placed;
+			const { finding, changes } = placed;
+			const inherited = Object.create({
+				get finding() {
+					return finding;
+				},
+				get changes() {
+					return changes;
+				},
+			});
+			return Object.assign(inherited, { record: placed.record });
+		});
+		expect(await t.step({ flow })).toEqual({ position: 1 });
+		expect(world.part("keys").keys).toEqual({});
+	});
+
+	it("answers unavailable for a record at another position than asked, or a tick, taking in nothing", async () => {
+		world.log.monitor(flow, "denial", { revoke: "k1" });
+		const moved = through(async (f, position) => {
+			const placed = await world.log.as("w1").at(f, position);
+			return placed && ({ ...placed, record: { ...placed.record, position: 2 } } as never);
+		});
+		await expect(moved.step({ flow })).rejects.toSatisfy(isUnavailable);
+		const tick = through(
+			async () =>
+				({
+					record: {
+						v: 1,
+						id: "t1",
+						writer: { role: "log" },
+						kind: "tick",
+						shard: "s1",
+						n: 1,
+						acceptedAt: 1,
+					},
+					finding: verified,
+				}) as never,
+		);
+		await expect(tick.step({ flow })).rejects.toSatisfy(isUnavailable);
+		expect(world.frame()?.applied ?? 0).toBe(0);
+	});
+
+	it("answers unavailable for an accepted append answer off the form", async () => {
+		const t = through(undefined, async (stage, prev) => {
+			const answer = await world.log.as("w1").append(stage, prev);
+			return { ...answer, extra: 1 } as never;
+		});
+		expect(
+			await t.decide({
+				kind: "issue",
+				flow,
+				op: "o9",
+				decide: () => ({ digest: "d".repeat(43), eff: {}, records: [] }),
+			}),
+		).toMatchObject({ prev: 0 });
+		await expect(
+			t.send({ flow, op: "o9", stage: { ...bundleStage("o9"), stage: 1, last: false }, prev: 0 }),
+		).rejects.toSatisfy(isUnavailable);
 	});
 });

@@ -126,6 +126,7 @@ export function memoryLog(now: () => number): TransparencyLog & {
 				...named,
 				plaintextDigest: digest(JSON.stringify(preimage)),
 				sealedTo: [{ key: "m1", ciphertextHash: digest("c") }],
+				keySetVersion: 1,
 				id: `r${n}`,
 				writer: { role: "core", instance: "w1", image: "i1", generation: 1 },
 				position: placed.length + 1,
@@ -171,6 +172,8 @@ export function memoryLog(now: () => number): TransparencyLog & {
 				last: true,
 				id: `r${n}`,
 				writer: { role: "monitor", key: "mk" },
+				plaintextDigest: digest("boundary"),
+				signed: "h.boundary.s",
 				position: placed.length + 1,
 				shard: "s1",
 				n,
@@ -241,7 +244,7 @@ export const writer = defineModule(
 export const deciding =
 	(eff: Changes, stage?: Stage): Deciding =>
 	(_state, held) => ({
-		digest: "d",
+		digest: "d".repeat(43),
 		eff,
 		records: held.map((_, i) =>
 			i === held.length - 1 && stage ? { value: stage as unknown as Json } : undefined,

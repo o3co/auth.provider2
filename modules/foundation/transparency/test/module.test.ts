@@ -59,7 +59,7 @@ describe("transparency's module", () => {
 			kind: "issue",
 			flow,
 			op: "op1",
-			decide: () => ({ digest: "d", eff: {}, records: [] }),
+			decide: () => ({ digest: "d".padEnd(43, "0"), eff: {}, records: [] }),
 		});
 		expect(decided).toEqual({ prev: 0 });
 		expect(frames.value(flow)).toMatchObject({ intent: { leaseEnd: 2000 } });

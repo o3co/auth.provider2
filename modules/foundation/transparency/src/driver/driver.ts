@@ -1,6 +1,6 @@
 import { type Envelope, emptyState, type FlowState, fold, ruleSchemas } from "@mod/authority-rules";
 import { isUnavailable, Unavailable } from "@mod/kernel";
-import type { Flow } from "@mod/transparency-wire";
+import { type Flow, schemas } from "@mod/transparency-wire";
 import type {
 	FrameRead,
 	FrameStore,
@@ -85,7 +85,62 @@ export function transparencyOver(p: {
 	readonly owners: readonly StateOwner[];
 	readonly leaseMs: number;
 }): Transparency {
-	const { frames, log, owners, leaseMs } = p;
+	const { frames, owners, leaseMs } = p;
+	/** The log's axis, its answers held to the wire's forms (the driver's card): else unavailable. */
+	const offForm = (): never => {
+		throw new Unavailable("transparency");
+	};
+	const read = <T>(
+		schema: { safeParse(v: unknown): { success: boolean; data?: T } },
+		v: unknown,
+	) => {
+		try {
+			const parsed = schema.safeParse(v);
+			return parsed.success ? (parsed.data as T) : offForm();
+		} catch (error) {
+			if (isUnavailable(error)) throw error;
+			return offForm();
+		}
+	};
+	/** What an adapter's object holds, read once: one whose reading throws is off the form. */
+	const fields = <T>(take: () => T): T => {
+		try {
+			return take();
+		} catch {
+			return offForm();
+		}
+	};
+	const answered = <A extends { readonly result: string }>(answer: A): A =>
+		fields(() => answer.result) === "accepted"
+			? (read(schemas.appendAnswer, answer) as unknown as A)
+			: answer;
+	const log: TransparencyLog = {
+		writer: p.log.writer,
+		digest: (preimage) => p.log.digest(preimage),
+		append: async (stage, prev) => answered(await p.log.append(stage, prev)),
+		head: (flow) => p.log.head(flow),
+		of: (flow, op) => p.log.of(flow, op),
+		reset: async (instruction) => answered(await p.log.reset(instruction)),
+		at: async (flow, position) => {
+			const placed = await p.log.at(flow, position);
+			if (placed === undefined) return undefined;
+			// Each member read once, its own or inherited, so a getter's answer is the one checked and kept.
+			const held = fields(() => ({
+				record: placed.record as unknown,
+				finding: placed.finding,
+				changes: placed.changes,
+			}));
+			const record = read(schemas.record, held.record) as Placed["record"];
+			const at = record as { readonly flow?: Flow; readonly position?: number };
+			if (at.flow?.of !== flow.of || at.flow.id !== flow.id || at.position !== position)
+				return offForm();
+			return {
+				record,
+				...(held.finding === undefined ? {} : { finding: held.finding }),
+				...(held.changes === undefined ? {} : { changes: held.changes }),
+			};
+		},
+	};
 	const kinds = new Map(p.kinds.map((k) => [k.name, k]));
 	const bundle = (kind: string) => kinds.get(kind)?.bundle === true;
 	/** The unit an event names: a subject's flow, or one op of a client's; none for any other. */
@@ -497,11 +552,19 @@ export function transparencyOver(p: {
 			const client = { of: "client", id: flow.id } as const;
 			let stepped = 0;
 			let did = {};
+			// An op that meets a record off the form keeps no later op of the turn from its own.
+			let failed: unknown;
 			for (const op of await turnOf(client)) {
-				const { stepped: count, ...claimed } = await tendUnit({ flow: client, op });
-				stepped += count;
-				if ("did" in claimed) did = claimed;
+				try {
+					const { stepped: count, ...claimed } = await tendUnit({ flow: client, op });
+					stepped += count;
+					if ("did" in claimed) did = claimed;
+				} catch (error) {
+					if (!isUnavailable(error)) throw error;
+					failed ??= error;
+				}
 			}
+			if (failed !== undefined) throw failed;
 			return { stepped, ...did };
 		},
 		async reset(q) {

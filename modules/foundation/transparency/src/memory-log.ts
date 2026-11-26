@@ -102,7 +102,12 @@ export function logBook(now: () => number) {
 			const { preimage: _sealed, ...named } = stage;
 			const p = place(
 				stage.flow,
-				{ ...named, plaintextDigest, sealedTo: [{ key: "m1", ciphertextHash: digest("c") }] },
+				{
+					...named,
+					plaintextDigest,
+					sealedTo: [{ key: "m1", ciphertextHash: digest("c") }],
+					keySetVersion: 1,
+				},
 				{ role: "core", instance, image: "i1", generation },
 			);
 			digests.set(p.record.id, plaintextDigest);
@@ -124,7 +129,12 @@ export function logBook(now: () => number) {
 					: resetRefusal.conflict();
 			const p = place(
 				flow,
-				{ kind: "resetBoundary", op, plaintextDigest: digest(canonical(payload)) },
+				{
+					kind: "resetBoundary",
+					op,
+					plaintextDigest: digest(canonical(payload)),
+					signed: instruction,
+				},
 				{ role: "monitor", key: "mk" },
 			);
 			resets.set(`${flowKey(flow)} ${op}`, canonical(payload));
@@ -166,7 +176,7 @@ export function logBook(now: () => number) {
 		monitor(flow: Flow, kind: (typeof recordKinds.monitor)[number], changes: Changes) {
 			const p = place(
 				flow,
-				{ kind, op: `m${n + 1}`, plaintextDigest: digest("m") },
+				{ kind, op: `m${n + 1}`, plaintextDigest: digest("m"), signed: "h.m.s" },
 				{
 					role: "monitor",
 					key: "mk",
