@@ -1278,6 +1278,9 @@ importers:
       '@mod/code-grant':
         specifier: workspace:*
         version: link:../code-grant
+      '@mod/front-core-codec':
+        specifier: workspace:*
+        version: link:../../wire/front-core-codec
       '@mod/front-core-wire':
         specifier: workspace:*
         version: link:../../wire/front-core-wire

@@ -2,7 +2,7 @@ import type { Approvals, IssueAsk } from "@mod/approvals";
 import type { Client } from "@mod/clients";
 import { requests } from "@mod/front-core-wire";
 import { type TargetRule, targetRules } from "@mod/grants";
-import type { HttpRequest } from "@mod/http";
+import { testRequest } from "@mod/http/testing";
 import { assemble, contract, defineModule, kernelConfig } from "@mod/kernel";
 import { quietRuntime } from "@mod/kernel/testing";
 import { redirects } from "@mod/redirect-uris";
@@ -100,6 +100,7 @@ function harness(
 	} = {},
 ) {
 	const asked: IssueAsk[] = [];
+	const sought: string[] = [];
 	let n = 0;
 	let tokens = 0;
 	let clock = now;
@@ -119,7 +120,12 @@ function harness(
 		},
 	};
 	const start = starting({
-		clients: { find: async (id) => (id === "c1" ? client : undefined) },
+		clients: {
+			find: async (id) => {
+				sought.push(id);
+				return id === "c1" ? client : undefined;
+			},
+		},
 		jar: {
 			sources: p.sources ?? [byValue],
 			assertion: {
@@ -169,7 +175,7 @@ function harness(
 		}),
 	});
 	const send = (fields: Record<string, string>) =>
-		start({ json: fields, source: { address: "192.0.2.1" } } as unknown as HttpRequest);
+		start(testRequest({ json: fields, source: { address: "192.0.2.1" } }));
 	const body = (fields: Record<string, string>) =>
 		send(fields).then((r) => ({ status: r.status, json: (r.body as { json: unknown }).json }));
 	const fields = (request: string, x = b64(32)) => ({
@@ -182,7 +188,7 @@ function harness(
 	const at = (t: number) => {
 		clock = t;
 	};
-	return { asked, body, fields, at };
+	return { asked, sought, body, fields, at };
 }
 
 describe("a login's start (②)", () => {
@@ -256,6 +262,78 @@ describe("a login's start (②)", () => {
 		expect(await h.body({ ...h.fields(jar(claims())), eEnc: b64(32) })).toMatchObject({
 			status: 400,
 		});
+	});
+
+	it("holds every field to front-core-wire's spec before any is acted on: no client looked up, no source asked, no T made", async () => {
+		let asked = 0;
+		const counting: RequestSource = {
+			name: "counting",
+			jarOf: async () => {
+				asked += 1;
+				return undefined;
+			},
+		};
+		const h = harness({ sources: [byValue, counting] });
+		const refused = {
+			status: 400,
+			json: {
+				error: "invalid_request",
+				error_description: "the start's fields are not front-core-wire's",
+			},
+		};
+		const sent = h.fields(jar(claims()));
+		// Another spelling of a key's bytes: its last character's unused bits set.
+		const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+		const respelled = (text: string) =>
+			text.slice(0, -1) + letters[letters.indexOf(text.at(-1) ?? "A") | 1];
+		for (const off of [
+			// An unknown client with a field off its spec: the field's refusal, before the client is sought.
+			{ clientId: "c9", requestUri: "x".repeat(513) },
+			{ clientId: "c".repeat(65) },
+			{ clientId: "c 1" },
+			{ clientId: "c\ud800" },
+			{ request: "not a jws" },
+			{ request: `a.${"b".repeat(8189)}.c` },
+			{ eSigX: respelled(sent.eSigX) },
+		]) {
+			expect(await h.body({ ...sent, ...off })).toEqual(refused);
+		}
+		expect(h.sought).toEqual([]);
+		expect(asked).toBe(0);
+		expect(h.asked).toHaveLength(0);
+		// At the bounds the fields are the wire's: a 64-character client is sought, and is unknown.
+		expect(await h.body({ ...sent, clientId: "c".repeat(64) })).toMatchObject({ status: 401 });
+		expect(h.sought).toEqual(["c".repeat(64)]);
+	});
+
+	it("hands the sources each field the wire names as the Front carries it: an empty one is not sent", async () => {
+		const pushed: RequestSource = {
+			name: "pushed",
+			jarOf: async (fields) =>
+				fields.requestUri === undefined ? undefined : { jar: jar(claims({ jti: "p1" })) },
+		};
+		const unnamed: RequestSource = {
+			name: "unnamed",
+			jarOf: async (fields) =>
+				fields.request_uri === undefined
+					? undefined
+					: { refused: { error: "invalid_request_uri", description: "read" } },
+		};
+		const h = harness({ sources: [byValue, pushed, unnamed] });
+		const sent = h.fields(jar(claims()));
+		const { request: _byValue, ...keys } = sent;
+		// An empty requestUri beside the JAR, or an empty request beside a requestUri: one source answers.
+		expect(await h.body({ ...sent, requestUri: "" })).toMatchObject({ status: 200 });
+		expect(await h.body({ ...keys, request: "", requestUri: "urn:p" })).toMatchObject({
+			status: 200,
+		});
+		// An empty request alone is none sent: no source answers.
+		expect(await h.body({ ...keys, request: "" })).toMatchObject({
+			status: 400,
+			json: { error: "invalid_request" },
+		});
+		// A member the wire does not name reaches no source.
+		expect(await h.body({ ...sent, request_uri: "urn:x" })).toMatchObject({ status: 200 });
 	});
 
 	it("answers prompt=none with login_required, takes the words every tap meets, and refuses others", async () => {
@@ -377,16 +455,16 @@ describe("a login's start (②)", () => {
 		const refusing: RequestSource = {
 			name: "refusing",
 			jarOf: async (fields) =>
-				fields.request_uri
+				fields.requestUri
 					? { refused: { error: "invalid_request_uri", description: "gone" } }
 					: undefined,
 		};
 		const h = harness({ sources: [byValue, refusing] });
-		expect(await h.body({ ...h.fields(jar(claims())), request_uri: "urn:x" })).toMatchObject({
+		expect(await h.body({ ...h.fields(jar(claims())), requestUri: "urn:x" })).toMatchObject({
 			json: { error: "invalid_request" },
 		});
 		const { request: _none, ...fields } = h.fields(jar(claims()));
-		expect(await h.body({ ...fields, request_uri: "urn:x" })).toMatchObject({
+		expect(await h.body({ ...fields, requestUri: "urn:x" })).toMatchObject({
 			json: { error: "invalid_request_uri" },
 		});
 		expect(await h.body(fields)).toMatchObject({ json: { error: "invalid_request" } });

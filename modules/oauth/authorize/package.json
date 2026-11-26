@@ -19,6 +19,7 @@
 		"@mod/client-documents": "workspace:*",
 		"@mod/clients": "workspace:*",
 		"@mod/code-grant": "workspace:*",
+		"@mod/front-core-codec": "workspace:*",
 		"@mod/front-core-wire": "workspace:*",
 		"@mod/grants": "workspace:*",
 		"@mod/http": "workspace:*",

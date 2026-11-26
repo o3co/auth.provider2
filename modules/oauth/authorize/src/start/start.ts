@@ -1,6 +1,7 @@
 import { type Approvals, approvals } from "@mod/approvals";
 import { clientAssertion } from "@mod/client-assertion";
 import { type Clients, clients } from "@mod/clients";
+import { carriedOf, requestOf } from "@mod/front-core-codec";
 import { requests } from "@mod/front-core-wire";
 import { type HttpRequest, type HttpResponse, jsonAnswer, use } from "@mod/http";
 import { issuer } from "@mod/issuer";
@@ -117,20 +118,6 @@ const answerOf = (status: number, r: Refusal): HttpResponse =>
 	jsonAnswer(status, { error: r.error, error_description: r.description });
 const bad = (description: string) => answerOf(400, { error: "invalid_request", description });
 
-/** A P-256 point, uncompressed (65 bytes, 0x04 first), unpadded base64url; none for anything else. */
-const pointOf = (text: string | undefined) =>
-	bytesOf(text, 65) !== undefined && Buffer.from(text as string, "base64url")[0] === 4
-		? text
-		: undefined;
-
-/** Bytes of a given length, unpadded base64url; none for anything else. */
-const bytesOf = (text: string | undefined, length: number) =>
-	text !== undefined &&
-	/^[A-Za-z0-9_-]+$/.test(text) &&
-	Buffer.from(text, "base64url").length === length
-		? text
-		: undefined;
-
 /** The words `prompt` takes, each met by the person's tap at every login (D6); `none` is never met. */
 const promptWords = new Set(["login", "consent", "select_account"]);
 
@@ -151,16 +138,23 @@ function withoutPrompt(claims: Readonly<Record<string, unknown>>) {
 /** ②: a login's start, from the screen's request and keys to the statement T it shows. */
 export function starting(p: StartParts) {
 	return async (request: HttpRequest): Promise<HttpResponse> => {
+		// Every field held to front-core-wire's spec before any is acted on, as the Front's are.
+		const sent = requestOf("loginStart", { values: request.fields, headers: new Map() });
+		if (!sent.ok) return bad("the start's fields are not front-core-wire's");
+		const { message } = sent;
+		// Each field sent, by its name in front-core-wire, as the Front carries it: an empty one is not sent.
 		const fields: StartFields = Object.fromEntries(
-			Object.entries(request.json ?? {}).filter(([, v]) => typeof v === "string"),
-		) as StartFields;
-		const eEnc = pointOf(fields.eEnc);
-		const x = bytesOf(fields.eSigX, 32);
-		const y = bytesOf(fields.eSigY, 32);
-		if (fields.clientId === undefined || !eEnc || !x || !y)
-			return bad("the start names a client and the screen's two keys");
+			[...carriedOf("loginStart", message).values].map(([name, [text]]) => [name, text ?? ""]),
+		);
+		// The spec holds the keys' lengths; an uncompressed P-256 point's first byte is this route's.
+		if (message.eEnc[0] !== 4) return bad("the start names a client and the screen's two keys");
+		// The keys as texts, each its bytes' one base64url spelling.
+		const [eEnc, x, y] = [message.eEnc, message.eSigX, message.eSigY].map((bytes) =>
+			Buffer.from(bytes).toString("base64url"),
+		) as [string, string, string];
 		const eSig: SigningKey = { kty: "EC", crv: "P-256", x, y };
-		const client = await p.clients.find(fields.clientId);
+		const clientId = message.clientId;
+		const client = await p.clients.find(clientId);
 		if (!client) return answerOf(401, { error: "invalid_client", description: "no such client" });
 		const read = await jarOf(p.jar, fields, client);
 		if ("refused" in read) return answerOf(statusOf[read.refused.error] ?? 400, read.refused);

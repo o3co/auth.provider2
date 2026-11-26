@@ -1,7 +1,7 @@
 import type { Approval, Completed, Used } from "@mod/approvals";
 import type { Client } from "@mod/clients";
 import type { CodeFacts } from "@mod/code-grant";
-import type { HttpRequest } from "@mod/http";
+import { testRequest } from "@mod/http/testing";
 import { payloads } from "@mod/sdk-core-wire";
 import { describe, expect, it } from "vitest";
 import { codeNeedsOver } from "../src/code-needs/code-needs.ts";
@@ -198,7 +198,7 @@ function harness(
 	};
 	const finish = finishing(parts);
 	const send = async (json: Record<string, unknown> = { statement, assertion: "{}" }) => {
-		const r = await finish({ json } as unknown as HttpRequest);
+		const r = await finish(testRequest({ json }));
 		return { status: r.status, json: (r.body as { json: Record<string, unknown> }).json };
 	};
 	return { send, log, issued, closed, rooted };
@@ -371,6 +371,31 @@ describe("a login's finish (⑤⑥)", () => {
 			status: 400,
 			json: { error: "invalid_request" },
 		});
+		expect(h.log).toEqual([]);
+	});
+
+	it("holds the statement and the assertion to front-core-wire's spec before the approval is used", async () => {
+		const h = harness();
+		const refused = {
+			status: 400,
+			json: {
+				error: "invalid_request",
+				error_description: "the finish's fields are not front-core-wire's",
+			},
+		};
+		for (const sent of [
+			{ statement: "", assertion: "{}" },
+			{ statement: "not a jws", assertion: "{}" },
+			{ statement: `a.${"b".repeat(4093)}.c`, assertion: "{}" },
+			{ statement, assertion: "" },
+			{ statement, assertion: "{\u0001}" },
+			{ statement, assertion: "{\ud800}" },
+			{ statement, assertion: "x".repeat(8193) },
+			// 8193 bytes in 4097 characters: the bound is the bytes'.
+			{ statement, assertion: `${"é".repeat(4096)}a` },
+		]) {
+			expect(await h.send(sent)).toMatchObject(refused);
+		}
 		expect(h.log).toEqual([]);
 	});
 

@@ -1,6 +1,7 @@
 import { type Approvals, approvals, type ItemsOf } from "@mod/approvals";
 import { type Clients, clients } from "@mod/clients";
 import { type Codes, codeGrantType, codes } from "@mod/code-grant";
+import { requestOf } from "@mod/front-core-codec";
 import { type HttpRequest, type HttpResponse, jsonAnswer, use } from "@mod/http";
 import { type BuildContext, Unavailable } from "@mod/kernel";
 import { requestsPerSource, type Window } from "@mod/rate-limit";
@@ -71,10 +72,10 @@ const malformed = new Set(["unknown", "expired", "used", "purpose", "malformed"]
  */
 export function finishing(p: FinishParts) {
 	return async (request: HttpRequest): Promise<HttpResponse> => {
-		const statement = request.json?.statement;
-		const assertion = request.json?.assertion;
-		if (typeof statement !== "string" || typeof assertion !== "string")
-			return bad("the finish names the statement and the assertion");
+		// Every field held to front-core-wire's spec before any is acted on, as the Front's are.
+		const read = requestOf("loginFinish", { values: request.fields, headers: new Map() });
+		if (!read.ok) return bad("the finish's fields are not front-core-wire's");
+		const { statement, assertion } = read.message;
 		const used = await p.approvals.use({ statement, assertion });
 		if (used.kind === "refused")
 			return malformed.has(used.reason)

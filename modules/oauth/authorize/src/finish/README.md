@@ -13,6 +13,7 @@ Internal module of `authorize`: the route of a login's finish (⑤⑥).
 
 ## Invariants
 - The amr a passkey's login carries (`passkeyAmr`, to `acr`'s `amrSources` as `authorize.passkey`): `pop` and `user`, what a passkey's assertion proves (a key held, the person present); not `hwk`, as no attestation is taken, nor `mfa`, as user verification is the authenticator's own word.
+- A finish whose fields `requestOf` refuses (`front-core-wire`'s `loginFinish`: the statement and the assertion, missing, repeated, or of a size or characters the wire does not give) is `invalid_request`, before the approval is used.
 - The steps run in this order:
   - the approval used, the scope and audience within the client's allowance, the policies, an OpenID request's claims selected (`requestClaims`; where no module reads them, none, and T carrying any past ② a `TypeError`; a `sub` asked of another subject, or an essential acr the login does not meet, is `access_denied`, no session opened);
   - the session (from the statement's issue: `provenSince`, and `endsAt` that and the delegation's length), the code made with no root, carrying the acr a passkey's login meets (`acr`'s table, given by the module), its claims kept for it by the reader's `keep`;
@@ -23,4 +24,4 @@ Internal module of `authorize`: the route of a login's finish (⑤⑥).
 - A login with a passkey is named by `amr` `pop` and `user`, what its assertion proves: a key held (its signature) and the person present (its flags). No `hwk`, as no attestation is taken and a synced passkey is bound to no one device; no `mfa`, as verifying the user is the authenticator's own word, and strength is `acr`'s.
 
 ## Depends on
-- `kernel`, `approvals`, `clients`, `code-grant`, `tokens`, `session`, `http`, `rate-limit`; the package's `code-needs` and contract (`requestClaims`).
+- `kernel`, `approvals`, `clients`, `code-grant`, `tokens`, `session`, `http`, `rate-limit`, `front-core-codec` (`requestOf`); the package's `code-needs` and contract (`requestClaims`).
