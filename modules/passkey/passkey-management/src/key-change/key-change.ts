@@ -127,7 +127,10 @@ const tries = 4;
 /** A key added or deleted's change, as its writer (KE-C01, C02, C04): as the card says. */
 export function keyChangesOver(p: {
 	readonly registrations: Pick<Registrations, "commit" | "remove">;
-	readonly transparency: Pick<Transparency, "send" | "step" | "tend" | "receiptOf" | "applied">;
+	readonly transparency: Pick<
+		Transparency,
+		"send" | "step" | "tend" | "receiptOf" | "applied" | "changeHeld"
+	>;
 	readonly passkeys: Pick<Passkeys, "settle">;
 	readonly digest: (preimage: Preimage) => string;
 	readonly pause: (look: number) => Promise<void>;
@@ -236,7 +239,12 @@ export function keyChangesOver(p: {
 		const { flow, preimage, stage } = deletionStageOf(d);
 		const a = d.approval;
 		// The writer's part: the approving key live as it approved, one deletion from one passkey-manage, in time.
+		// Its last decision's: the driver calls it once a decide and answers that call's word.
+		let marked = false;
 		const decide: Deciding = (state, held) => {
+			// An op a call read past its expiry is refused so by any decision, whatever its clock reads.
+			marked = (held.at(-1) as { readonly expired?: unknown } | undefined)?.expired === d.op;
+			if (marked) return { refused: "expired" };
 			const parent = Object.hasOwn(state.keys, a.registration)
 				? state.keys[a.registration]
 				: undefined;
@@ -257,7 +265,19 @@ export function keyChangesOver(p: {
 		};
 		const { subject, credential, op } = d;
 		const attempt = () => p.registrations.remove({ subject, credential, op, decide });
-		return placed<RemoveRefusal>(subject, flow, op, stage, attempt, removeRefusals);
+		for (let tried = 0; tried < tries; tried++) {
+			const ended = await placed<RemoveRefusal>(subject, flow, op, stage, attempt, removeRefusals);
+			// `expired` is kept only from the mark: a clock's is marked, then decided again after it.
+			if (!(ended.kind === "refused" && ended.reason === "expired") || marked) return ended;
+			const mark = await p.transparency.changeHeld({
+				kind: keyChangeKind.name,
+				flow,
+				records: [preimageRecord],
+				change: () => [{ value: { expired: op } }],
+			});
+			if ("refused" in mark && mark.refused === "notSubject") return unavailable();
+		}
+		return unavailable();
 	}
 
 	/** A key added placed already: its receipts, its stage made again alike; none where not placed so. */

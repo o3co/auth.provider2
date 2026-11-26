@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { Flow } from "@mod/transparency-wire";
 import { describe, expect, it } from "vitest";
+import { keyChangePart } from "../../contract.ts";
 import { type AddedKey, type DeletedKey, keyChangesOver } from "../key-change.ts";
 import { keyFlow } from "./flow.ts";
 
@@ -188,6 +189,119 @@ describe("a key deleted's change", () => {
 		expect(await writer(w).removed(d)).toEqual({ kind: "took", receipts: ["h.p.s"] });
 	});
 
+	it("is refused expired, nothing placed, where a later call marked its op past expiry while its write was on its way", async () => {
+		const { w, first, second, r2, deleting } = await twoKeys();
+		const d = deleting(first.credential, { credential: second.credential, registration: r2 });
+		const sent = w.book.sent.length;
+		// A decided in time; before its write commits, B, past the expiry, marks the op.
+		let b: unknown;
+		w.frames.beforeWrite(async () => {
+			b = await writer(w, () => 1_001).remove(d);
+		});
+		expect(await writer(w, () => 900).remove(d)).toEqual({ kind: "refused", reason: "expired" });
+		expect(b).toEqual({ kind: "refused", reason: "expired" });
+		expect(w.book.sent).toHaveLength(sent);
+		expect(keysOf(w)).toHaveLength(2);
+	});
+
+	it("keeps no expired where its op ended before the mark: decided again, it is ended", async () => {
+		const { w, first, second, r2, deleting } = await twoKeys();
+		const d = deleting(first.credential, { credential: second.credential, registration: r2 });
+		// B read past the expiry; before its mark commits, A, in time, places and takes its deletion.
+		let a: unknown;
+		w.frames.beforeWrite(async () => {
+			a = await writer(w, () => 900).remove(d);
+		});
+		expect(await writer(w, () => 1_001).remove(d)).toEqual({ kind: "ended" });
+		expect(a).toMatchObject({ kind: "took" });
+		expect(keysOf(w)).toEqual([r2]);
+		expect(await writer(w, () => 1_001).removed(d)).toMatchObject({ kind: "took" });
+	});
+
+	/** The world with one of its transparency's members answered otherwise. */
+	const replacing = (w: Flowing, over: Partial<Flowing["transparency"]>): Flowing => ({
+		...w,
+		transparency: { ...w.transparency, ...over },
+	});
+	const markRecord = { part: keyChangePart, name: "preimage" };
+
+	it("reads its op's mark before any other word: a marked op is expired, whatever its approver", async () => {
+		const { w, first, second, r1, r2, deleting } = await twoKeys();
+		const d = deleting(first.credential, { credential: second.credential, registration: r2 });
+		expect(await writer(w, () => 1_001).remove(d)).toEqual({ kind: "refused", reason: "expired" });
+		const unapproved = { ...d, approval: { ...d.approval, registration: r1 } };
+		expect(await writer(w, () => 900).remove(unapproved)).toEqual({
+			kind: "refused",
+			reason: "expired",
+		});
+	});
+
+	it("throws, keeping no clock's expired, where its mark's write fails; a mark it committed is read again", async () => {
+		const { w, first, second, r2, deleting } = await twoKeys();
+		const d = deleting(first.credential, { credential: second.credential, registration: r2 });
+		// Failing before it commits: nothing kept, and a call in time takes.
+		const before = replacing(w, {
+			changeHeld: async () => {
+				throw new Error("unavailable before");
+			},
+		});
+		await expect(writer(before, () => 1_001).remove(d)).rejects.toThrow("unavailable before");
+		const other = { ...d, op: "rm-other" };
+		// Failing after it commits: thrown, and the next call, in time or not, reads the mark.
+		const after = replacing(w, {
+			changeHeld: async (q) => {
+				await w.transparency.changeHeld(q);
+				throw new Error("unavailable after");
+			},
+		});
+		await expect(writer(after, () => 1_001).remove(other)).rejects.toThrow("unavailable after");
+		expect(w.frames.value(flow, markRecord)).toEqual({ expired: other.op });
+		expect(await writer(w, () => 900).remove(other)).toEqual({
+			kind: "refused",
+			reason: "expired",
+		});
+		expect(await writer(w, () => 900).remove(d)).toMatchObject({ kind: "took" });
+	});
+
+	it("answers ended where its op took before its mark committed, the mark left on it harmless", async () => {
+		const { w, first, second, r2, deleting } = await twoKeys();
+		const d = deleting(first.credential, { credential: second.credential, registration: r2 });
+		let a: unknown;
+		const b = replacing(w, {
+			changeHeld: async (q) => {
+				a = await writer(w, () => 900).remove(d);
+				return w.transparency.changeHeld(q);
+			},
+		});
+		expect(await writer(b, () => 1_001).remove(d)).toEqual({ kind: "ended" });
+		expect(a).toMatchObject({ kind: "took" });
+		expect(w.frames.value(flow, markRecord)).toEqual({ expired: d.op });
+		expect(await writer(w, () => 1_001).removed(d)).toMatchObject({ kind: "took" });
+	});
+
+	it("protects its op only while its mark stays: another op's mark over it, a call in time decides it anew", async () => {
+		const { w, first, second, r2, deleting } = await twoKeys();
+		const x = deleting(first.credential, { credential: second.credential, registration: r2 });
+		const y = { ...x, op: "rm-y" };
+		expect(await writer(w, () => 1_001).remove(x)).toEqual({ kind: "refused", reason: "expired" });
+		expect(await writer(w, () => 1_001).remove(y)).toEqual({ kind: "refused", reason: "expired" });
+		expect(w.frames.value(flow, markRecord)).toEqual({ expired: y.op });
+		// The residual D (approvals' takeover margin) closes: a clock before the expiry reads no mark of x.
+		expect(await writer(w, () => 900).remove(x)).toMatchObject({ kind: "took" });
+	});
+
+	it("throws, never a clock's expired, where another op's mark takes its place each time", async () => {
+		const { w, first, second, r2, deleting } = await twoKeys();
+		const d = deleting(first.credential, { credential: second.credential, registration: r2 });
+		const overwritten = replacing(w, {
+			changeHeld: async (q) => {
+				await w.transparency.changeHeld(q);
+				return w.transparency.changeHeld({ ...q, change: () => [{ value: { expired: "rm-y" } }] });
+			},
+		});
+		await expect(writer(overwritten, () => 1_001).remove(d)).rejects.toThrow(/unavailable/);
+	});
+
 	it("deletes the approving key itself while another is left", async () => {
 		const { w, second, r1, r2, deleting, first } = await twoKeys();
 		const { remove } = writer(w);
@@ -209,7 +323,13 @@ describe("a key deleted's change", () => {
 			kind: "refused",
 			reason: "approver",
 		});
-		expect(await writer(w, () => 1_001).remove(d)).toEqual({ kind: "refused", reason: "expired" });
+		// Past its expiry: marked so, an op every later decision of refuses alike, whatever its clock.
+		const late = { ...d, op: "rm-late" };
+		expect(await writer(w, () => 1_001).remove(late)).toEqual({
+			kind: "refused",
+			reason: "expired",
+		});
+		expect(await remove(late)).toEqual({ kind: "refused", reason: "expired" });
 		// Past its call's hold: decided by none, thrown, so nothing is kept for its number.
 		await expect(writer(w, () => 900).remove({ ...d, heldUntil: 899 })).rejects.toThrow();
 		expect(await remove({ ...d, credential: "none", op: "rm-none" })).toEqual({
