@@ -14,6 +14,7 @@ Internal module of `keys`: the two rings, read at boot from the section and the 
 - `section` (the operator section, each `kid` unique across it), `rs256Named`, `readRings` (the section and the holder → the rings, the Core's by generation, or the refusals by key path), `ringSigner` (a ring → its `prepare`, `sign` and `verify`), `verifiedBy`, `jwkOf`, `jsonOf`, `refusingAccessTokens`, and the ring's `kinds`, `underAlg`, `expired`, `pointOf` and `publicHalf`.
 
 ## Invariants
+- A signature is taken only at the length its `Prepared` said (`signatureLength`): a holder answering another (an ECDSA signature in DER) is logged by ring, kid and both lengths (`keys.signature_length`) and thrown as a failure, never an outage to try again, so a length known before signing holds.
 - The JWS header is `alg`, `typ` and `kid`, written as prepared; the payload is the caller's bytes as given, and the signature the holder's bytes as a JWS writes them. A signer signs only under a prepared value it gave.
 - A prepared value says how many bytes the signing key's signature takes: an RSA key's modulus, two coordinates of its curve for ES256, 64 for Ed25519 (114 for Ed448), so a caller knows a token's size before it is signed; for a key of another kind, `prepare` is a TypeError, never a length guessed.
 - JSON (a payload, a header) is read by transparency-wire's `tokens.parse`: a member named twice reads as none.

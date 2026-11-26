@@ -134,6 +134,14 @@ export function ringSigner(
 				log.warn("keys.withdrawn", { use: name, kid });
 				return { kind: "withdrawn" };
 			}
+			// The length its prepared said before signing: a holder answering another (DER for P1363) is
+			// refused here, its signature never written; a fault it repeats, so no outage to try again.
+			const said = prepared.signatureLength;
+			if (answer.signature.length !== said) {
+				const answered = String(answer.signature.length);
+				log.error("keys.signature_length", { use: name, kid, said: String(said), answered });
+				throw new Error("keys: its holder answered a signature of another length than prepared");
+			}
 			return { kind: "signed", jws: `${input}.${segment(answer.signature)}` };
 		},
 		verify: async (token, typ) => {

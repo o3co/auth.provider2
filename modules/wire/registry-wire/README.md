@@ -7,6 +7,7 @@
 - Signing a version, and checking a signature: the publisher's tool, and the Core's registry source.
 - What a section's value means and its schema: the section's owner, through `clients`.
 - Where a version is kept and how a Core reaches it: the Core's registry source.
+- Which client ids a Core can name: `clients` (`clientIdNameable`), held by the Core's registry source, which refuses a version holding another.
 
 ## Offers
 - `registryWire.version`: a version's schema: `v`, the wire's version; `version`, a whole number from 1 that only grows; `issuedAt`, seconds since the epoch; `clients`, each with `id`, `kind` (`public` or `confidential`), `method` and `sections` (each section's value by its name).
