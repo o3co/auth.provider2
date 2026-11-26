@@ -12,8 +12,9 @@ const now = () => Math.floor(Date.now() / 1000);
 export function machineClient(
 	id: string,
 	provider: { readonly issuer: string; readonly tokenUrl: string },
+	/** Its key pair, a fresh one unless given (another client signing with the same key). */
+	key: ReturnType<typeof p256> = p256(),
 ) {
-	const key = p256();
 	const kid = `${id}-key`;
 	/** An assertion for an audience, the provider's unless said (a client of two ASs signs for each). */
 	const assertion = (aud = provider.issuer) =>
@@ -36,6 +37,8 @@ export function machineClient(
 		);
 	return {
 		id,
+		/** Its key pair, for another client made to sign with the same key. */
+		key,
 		publicKey: { ...key.jwk, kid, alg: "ES256", use: "sig" },
 		jkt: thumbprint(key.jwk),
 		assertion,

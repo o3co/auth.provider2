@@ -96,6 +96,15 @@ export interface PatternSpec {
 	/** More promises the composition must hold, beside the claims the harness attacks: boot refused otherwise. */
 	readonly required?: readonly string[];
 	/**
+	 * Of the claims the harness attacks, those this composition need not hold: for a step showing a
+	 * module's own refusal behind the claim's boot check.
+	 */
+	readonly released?: readonly string[];
+	/** What the wire does to a Front instance that sent a violation (core-wire's `on-violation`), `notify` unless said. */
+	readonly onViolation?: "notify" | "cut";
+	/** The operator's `outbound` section (outbound's words), where a step's Core reaches a server of the harness. */
+	readonly outbound?: Readonly<Record<string, unknown>>;
+	/**
 	 * Users brought from another IdP, as an operator's import run hands them to users' `usersImport`
 	 * once the Core started: a subject holding no passkey.
 	 */
@@ -216,13 +225,22 @@ async function configOf(spec: PatternSpec, kernelConfig: any) {
 		...auditConfig({ receivers: ["stdout"] }),
 		// The claims the harness attacks (1 and 2) must hold, or boot is refused (the design note, §1).
 		promises: {
-			required: [promiseNames.newAuthorization, promiseNames.clientToken, ...(spec.required ?? [])],
+			required: [
+				...[promiseNames.newAuthorization, promiseNames.clientToken].filter(
+					(name) => !spec.released?.includes(name),
+				),
+				...(spec.required ?? []),
+			],
 		},
+		...(spec.outbound === undefined ? {} : { outbound: spec.outbound }),
 		"users-local": { "password-work": "scrypt:10,8,1,32,16" },
 		"transparency-local": { origin: spec.screen },
 		// The wire's port; the public origin the issuer names its endpoints on; the Fronts, on this host,
 		// whose declared source the Core reads (each step declares its own).
 		...httpConfig({ "public-origin": spec.origin, "trusted-proxies": ["127.0.0.1"] }),
-		...coreWireConfig(spec.certificates),
+		...coreWireConfig(
+			spec.certificates,
+			spec.onViolation === undefined ? {} : { "on-violation": spec.onViolation },
+		),
 	};
 }

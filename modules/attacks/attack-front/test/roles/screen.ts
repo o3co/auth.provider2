@@ -166,6 +166,21 @@ export function loginScreen(
 		if (registered.status !== 200) return refusedAt("/continue register", registered);
 		const possessionJws = answers.read("statement", registered.body);
 		if (possessionJws === undefined) return sdkRefused("answers.read", "answer");
+		return possess(front, possessionJws, creation, made, keys, device);
+	};
+
+	/**
+	 * A register stage's possession taken on: read against the creation and the key `create()` made, the
+	 * new key's `get()` and its finish, the change read at L0; the new credential's id.
+	 */
+	const possess = async (
+		front: BadFront,
+		possessionJws: string,
+		creation: ReadCreation,
+		made: { readonly id: string; readonly spki: Uint8Array; readonly alg: number },
+		keys: ScreenKeys,
+		device: Browser = browser,
+	): Promise<{ readonly credential: string } | Stopped> => {
 		const possession = await firstKey.readPossession(
 			possessionJws,
 			creation,
@@ -428,7 +443,8 @@ export function loginScreen(
 		plain: { readonly token: string; readonly identifier: string; readonly code: string },
 		given?: ScreenKeys,
 	): Promise<
-		{ readonly creation: ReadCreation; readonly mail: Mail; readonly keys: ScreenKeys } | Stopped
+		| { readonly creation: ReadCreation; readonly mail: Mail; readonly keys: ScreenKeys }
+		| (Stopped & { readonly sent?: { readonly mail: Mail; readonly keys: ScreenKeys } })
 	> => {
 		const keys = given ?? (await screenKeys());
 		const nonce = await nonceOf(front, "mail");
@@ -439,12 +455,36 @@ export function loginScreen(
 			path: "/first-key/mail",
 			body: sealedBody(nonce, keys, made.mail.sealed),
 		});
-		if (answered.status !== 200) return refusedAt("/first-key/mail", answered);
+		// Its answer not had: what was sealed is kept with the stop, for a recovery (§C.4).
+		if (answered.status !== 200)
+			return { ...refusedAt("/first-key/mail", answered), sent: { mail: made.mail, keys } };
+		return creationRead(answered, made.mail, keys);
+	};
+
+	/** A creation answered for a mail sealed, read against it. */
+	const creationRead = async (answered: Answered, mail: Mail, keys: ScreenKeys) => {
 		const compact = answers.read("statement", answered.body);
 		if (compact === undefined) return sdkRefused("answers.read", "answer");
-		const read = await firstKey.readCreation(compact, made.mail, firstKeyOptions(keys));
+		const read = await firstKey.readCreation(compact, mail, firstKeyOptions(keys));
 		if ("error" in read) return sdkRefused("firstKey.readCreation", read.error);
-		return { creation: read.creation, mail: made.mail, keys };
+		return { creation: read.creation, mail, keys };
+	};
+
+	/**
+	 * A creation whose answer was lost asked again (§C.4): the mail's nonce, its sealed request's digest
+	 * and E_sig's signature over them, the page that sealed it alone; the creation the Core kept, read.
+	 */
+	const firstKeyRecover = async (
+		front: BadFront,
+		sent: { readonly mail: Mail; readonly keys: ScreenKeys },
+	): Promise<
+		{ readonly creation: ReadCreation; readonly mail: Mail; readonly keys: ScreenKeys } | Stopped
+	> => {
+		const asked = await firstKey.recover(sent.mail);
+		if ("error" in asked) return sdkRefused("firstKey.recover", asked.error);
+		const answered = await front.post({ path: "/first-key/recover", body: asked });
+		if (answered.status !== 200) return refusedAt("/first-key/recover", answered);
+		return creationRead(answered, sent.mail, sent.keys);
 	};
 
 	/** The first key after its mail: the mail's side, then the creation's key made, registered and possessed. */
@@ -466,8 +506,10 @@ export function loginScreen(
 		deleteKey,
 		firstKeyStart,
 		firstKeyMail,
+		firstKeyRecover,
 		firstKey: firstKeyWith,
 		register,
+		possess,
 	};
 }
 

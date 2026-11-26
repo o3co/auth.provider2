@@ -28,14 +28,33 @@ export interface Person {
 	readonly credential: string;
 }
 
+/** The worlds started in this process and not stopped: the wire's certificates, one set for the process, are theirs. */
+let live = 0;
+/** A world's hold on the certificates let go: the last one removes them (counted again after the wait, as another may start). */
+async function letGo() {
+	live -= 1;
+	if (live !== 0) return;
+	const certificates = await wireCertificates();
+	if (live === 0) await certificates.remove();
+}
+
 /**
  * A harness's world: one Core of the default pattern, the relying parties it registers, and a Front
  * per source, each on its own connection (a step is independent: its own subject, client and source).
  */
 export async function world(
 	clientIds: readonly string[],
-	more: Pick<PatternSpec, "signedClients" | "change" | "seeds"> = {},
+	more: Pick<
+		PatternSpec,
+		"signedClients" | "change" | "seeds" | "outbound" | "released" | "onViolation"
+	> & {
+		/** More clients the operator registers, beside the relying parties': each as `clients`' `registered` takes it. */
+		readonly clients?: readonly unknown[];
+	} = {},
 ) {
+	const { clients, ...pattern } = more;
+	// Held before the wait, so a last world stopping meanwhile does not remove them under this one.
+	live += 1;
 	const certificates = await wireCertificates();
 	const rps = clientIds.map((id) => relyingParty(provider, id, `https://${id}.example/cb`));
 	let core: StartedCore;
@@ -44,11 +63,11 @@ export async function world(
 			certificates,
 			origin,
 			screen: screenOrigin,
-			clients: await Promise.all(rps.map((rp) => registered(rp))),
-			...more,
+			clients: [...(await Promise.all(rps.map((rp) => registered(rp)))), ...(clients ?? [])],
+			...pattern,
 		});
 	} catch (error) {
-		await certificates.remove();
+		await letGo();
 		throw error;
 	}
 	const wires: { close(): void }[] = [];
@@ -114,8 +133,11 @@ export async function world(
 		started,
 		stop: async () => {
 			for (const wire of wires) wire.close();
-			await core.stop();
-			await certificates.remove();
+			try {
+				await core.stop();
+			} finally {
+				await letGo();
+			}
 		},
 	};
 }
