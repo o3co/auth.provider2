@@ -11,10 +11,12 @@
 	"exports": {
 		".": "./src/contract.ts",
 		"./testing": "./src/testing.ts",
-		"./module": "./src/module.ts"
+		"./module": "./src/module.ts",
+		"./audit-events": "./src/audit-events.ts"
 	},
 	"dependencies": {
 		"@mod/approvals": "workspace:*",
+		"@mod/audit": "workspace:*",
 		"@mod/claims-selection": "workspace:*",
 		"@mod/clients": "workspace:*",
 		"@mod/code-grant": "workspace:*",
@@ -35,6 +37,7 @@
 	},
 	"devDependencies": {
 		"@mod/authority-rules": "workspace:*",
+		"@mod/front-core-wire": "workspace:*",
 		"vitest": "5.0.5"
 	},
 	"peerDependencies": {

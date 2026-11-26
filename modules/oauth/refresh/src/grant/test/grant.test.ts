@@ -216,7 +216,7 @@ describe("a refresh of a rooted family", () => {
 		for (const t of [
 			"x",
 			tokenOf("r-none", secret),
-			tokenOf("r-bundle", "t".repeat(43)),
+			tokenOf("r-bundle", "w".repeat(43)),
 			`${token}.more`,
 		])
 			expect(await handled({ refresh_token: t }), t).toEqual(refused);
@@ -319,7 +319,7 @@ describe("revoking a refresh token", () => {
 	it("revokes its family for its own client, answering another client's done and an unknown token unknown", async () => {
 		const w = await world();
 		expect(await w.revocable.revoke(token, { id: "other" } as Client)).toBe("done");
-		expect(await w.revocable.revoke(tokenOf("r-bundle", "t".repeat(43)), client)).toBe("unknown");
+		expect(await w.revocable.revoke(tokenOf("r-bundle", "w".repeat(43)), client)).toBe("unknown");
 		expect(await w.revocable.revoke("x", client)).toBe("unknown");
 		expect(await w.revocable.revoke(token, client)).toBe("written");
 		expect(read.family(await w.records.records.read(nameOf.family("r-bundle")))?.revoked).toBe(

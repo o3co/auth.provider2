@@ -21,6 +21,7 @@ const iat = now / 1000 - 10;
 function world(over: Partial<FoundingParts> = {}) {
 	const records = recordsAt();
 	const followed: unknown[][] = [];
+	const audited: unknown[] = [];
 	const maker = founding({
 		records: records.records,
 		approvals: {
@@ -55,9 +56,15 @@ function world(over: Partial<FoundingParts> = {}) {
 			now: records.now,
 			held: async () => false,
 		}).list,
+		audit: {
+			record: (event) => {
+				audited.push(event);
+			},
+			lost: () => ({}),
+		},
 		...over,
 	});
-	return { records, maker, followed };
+	return { records, maker, followed, audited };
 }
 
 /** A part founded, prepared, signed and committed as the bundle's record `placed` would. */
@@ -140,6 +147,18 @@ describe("a family, founded with a code's redemption", () => {
 		expect(await w.maker.part({ ...request, code: "code-2" })).toEqual({
 			refused: "the key is bound to another family",
 		});
+		// Recorded for the operator: whose, which client, which key; never a token.
+		expect(w.audited).toEqual([
+			{
+				kind: "refresh.key_bound",
+				subject: "alice",
+				attributes: {
+					client: request.clientId,
+					binding: request.binding?.member,
+					thumbprint: request.binding?.confirmation,
+				},
+			},
+		]);
 		// Revoked, it holds its key until its end all the same; past it, the key is free.
 		await w.maker.revoke("code-digest", "alice");
 		expect(await w.maker.part({ ...request, code: "code-2" })).toMatchObject({
@@ -165,6 +184,14 @@ describe("a family, founded with a code's redemption", () => {
 		expect((await at("r-1"))?.revoked).toBeUndefined();
 		expect((await at("r-2"))?.revoked).toBe(true);
 		expect(read.key(await w.records.records.read(nameOf.key(jkt)))?.family).toBe("r-1");
+		// The one that lost the key is recorded as one refused at its part is.
+		expect(w.audited).toEqual([
+			expect.objectContaining({
+				kind: "refresh.key_bound",
+				subject: "alice",
+				attributes: expect.objectContaining({ thumbprint: jkt }),
+			}),
+		]);
 	});
 
 	it("ends itself where its commit fails midway, and records the generation that signed its statement", async () => {

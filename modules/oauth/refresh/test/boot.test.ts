@@ -1,4 +1,5 @@
 import { approvals } from "@mod/approvals";
+import { audit } from "@mod/audit";
 import { claimsSelections } from "@mod/claims-selection";
 import { sessionIssuances } from "@mod/grants";
 import { assemble, defineModule, kernelConfig } from "@mod/kernel";
@@ -48,6 +49,7 @@ const around = defineModule({ name: "around", replicaSafe: true, takes: [] }, (m
 	m.provide(sessions).by(() => ({}) as never),
 	m.provide(accessTokens).by(() => ({}) as never),
 	m.provide(claimsSelections).by(() => ({}) as never),
+	m.provide(audit).by(() => ({ record: () => undefined, lost: () => ({}) })),
 	m.contribute(sessionIssuances).by(() => ({ issued: async () => undefined })),
 	// The key change's writer (passkey-management, in a deployment).
 	m.contribute(operationKinds).by(() => ({ ...passkeyChanges, bundle: false })),

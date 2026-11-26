@@ -1,4 +1,5 @@
 import { type Approvals, approvals } from "@mod/approvals";
+import { type Audit, audit, declaredAudit } from "@mod/audit";
 import { type ClaimsSelections, claimsSelections } from "@mod/claims-selection";
 import type { FamilyMaker, FamilyRequest } from "@mod/code-grant";
 import type { BundlePart, BundlePlaced } from "@mod/grants";
@@ -6,6 +7,8 @@ import { type BuildContext, Unavailable } from "@mod/kernel";
 import { type Keys, keys } from "@mod/keys";
 import { type Passkeys, passkeys } from "@mod/passkeys";
 import { typs } from "@mod/sdk-core-wire";
+import type { Binding } from "@mod/sender-binding";
+import events from "../audit-events.ts";
 import {
 	allowanceMs,
 	type FamilyRecord,
@@ -33,6 +36,7 @@ export interface FoundingParts {
 	readonly secret: () => string;
 	/** Lists a family founded under its subject and its root key (internal module `rooted`). */
 	readonly list: (entry: Listed) => Promise<void>;
+	readonly audit: Audit;
 }
 
 /** What a part holds between its preparing and its commit: the record but its id, and the secret. */
@@ -62,6 +66,13 @@ export function founding(p: FoundingParts): FamilyMaker {
 	 * by the index's one create (Q27). Its code voided meanwhile, or its key claimed by another family
 	 * first, ends it at once; a failure midway ends it too: its token is never answered.
 	 */
+	/** A family not founded, its key bound to another (Q27), recorded for the operator. */
+	const keyBound = (subject: string, client: string, binding: Binding) =>
+		declaredAudit(p.audit, events).record("refresh.key_bound", {
+			subject,
+			attributes: { client, binding: binding.member, thumbprint: binding.confirmation },
+		});
+
 	async function commit(ready: Ready, placed: BundlePlaced) {
 		const { record } = ready;
 		const ttl = record.end - p.now() + allowanceMs;
@@ -85,6 +96,7 @@ export function founding(p: FoundingParts): FamilyMaker {
 			const key = nameOf.key(record.binding.confirmation);
 			await p.records.create(key, write.key(placed.id, record.subject), ttl, record.subject);
 			const claimed = read.key(await p.records.read(key))?.family;
+			if (claimed !== placed.id) keyBound(record.subject, record.client, record.binding);
 			if (code?.revoked || claimed !== placed.id)
 				throw new Unavailable("refresh: ended as founded");
 			await p.list({ subject: record.subject, family: placed.id, credential: record.credential });
@@ -115,8 +127,10 @@ export function founding(p: FoundingParts): FamilyMaker {
 			if (!key || key.subject !== asked.subject) return refused("the key it rests on is gone");
 			if (!asked.binding) return refused("no key the family is bound to");
 			// One family a key (Q27): a key the index holds, its family live or not, until that family's end.
-			if ((await p.records.read(nameOf.key(asked.binding.confirmation))) !== undefined)
+			if ((await p.records.read(nameOf.key(asked.binding.confirmation))) !== undefined) {
+				keyBound(asked.subject, asked.clientId, asked.binding);
 				return refused("the key is bound to another family");
+			}
 			const generation = await generationOf(root.statement);
 			if (generation === undefined) return refused("the statement it rests on does not verify");
 			const secret = p.secret();
@@ -168,7 +182,14 @@ export function founding(p: FoundingParts): FamilyMaker {
 }
 
 /** What the founding takes from the composition. */
-export const foundingTakes = [familyRecords, approvals, passkeys, keys, claimsSelections] as const;
+export const foundingTakes = [
+	familyRecords,
+	approvals,
+	passkeys,
+	keys,
+	claimsSelections,
+	audit,
+] as const;
 
 export const foundingIn = async (
 	c: Pick<BuildContext<unknown>, "get" | "clock" | "random">,
@@ -189,4 +210,5 @@ export const foundingIn = async (
 			now: c.clock.now,
 			held: heldBy(await c.get(passkeys)),
 		}).list,
+		audit: await c.get(audit),
 	});

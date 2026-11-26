@@ -18,10 +18,12 @@
 - Store interface `familyRecords` (create for a subject, read, change from what it holds; `erase` and `migrate` together or neither, a part refusing boot) and `familyRecordsNeeds`; `./testing`: `refreshConfig`, `familyRecordsInMemory`, `familiesOwning` (its owner of the families alone, for a composition without refresh).
 - A contribution to `erasure-extensions`' erasers: `refresh` (internal module `erasure`), every record keeping its subject.
 - Operator section: `lifetime`, the delegation's length (`5m`–`1y`, default `1d`).
+- Audit event `refresh.key_bound` (`./audit-events`): a code's redemption founded no family, its key bound to another family (Q27); its subject, client, the binding's kind and the key's thumbprint.
 - Its stance: `front-compromise-new-authorization` holds: a family rests on a passkey's approval, its token on the authorization's key.
 
 ## Invariants
-- A refresh token is `<family>.<secret>`: the family's id (its bundle record's, base64url) and 32 random bytes; the family keeps the secret's SHA-256 alone.
+- A refresh token is `<secret><family>`, nothing between: 32 random bytes and the family's id (its bundle record's), each base64url; the family keeps the secret's SHA-256 alone.
+- A token fits the Front's wire's `refreshToken` (front-core-wire): base64url alone, at most 128 characters; a family id of more than 63 bytes, which would not fit, gives no token (thrown, after the bundle is on the log: the redemption answers no token, its code used up).
 - A family is bound to its authorization's key (`dpop_jkt`): one family a key (Q27), the key held until that family's end, revoked or not; its token used only with a proof by that key. Bound, it is never rotated: each refresh answers the same token.
 - A family lives no longer than its delegation (its statement's issue and `lifetime`, the same end as its session's) nor its session: each refresh asks the session to enter, before issuing and again after, so a logout ends it, even one racing a refresh, its record and key kept to their end. Boot is refused where no module records its tokens to their session (`grants`' `sessionIssuances`).
 - Ending a family (revoked, its code voided, its root key removed) revokes no access token it gave: each ends with its lifetime, as after a reset (proposal 3.9).
@@ -30,7 +32,7 @@
 - Its access tokens carry the amr, authentication time and acr of its redemption, its scope narrowed only within the family's (`offline_access` never part of it), its audience within the family's.
 
 ## Depends on
-- `kernel`, `code-grant`, `grants`, `token-revocation`, `tokens`, `promises`, `erasure-extensions`, `transparency` (`stateOwners`); the internal modules' own.
+- `kernel`, `audit`, `code-grant`, `grants`, `token-revocation`, `tokens`, `promises`, `erasure-extensions`, `transparency` (`stateOwners`); the internal modules' own.
 
 ## Vocabulary
 - family: a code redemption's delegation, its one refresh token. root: the approval it rests on.

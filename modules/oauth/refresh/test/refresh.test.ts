@@ -1,4 +1,5 @@
 import { approvals } from "@mod/approvals";
+import { audit } from "@mod/audit";
 import { claimsSelections } from "@mod/claims-selection";
 import { type FamilyMaker, families } from "@mod/code-grant";
 import { type Eraser, erasers } from "@mod/erasure-extensions";
@@ -41,6 +42,7 @@ const fakes = defineModule(
 		m.provide(sessions).by(() => ({}) as never),
 		m.provide(accessTokens).by(() => ({}) as never),
 		m.provide(claimsSelections).by(() => ({}) as never),
+		m.provide(audit).by(() => ({ record: () => undefined, lost: () => ({}) })),
 		m.provide(seen).by(async (c) => ({
 			families: await c.collect(families),
 			grants: await c.collect(grants),

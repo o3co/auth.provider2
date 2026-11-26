@@ -97,15 +97,35 @@ export const write = {
 
 export const sha256 = (text: string) => createHash("sha256").update(text).digest("base64url");
 
-/** A refresh token: its family's id and its secret, each base64url, joined by a dot. */
-export const tokenOf = (family: string, secret: string) =>
-	`${Buffer.from(family).toString("base64url")}.${secret}`;
-/** A refresh token's family and secret; none for a token of another shape. */
+/** A secret's length: 32 bytes, base64url without padding. */
+const secretChars = 43;
+/** A token's greatest length, as the Front's wire carries `refreshToken`. */
+const tokenChars = 128;
+/** A secret in the one spelling of its 32 bytes. */
+const canonical = (secret: string) =>
+	secret.length === secretChars &&
+	Buffer.from(Buffer.from(secret, "base64url")).toString("base64url") === secret;
+
+/**
+ * A refresh token: its secret, then its family's id in base64url, nothing between, so base64url
+ * alone. A family's id it does not read back within the wire's length (over 63 bytes) is thrown.
+ */
+export const tokenOf = (family: string, secret: string) => {
+	if (!canonical(secret)) throw new TypeError("refresh: a secret not of 32 bytes in one spelling");
+	const token = `${secret}${Buffer.from(family).toString("base64url")}`;
+	if (tokenParts(token)?.family !== family)
+		throw new TypeError("refresh: a family id no token the Front's wire carries names");
+	return token;
+};
+/** A refresh token's family and secret, in the very form `tokenOf` makes; none for another. */
 export function tokenParts(token: string) {
-	const [family, secret, more] = token.split(".");
-	if (!family || !secret || more !== undefined) return undefined;
-	if (!/^[\w-]+$/.test(family) || !/^[\w-]{43}$/.test(secret)) return undefined;
-	return { family: Buffer.from(family, "base64url").toString("utf8"), secret };
+	if (!/^[\w-]+$/.test(token) || token.length <= secretChars || token.length > tokenChars)
+		return undefined;
+	const secret = token.slice(0, secretChars);
+	const encoded = token.slice(secretChars);
+	const family = Buffer.from(encoded, "base64url").toString("utf8");
+	if (!canonical(secret) || Buffer.from(family).toString("base64url") !== encoded) return undefined;
+	return { family, secret };
 }
 
 /** Each record's kind and what it was named for, from its name; none for a name of no kind. */
