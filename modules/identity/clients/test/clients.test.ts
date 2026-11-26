@@ -118,7 +118,7 @@ describe("clients", () => {
 	});
 
 	it("form-decodes the Basic id and secret [rfc6749-2.3.1-a]", async () => {
-		const id = "a+b %c";
+		const id = "a+b%c";
 		const c = await boot(
 			[],
 			[
@@ -133,8 +133,10 @@ describe("clients", () => {
 		const raw = (decoded: string) => ({
 			authorization: `Basic ${Buffer.from(decoded).toString("base64")}`,
 		});
-		expect(clientOf(await outcome(c, raw("a%2Bb+%25c:s%2Be%20%25t"), {})).id).toBe(id);
-		expect(await outcome(c, raw("a%2Bb+%25c:s+e+%25t"), {})).toMatchObject({
+		expect(clientOf(await outcome(c, raw("a%2Bb%25c:s%2Be%20%25t"), {})).id).toBe(id);
+		// A `+` is a space, as a form writes one.
+		expect(clientOf(await outcome(c, raw("a%2Bb%25c:s%2Be+%25t"), {})).id).toBe(id);
+		expect(await outcome(c, raw("a%2Bb%25c:s+e+%25t"), {})).toMatchObject({
 			reason: "bad_credentials",
 		});
 	});
@@ -240,7 +242,7 @@ describe("clients", () => {
 		});
 	});
 
-	// Each id no client can have: control and line-breaking characters, a BOM, a lone surrogate, too long.
+	// Each id no client can have: control and line-breaking characters, a BOM, a lone surrogate, a space, not ASCII, too long.
 	const unnameable = [
 		"a\nb",
 		"a\u0000",
@@ -249,10 +251,10 @@ describe("clients", () => {
 		"a\u009fb",
 		"a\u2028b",
 		"a\u2029b",
-	].concat(["\ufeffconf", "a\ud800b", "\udc00", "a".repeat(257)]);
+	].concat(["\ufeffconf", "a\ud800b", "\udc00", "a b", "\u00e9t\u00e9", "a".repeat(65)]);
 
 	it("refuses a registered client id no client can have", async () => {
-		const longest = "a".repeat(256);
+		const longest = "a".repeat(64);
 		const c = await boot([], [{ id: longest, kind: "public", method: "none" }]);
 		expect((await c.find(longest))?.registered).toBe(true);
 		for (const id of unnameable) {
@@ -558,9 +560,10 @@ describe("clients", () => {
 		}
 		expect(await c.find("")).toBeUndefined();
 		expect(asked).toEqual([]);
-		expect((await c.find("a b"))?.id).toBe("a b");
-		expect((await c.find("a".repeat(256)))?.id).toBe("a".repeat(256));
-		expect(asked).toEqual(["a b", "a".repeat(256)]);
+		const visible = "!~a-Z.0_";
+		expect((await c.find(visible))?.id).toBe(visible);
+		expect((await c.find("a".repeat(64)))?.id).toBe("a".repeat(64));
+		expect(asked).toEqual([visible, "a".repeat(64)]);
 	});
 
 	it("checks a source's record by the rule for a registered one, and against the id asked", async () => {

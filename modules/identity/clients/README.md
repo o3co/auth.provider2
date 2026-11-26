@@ -18,7 +18,7 @@
 - Asking a client for a section no module contributed throws; it never answers undefined.
 - Extension point `authMethods`: a method names its challenge for a refusal and its signing algorithms (at least one where it names any, never the JWS algorithm `none` in any case: boot refuses a method that breaks either), may say a request carries its credentials malformed, and may say it authenticates by an assertion (RFC 7521), when it names at least one signing algorithm (boot refuses one that does not).
 - Extension points `clientSources` and `metadataSections`; a section may give `checkAtBoot`, which takes a registered client's value of that section after the schema, and the client that holds it, and may give a reason to refuse boot.
-- Operator section `registered`: a list of `id`, `kind` (`public` or `confidential`), `method` and `sections` (values by section name); built-in section `client-secret` holds `hash`, a bcrypt or scrypt hash in the forms `secret-hash` reads.
+- Operator section `registered`: a list of `id` (1 to 64 visible ASCII characters), `kind` (`public` or `confidential`), `method` and `sections` (values by section name); built-in section `client-secret` holds `hash`, a bcrypt or scrypt hash in the forms `secret-hash` reads.
 - `./testing`: `confidentialClient` and `publicClient` (test clients; `clientSecret` is the former's secret) and `clientsConfig`.
 
 ## Invariants

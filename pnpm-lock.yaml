@@ -883,6 +883,10 @@ importers:
       zod:
         specifier: 4.6.7
         version: 4.6.7
+    devDependencies:
+      '@mod/front-core-wire':
+        specifier: workspace:*
+        version: link:../../wire/front-core-wire
 
   modules/identity/clients-registry:
     dependencies:

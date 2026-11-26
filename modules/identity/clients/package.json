@@ -21,5 +21,8 @@
 		"@mod/secret-hash": "workspace:*",
 		"@standard-schema/spec": "1.1.0",
 		"zod": "4.6.7"
+	},
+	"devDependencies": {
+		"@mod/front-core-wire": "workspace:*"
 	}
 }

@@ -32,21 +32,12 @@ export interface SectionIssue {
 	readonly message: string;
 }
 
-// biome-ignore lint/suspicious/noControlCharactersInRegex: finding control characters is the point.
-const unnameableCharacter = /[\u0000-\u001f\u007f-\u009f\u2028\u2029\ufeff]/;
-
-/** Whether an id can name a client: 1 to 256 UTF-16 code units, no lone surrogate, and no C0, DEL, C1, U+2028, U+2029 or BOM. */
-const nameable = (id: string) =>
-	id.length > 0 && id.length <= 256 && id.isWellFormed() && !unnameableCharacter.test(id);
+/** Whether an id can name a client: 1 to 64 visible ASCII characters (0x21 to 0x7e), as every way to the Core carries one. */
+const nameable = (id: string) => /^[\x21-\x7e]{1,64}$/.test(id);
 
 /** A client record as the operator registers it, and as a source's answer is held to. */
 export const clientRecord = z.strictObject({
-	id: z
-		.string()
-		.refine(
-			nameable,
-			"a client id that is empty, over 256 code units or with a character no id may hold",
-		),
+	id: z.string().refine(nameable, "a client id that is not 1 to 64 visible ASCII characters"),
 	kind: z.enum(["public", "confidential"]),
 	method: z.string().min(1),
 	sections: z.record(z.string(), z.unknown()).prefault({}),

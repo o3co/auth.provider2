@@ -26,7 +26,7 @@ const section = z
 			.array(clientRecord)
 			.prefault([])
 			.describe(
-				"The clients the operator registers: each an id (unique), a kind (public or confidential), a method and sections (values by section name, client-secret holding its hash).",
+				"The clients the operator registers: each an id (unique, 1 to 64 visible ASCII characters), a kind (public or confidential), a method and sections (values by section name, client-secret holding its hash).",
 			),
 	})
 	.refine((s) => new Set(s.registered.map((r) => r.id)).size === s.registered.length, {
