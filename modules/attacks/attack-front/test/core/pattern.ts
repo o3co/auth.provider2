@@ -95,6 +95,15 @@ export interface PatternSpec {
 	readonly change?: readonly string[];
 	/** More promises the composition must hold, beside the claims the harness attacks: boot refused otherwise. */
 	readonly required?: readonly string[];
+	/**
+	 * Users brought from another IdP, as an operator's import run hands them to users' `usersImport`
+	 * once the Core started: a subject holding no passkey.
+	 */
+	readonly seeds?: readonly {
+		readonly subject: string;
+		readonly identifier?: string;
+		readonly verifiedEmail?: string;
+	}[];
 }
 
 /** A mail the Core sent, as `mail`'s preparer made it. */

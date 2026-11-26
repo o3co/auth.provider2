@@ -12,10 +12,12 @@
 		"@mod/front-core-wire": "workspace:*"
 	},
 	"devDependencies": {
+		"@mod/continuation-wire": "workspace:*",
 		"@mod/core-wire": "workspace:*",
 		"@mod/front-relay": "workspace:*",
 		"@mod/http": "workspace:*",
 		"@mod/kernel": "workspace:*",
+		"@mod/keys": "workspace:*",
 		"@mod/promises": "workspace:*",
 		"@mod/sdk-core-wire": "workspace:*",
 		"@mod/tls-options": "workspace:*",

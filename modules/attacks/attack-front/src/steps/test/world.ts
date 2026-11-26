@@ -2,6 +2,7 @@ import { wireClient } from "@mod/core-wire/testing";
 import { wireCertificates } from "@mod/front-relay/testing";
 import { registered } from "../../../test/core/clients.ts";
 import { type StartedCore, startCore } from "../../../test/core/launch.ts";
+import type { PatternSpec } from "../../../test/core/pattern.ts";
 import { type Browser, browser } from "../../../test/roles/browser.ts";
 import { type RelyingParty, relyingParty } from "../../../test/roles/rp.ts";
 import {
@@ -33,7 +34,7 @@ export interface Person {
  */
 export async function world(
 	clientIds: readonly string[],
-	signedClients: readonly { readonly id: string }[] = [],
+	more: Pick<PatternSpec, "signedClients" | "change" | "seeds"> = {},
 ) {
 	const certificates = await wireCertificates();
 	const rps = clientIds.map((id) => relyingParty(provider, id, `https://${id}.example/cb`));
@@ -44,7 +45,7 @@ export async function world(
 			origin,
 			screen: screenOrigin,
 			clients: await Promise.all(rps.map((rp) => registered(rp))),
-			signedClients,
+			...more,
 		});
 	} catch (error) {
 		await certificates.remove();
@@ -65,7 +66,13 @@ export async function world(
 	};
 	/** A Front of its own, declaring a source of its own. */
 	const front = async (): Promise<BadFront> => badFront(await connect(), fresh());
-	const screenOf = (b: Browser) => loginScreen({ ring: core.ring, issuer: origin }, b);
+	// The Core's sealing key as the page pins it: HPKE's raw P-256 point.
+	const sealingKey = new Uint8Array([
+		4,
+		...Buffer.from(core.sealingKey.x ?? "", "base64url"),
+		...Buffer.from(core.sealingKey.y ?? "", "base64url"),
+	]);
+	const screenOf = (b: Browser) => loginScreen({ ring: core.ring, issuer: origin, sealingKey }, b);
 	/** A person signed up (F1) through an honest Front, at the RP given, the first of `rps` unless said. */
 	const person = async (rp: RelyingParty = rps[0] as RelyingParty): Promise<Person> => {
 		const honest = await front();
@@ -76,6 +83,11 @@ export async function world(
 		const key = await screen.signUp(honest, s);
 		if (stopped(key)) throw new Error(`a sign-up: ${JSON.stringify(key)}`);
 		return { browser: b, screen, credential: key.credential };
+	};
+	/** The token of the first-key mail sent to `to`, as the link's fragment carries it to the page. */
+	const firstKeyToken = async (to: string): Promise<string> => {
+		const mail = await core.mailWhere((m) => m.purpose === "first-key" && m.to === to);
+		return new URL((mail.values as { link: string }).link).hash.slice(1);
 	};
 	/** An authorization started by a person at an RP, through a Front: the RP's session and the screen's T. */
 	const started = async (
@@ -92,11 +104,13 @@ export async function world(
 	return {
 		core,
 		rps,
+		sealingKey,
 		connect,
 		fresh,
 		front,
 		screenOf,
 		person,
+		firstKeyToken,
 		started,
 		stop: async () => {
 			for (const wire of wires) wire.close();

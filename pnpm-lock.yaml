@@ -83,6 +83,9 @@ importers:
         specifier: workspace:*
         version: link:../../wire/front-core-wire
     devDependencies:
+      '@mod/continuation-wire':
+        specifier: workspace:*
+        version: link:../../wire/continuation-wire
       '@mod/core-wire':
         specifier: workspace:*
         version: link:../../http-servers/core-wire
@@ -95,6 +98,9 @@ importers:
       '@mod/kernel':
         specifier: workspace:*
         version: link:../../foundation/kernel
+      '@mod/keys':
+        specifier: workspace:*
+        version: link:../../foundation/keys
       '@mod/promises':
         specifier: workspace:*
         version: link:../../foundation/promises

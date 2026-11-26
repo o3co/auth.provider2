@@ -29,6 +29,8 @@ export interface StartedCore {
 	readonly ring: readonly PublishedKey[];
 	/** The Core's sealing key (HPKE, P-256), as the screen pins it. */
 	readonly sealingKey: PublishedKey;
+	/** The discovery document (OpenID Connect Discovery), as the operator publishes it. */
+	readonly metadata: Readonly<Record<string, unknown>>;
 	/** The mails the Core sent so far, and a wait for one: a mail goes apart from the wire's answer. */
 	readonly mail: () => readonly SentMail[];
 	readonly mailWhere: Waiting<SentMail>;
@@ -157,6 +159,7 @@ export async function startCore(spec: PatternSpec): Promise<StartedCore> {
 			jwks: (said.jwks as { keys: PublishedKey[] }).keys,
 			ring: core.filter((key) => key.use !== "enc"),
 			sealingKey,
+			metadata: said.metadata as Record<string, unknown>,
 			mail: () => mail,
 			mailWhere: waitingOver(mail, "mail"),
 			lines: () => lines,

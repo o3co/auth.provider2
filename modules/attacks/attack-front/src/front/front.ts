@@ -34,7 +34,10 @@ export interface Wire {
 
 /** A step's change to what the Front relays: each operation's message before it goes, each reply before it is answered. */
 export interface Rewrites {
-	readonly messages?: { readonly [K in RequestKind]?: (message: Message<K>) => Message<K> };
+	/** Each operation's message before it goes, now or once worked out (a Front may compute its change). */
+	readonly messages?: {
+		readonly [K in RequestKind]?: (message: Message<K>) => Message<K> | Promise<Message<K>>;
+	};
 	readonly replies?: { readonly [K in RequestKind]?: (reply: WireReply) => WireReply };
 }
 
@@ -97,18 +100,22 @@ export function badFront(wire: Wire, source: string) {
 		values: ReadonlyMap<string, readonly string[]>,
 		headers: ReadonlyMap<string, string>,
 	): Promise<Answered> => {
+		// The rewrites as they stand when the request comes: one setting for its message and its reply.
+		const now = rewrites;
 		const read = messageOf(kind, { values, headers, source });
 		if (!read.ok) return invalidRequest;
-		const change = rewrites.messages?.[kind] as ((message: Message<K>) => Message<K>) | undefined;
+		const change = now.messages?.[kind] as
+			| ((message: Message<K>) => Message<K> | Promise<Message<K>>)
+			| undefined;
 		let reply: WireReply;
 		try {
-			reply = await send(kind, change ? change(read.message) : read.message);
+			reply = await send(kind, change ? await change(read.message) : read.message);
 		} catch (error) {
 			// A field outside its spec: the frame cannot carry it, so nothing is sent.
 			if (error instanceof WireEncodeError) return invalidRequest;
 			throw error;
 		}
-		return { ...answerOf(kind, rewrites.replies?.[kind]?.(reply) ?? reply), wire: reply };
+		return { ...answerOf(kind, now.replies?.[kind]?.(reply) ?? reply), wire: reply };
 	};
 	return {
 		/** Relays a request: read as its operation, rewritten, sent, and its reply rewritten and answered. */

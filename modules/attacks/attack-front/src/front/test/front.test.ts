@@ -153,6 +153,23 @@ describe("the dishonest Front", () => {
 		});
 	});
 
+	it("applies a rewrite it works out before the message goes", async () => {
+		const { wire, seen } = await core((request) =>
+			jsonAnswer(200, { code: request.fields.single("code") }),
+		);
+		const front = badFront(wire, "203.0.113.9");
+		front.rewrite({
+			messages: {
+				token: async (message) => {
+					await new Promise((resolve) => setTimeout(resolve, 1));
+					return { ...message, code: "later" };
+				},
+			},
+		});
+		expect(await front.post(sentOf(token))).toMatchObject({ status: 200, body: { code: "later" } });
+		expect(seen).toHaveLength(1);
+	});
+
 	it("sends frames of its own beside what it relays", async () => {
 		const { wire, seen } = await core(() => jsonAnswer(200, {}));
 		const front = badFront(wire, "203.0.113.9");

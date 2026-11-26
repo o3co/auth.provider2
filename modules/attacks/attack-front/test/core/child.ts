@@ -1,7 +1,7 @@
 /**
  * The default pattern's process (M4's seed): reads its spec from the file its argument names, starts
- * the Core, and signals on its own descriptor (3), one JSON object a line: `ready` (the wire's port and
- * the key sets the operator publishes), each `mail` the Core sends, each `log` line, or `failed`.
+ * the Core, imports its seeds, and signals on its own descriptor (3), one JSON object a line: `ready` (the wire's port and
+ * the key sets and the discovery document the operator publishes), each `mail` the Core sends, each `log` line, or `failed`.
  * Standard output is the modules' own (audit-stdout's records). SIGTERM, or its parent gone (standard
  * input ended), stops it.
  */
@@ -53,15 +53,27 @@ try {
 	const started = await assemble({ modules, config, runtime: quietRuntime({ log }) });
 	app = started;
 	await started.start();
+	// The users an operator's import run brings, before the wire is used.
+	const { usersImport } = await entry("@mod/users");
+	for (const seed of spec.seeds ?? []) {
+		const answer = await started.get(usersImport).record(seed);
+		if (answer !== "imported") throw new Error(`users-import: ${answer}`);
+	}
 	// The key sets as the operator publishes them: the JWKS, and the Core's ring with its sealing key.
 	const published = await started.get(keys).publish([dir]);
 	if (published.code !== 0) throw new Error(`keys-publish: ${published.lines.join(" ")}`);
 	const read = async (name: string) => JSON.parse(await readFile(join(dir, name), "utf8"));
+	// The discovery document as the operator publishes it, for an issuer without a path at the root.
+	const { discovery } = await entry("@mod/discovery");
+	const documents = join(dir, "discovery");
+	const written = await started.get(discovery).publish([documents]);
+	if (written.code !== 0) throw new Error(`discovery-publish: ${written.lines.join(" ")}`);
 	say({
 		ready: {
 			port: started.get(listening).port(),
 			jwks: await read("jwks.json"),
 			coreKeys: await read("core-keys.json"),
+			metadata: await read(join("discovery", ".well-known", "openid-configuration")),
 		},
 	});
 } catch (error) {

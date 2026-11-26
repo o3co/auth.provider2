@@ -22,13 +22,12 @@ beforeAll(async () => {
 	mine = machineClient("svc-a", provider);
 	// A client of the attacker's own, registered as honestly as any.
 	other = machineClient("svc-b", provider);
-	w = await world(
-		[],
-		[
+	w = await world([], {
+		signedClients: [
 			await signedMachine(mine.id, mine.publicKey, [{ audience: api, scopes: ["read", "write"] }]),
 			await signedMachine(other.id, other.publicKey, [{ audience: api, scopes: ["read"] }]),
 		],
-	);
+	});
 }, readyWithinMs + 10_000);
 afterAll(async () => {
 	await w?.stop();
