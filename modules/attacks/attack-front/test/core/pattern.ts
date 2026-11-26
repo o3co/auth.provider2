@@ -92,6 +92,8 @@ export interface PatternSpec {
 	readonly signedClients?: readonly { readonly id: string }[];
 	/** More features beside `features`, or fewer (a name prefixed `-`, which no need may bring back). */
 	readonly change?: readonly string[];
+	/** More promises the composition must hold, beside the claims the harness attacks: boot refused otherwise. */
+	readonly required?: readonly string[];
 }
 
 /** A mail the Core sent, as `mail`'s preparer made it. */
@@ -202,10 +204,10 @@ async function configOf(spec: PatternSpec, kernelConfig: any) {
 		...dpopConfig({ nonce: { ...dpopConfig().dpop.nonce, required: "as" } }),
 		...clientsConfig(spec.clients),
 		...auditConfig({ receivers: ["stdout"] }),
-		// The claim the harness attacks must hold, or boot is refused (the design note, §1). Claim 2
-		// (`front-compromise-client-token`) joins once a module stands holding it: today none does,
-		// so it holds in no composition (m0-notes, 2026-11-26).
-		promises: { required: [promiseNames.newAuthorization] },
+		// The claims the harness attacks (1 and 2) must hold, or boot is refused (the design note, §1).
+		promises: {
+			required: [promiseNames.newAuthorization, promiseNames.clientToken, ...(spec.required ?? [])],
+		},
 		"users-local": { "password-work": "scrypt:10,8,1,32,16" },
 		"transparency-local": { origin: spec.screen },
 		// The wire's port; the public origin the issuer names its endpoints on; the Fronts, on this host,
