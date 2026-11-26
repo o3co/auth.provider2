@@ -10,6 +10,7 @@ import {
 	keyChangeDigests,
 	ordinal,
 	type RecordRef,
+	recordId,
 	recordRef,
 	v,
 	writer,
@@ -95,7 +96,7 @@ export const receipt = z
 	.object({
 		v,
 		iss: id,
-		id,
+		id: recordId,
 		writer,
 		kind: z.enum([
 			...recordKinds.core,

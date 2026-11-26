@@ -43,6 +43,13 @@ export const opIds = Object.freeze({
 
 export const v = z.literal(speaks[0]);
 export const id = z.string().min(1);
+/**
+ * A record's id, as its log gives it: never `__proto__`, as a flow's state names its items by it and
+ * a store refuses that key, so a log naming one is told apart here, at the boundary.
+ */
+export const recordId = id.refine((x) => x !== "__proto__", {
+	message: "a record's id is never __proto__",
+});
 export const count = z.number().int().nonnegative();
 export const ordinal = z.number().int().positive();
 /** SHA-256, base64url without padding. */
@@ -179,7 +186,7 @@ export const appendRequest = z
 	});
 
 const placed = {
-	id,
+	id: recordId,
 	writer,
 	position: ordinal,
 	shard: id,
@@ -216,7 +223,7 @@ export const written = z
 const tick = z
 	.object({
 		v,
-		id,
+		id: recordId,
 		writer: z.object({ role: z.literal("log") }).strict(),
 		kind: z.literal("tick"),
 		shard: id,
@@ -242,7 +249,7 @@ export const appendAnswer = z.discriminatedUnion("result", [
 		.object({
 			v,
 			result: z.literal("accepted"),
-			id,
+			id: recordId,
 			position: ordinal,
 			shard: id,
 			n: ordinal,

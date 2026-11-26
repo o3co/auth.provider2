@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { base64url, count, flow, id, ordinal, v } from "../records/records.ts";
+import { base64url, count, flow, id, ordinal, recordId, v } from "../records/records.ts";
 import { unique } from "../text/text.ts";
 
 /** The monitor's four verdicts (A45) and the outcome, a separate axis: whether a stage took effect. */
@@ -25,11 +25,11 @@ const ext = z.record(z.string(), z.unknown()).optional();
 const verdict = z.enum(judgments.verdicts);
 const outcome = z.enum(judgments.outcomes);
 const ids = z
-	.array(id)
+	.array(recordId)
 	.refine((list) => unique(list, (x) => x), { message: "an id is named twice" });
 
 export const judgment = z
-	.object({ v, id, flow, position: ordinal, shard: id, n: ordinal, verdict, outcome })
+	.object({ v, id: recordId, flow, position: ordinal, shard: id, n: ordinal, verdict, outcome })
 	.strict();
 
 export const checkpoint = z
@@ -62,7 +62,7 @@ export const statusReasons = z
 		v,
 		version: ordinal,
 		reasons: z
-			.array(z.object({ id, reason: z.enum(statusWords.denyReasons) }).strict())
+			.array(z.object({ id: recordId, reason: z.enum(statusWords.denyReasons) }).strict())
 			.refine((list) => unique(list, (r) => r.id), { message: "an id is named twice" }),
 	})
 	.strict();
@@ -75,7 +75,7 @@ export const stateOf = z
 		/** The flow's state as the one fold makes it, held to `authority-rules`' schema, not here. */
 		state: z.record(z.string(), z.unknown()),
 		/** Each position's verdict and outcome, from 1 to `position`, each once and in order. */
-		results: z.array(z.object({ position: ordinal, id, verdict, outcome }).strict()),
+		results: z.array(z.object({ position: ordinal, id: recordId, verdict, outcome }).strict()),
 	})
 	.strict()
 	.refine(

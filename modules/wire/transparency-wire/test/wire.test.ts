@@ -227,6 +227,19 @@ describe("the conditional append a writer sends", () => {
 });
 
 describe("the log's answer to an append", () => {
+	it("refuses an accepted answer whose record id is __proto__", () => {
+		no(schemas.appendAnswer, {
+			v: 1,
+			result: "accepted",
+			id: "__proto__",
+			position: 5,
+			shard: "s1",
+			n: 17,
+			acceptedAt: 1,
+			receipts: [jws, jws, jws],
+		});
+	});
+
 	it("accepts with the record's id, position, shard, sequence number, acceptance time and one receipt per token", () => {
 		ok(schemas.appendAnswer, {
 			v: 1,
@@ -307,6 +320,13 @@ describe("a committed record", () => {
 		no(schemas.record, { ...denialRecord, sealedTo: bundleRecord.sealedTo });
 	});
 
+	it("refuses a record whose id is __proto__: the state names its items by record ids, and a store refuses that key", () => {
+		no(schemas.record, { ...bundleRecord, id: "__proto__" });
+		no(schemas.record, { ...tick, id: "__proto__" });
+		// A flow's id is no record's: a subject of that name is read.
+		ok(schemas.record, { ...bundleRecord, flow: { of: "subject", id: "__proto__" } });
+	});
+
 	it("refuses a kind its writer may not write, and a field it does not know", () => {
 		no(schemas.record, { ...denialRecord, writer: core });
 		no(schemas.record, { ...bundleRecord, writer: { role: "monitor", key: "mon-1" } });
@@ -332,6 +352,7 @@ describe("a committed record", () => {
 describe("receipts, judgments, checkpoints, status and stateOf", () => {
 	it("reads a receipt per token, and one of an approval binding what the screen checks", () => {
 		ok(schemas.receipt, receipt);
+		no(schemas.receipt, { ...receipt, id: "__proto__" });
 		const { token: _, ...approval } = { ...receipt, kind: "approval" };
 		ok(schemas.receipt, {
 			...approval,
@@ -373,6 +394,7 @@ describe("receipts, judgments, checkpoints, status and stateOf", () => {
 		for (const verdict of judgments.verdicts) ok(schemas.judgment, { ...judgment, verdict });
 		for (const outcome of judgments.outcomes) ok(schemas.judgment, { ...judgment, outcome });
 		no(schemas.judgment, { ...judgment, verdict: "確かめた" });
+		no(schemas.judgment, { ...judgment, id: "__proto__" });
 		no(schemas.judgment, { ...judgment, reason: "J7" });
 	});
 
@@ -391,6 +413,8 @@ describe("receipts, judgments, checkpoints, status and stateOf", () => {
 		const { deny: _, ...noDeny } = checkpoint;
 		no(schemas.checkpoint, noDeny);
 		no(schemas.checkpoint, { ...checkpoint, deny: ["r-1", "r-1"] });
+		no(schemas.checkpoint, { ...checkpoint, deny: ["__proto__"] });
+		no(schemas.checkpoint, { ...checkpoint, counted: ["__proto__"] });
 	});
 
 	it("reads a status: its version, each shard's watermark and generation state, and ids alone", () => {
@@ -406,6 +430,12 @@ describe("receipts, judgments, checkpoints, status and stateOf", () => {
 		ok(schemas.status, { ...status, ext: { kmsCheckedTo: 3, later: "unknown" } });
 		ok(schemas.statusReasons, { v: 1, version: 4, reasons: [{ id: "r-2", reason: "forged" }] });
 		no(schemas.statusReasons, { v: 1, version: 4, reasons: [{ id: "r-2", reason: "lost" }] });
+		no(schemas.status, { ...status, deny: ["__proto__"] });
+		no(schemas.statusReasons, {
+			v: 1,
+			version: 4,
+			reasons: [{ id: "__proto__", reason: "forged" }],
+		});
 	});
 
 	it("reads stateOf: the flow, a position, the state, and each position's verdict and outcome", () => {
@@ -420,6 +450,12 @@ describe("receipts, judgments, checkpoints, status and stateOf", () => {
 			],
 		};
 		ok(schemas.stateOf, { ...stateOf, position: 2 });
+		const [first, second] = stateOf.results;
+		no(schemas.stateOf, {
+			...stateOf,
+			position: 2,
+			results: [first, { ...second, id: "__proto__" }],
+		});
 		ok(schemas.stateOf, { ...stateOf, position: 0, results: [] });
 		no(schemas.stateOf, stateOf);
 		no(schemas.stateOf, {
