@@ -23,7 +23,7 @@ import { tokenEndpointLocation } from "@mod/token-endpoint";
 import { SignJWT } from "jose";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { clientAssertion, spentAssertions } from "../src/contract.ts";
-import { assertionType } from "../src/method.ts";
+import { assertionType } from "../src/method/method.ts";
 import assertionModule from "../src/module.ts";
 import { clientAssertionConfig } from "../src/testing.ts";
 

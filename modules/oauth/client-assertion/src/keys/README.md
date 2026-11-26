@@ -8,7 +8,7 @@ Internal module of `client-assertion`: the client metadata section that holds a 
 - Says where the registered clients' sections leave claim 2: the package's stance.
 
 ## Not here
-- Checking an assertion, its audience among it, and spending it (the package). Fetching the key set (`external-jwt`, through `outbound`).
+- Checking an assertion, its audience among it, and spending it (internal module `method`). Fetching the key set (`external-jwt`, through `outbound`).
 
 ## Offers
 - `clientKeys`, the section; `keysOf` (the section) → where the keys come from; `keysFor` (a client) → the keys its assertions and JWTs are checked against, none for a source's client naming a `jwks-uri`; `clientKeysIn` (the build context) → the section with its boot check, `outbound`'s refusals taken from the composition.

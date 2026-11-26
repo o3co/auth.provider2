@@ -1,14 +1,17 @@
 import { createHash } from "node:crypto";
 import type { AuthMethod } from "@mod/clients";
-import type { Algorithm, ExternalJwt } from "@mod/external-jwt";
-import type { HttpRequest } from "@mod/http";
-import { type Clock, type Log, Unavailable } from "@mod/kernel";
+import { type Algorithm, type ExternalJwt, externalJwt } from "@mod/external-jwt";
+import { type HttpRequest, site } from "@mod/http";
+import { issuer } from "@mod/issuer";
+import { type BuildContext, type Clock, type Log, Unavailable } from "@mod/kernel";
+import { tokenEndpointLocation } from "@mod/token-endpoint";
 import { decodeJwt } from "jose";
+import type { z } from "zod";
+import { keysFor, looseFor } from "../keys/keys.ts";
+import { proofOf } from "../proof.ts";
+import { type section, widestClockSkew } from "../section.ts";
+import { type SpentAssertions, spentAssertions } from "../store.ts";
 import { checked } from "./check.ts";
-import { keysFor, looseFor } from "./keys/keys.ts";
-import { proofOf } from "./proof.ts";
-import { widestClockSkew } from "./section.ts";
-import type { SpentAssertions } from "./store.ts";
 
 export const assertionType = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer";
 
@@ -127,5 +130,45 @@ export function assertionMethod(p: Parts): AuthMethod {
 				? { proof: await proofOf(verified.key, client, written) }
 				: undefined;
 		},
+	};
+}
+
+/** What `methodEndpointIn` and `methodIn` take from the build context, which the package names among its own takes. */
+export const methodTakes = [
+	tokenEndpointLocation,
+	spentAssertions,
+	externalJwt,
+	issuer,
+	site,
+] as const;
+
+/**
+ * The token endpoint's URL the method is built with, from the build context: a public origin is
+ * required, as written, though the token endpoint has a location without one; with neither, boot is
+ * refused.
+ */
+export async function methodEndpointIn(c: BuildContext<z.output<typeof section>>): Promise<string> {
+	const { url } = await c.get(tokenEndpointLocation);
+	if ((await c.get(site)).origin === undefined || url === undefined) {
+		return c.refuse("client-assertion", "the token endpoint's location needs a public origin");
+	}
+	return url;
+}
+
+/** The method's parts for that URL, made in a build. */
+export async function methodIn(
+	c: BuildContext<z.output<typeof section>>,
+	tokenEndpoint: string,
+): Promise<Parts> {
+	return {
+		spent: await c.get(spentAssertions),
+		jwt: await c.get(externalJwt),
+		issuer: (await c.get(issuer)).url,
+		tokenEndpoint,
+		maxLifetimeMs: c.section["max-lifetime"] * 1000,
+		skewMs: c.section["clock-skew"] * 1000,
+		algorithms: c.section.algorithms,
+		clock: c.clock,
+		log: c.log,
 	};
 }

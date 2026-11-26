@@ -7,11 +7,11 @@
 
 ## Not here
 - Client records, lookup, and choosing among methods: `clients`. OAuth error responses: `token-endpoint`.
-- Checking the header, key, signature, times, issuer, audience and subject: `external-jwt`, under the policy below.
+- Checking the header, key, signature, times, issuer, audience and subject: `external-jwt`, under the policy below and internal module `method`'s.
 - Fetching a key set, and how long it is kept: `external-jwt`, through `outbound`.
 
 ## Offers
-- Composition definition: the method, which names the asymmetric algorithms it takes.
+- Composition definition: the method, which names the asymmetric algorithms it takes; how it reads and judges a request: internal module `method`.
 - The client metadata section `client-assertion` (`clientKeys`): `keys`, public RSA, EC or OKP keys as JWKs, default empty; any other key is refused at boot; each is read as internal module `keys`' card says.
   - Or `jwks-uri`, a registered client's alone, never beside written keys; and `accept-loose-audience` (default false), for a loose audience, below: each as internal module `keys`' card says.
 - Its stance on `promises`' `front-compromise-client-token` (claim 2): broken where a registered client names a `jwks-uri` or takes a loose audience, by its place and field; held otherwise (internal module `keys`).
@@ -22,13 +22,9 @@
 - `./testing`: `clientAssertionConfig`, the section for test clients (`clientKeysFor`), and the store interface's contract test (`spentAssertionsContract`).
 
 ## Invariants
-- The three values are read from the body only, a form or a JSON object; never from the query.
 - A request carrying `client_assertion` or `client_assertion_type`, sent, given twice or in JSON not as a string, is this method's alone (RFC 7521 §4.2.1). The method says it authenticates by an assertion, so a refusal for malformed credentials, or for another method beside it, of a request it claims is marked as the assertion's (`clients`); its finding a request with no assertion malformed marks nothing.
-- Only one of the two, an empty `client_assertion`, or either part or `client_id` given twice or, in JSON, not as a string is malformed credentials, before anything is judged or spent. An assertion type other than `urn:ietf:params:oauth:client-assertion-type:jwt-bearer` is refused, never left to another method.
-- `client_id`, when given, names the client; otherwise the assertion's `iss` does. `iss` and `sub` are the client's id.
-- `aud` is `issuer`'s URL as one string, judged before the `jti` is spent: the token endpoint's URL, or a list, could be for another authorization server that names this one's token endpoint.
 - A registered client whose section sets `accept-loose-audience` is also taken with a loose audience (a source's never): the token endpoint's absolute URL from `token-endpoint`, or a list holding either URL. Each is logged as a `client-assertion.loose_audience` warning with the client, and each registered client that sets it as a `client-assertion.accept_loose_audience` warning with the client at every start.
-- Without `http`'s public origin, boot is refused, whether or not a client accepts a loose audience, though `token-endpoint` names its location on the issuer's origin without one; and without that location.
+- Without `http`'s public origin, boot is refused, whether or not a client accepts a loose audience, though `token-endpoint` names its location on the issuer's origin without one; and without that location (internal module `method`).
 - The assertion is checked against the client's own keys, written or, a registered client's, at its `jwks-uri`, in the operator's `algorithms`; the method names them. Which algorithm each key is read under, and the warning of one read under none, are `keys`' card's. A key set is fetched from its URL's host alone; while it cannot be fetched, the answer is unavailable.
 - The longest lifetime is `max-lifetime`; the clock allowance is `clock-skew`. `jti` is a well-formed string of 1–256 characters, a fixed bound as it becomes a store key (clients send UUID-like values).
 - A spent `jti` is kept per client, past the assertion's end by five minutes, the widest `clock-skew` a section takes, whatever is set, and a minute for the store's clock: a `clock-skew` widened later on the same store never takes it again.

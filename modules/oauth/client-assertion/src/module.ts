@@ -1,28 +1,16 @@
 import { authMethods, clients, metadataSections } from "@mod/clients";
 import { externalJwt } from "@mod/external-jwt";
-import { site } from "@mod/http";
-import { issuer } from "@mod/issuer";
 import { defineModule } from "@mod/kernel";
 import { pkcs1v15Deprecated } from "@mod/keys";
 import { stances } from "@mod/promises";
-import { tokenEndpointLocation } from "@mod/token-endpoint";
 import { clientAssertion } from "./contract.ts";
 import { clientKeys, clientKeysIn, keysStance, keysTakes, unreadKeys } from "./keys/keys.ts";
-import { assertionMethod } from "./method.ts";
+import { assertionMethod, methodEndpointIn, methodIn, methodTakes } from "./method/method.ts";
 import { section } from "./section.ts";
 import { signedBy } from "./signed.ts";
-import { spentAssertions } from "./store.ts";
 
-/** What the module takes: `clientKeysIn`'s, what the method is built over, the site, and the clients its start warns of. */
-const takes = [
-	...keysTakes,
-	tokenEndpointLocation,
-	spentAssertions,
-	externalJwt,
-	issuer,
-	site,
-	clients,
-];
+/** What the module takes: `clientKeysIn`'s, the method's, `external-jwt` for `clientAssertion` too, and the clients its start warns of. */
+const takes = [...new Set([...keysTakes, ...methodTakes, externalJwt, clients])];
 
 const pkcs1v15: ReadonlySet<string> = new Set(["RS256", "RS384", "RS512"]);
 
@@ -48,11 +36,7 @@ export default defineModule(
 			});
 		}),
 		m.contribute(authMethods).by(async (c) => {
-			const { url } = await c.get(tokenEndpointLocation);
-			// A public origin is required, as written, though the token endpoint has a location without one.
-			if ((await c.get(site)).origin === undefined || url === undefined) {
-				return c.refuse("client-assertion", "the token endpoint's location needs a public origin");
-			}
+			const tokenEndpoint = await methodEndpointIn(c);
 			// Told at each start, by client: an assertion such a client made for another authorization
 			// server that names this one's token endpoint can be used here; and each written key none of
 			// the algorithms taken reads, as no assertion is checked against it.
@@ -68,17 +52,7 @@ export default defineModule(
 					}
 				}
 			});
-			return assertionMethod({
-				spent: await c.get(spentAssertions),
-				jwt: await c.get(externalJwt),
-				issuer: (await c.get(issuer)).url,
-				tokenEndpoint: url,
-				maxLifetimeMs: c.section["max-lifetime"] * 1000,
-				skewMs: c.section["clock-skew"] * 1000,
-				algorithms: c.section.algorithms,
-				clock: c.clock,
-				log: c.log,
-			});
+			return assertionMethod(await methodIn(c, tokenEndpoint));
 		}),
 	],
 );
