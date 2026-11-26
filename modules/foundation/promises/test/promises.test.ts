@@ -139,18 +139,17 @@ describe("the promises and their judgment", () => {
 		await app.stop();
 	});
 
-	it("names, on the line of the client's own token, the issuance it does not see", async () => {
+	it("names, on the lines of the client's own token and claim 2, the issuance they do not see", async () => {
 		const { app, recorded } = await judged([]);
 		await app.start();
-		const line = recorded
-			.lines()
-			.find(
-				(l) =>
-					l.event === "promises.judged" && l.fields.promise === promiseNames.noClientSubjectToken,
+		for (const promise of [promiseNames.noClientSubjectToken, promiseNames.clientToken]) {
+			const line = recorded
+				.lines()
+				.find((l) => l.event === "promises.judged" && l.fields.promise === promise);
+			expect(line?.fields.unchecked).toBe(
+				"operator's conditions; receivers' duties; issuance not through the token endpoint",
 			);
-		expect(line?.fields.unchecked).toBe(
-			"operator's conditions; receivers' duties; issuance not through the token endpoint",
-		);
+		}
 		await app.stop();
 	});
 

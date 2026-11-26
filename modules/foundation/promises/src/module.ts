@@ -76,6 +76,7 @@ const uncheckedByAll = "operator's conditions; receivers' duties";
 /** What one promise's judgment does not see, past what none checks. */
 const uncheckedFor: Partial<Record<PromiseName, string>> = {
 	[promiseNames.noClientSubjectToken]: "issuance not through the token endpoint",
+	[promiseNames.clientToken]: "issuance not through the token endpoint",
 };
 
 const unchecked = (promise: PromiseName) =>

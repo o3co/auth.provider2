@@ -25,7 +25,7 @@
 
 ## Invariants
 - A promise holds only where at least one module stands holding it and none stands breaking it; none declared holds nothing.
-- The basis is `declared`: the composition and its settings were checked; the operator's conditions and the receivers' duties were not, and each line says so. The line of `no-client-subject-token` also names issuance not through the token endpoint as not checked.
+- The basis is `declared`: the composition and its settings were checked; the operator's conditions and the receivers' duties were not, and each line says so. The lines of `no-client-subject-token` and `front-compromise-client-token` also name issuance not through the token endpoint as not checked.
 - A promise's line and a refusal name a setting by its key path and never by its value; an evidence line says its strength's values, an issuer's URL among them.
 - A required promise that does not hold refuses boot at `promises.required.<i>`, before anything starts.
 - An evidence kind holds no promise and breaks none: the judgment is the stances' alone. A kind off its shape refuses boot at `promises.evidence-kinds:<kind>`, naming the first part off it: trusting nothing, a word not of `trustedNames` or one twice, a blank name or module, or a strength not of `Strength`'s (each count a whole number from 1). So does one name declared twice.
