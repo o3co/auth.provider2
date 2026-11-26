@@ -22,6 +22,14 @@ const version = (number: number, ids: readonly string[] = ["rp-1"]) => ({
 	clients: ids.map((id) => ({ id, kind: "public", method: "none", sections: {} })),
 });
 
+/** A compact JWS with one bit of its signature's last byte flipped: always another signature. */
+const tampered = (jws: string) => {
+	const [head, payload, signature] = jws.split(".");
+	const bytes = Buffer.from(signature ?? "", "base64url");
+	bytes[bytes.length - 1] = (bytes[bytes.length - 1] ?? 0) ^ 1;
+	return `${head}.${payload}.${bytes.toString("base64url")}`;
+};
+
 let dir = "";
 afterEach(async () => {
 	if (dir) await rm(dir, { recursive: true, force: true });
@@ -136,7 +144,7 @@ describe("clients-registry", () => {
 		const other = publisherKey("ed25519", publisher.kid);
 		for (const text of [
 			signedBy(other, version(1)),
-			`${signedBy(publisher, version(1)).slice(0, -4)}AAAA`,
+			tampered(signedBy(publisher, version(1))),
 			"not a jws",
 			signedBy({ ...publisher, kid: "another" }, version(1)),
 		]) {
