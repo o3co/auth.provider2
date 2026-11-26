@@ -12,7 +12,7 @@ import type {
 	RecordRefusal,
 	Section,
 } from "../contract.ts";
-import { none, sends } from "../methods.ts";
+import { none, sends } from "../methods/methods.ts";
 
 /**
  * The parameters a client authenticates with (RFC 6749 §2.3.1, RFC 7521 §4.2), sent at all,

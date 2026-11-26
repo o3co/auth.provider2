@@ -17,7 +17,7 @@ import {
 	secretMethods,
 	secretPost,
 	secretSection,
-} from "./methods.ts";
+} from "./methods/methods.ts";
 import { clientRecord, methodIssues, readRecord, registry } from "./registry/registry.ts";
 
 const section = z

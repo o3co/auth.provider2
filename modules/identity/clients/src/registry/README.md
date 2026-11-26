@@ -6,7 +6,7 @@ Internal module of `clients`: the registry every taker shares, reading records, 
 - Reads a registered or a source's record into a frozen client, holding it to its sections, and answers `find`, `listed`, `checkRecord`, `bare` and `authenticate` over the methods composed.
 
 ## Not here
-- The built-in methods (the package's `methods`). The sections a record holds (their owners').
+- The built-in methods (the internal module `methods`). The sections a record holds (their owners').
 
 ## Offers
 - `registry` (the registered clients, the sources, the methods, the sections) → `Clients`; `readRecord`, `clientRecord` (the registered record's schema), `methodIssues`.

@@ -1,6 +1,6 @@
 import { randomBytes, scryptSync } from "node:crypto";
 import type { ClientRecord } from "./contract.ts";
-import { secretSection } from "./methods.ts";
+import { secretSection } from "./methods/methods.ts";
 
 /** A client record as the operator registers it. */
 export type RegisteredClient = ClientRecord;

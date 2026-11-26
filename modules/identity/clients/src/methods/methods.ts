@@ -1,7 +1,7 @@
 import type { HttpRequest } from "@mod/http";
 import { readSecretHash, type SecretChecker, type SecretHash } from "@mod/secret-hash";
 import { z } from "zod";
-import type { AuthMethod, Client, ClientRecord, Section } from "./contract.ts";
+import type { AuthMethod, Client, ClientRecord, Section } from "../contract.ts";
 
 const secretFields = z.strictObject({
 	hash: z
