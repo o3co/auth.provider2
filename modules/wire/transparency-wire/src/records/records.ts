@@ -47,12 +47,15 @@ export const id = z.string().min(1);
 const recordIdBytes = 63;
 /**
  * A record's id, as its log gives it: never `__proto__`, as a flow's state names its items by it and
- * a store refuses that key; and at most 63 bytes in UTF-8, as a refresh token carries a family's id in
- * base64url beside its 43-character secret within the Front wire's 128. A log naming another is told
- * apart here, at the boundary.
+ * a store refuses that key; well-formed UTF-16, no lone surrogate, as a store refuses one and a refresh
+ * token's base64url could not carry it back; and at most 63 bytes in UTF-8, as a refresh token carries
+ * a family's id beside its 43-character secret within the Front wire's 128. A log naming another is
+ * told apart here, at the boundary.
  */
 export const recordId = id
 	.refine((x) => x !== "__proto__", { message: "a record's id is never __proto__" })
+	// A lone surrogate, by a pattern every runtime reads (a pair is one code point under `u`).
+	.refine((x) => !/\p{Cs}/u.test(x), { message: "a record's id is well-formed, no lone surrogate" })
 	.refine((x) => utf8Length(x) <= recordIdBytes, {
 		message: `a record's id is at most ${recordIdBytes} bytes in UTF-8`,
 	});

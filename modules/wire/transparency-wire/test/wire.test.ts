@@ -327,19 +327,21 @@ describe("a committed record", () => {
 		ok(schemas.record, { ...bundleRecord, flow: { of: "subject", id: "__proto__" } });
 	});
 
-	it("refuses a record whose id is over 63 bytes in UTF-8, as a refresh token carries a family's id within the wire's 128", () => {
+	it("refuses a record whose id is over 63 bytes in UTF-8, as a refresh token carries a family's id within the wire's 128, or holds a lone surrogate", () => {
 		ok(schemas.record, { ...bundleRecord, id: "r".repeat(63) });
 		no(schemas.record, { ...bundleRecord, id: "r".repeat(64) });
 		// Bytes, not characters: 21 three-byte characters are 63 bytes, 22 are 66.
 		ok(schemas.record, { ...bundleRecord, id: "記".repeat(21) });
 		no(schemas.record, { ...bundleRecord, id: "記".repeat(22) });
-		// Two-byte and four-byte characters, and a lone surrogate counted as U+FFFD's three.
+		// Two-byte and four-byte characters.
 		ok(schemas.record, { ...bundleRecord, id: `${"é".repeat(31)}a` });
 		no(schemas.record, { ...bundleRecord, id: "é".repeat(32) });
 		ok(schemas.record, { ...bundleRecord, id: `${"😀".repeat(15)}abc` });
 		no(schemas.record, { ...bundleRecord, id: "😀".repeat(16) });
-		ok(schemas.record, { ...bundleRecord, id: "\ud800".repeat(21) });
-		no(schemas.record, { ...bundleRecord, id: "\ud800".repeat(22) });
+		// A lone surrogate is no character: an id holding one is ill-formed, whatever its length.
+		no(schemas.record, { ...bundleRecord, id: "\ud800" });
+		no(schemas.record, { ...bundleRecord, id: "r\udc00" });
+		ok(schemas.record, { ...bundleRecord, id: "\ud83d\ude00" });
 		// The log's accepted answer, whose id a family takes.
 		const accepted = {
 			v: 1,
@@ -352,6 +354,7 @@ describe("a committed record", () => {
 		};
 		ok(schemas.appendAnswer, { ...accepted, id: "r".repeat(63) });
 		no(schemas.appendAnswer, { ...accepted, id: "r".repeat(64) });
+		no(schemas.appendAnswer, { ...accepted, id: "\ud800" });
 		no(schemas.judgment, {
 			v: 1,
 			id: "r".repeat(64),
@@ -434,6 +437,7 @@ describe("receipts, judgments, checkpoints, status and stateOf", () => {
 		for (const outcome of judgments.outcomes) ok(schemas.judgment, { ...judgment, outcome });
 		no(schemas.judgment, { ...judgment, verdict: "確かめた" });
 		no(schemas.judgment, { ...judgment, id: "__proto__" });
+		no(schemas.judgment, { ...judgment, id: "r\udc00" });
 		no(schemas.judgment, { ...judgment, reason: "J7" });
 	});
 
