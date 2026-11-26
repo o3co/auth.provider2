@@ -112,6 +112,20 @@ export const requests = Object.freeze({
 			field("dpop", "jws", 0, 4096),
 		] as const),
 	}),
+	/** A client's own token (`client_credentials`): scope, one resource, assertion, proof; a length of 0 is not sent. */
+	clientCredentials: Object.freeze({
+		code: 0x10,
+		fields: Object.freeze([
+			source,
+			field("scope", "utf8", 0, 512),
+			field("resource", "visible", 0, 512),
+			field("clientAssertionType", "enum", 1, 1, 2),
+			field("clientAssertion", "jws", 1, 4096),
+			field("clientId", "visible", 0, 64),
+			field("authorizationDetails", "enum", 1, 1, 2),
+			field("dpop", "jws", 0, 4096),
+		] as const),
+	}),
 	/** A nonce of the first key's path: stage 0 for its start, 1 for the mail's side. */
 	firstKeyNonce: Object.freeze({
 		code: 0x05,
@@ -350,6 +364,14 @@ export const overHttp = Object.freeze({
 			body: "form",
 			discriminator: Object.freeze({ name: "grant_type", value: "refresh_token" }),
 			bodyNames: Object.freeze({ refreshToken: "refresh_token", ...tokenNames }),
+			headerNames: dpopHeader,
+			enumTexts: tokenEnumTexts,
+		}),
+		clientCredentials: Object.freeze({
+			path: "/oauth/token",
+			body: "form",
+			discriminator: Object.freeze({ name: "grant_type", value: "client_credentials" }),
+			bodyNames: Object.freeze({ scope: "scope", resource: "resource", ...tokenNames }),
 			headerNames: dpopHeader,
 			enumTexts: tokenEnumTexts,
 		}),

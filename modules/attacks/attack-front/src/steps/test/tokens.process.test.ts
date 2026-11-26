@@ -2,9 +2,9 @@ import type { Message, WireReply } from "@mod/front-core-codec";
 import { refusals } from "@mod/front-core-wire";
 import { screenKeys } from "@sdk/login-screen";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { readyWithinMs } from "../core/launch.ts";
-import { dpopKey } from "../roles/rp.ts";
-import { stopped } from "../roles/screen.ts";
+import { readyWithinMs } from "../../../test/core/launch.ts";
+import { dpopKey } from "../../../test/roles/rp.ts";
+import { stopped } from "../../../test/roles/screen.ts";
 import { provider, type World, world } from "./world.ts";
 
 // The compromised Front's steps on PAR and the tokens (the design note's §2): the Front holds no
@@ -103,9 +103,7 @@ describe("the compromised Front on PAR and the tokens", () => {
 		expect((await front.post(rp().par(session.jar))).status).toBe(201);
 	});
 
-	// Waits for refresh's token to cross the wire: it is `<family>.<secret>`, and the wire's refreshToken
-	// takes base64url alone, so every Front refuses a refresh before the Core sees it (reported).
-	it.skip("F-14: a refresh under the Front's DPoP key is refused (the family's dpop_jkt); the code sent again ends the family", async () => {
+	it("F-14: a refresh under the Front's DPoP key is refused (the family's dpop_jkt); the code sent again ends the family", async () => {
 		const victim = await w.person();
 		const front = await w.front();
 		const { session, s } = await w.started(victim, rp(), front);
@@ -125,9 +123,15 @@ describe("the compromised Front on PAR and the tokens", () => {
 		});
 		const stolen = await front.post(rp().refresh(session, refresh_token, asked.dpopNonce));
 		expect(stolen.wire?.outcome).toBe("refused");
-		expect(stolen.body).toMatchObject({ error: "invalid_grant" });
-		// The RP's next refresh, kept from the Core: its assertion and proof, unspent, carry the old code.
+		expect(stolen.body).toEqual({
+			error: "invalid_grant",
+			error_description: "invalid refresh token",
+		});
+		// The RP's own refresh after it is taken: so the Front's key alone was refused, the family alive.
 		front.rewrite({});
+		const own = await front.post(rp().refresh(session, refresh_token, asked.dpopNonce));
+		expect(own.status, JSON.stringify(own.body)).toBe(200);
+		// The RP's next refresh, kept from the Core: its assertion and proof, unspent, carry the old code.
 		const kept = rp().refresh(session, refresh_token, asked.dpopNonce);
 		const resent = await front.post({
 			path: "/oauth/token",

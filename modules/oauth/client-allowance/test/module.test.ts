@@ -1,6 +1,7 @@
 import { clients } from "@mod/clients";
 import clientsModule from "@mod/clients/module";
 import { clientsConfig, confidentialClient } from "@mod/clients/testing";
+import { requests } from "@mod/front-core-wire";
 import { assemble, kernelConfig } from "@mod/kernel";
 import { takesUnused } from "@mod/kernel/testing";
 import secretHashModule from "@mod/secret-hash/module";
@@ -91,4 +92,33 @@ it("refuses boot for a registered client writing its own ceiling, which only a s
 		},
 	]);
 	expect(await boot(allowancesFor({ self: [] }))).toBeDefined();
+});
+
+it("refuses boot for an own-ceiling entry a Front's wire cannot carry: its audience as one resource, its scopes together as the scope", async () => {
+	const refusals = (self: { audience: string; scopes: string[] }[]) =>
+		boot(allowancesFor({ self })).then(
+			() => [],
+			(error: { refusals: readonly { where: string }[] }) => error.refusals.map((r) => r.where),
+		);
+	const at = "clients.registered.0.sections.client-allowance";
+	const { resource, scope } = Object.fromEntries(
+		requests.clientCredentials.fields.map((field) => [field.name, field.max]),
+	) as { resource: number; scope: number };
+	const audience = (length: number) => `https://${"a".repeat(length - 8)}`;
+	// At the wire's bounds: only a registered client's own ceiling is refused, which a signed one may write.
+	expect(await refusals([{ audience: audience(resource), scopes: ["s".repeat(scope)] }])).toEqual([
+		at,
+	]);
+	expect(await refusals([{ audience: audience(resource + 1), scopes: ["read"] }])).toEqual([
+		`${at}.self.0.audience`,
+	]);
+	expect(await refusals([{ audience: "https://api.example/a b", scopes: ["read"] }])).toEqual([
+		`${at}.self.0.audience`,
+	]);
+	expect(
+		await refusals([{ audience: "https://api", scopes: ["s".repeat(scope - 4), "read"] }]),
+	).toEqual([`${at}.self.0.scopes`]);
+	// A scope written twice is asked once: counted once.
+	const half = "s".repeat(Math.floor(scope / 2) + 1);
+	expect(await refusals([{ audience: "https://api", scopes: [half, half] }])).toEqual([at]);
 });

@@ -191,6 +191,38 @@ describe("each operation over HTTP", () => {
 		expect(requests.par.fields.find((f) => f.name === "request")?.min).toBe(1);
 	});
 
+	it("takes a client's own token request at the token endpoint by its grant type, RFC 6749's and RFC 8707's names, from the client's server", () => {
+		const cc = overHttp.operations.clientCredentials;
+		expect(cc).toMatchObject({
+			path: overHttp.operations.token.path,
+			body: "form",
+			discriminator: { name: "grant_type", value: "client_credentials" },
+		});
+		expect(cc).not.toHaveProperty("crossOrigin");
+		expect(cc).not.toHaveProperty("successStatus");
+		expect(cc.bodyNames).toEqual({
+			scope: "scope",
+			resource: "resource",
+			clientAssertionType: "client_assertion_type",
+			clientAssertion: "client_assertion",
+			clientId: "client_id",
+			authorizationDetails: "authorization_details",
+		});
+		expect(cc.headerNames).toEqual({ dpop: "dpop" });
+		// authorization_details is carried as sent or not, so the Core refuses it (A25), never the Front.
+		expect(cc.enumTexts?.authorizationDetails).toEqual({ texts: { "": 0 }, other: 1 });
+		expect(requests.clientCredentials.fields.map((f) => [f.name, f.type, f.min, f.max])).toEqual([
+			["source", "visible", 0, 45],
+			["scope", "utf8", 0, 512],
+			["resource", "visible", 0, 512],
+			["clientAssertionType", "enum", 1, 1],
+			["clientAssertion", "jws", 1, 4096],
+			["clientId", "visible", 0, 64],
+			["authorizationDetails", "enum", 1, 1],
+			["dpop", "jws", 0, 4096],
+		]);
+	});
+
 	it("lets the login's start carry its JAR by value or a PAR's reference, either of length 0 on the wire", () => {
 		const fields = Object.fromEntries(requests.loginStart.fields.map((f) => [f.name, f]));
 		expect(fields.request).toMatchObject({ type: "jws", min: 0 });

@@ -1,8 +1,8 @@
 import { decodeRequest, encodeRequest, type Message } from "@mod/front-core-codec";
 import { headerLength } from "@mod/front-core-wire";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { readyWithinMs } from "../core/launch.ts";
-import { loginScreen, stopped } from "../roles/screen.ts";
+import { readyWithinMs } from "../../../test/core/launch.ts";
+import { loginScreen, stopped } from "../../../test/roles/screen.ts";
 import { origin, screenOrigin, type World, world } from "./world.ts";
 
 // The compromised Front's steps at the edges (the design note's §2): the origin a ceremony is made

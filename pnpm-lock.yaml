@@ -1376,6 +1376,12 @@ importers:
       '@mod/clients':
         specifier: workspace:*
         version: link:../../identity/clients
+      '@mod/front-core-codec':
+        specifier: workspace:*
+        version: link:../../wire/front-core-codec
+      '@mod/front-core-wire':
+        specifier: workspace:*
+        version: link:../../wire/front-core-wire
       '@mod/kernel':
         specifier: workspace:*
         version: link:../../foundation/kernel

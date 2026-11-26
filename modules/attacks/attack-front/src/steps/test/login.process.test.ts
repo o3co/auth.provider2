@@ -2,9 +2,9 @@ import type { Message, WireReply } from "@mod/front-core-codec";
 import { refusals } from "@mod/front-core-wire";
 import { challengeOf, screenKeys } from "@sdk/login-screen";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { readyWithinMs } from "../core/launch.ts";
-import { claimsOf, dpopKey } from "../roles/rp.ts";
-import { stopped } from "../roles/screen.ts";
+import { readyWithinMs } from "../../../test/core/launch.ts";
+import { claimsOf, dpopKey } from "../../../test/roles/rp.ts";
+import { stopped } from "../../../test/roles/screen.ts";
 import { provider, type World, world } from "./world.ts";
 
 // The compromised Front's steps on the login (the design note's §2): each its own subject, client

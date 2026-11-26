@@ -24,3 +24,27 @@ export async function registered(
 		},
 	};
 }
+
+/**
+ * A machine client of a signed registry version: private_key_jwt by its one key, allowed the client
+ * credentials grant for itself at each audience given, with its scopes.
+ */
+export async function signedMachine(
+	id: string,
+	publicKey: Record<string, unknown>,
+	self: readonly { readonly audience: string; readonly scopes: readonly string[] }[],
+	version = 1,
+) {
+	const { clientKeysFor } = await entry("@mod/client-assertion", "./testing");
+	const { allowancesFor } = await entry("@mod/client-allowance", "./testing");
+	return {
+		id,
+		kind: "confidential",
+		method: "private_key_jwt",
+		sections: {
+			...allowancesFor({ grants: ["client_credentials"], self }),
+			...clientKeysFor([publicKey]),
+		},
+		version,
+	};
+}

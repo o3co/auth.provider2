@@ -97,6 +97,31 @@ describe("core-wire", () => {
 		]);
 	});
 
+	it("hands a client's own token request to the token route, rebuilt as the client's form with its grant type", async () => {
+		const app = await started([token(() => jsonAnswer(200, { access_token: "t" }))]);
+		const front = await client(app.port);
+		const reply = await front.send("clientCredentials", 3, {
+			source: "203.0.113.7",
+			scope: "read write",
+			resource: "https://api.example",
+			clientAssertionType: 1,
+			clientAssertion: "a.b.c",
+			clientId: "svc",
+			authorizationDetails: 0,
+			dpop: "d.e.f",
+		});
+		expect(reply.outcome).toBe("ok");
+		const [request] = seen;
+		expect(request?.fields.single("grant_type")).toBe("client_credentials");
+		expect(request?.fields.single("scope")).toBe("read write");
+		expect(request?.fields.single("resource")).toBe("https://api.example");
+		expect(request?.fields.single("client_assertion")).toBe("a.b.c");
+		expect(request?.fields.single("client_id")).toBe("svc");
+		expect(request?.fields.has("authorization_details")).toBe(false);
+		expect(request?.headers.get("dpop")).toBe("d.e.f");
+		expect(request?.source).toMatchObject({ address: "203.0.113.7", determined: true });
+	});
+
 	it("relays a DPoP nonce as long and of the characters as the wire's field takes, and none outside them", async () => {
 		// dpop's form: the time bucket's digits, then its MAC in base64url, 59 characters.
 		const long = `${"1".repeat(16)}${"A".repeat(42)}Q`;

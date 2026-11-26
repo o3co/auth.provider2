@@ -1,11 +1,16 @@
 import { wireClient } from "@mod/core-wire/testing";
 import { wireCertificates } from "@mod/front-relay/testing";
-import { type BadFront, badFront } from "../../src/contract.ts";
-import { registered } from "../core/clients.ts";
-import { type StartedCore, startCore } from "../core/launch.ts";
-import { type Browser, browser } from "../roles/browser.ts";
-import { type RelyingParty, relyingParty } from "../roles/rp.ts";
-import { type LoginScreen, loginScreen, type Started, stopped } from "../roles/screen.ts";
+import { registered } from "../../../test/core/clients.ts";
+import { type StartedCore, startCore } from "../../../test/core/launch.ts";
+import { type Browser, browser } from "../../../test/roles/browser.ts";
+import { type RelyingParty, relyingParty } from "../../../test/roles/rp.ts";
+import {
+	type LoginScreen,
+	loginScreen,
+	type Started,
+	stopped,
+} from "../../../test/roles/screen.ts";
+import { type BadFront, badFront } from "../../contract.ts";
 
 export const origin = "https://issuer.example";
 export const screenOrigin = "https://login.example";
@@ -26,7 +31,10 @@ export interface Person {
  * A harness's world: one Core of the default pattern, the relying parties it registers, and a Front
  * per source, each on its own connection (a step is independent: its own subject, client and source).
  */
-export async function world(clientIds: readonly string[]) {
+export async function world(
+	clientIds: readonly string[],
+	signedClients: readonly { readonly id: string }[] = [],
+) {
 	const certificates = await wireCertificates();
 	const rps = clientIds.map((id) => relyingParty(provider, id, `https://${id}.example/cb`));
 	let core: StartedCore;
@@ -36,6 +44,7 @@ export async function world(clientIds: readonly string[]) {
 			origin,
 			screen: screenOrigin,
 			clients: await Promise.all(rps.map((rp) => registered(rp))),
+			signedClients,
 		});
 	} catch (error) {
 		await certificates.remove();

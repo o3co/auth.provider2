@@ -1,5 +1,18 @@
 import type { Section } from "@mod/clients";
+import { checkField } from "@mod/front-core-codec";
+import { requests } from "@mod/front-core-wire";
 import { z } from "zod";
+
+/** A client's own token request crosses a Front as front-core-wire's clientCredentials: what it carries. */
+const carried = Object.fromEntries(
+	requests.clientCredentials.fields.map((field) => [field.name, field]),
+);
+const encoder = new TextEncoder();
+/** Whether a value fits a field of the client's own token request, as the codec checks it. */
+const fits = (name: "resource" | "scope", value: string) => {
+	const field = carried[name];
+	return field !== undefined && checkField(field, encoder.encode(value)) === undefined;
+};
 
 /** One entry of the client's own ceiling: an audience and the scopes it may be issued for itself there. */
 export interface SelfEntry {
@@ -71,6 +84,22 @@ export const allowances: Section<Allowances> = {
 							code: "custom",
 							message: "an audience is written in one entry alone",
 							path: [i, "audience"],
+						});
+					// Asked through a Front, the audience goes as the request's one resource and the scopes as
+					// its scope: an entry the wire cannot carry could never be asked there, so it is refused.
+					if (!fits("resource", entry.audience))
+						context.addIssue({
+							code: "custom",
+							message:
+								"an audience the Front's wire cannot carry as a resource (its length or characters)",
+							path: [i, "audience"],
+						});
+					// The longest scope a client asks for all of them: each scope once.
+					if (!fits("scope", [...new Set(entry.scopes)].join(" ")))
+						context.addIssue({
+							code: "custom",
+							message: "scopes the Front's wire cannot carry together as a scope (their length)",
+							path: [i, "scopes"],
 						});
 				}
 			})

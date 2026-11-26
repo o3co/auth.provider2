@@ -85,6 +85,11 @@ export interface PatternSpec {
 	readonly screen: string;
 	/** The clients the operator registers, as `clients`' `registered` takes them. */
 	readonly clients: readonly unknown[];
+	/**
+	 * The clients of a registry version its publisher signed (each record with its `version`): a source
+	 * marked signed stands in for clients-registry's signed file, whose signature the harness does not attack.
+	 */
+	readonly signedClients?: readonly { readonly id: string }[];
 	/** More features beside `features`, or fewer (a name prefixed `-`, which no need may bring back). */
 	readonly change?: readonly string[];
 }
@@ -131,6 +136,23 @@ export async function pattern(spec: PatternSpec, sent: (mail: SentMail) => void)
 		],
 	);
 	const modules = [];
+	if (spec.signedClients !== undefined && spec.signedClients.length > 0) {
+		const { clientSources } = await entry("@mod/clients");
+		const signed = spec.signedClients;
+		modules.push(
+			defineModule(
+				{ name: "signed-registry", replicaSafe: true, takes: [] },
+				// biome-ignore lint/suspicious/noExplicitAny: the kernel's builder, typed by the entry imported.
+				(m: any) => [
+					m.contribute(clientSources).by(() => ({
+						signed: true,
+						find: async (id: string) => signed.find((client) => client.id === id),
+						listed: async () => signed,
+					})),
+				],
+			),
+		);
+	}
 	for (const name of names) {
 		modules.push(name === "@mod/mail" ? capture : (await entry(name, "./module")).default);
 	}

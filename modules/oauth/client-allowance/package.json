@@ -11,6 +11,8 @@
 	},
 	"dependencies": {
 		"@mod/clients": "workspace:*",
+		"@mod/front-core-codec": "workspace:*",
+		"@mod/front-core-wire": "workspace:*",
 		"@mod/kernel": "workspace:*",
 		"zod": "4.6.7"
 	},

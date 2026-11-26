@@ -31,12 +31,13 @@
 - Decisions are pure: no failure, no state. `allowancesWithin` never widens the ceiling.
 - The client's own ceiling is apart from the person's delegation: `allowedSelfIssuance` reads `self` alone, and the other decisions never read it. It is read only for a client whose source declares it signed (`clients`' `signed`), never from the client's version alone, so a registered client is issued nothing for itself.
 - An audience written in two entries of `self`, or `offline_access` or `openid` among an entry's scopes, refuses the client's record at that entry. `openid` is refused there because a client's own token carries no person. A registered client writing a non-empty `self` refuses boot, as no one would read it; one of those entries refuses it at that entry.
+- An entry of `self` a Front's wire cannot carry, its audience as `clientCredentials`' one `resource` or its scopes together as its `scope` (front-core-wire's spec, by the codec's check), refuses the record at that entry: it could never be asked through a Front.
 
 ## Data
 - None, so it is safe on many instances.
 
 ## Depends on
-- `kernel`, `clients`
+- `kernel`, `clients`; `front-core-wire` and `front-core-codec` (what a Front's wire carries of a client's own token request)
 
 ## Vocabulary
 - allowance: what a client may be issued: grants, scopes and audiences. ceiling: the most a client from a source may be allowed.

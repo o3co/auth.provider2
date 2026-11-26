@@ -114,6 +114,49 @@ describe("front-relay", () => {
 		expect(core.seen.at(-1)?.kind).toBe("refresh");
 	});
 
+	it("relays a client's own token request (client_credentials) as its operation's frame, its scope and resource carried", async () => {
+		const { url, core } = await front(() => ok({ access_token: "t" }));
+		const answer = await post(
+			`${url}/oauth/token`,
+			{
+				grant_type: "client_credentials",
+				scope: "read",
+				resource: "https://api.example",
+				client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+				client_assertion: "a.b.c",
+			},
+			{ dpop: "d.e.f" },
+		);
+		expect(answer.status).toBe(200);
+		expect(core.seen.map((r) => [r.kind, r.message])).toEqual([
+			[
+				"clientCredentials",
+				expect.objectContaining({
+					scope: "read",
+					resource: "https://api.example",
+					clientAssertionType: 1,
+					clientAssertion: "a.b.c",
+					authorizationDetails: 0,
+					dpop: "d.e.f",
+				}),
+			],
+		]);
+		// Two resources are more than the frame carries: refused at the Front, nothing sent.
+		const two = new URLSearchParams([
+			["grant_type", "client_credentials"],
+			["resource", "https://a.example"],
+			["resource", "https://b.example"],
+			["client_assertion", "a.b.c"],
+		]);
+		const refused = await fetch(`${url}/oauth/token`, { method: "POST", body: two });
+		expect(refused.status).toBe(400);
+		expect(await refused.json()).toEqual({
+			error: "invalid_request",
+			error_description: "resource: fieldSyntax",
+		});
+		expect(core.seen).toHaveLength(1);
+	});
+
 	it("answers a refusal with its word's status, and a frame the Core rejected 502", async () => {
 		const replies: ReturnType<Answer>[] = [
 			refusing("invalid_client"),
