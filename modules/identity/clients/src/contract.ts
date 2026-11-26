@@ -49,6 +49,10 @@ export interface RecordRefusal {
 	readonly path: string;
 }
 
+/**
+ * A source of client records. It holds its own ids to `clientIdNameable` and refuses boot for one that
+ * fails: `clients` never asks it for such an id, and leaves such a record out of `listed`.
+ */
 export interface ClientSource {
 	/**
 	 * Set by a source whose every record comes from a registry version its publisher signed: its
@@ -182,6 +186,9 @@ export const metadataSections = extensionPoint<Section<unknown>>("clients.metada
 	multiplicity: "keyed",
 	keyOf: (section) => section.name,
 });
+
+/** Whether an id can name a client: 1 to 64 visible ASCII characters (0x21 to 0x7e), as every way to the Core carries one. */
+export const clientIdNameable = (id: string): boolean => /^[\x21-\x7e]{1,64}$/.test(id);
 
 /** Records a refused authentication on the caller's audit, by its reason and the source alone. */
 export function recordRefusedAuthentication(

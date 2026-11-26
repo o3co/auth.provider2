@@ -171,6 +171,15 @@ describe("clients-registry", () => {
 		}
 	});
 
+	it("refuses boot where the version holds a client id no client can have, naming its place, never the id", async () => {
+		for (const id of ["My App", "caf\u00e9", "a".repeat(65)]) {
+			const refusals = await refusalsOf(await written(signedBy(publisher, version(1, ["ok", id]))));
+			expect(refusals.map((r) => r.where)).toEqual(["clients-registry.file"]);
+			expect(refusals[0]?.reason).toContain("clients.1.id");
+			expect(refusals[0]?.reason).not.toContain(id);
+		}
+	});
+
 	it("refuses boot where the version is below the least the operator takes", async () => {
 		const refusals = await refusalsOf(
 			await written(signedBy(publisher, version(4)), { "min-version": 5 }),

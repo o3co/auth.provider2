@@ -1,4 +1,4 @@
-import type { ClientRecord } from "@mod/clients";
+import { type ClientRecord, clientIdNameable } from "@mod/clients";
 import type { Refusal } from "@mod/kernel";
 import { type Jwk, publicJwk, type Read, verifiesUnder } from "@mod/keys";
 import { type RegistryClient, type RegistryVersion, registryWire } from "@mod/registry-wire";
@@ -26,8 +26,8 @@ const at = (key: string, reason: string): { readonly refused: Refusal } => ({
 
 /**
  * The version a signed text holds, checked in order: the signature under the publisher's key (by
- * `verify`, `keys`' `verifyJws`), the header's `typ`, registry-wire's schema, and the least version
- * taken. A refusal names the setting and why, never a value read.
+ * `verify`, `keys`' `verifyJws`), the header's `typ`, registry-wire's schema, every client id
+ * `clients` can name, and the least version taken. A refusal names the setting and why, never a value read.
  */
 export function versionOf(
 	text: string,
@@ -44,6 +44,11 @@ export function versionOf(
 	if (!parsed.success) {
 		const paths = parsed.error.issues.map((issue) => issue.path.join(".") || "(top)");
 		return at("file", `does not fit registry-wire's version, at ${paths.join(", ")}`);
+	}
+	// An id no client can have would be answered as no client, silently: the version is refused whole.
+	const unnamable = parsed.data.clients.findIndex((client) => !clientIdNameable(client.id));
+	if (unnamable >= 0) {
+		return at("file", `holds a client id no client can have, at clients.${unnamable}.id`);
 	}
 	if (parsed.data.version < s["min-version"]) {
 		return at(

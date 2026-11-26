@@ -12,6 +12,7 @@ import type {
 	RecordRefusal,
 	Section,
 } from "../contract.ts";
+import { clientIdNameable } from "../contract.ts";
 import { none, secretMethods, sends } from "../methods/methods.ts";
 
 /**
@@ -32,12 +33,11 @@ export interface SectionIssue {
 	readonly message: string;
 }
 
-/** Whether an id can name a client: 1 to 64 visible ASCII characters (0x21 to 0x7e), as every way to the Core carries one. */
-const nameable = (id: string) => /^[\x21-\x7e]{1,64}$/.test(id);
-
 /** A client record as the operator registers it, and as a source's answer is held to. */
 export const clientRecord = z.strictObject({
-	id: z.string().refine(nameable, "a client id that is not 1 to 64 visible ASCII characters"),
+	id: z
+		.string()
+		.refine(clientIdNameable, "a client id that is not 1 to 64 visible ASCII characters"),
 	kind: z.enum(["public", "confidential"]),
 	method: z.string().min(1),
 	sections: z.record(z.string(), z.unknown()).prefault({}),
@@ -199,7 +199,7 @@ export function registry(
 	/** The client by id: registered first, then the first source that names it; "invalid" if its record fails. */
 	const lookup = async (id: string): Promise<Client | undefined | "invalid"> => {
 		// An id no client can have is looked up nowhere, so no source can fail on it.
-		if (!nameable(id)) return undefined;
+		if (!clientIdNameable(id)) return undefined;
 		const local = registered.get(id);
 		if (local) return local;
 		for (const source of sources) {

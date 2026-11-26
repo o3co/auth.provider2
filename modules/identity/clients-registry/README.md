@@ -19,7 +19,7 @@
 ## Invariants
 - Boot is refused, never left with no clients, where:
   - `publisher-key` is no public JWK with a `kid` and an `alg`, `EdDSA` over Ed25519 or `ES256` over P-256, that may verify signatures (`clients-registry.publisher-key`);
-  - the file cannot be read, its compact JWS does not verify under `publisher-key` (the `kid` it names, the `alg` the key names), its signed header's `typ` is not `registryWire.typ`, or its payload does not fit `registryWire.version` (`clients-registry.file`);
+  - the file cannot be read, its compact JWS does not verify under `publisher-key` (the `kid` it names, the `alg` the key names), its signed header's `typ` is not `registryWire.typ`, its payload does not fit `registryWire.version`, or it holds a client id `clients` would never name (`clientIdNameable`: 1 to 64 visible ASCII characters), named by its place (`clients-registry.file`);
   - its version number is below `min-version` (`clients-registry.min-version`).
 - A refusal names the setting's key path and why, never a path, an id or a value read.
 - The file is read once, at boot; a version written after it changes nothing until the next boot.
