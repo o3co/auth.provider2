@@ -217,7 +217,7 @@ describe("an operation over HTTP", () => {
 		const decoded = decodeRequest(validFrame("continue"));
 		if (!decoded.ok) throw new Error("a valid frame");
 		const sent = carriedOf("continue", decoded.value.message as never);
-		for (const seq of ["17", "256", "257", "272"]) {
+		for (const seq of ["17", "255", "256", "257", "272"]) {
 			const values = new Map(sent.values);
 			values.set("seq", [seq]);
 			expect(requestOf("continue", { ...sent, values }), seq).toEqual({

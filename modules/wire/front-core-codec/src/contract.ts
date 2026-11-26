@@ -105,6 +105,20 @@ export class WireEncodeError extends Error {
 	}
 }
 
+/**
+ * A value held to its spec as given, before its bytes could change it: an enum's number to its
+ * count, never wrapped to its one byte; a text whole, a lone surrogate never sent as U+FFFD.
+ */
+function givenError(spec: FieldSpec, value: unknown): WireErrorName | undefined {
+	if (spec.type === "enum") {
+		const n = value ?? 0;
+		return Number.isInteger(n) && (n as number) >= 0 && (n as number) < (spec.values ?? 0)
+			? undefined
+			: "enumRange";
+	}
+	return typeof value === "string" && !value.isWellFormed() ? "fieldSyntax" : undefined;
+}
+
 function bytesOf(spec: FieldSpec, value: unknown): Uint8Array {
 	if (spec.type === "enum") return Uint8Array.of(Number(value ?? 0));
 	if (spec.type === "bytes") return value instanceof Uint8Array ? value : new Uint8Array(0);
@@ -116,7 +130,10 @@ function encodeBody(
 	message: Readonly<Record<string, unknown>>,
 ): Uint8Array {
 	const parts = fields.map((spec) => {
-		const bytes = bytesOf(spec, message[spec.name]);
+		const value = message[spec.name];
+		const given = givenError(spec, value);
+		if (given) throw new WireEncodeError(spec.name, given);
+		const bytes = bytesOf(spec, value);
 		const error = checkField(spec, bytes);
 		if (error) throw new WireEncodeError(spec.name, error);
 		return bytes;
@@ -381,14 +398,7 @@ export function requestOf<K extends RequestKind>(kind: K, carried: Carried): Rea
 	if (!read.ok) return read;
 	for (const spec of requests[kind].fields as readonly FieldSpec[]) {
 		const value = (read.message as Record<string, unknown>)[spec.name];
-		// As read, before its bytes could change it: an enum's number held to its count, before its
-		// one byte could wrap it; a text with a lone surrogate refused, never checked as U+FFFD.
-		const error =
-			spec.type === "enum" && !((value as number) < (spec.values ?? 0))
-				? "enumRange"
-				: typeof value === "string" && !value.isWellFormed()
-					? "fieldSyntax"
-					: checkField(spec, bytesOf(spec, value));
+		const error = givenError(spec, value) ?? checkField(spec, bytesOf(spec, value));
 		if (error) return { ok: false, field: spec.name, error };
 	}
 	return read;

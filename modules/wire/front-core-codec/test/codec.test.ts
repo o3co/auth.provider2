@@ -115,6 +115,20 @@ describe("a round trip", () => {
 		expect(() => encodeRequest("loginStart", 1, message)).toThrow(WireEncodeError);
 		expect(() => encodeRequest("loginStart", 1, message)).toThrow("wire: clientId fieldLength");
 	});
+
+	it("refuses an enum's number past its count, never wrapping it to a byte within, and a text with a lone surrogate", () => {
+		const decoded = decodeRequest(validFrame("continue"));
+		if (!decoded.ok || decoded.value.kind !== "continue") throw new Error("a valid frame");
+		const { message } = decoded.value;
+		expect(() => encodeRequest("continue", 1, { ...message, seq: 16 })).not.toThrow();
+		for (const seq of [17, 255, 256, 272, -1, 1.5])
+			expect(() => encodeRequest("continue", 1, { ...message, seq }), String(seq)).toThrow(
+				"wire: seq enumRange",
+			);
+		expect(() => encodeRequest("continue", 1, { ...message, body: "a\ud800" })).toThrow(
+			"wire: body fieldSyntax",
+		);
+	});
 });
 
 describe("random frames and mutations of well-formed ones", () => {

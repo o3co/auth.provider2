@@ -8,7 +8,7 @@
 - Reading what a field means: the Core's verifier of each. The connection and who may reach it, and reading or writing HTTP itself (bodies, headers, statuses): the http axis's adapters.
 
 ## Offers
-- `encodeRequest` (kind, id, message) and `encodeReply` (reply): a frame, each field held to its spec; a field outside it throws `WireEncodeError`, naming the field and the code, for the honest side's own log.
+- `encodeRequest` (kind, id, message) and `encodeReply` (reply): a frame, each field held to its spec, an enum's number and a text as given (never wrapped to a byte, never a lone surrogate sent as U+FFFD); a field outside it throws `WireEncodeError`, naming the field and the code, for the honest side's own log.
 - `decodeRequest` and `decodeReply` (bytes): a `Decoded` value, the frame's kind or outcome, its id and its fields, or the code it is rejected with and the id its header gave. They never throw.
 - `readHeader` (bytes, the body's limit) and `frameSplitter` (the limit, `onFrame`, `onError`): a stream cut into whole frames.
 - `checkField` (spec, bytes): the one check of a field's length and characters both sides run.
