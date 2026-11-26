@@ -14,6 +14,8 @@ import { assemble, BootRefused, defineModule, isUnavailable, kernelConfig } from
 import { quietRuntime } from "@mod/kernel/testing";
 import { thumbprint } from "@mod/keys";
 import outboundModule from "@mod/outbound/module";
+import { promiseNames, promises } from "@mod/promises";
+import promisesModule from "@mod/promises/module";
 import { memoryRecords } from "@mod/records/testing";
 import secretHashModule from "@mod/secret-hash/module";
 import { tlsOptionsForTests } from "@mod/tls-options/testing";
@@ -86,6 +88,7 @@ async function boot(section: Record<string, unknown>, reach = true, fromSource =
 			spent,
 			location,
 			...(fromSource ? [source] : []),
+			promisesModule,
 		],
 		config: {
 			...kernelConfig(),
@@ -97,26 +100,30 @@ async function boot(section: Record<string, unknown>, reach = true, fromSource =
 		},
 		runtime: quietRuntime(),
 	});
-	return { ...app.get(clients), checks: app.get(clientAssertion) };
+	const claim2 = app
+		.get(promises)
+		.judgment()
+		.find((j) => j.promise === promiseNames.clientToken);
+	return { ...app.get(clients), checks: app.get(clientAssertion), claim2 };
 }
 
-const assertion = () =>
+const assertion = (aud: string = issuer) =>
 	new SignJWT({
 		iss: "app",
 		sub: "app",
-		aud: issuer,
+		aud,
 		exp: Math.floor(Date.now() / 1000) + 60,
 		jti: `j-${Math.random()}`,
 	})
 		.setProtectedHeader({ alg: "ES256", kid: "ec" })
 		.sign(ec.privateKey);
-const authenticate = async (c: Awaited<ReturnType<typeof boot>>) =>
+const authenticate = async (c: Awaited<ReturnType<typeof boot>>, aud?: string) =>
 	c.authenticate(
 		testRequest({
 			method: "POST",
 			form: new Map([
 				["client_assertion_type", [assertionType]],
-				["client_assertion", [await assertion()]],
+				["client_assertion", [await assertion(aud)]],
 			]),
 		}),
 	);
@@ -135,6 +142,40 @@ it("refuses a source's client naming a jwks-uri, fetching nothing: a source's ke
 	const before = fetched;
 	expect(await authenticate(c)).toMatchObject({ kind: "refused" });
 	expect(fetched - before).toBe(0);
+});
+
+it("takes a loose audience for a registered client that accepts one, and for a source's client never (§0.2)", async () => {
+	const keys = { keys: [publicJwk(ec.publicKey, "ec")], "accept-loose-audience": true };
+	const registered = await boot(keys);
+	expect(await authenticate(registered, tokenUrl)).toMatchObject({ kind: "authenticated" });
+	const sourced = await boot(keys, true, true);
+	expect(await authenticate(sourced, tokenUrl)).toMatchObject({ kind: "refused" });
+	expect(await authenticate(sourced)).toMatchObject({ kind: "authenticated" });
+});
+
+it("stands on claim 2 as composed: broken by a registered jwks-uri or loose audience, by its place and field; held for a source's", async () => {
+	expect((await boot({ "jwks-uri": jwksUri() })).claim2).toMatchObject({
+		held: false,
+		breaking: [
+			{
+				by: "client-assertion",
+				setting: "clients.registered.0.sections.client-assertion.jwks-uri",
+			},
+		],
+	});
+	const loose = { keys: [publicJwk(ec.publicKey, "ec")], "accept-loose-audience": true };
+	expect((await boot(loose)).claim2).toMatchObject({
+		held: false,
+		breaking: [
+			{
+				by: "client-assertion",
+				setting: "clients.registered.0.sections.client-assertion.accept-loose-audience",
+			},
+		],
+	});
+	// A source's client weakens nothing: its keys are written in, its audience strict.
+	expect((await boot(loose, true, true)).claim2).toMatchObject({ held: true, breaking: [] });
+	expect((await boot({ "jwks-uri": jwksUri() }, true, true)).claim2).toMatchObject({ held: true });
 });
 
 it("answers the key of the set its assertion was verified with, naming the client", async () => {

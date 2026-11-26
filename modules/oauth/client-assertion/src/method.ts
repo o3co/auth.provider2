@@ -5,7 +5,7 @@ import type { HttpRequest } from "@mod/http";
 import { type Clock, type Log, Unavailable } from "@mod/kernel";
 import { decodeJwt } from "jose";
 import { checked } from "./check.ts";
-import { clientKeys, keysFor } from "./keys/keys.ts";
+import { keysFor, looseFor } from "./keys/keys.ts";
 import { proofOf } from "./proof.ts";
 import { widestClockSkew } from "./section.ts";
 import type { SpentAssertions } from "./store.ts";
@@ -89,8 +89,7 @@ export function assertionMethod(p: Parts): AuthMethod {
 			if (field(request, "client_assertion_type") !== assertionType) {
 				return refuse("assertion type");
 			}
-			const section = client.section(clientKeys);
-			const loose = section["accept-loose-audience"];
+			const loose = looseFor(client);
 			const source = keysFor(client);
 			// A verifier over this client's keys, under the algorithms the operator takes.
 			const verifier = p.jwt.verifierOf(source, {

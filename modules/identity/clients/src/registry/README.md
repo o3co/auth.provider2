@@ -12,6 +12,7 @@ Internal module of `clients`: the registry every taker shares, reading records, 
 - `registry` (the registered clients, the sources, the methods, the sections) → `Clients`; `readRecord`, `clientRecord` (the registered record's schema), `methodIssues`.
 
 ## Invariants
+- A request uses one authentication method: two or more are refused first, then credentials a method finds malformed, both before any lookup. Where an assertion method claims the request, it uses an assertion: either refusal is then marked `assertion` and carries the challenges of every method claiming the request or finding it malformed, as RFC 7521 §4.2.1 answers it `invalid_client`; a method that only finds the request malformed marks nothing, and an unmarked refusal carries no challenge.
 - A registered client wins over the same id from another source.
 - An id that is not 1 to 64 visible ASCII characters (0x21 to 0x7e: a fixed bound, the Front's wire's `clientId`, and a store key) is unknown, and no source is asked; registered, it refuses boot.
 - `listed` takes the id of each record a source lists (`ClientSource.listed`), none where it cannot be read, and answers each id once as `find` does, from the first source that names it: one `find` answers none for, or a record that fails, is left out, and a registered client's id never.

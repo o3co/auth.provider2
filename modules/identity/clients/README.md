@@ -21,21 +21,20 @@
 - A method may say its credentials need a key the client alone holds (`keyHeld`), a signature by an asymmetric algorithm: boot refuses one naming no signing algorithm, or one not an asymmetric JWS algorithm (RS, PS or ES of 256, 384 or 512, ES256K, EdDSA, Ed25519, Ed448), its algorithms held as checked. Left out, it declares no such hold; the built-in methods declare none.
 - Extension points `clientSources` and `metadataSections`; a section may give `checkAtBoot`, which takes a registered client's value of that section after the schema, and the client that holds it, and may give a reason to refuse boot.
 - Operator section `registered`: a list of `id` (1 to 64 visible ASCII characters), `kind` (`public` or `confidential`), `method` and `sections` (values by section name); built-in section `client-secret` holds `hash`, a bcrypt or scrypt hash in the forms `secret-hash` reads.
+- Its stance on `promises`' `front-compromise-client-token` (claim 2): broken by a registered client of a secret method, named by its place, or a contributed method declaring no key held; held otherwise (internal module `methods`).
 - `./testing`: `confidentialClient` and `publicClient` (test clients; `clientSecret` is the former's secret) and `clientsConfig`.
 
 ## Invariants
-- A request uses one authentication method: two or more are refused first, then credentials a method finds malformed, both before any lookup. Where an assertion method claims the request, it uses an assertion: either refusal is then marked `assertion` and carries the challenges of every method claiming the request or finding it malformed, as RFC 7521 §4.2.1 answers it `invalid_client`; a method that only finds the request malformed marks nothing, and an unmarked refusal carries no challenge.
 - `none` is the method only when no other method claims the request; an Authorization header no method reads claims nothing.
 - `bare` is false for an `authorization` header, a client certificate (a malformed one included), any of `client_id`, `client_secret`, `client_assertion` and `client_assertion_type` sent at all (empty, repeated or not a string included), and anything a composed method claims or finds malformed; a field only a method not composed reads cannot be told.
 - `checkAtBoot` sees each registered client that carries the section, and never a source's client, which the section's owner checks at request time.
 - A `checkAtBoot` reason refuses boot at `clients.registered.<i>.sections.<name>`, which names the client by its place and the section; the reason is the check's own, unchanged, so it never holds a configuration value, the client's id included.
 - An unknown client, an invalid record and another method's client are refused only after the work the claimed method's credentials would cost (`decoy`; a secret's is the checker's decoys), so the time tells no client id apart.
-
-- How a record is read, and which client an id names: the internal module `registry`'s card.
+- How a record is read, which client an id names, the one method a request uses, the order of refusals and a refusal marked `assertion`: the internal module `registry`'s card.
 - How each built-in method reads a request, and how a secret is checked: the internal module `methods`' card.
 
 ## Depends on
-- `kernel`, `http`, `secret-hash`, `audit` (the declaration), `request-source` (the source)
+- `kernel`, `http`, `secret-hash`, `audit` (the declaration), `request-source` (the source), `promises` (the stance)
 
 ## Vocabulary
 - client: an id, a kind (public or confidential), an authentication method, and metadata by section.

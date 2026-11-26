@@ -871,6 +871,9 @@ importers:
       '@mod/kernel':
         specifier: workspace:*
         version: link:../../foundation/kernel
+      '@mod/promises':
+        specifier: workspace:*
+        version: link:../../foundation/promises
       '@mod/request-source':
         specifier: workspace:*
         version: link:../../foundation/request-source
@@ -1426,6 +1429,9 @@ importers:
       '@mod/outbound-policy':
         specifier: workspace:*
         version: link:../../foundation/outbound-policy
+      '@mod/promises':
+        specifier: workspace:*
+        version: link:../../foundation/promises
       '@mod/token-endpoint':
         specifier: workspace:*
         version: link:../token-endpoint

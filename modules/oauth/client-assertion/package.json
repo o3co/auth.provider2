@@ -19,6 +19,7 @@
 		"@mod/keys": "workspace:*",
 		"@mod/outbound": "workspace:*",
 		"@mod/outbound-policy": "workspace:*",
+		"@mod/promises": "workspace:*",
 		"@mod/token-endpoint": "workspace:*",
 		"@mod/url-setting": "workspace:*",
 		"jose": "6.2.15",

@@ -18,7 +18,7 @@
 - For tests (`./testing`): `grantCaller` calls a contributed grant as the endpoint does once the client is in, the grant allowed and the binding read, beside `client-allowance`, refusing a mistyped parameter and asking the rule's `untargeted` first; `grantInput` is what it hands the grant.
 - `issuer`'s metadata items: `token_endpoint`, `grant_types_supported`, `token_endpoint_auth_methods_supported` and `token_endpoint_auth_signing_alg_values_supported` (left out when `clients` names none).
 - Audit events once the client is authenticated, with `client`, `source` (when determined) and `grant_type` (when dispatched to): `token.issued`, and `token.issued.failure` with `reason` and `error` (the code answered); declared in `./audit-events`, listed in the audit event reference.
-- Its kind of operation, `token-endpoint.bundle`, in `transparency`'s `operationKinds`; its stances in `promises`' `stances`, as `built-in`'s card says: `core-compromise-contained` holds by it, and `no-client-subject-token` is judged from the subject kind each grant composed declares.
+- Its kind of operation, `token-endpoint.bundle`, in `transparency`'s `operationKinds`; its stances in `promises`' `stances` on `core-compromise-contained`, `no-client-subject-token` and `front-compromise-client-token`, as `built-in`'s card says.
 - What `token.issued` adds, the failure's `reason` and a request naming no client's record: `route`'s card; a grant allowed and served by none: `allowed`'s.
 - Operator section: `requests` per source in each window (1–100000, default 60) and `window` (1s–1d, default `1m`, written with its unit).
 

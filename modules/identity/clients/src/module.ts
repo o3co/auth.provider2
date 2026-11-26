@@ -1,4 +1,5 @@
 import { contract, defineModule } from "@mod/kernel";
+import { stances } from "@mod/promises";
 import { type SecretChecker, secretCheckers } from "@mod/secret-hash";
 import { z } from "zod";
 import {
@@ -11,6 +12,7 @@ import {
 	type Section,
 } from "./contract.ts";
 import {
+	clientTokenStance,
 	hashesOf,
 	none,
 	secretBasic,
@@ -121,6 +123,9 @@ export default defineModule(
 		m.contribute(authMethods).by(async (c) => secretPost(await c.get(secrets))),
 		m.contribute(authMethods).by(() => none),
 		m.contribute(metadataSections).by(() => secretSection),
+		m
+			.contribute(stances)
+			.by(async (c) => clientTokenStance(c.section.registered, await c.collect(authMethods))),
 		m.provide(registered).by(async (c) => {
 			const known = byName(await c.collect(metadataSections));
 			const methods = new Set((await c.collect(authMethods)).map((a) => a.name));

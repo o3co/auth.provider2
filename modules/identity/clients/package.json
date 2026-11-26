@@ -17,6 +17,7 @@
 		"@mod/audit": "workspace:*",
 		"@mod/http": "workspace:*",
 		"@mod/kernel": "workspace:*",
+		"@mod/promises": "workspace:*",
 		"@mod/request-source": "workspace:*",
 		"@mod/secret-hash": "workspace:*",
 		"@standard-schema/spec": "1.1.0",

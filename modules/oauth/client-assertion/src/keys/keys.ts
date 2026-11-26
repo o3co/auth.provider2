@@ -3,6 +3,7 @@ import { type Algorithm, boundAlgorithm, type KeySource } from "@mod/external-jw
 import type { BuildContext } from "@mod/kernel";
 import { publicJwk, verifiesUnder } from "@mod/keys";
 import { destinationRefusal, type OutboundRefusals, outboundRefusals } from "@mod/outbound-policy";
+import { promiseNames, type Stance } from "@mod/promises";
 import { urlSetting } from "@mod/url-setting";
 import { z } from "zod";
 
@@ -42,7 +43,7 @@ export const clientKeys: Section<ClientKeys> = {
 				.boolean()
 				.prefault(false)
 				.describe(
-					"Also takes, from this client, an assertion whose `aud` is the token endpoint's URL or a list holding the issuer's or the token endpoint's URL, as 0.18.5 did; each is logged. While set, an assertion the client made for another authorization server that names this one's token endpoint can be used here. For a client whose library names the token endpoint; a registered client that sets it is warned of at every start.",
+					"A registered client's alone (a source's client takes none): also takes, from this client, an assertion whose `aud` is the token endpoint's URL or a list holding the issuer's or the token endpoint's URL, as 0.18.5 did; each is logged. While set, an assertion the client made for another authorization server that names this one's token endpoint can be used here. For a client whose library names the token endpoint; a registered client that sets it is warned of at every start.",
 				),
 		})
 		.refine((s) => s.keys.length === 0 || s["jwks-uri"] === undefined, {
@@ -92,6 +93,41 @@ export function clientKeysUnder(refusals: OutboundRefusals): Section<ClientKeys>
 		},
 	};
 }
+
+/**
+ * Where the keys stand on the promise of a client's token (claim 2), by the registered clients'
+ * sections: broken by one naming a jwks-uri, whose key set is whoever serves it (or, over plain http,
+ * sits on its path), or taking a loose audience, an assertion made for another server taken here;
+ * each named by its place and field, never its id. Held otherwise: its keys are written in.
+ */
+export function keysStance(registered: readonly Pick<Client, "section">[]): Stance {
+	// The first client weakening it, either way, in the settings' order.
+	for (const [i, client] of registered.entries()) {
+		const keys = client.section(clientKeys);
+		const field =
+			keys["jwks-uri"] !== undefined
+				? "jwks-uri"
+				: keys["accept-loose-audience"]
+					? "accept-loose-audience"
+					: undefined;
+		if (field === undefined) continue;
+		return {
+			promise: promiseNames.clientToken,
+			holds: false,
+			by: "client-assertion",
+			setting: `clients.registered.${i}.sections.client-assertion.${field}`,
+			reason:
+				field === "jwks-uri"
+					? "a key set fetched is whoever serves it, or sits on its path"
+					: "an assertion made for another server is taken here",
+		};
+	}
+	return { promise: promiseNames.clientToken, holds: true, by: "client-assertion" };
+}
+
+/** Whether a client's assertion is also taken for a loose audience: a registered client's choice alone (§0.2). */
+export const looseFor = (client: Pick<Client, "registered" | "section">) =>
+	client.registered && client.section(clientKeys)["accept-loose-audience"];
 
 /** What `clientKeysIn` takes from the build context. */
 export const keysTakes = [outboundRefusals] as const;

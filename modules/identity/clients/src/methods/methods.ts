@@ -1,4 +1,5 @@
 import type { HttpRequest } from "@mod/http";
+import { promiseNames, type Stance } from "@mod/promises";
 import { readSecretHash, type SecretChecker, type SecretHash } from "@mod/secret-hash";
 import { z } from "zod";
 import type { AuthMethod, Client, ClientRecord, Section } from "../contract.ts";
@@ -135,3 +136,39 @@ export const none: AuthMethod = {
 		sends(request, "client_id") && request.fields.single("client_id") === undefined,
 	verify: async (_request, client) => (client.kind === "public" ? {} : undefined),
 };
+
+/** The methods built in here: a secret method is the operator's registered choice, and none is a public client's. */
+const builtIn: readonly string[] = [...secretMethods, "none"];
+
+/**
+ * Where the clients stand on the promise of a client's token (claim 2). Broken by a registered client
+ * of a secret method, whose secret one who relays its request keeps, named by its place, never its id;
+ * and by a contributed method declaring no key held, which a source's client may use, named. Held
+ * otherwise: every client authenticates by a key it alone holds, or is public (`none`, bound by its
+ * request object's key and the DPoP key, a request object being always required).
+ */
+export function clientTokenStance(
+	registered: readonly { readonly method: string }[],
+	methods: readonly Pick<AuthMethod, "name" | "keyHeld">[],
+): Stance {
+	const by = "clients";
+	const promise = promiseNames.clientToken;
+	const i = registered.findIndex((client) => secretMethods.includes(client.method));
+	if (i >= 0)
+		return {
+			promise,
+			holds: false,
+			by,
+			setting: `clients.registered.${i}.method`,
+			reason: "a shared secret goes through whoever relays the request, who can keep it",
+		};
+	const unheld = methods.filter((m) => !builtIn.includes(m.name) && m.keyHeld !== true);
+	if (unheld.length > 0)
+		return {
+			promise,
+			holds: false,
+			by,
+			reason: `${unheld.map((m) => m.name).join(", ")} declares no key held`,
+		};
+	return { promise, holds: true, by };
+}

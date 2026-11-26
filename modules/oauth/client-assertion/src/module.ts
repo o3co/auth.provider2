@@ -4,9 +4,10 @@ import { site } from "@mod/http";
 import { issuer } from "@mod/issuer";
 import { defineModule } from "@mod/kernel";
 import { pkcs1v15Deprecated } from "@mod/keys";
+import { stances } from "@mod/promises";
 import { tokenEndpointLocation } from "@mod/token-endpoint";
 import { clientAssertion } from "./contract.ts";
-import { clientKeys, clientKeysIn, keysTakes, unreadKeys } from "./keys/keys.ts";
+import { clientKeys, clientKeysIn, keysStance, keysTakes, unreadKeys } from "./keys/keys.ts";
 import { assertionMethod } from "./method.ts";
 import { section } from "./section.ts";
 import { signedBy } from "./signed.ts";
@@ -29,6 +30,7 @@ export default defineModule(
 	{ name: "client-assertion", replicaSafe: true, section, takes },
 	(m) => [
 		m.contribute(metadataSections).by((c) => clientKeysIn(c)),
+		m.contribute(stances).by(async (c) => keysStance((await c.get(clients)).registered())),
 		m.provide(clientAssertion).by(async (c) => {
 			// The operator's choice, yet said at every start, in keys' words: PKCS#1 v1.5's three alike.
 			const pkcs1 = c.section.algorithms.filter((alg) => pkcs1v15.has(alg));

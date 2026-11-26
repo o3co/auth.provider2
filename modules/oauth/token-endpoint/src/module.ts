@@ -7,7 +7,7 @@ import { stances } from "@mod/promises";
 import { requestsPerSource } from "@mod/rate-limit";
 import { operationKinds } from "@mod/transparency";
 import { unservedGrants, unservedListed } from "./allowed/allowed.ts";
-import { clientSubjectStance, tokenEndpointStance } from "./built-in/stance.ts";
+import { clientSubjectStance, keyHoldStance, tokenEndpointStance } from "./built-in/stance.ts";
 import { composedRule, targetTakes } from "./built-in/targets.ts";
 import { bundleKind } from "./bundle/bundle.ts";
 import { tokenEndpointLocation } from "./contract.ts";
@@ -30,6 +30,7 @@ export default defineModule({ name: "token-endpoint", replicaSafe: true, section
 	m.contribute(operationKinds).by(() => bundleKind),
 	m.contribute(stances).by(() => tokenEndpointStance),
 	m.contribute(stances).by(async (c) => clientSubjectStance(await c.collect(grants))),
+	m.contribute(stances).by(async (c) => keyHoldStance(await c.collect(grants))),
 	m
 		.provide(composedGrants)
 		.by(async (c) => new Set((await c.collect(grants)).map((g) => g.grantType))),

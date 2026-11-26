@@ -35,3 +35,39 @@ export const clientSubjectStance = (
 		...(reasons.length === 0 ? {} : { reason: reasons.join("; ") }),
 	});
 };
+
+/** What each hold a grant declares rests on, in the endpoint's words. */
+const holdOf: Readonly<Record<NonNullable<Grant["keyHold"]>, string>> = {
+	authorization: "the key its client's signed authorization named ahead",
+	family: "its family's key",
+	assertion: "the key that signed the client's assertion, proved by that key",
+};
+/** The hold a grant declares, or none: a value no hold is counts as none, never as one. */
+const holdOfGrant = ({ keyHold }: Pick<Grant, "keyHold">): string | undefined =>
+	typeof keyHold === "string" && Object.hasOwn(holdOf, keyHold) ? holdOf[keyHold] : undefined;
+
+/**
+ * Where the token endpoint stands on `front-compromise-client-token` (claim 2), from how each grant
+ * composed declares it holds a client's tokens to a key: held where every one declares a hold, its
+ * reason what each rests on; broken by any declaring none, its grant type named. The authentication
+ * methods' keys are `clients`' to judge.
+ */
+export const keyHoldStance = (
+	composed: readonly Pick<Grant, "grantType" | "keyHold">[],
+): Stance => {
+	const silent = composed.filter((g) => holdOfGrant(g) === undefined).map((g) => g.grantType);
+	if (silent.length > 0)
+		return Object.freeze({
+			promise: promiseNames.clientToken,
+			holds: false,
+			by: "token-endpoint",
+			reason: `${silent.join(", ")} declares no hold of a client's tokens to a key`,
+		});
+	const held = composed.map((g) => `${g.grantType}: ${holdOfGrant(g)}`);
+	return Object.freeze({
+		promise: promiseNames.clientToken,
+		holds: true,
+		by: "token-endpoint",
+		...(held.length === 0 ? {} : { reason: held.join("; ") }),
+	});
+};
