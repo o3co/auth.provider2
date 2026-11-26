@@ -12,7 +12,7 @@
 
 ## Offers
 - `approvals`, taken only by a module standing on the promises (`promises`' `stances`); each offer's asks and answers are its internal module's:
-  - `issue`: a statement of one purpose signed and recorded for the screen's keys. `use`: a statement used once, by an assertion (an authorization's, a passkey-add's, a passkey-manage's) or a possession's verification (`statement`).
+  - `issue`: a statement of one purpose signed and recorded for the screen's keys; longer than `fits`: `long`, unsigned. `use`: a statement used once, by an assertion (an authorization's, a passkey-add's, a passkey-manage's) or a possession's verification (`statement`).
   - `usedOf`: a used statement's approval. `creationOf`: a creation's record. `rootOf`: what a used authorization rests on. `passkeyAddOf`: a used passkey-add as its key change takes it. `keptChangeOf`: what a used possession's key change was made of, to its records' end. `completionOf` and `publish`: an authorization's completion kept, and marked gone out (`statement`).
   - `continue`: a creation's continuation, its step run once and answered again alike. `continueSignUp`: a T's sign-up (F1), the same, on a T its owner allowed. `continueSealed`: a used passkey-manage's sealed `delete` or `rename`, opened here, the same (`continuation`).
   - `signUpOf`: a T's sign-up as kept. `signUpSubject`: the subject made for it, kept once (`statement`).

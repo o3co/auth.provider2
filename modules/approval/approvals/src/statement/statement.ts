@@ -167,6 +167,9 @@ export const statementMark = (sid: string) => `statement:${sid}`;
 const keptPastS = 60;
 export const recordEnd = (r: StatementRecord) => r.exp + keptPastS * 1000;
 
+/** Base64url's characters for `bytes` bytes, unpadded. */
+const chars = (bytes: number) => Math.ceil((bytes * 4) / 3);
+
 /** Issuing statements, and using each once. */
 export function statementsOver(p: StatementParts) {
 	let signing = 0;
@@ -208,9 +211,9 @@ export function statementsOver(p: StatementParts) {
 	async function signed(
 		ask: IssueAsk,
 		made: NonNullable<ReturnType<typeof payloadOf>>,
+		prepared: ReturnType<typeof p.keys.prepare>,
+		text: string,
 	): Promise<Issued> {
-		const prepared = p.keys.prepare("core", typs.statement);
-		const text = canonicalText(made.payload);
 		const answer = await p.keys.sign(prepared, new TextEncoder().encode(text));
 		if (answer.kind !== "signed") return { kind: "refused", reason: "withdrawn" };
 		const hash = sha256(answer.jws);
@@ -242,6 +245,15 @@ export function statementsOver(p: StatementParts) {
 			return { kind: "refused", reason: "items" };
 		const made = payloadOf(ask);
 		if (!made) return { kind: "refused", reason: "items" };
+		// Its length known before it is signed (each part base64url, joined by dots): too long costs nothing.
+		const prepared = p.keys.prepare("core", typs.statement);
+		const text = canonicalText(made.payload);
+		const length =
+			chars(Buffer.byteLength(prepared.headerText)) +
+			chars(Buffer.byteLength(text)) +
+			chars(prepared.signatureLength) +
+			2;
+		if (ask.fits !== undefined && length > ask.fits) return { kind: "refused", reason: "long" };
 		if (signing >= p.maxConcurrent) return { kind: "refused", reason: "busy" };
 		signing += 1;
 		try {
@@ -252,7 +264,7 @@ export function statementsOver(p: StatementParts) {
 			if (all.kind === "limited") return { kind: "refused", reason: "limited" };
 			const counted = await p.limit.hit("approvals.issue", ask.by, p.window);
 			if (counted.kind === "limited") return { kind: "refused", reason: "limited" };
-			return await signed(ask, made);
+			return await signed(ask, made, prepared, text);
 		} finally {
 			signing -= 1;
 		}

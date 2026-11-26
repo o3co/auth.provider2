@@ -47,6 +47,8 @@ export type IssueAsk = {
 		readonly by: string;
 		/** A T's alone: the stages it may be continued by, as its owner allows them; none where absent. */
 		readonly continues?: P extends "authorization" ? readonly TStage[] : never;
+		/** The longest statement, in characters, its way to the screen and back carries; longer is refused `long`, never signed. */
+		readonly fits?: number;
 	};
 }[Purpose];
 
@@ -60,7 +62,10 @@ export type Issued =
 			/** What a `get()` over it is asked with: sdk-core-wire's challenge input, hashed. */
 			readonly challenge: string;
 	  }
-	| { readonly kind: "refused"; readonly reason: "items" | "limited" | "busy" | "withdrawn" };
+	| {
+			readonly kind: "refused";
+			readonly reason: "items" | "limited" | "busy" | "withdrawn" | "long";
+	  };
 
 /** A statement used once: what its purpose's owner takes, from the record alone. */
 export interface Approval {

@@ -1,5 +1,6 @@
 import { continuations } from "@mod/continuation-wire";
-import { overHttp } from "@mod/front-core-wire";
+import { checkField } from "@mod/front-core-codec";
+import { overHttp, requests } from "@mod/front-core-wire";
 import { challengeInput, hpke } from "@mod/sdk-core-wire";
 import { type Credential, ceremonies } from "@mod/webauthn";
 import { softwareAuthenticator, testOrigin } from "@mod/webauthn/testing";
@@ -10,7 +11,7 @@ import { f1World, payloadOf, screen, sha256 } from "./fixtures/world.ts";
 // `/continue`'s stage `sign-up`, registers the key its creation is for, and finishes the login with it.
 
 const at = { origin: testOrigin };
-const jarOf = (now: number) => {
+const jarOf = (now: number, over: Record<string, string> = {}) => {
 	const claims = {
 		iss: "c1",
 		aud: "https://issuer.example",
@@ -26,6 +27,7 @@ const jarOf = (now: number) => {
 		code_challenge: "c".repeat(43),
 		code_challenge_method: "S256",
 		dpop_jkt: "jkt",
+		...over,
 	};
 	return `h.${Buffer.from(JSON.stringify(claims)).toString("base64url")}.c1`;
 };
@@ -160,5 +162,43 @@ describe("a person's sign-up (F1), from the login's start to its finish", () => 
 			.map((sent) => sent.stage.kind);
 		expect(flow).toEqual(["keyChange", "approval"]);
 		await w.app.stop();
+	});
+});
+
+describe("a T the way back carries", () => {
+	it("is made up to its route's bound and crosses the wire to the finish and the sign-up's continue; one longer is refused before T", async () => {
+		const w = await f1World();
+		await w.app.start();
+		const s = await screen();
+		const start = (jti: string, state: string) =>
+			w.post(overHttp.operations.loginStart.path, {
+				clientId: "c1",
+				request: jarOf(w.now(), { jti, state }),
+				eEnc: s.eEnc,
+				eSigX: s.eSigX,
+				eSigY: s.eSigY,
+			});
+		const finish = requests.loginFinish.fields.find((f) => f.name === "statement");
+		const signUp = requests.continue.fields.find((f) => f.name === "statement");
+		if (!finish || !signUp) throw new Error("no statement field");
+		const bound = Math.min(finish.max, signUp.max);
+		// The room left by a T of a short state, in its payload's bytes, each adds 4/3 of a character.
+		const small = (await start("j0", "st")).json.statement as string;
+		const payload = Buffer.from(small.split(".")[1] ?? "", "base64url").length;
+		const room =
+			Math.floor(((Math.ceil((payload * 4) / 3) + bound - small.length) * 3) / 4) - payload;
+		const fits = await start("j1", `st${"a".repeat(room)}`);
+		expect(fits).toMatchObject({ status: 200, json: { create: true } });
+		const t = fits.json.statement as string;
+		expect(t.length).toBeLessThanOrEqual(bound);
+		expect(t.length).toBeGreaterThan(bound - 4);
+		const bytes = new TextEncoder().encode(t);
+		expect(checkField(finish, bytes)).toBeUndefined();
+		expect(checkField(signUp, bytes)).toBeUndefined();
+		// A few bytes more: refused before T, as the request object's, and nothing shown.
+		expect(await start("j2", `st${"a".repeat(room + 3)}`)).toMatchObject({
+			status: 400,
+			json: { error: "invalid_request_object" },
+		});
 	});
 });

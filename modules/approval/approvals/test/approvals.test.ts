@@ -75,6 +75,65 @@ describe("issuing a statement", () => {
 		expect(w.statements.value(t.hash)).toMatchObject({ state: "issued", jws: t.statement });
 	});
 
+	it("refuses one longer than its asker carries, as long, before it is signed or kept; one of that very length it signs", async () => {
+		const w = await world();
+		const length = (await issued(w)).statement.length;
+		const created: string[] = [];
+		const create = w.statements.store.create;
+		w.statements.store.create = async (...args) => {
+			created.push(args[0]);
+			return create(...args);
+		};
+		const { screen } = screenKeys();
+		const ask = { purpose: "authorization", items, screen, by: "src" } as const;
+		expect(await w.approvals.issue({ ...ask, fits: length - 1 })).toEqual({
+			kind: "refused",
+			reason: "long",
+		});
+		expect(created).toEqual([]);
+		// Its length, known before signing, is the signed statement's own.
+		const fits = await w.approvals.issue({ ...ask, fits: length });
+		if (fits.kind !== "issued") throw new Error(fits.reason);
+		expect(fits.statement).toHaveLength(length);
+		expect(created).toEqual([fits.hash]);
+	});
+
+	it("knows the length before signing for items JSON escapes and UTF-8 widens, and signs nothing it refuses long", async () => {
+		const w = await world();
+		const signed: unknown[] = [];
+		const sign = w.keys.sign.bind(w.keys);
+		w.keys.sign = async (...args) => {
+			signed.push(args[0]);
+			return sign(...args);
+		};
+		const { screen } = screenKeys();
+		const state = `"\\\u0001é😀${"x".repeat(100)}`;
+		const ask = {
+			purpose: "authorization",
+			items: { ...items, state },
+			screen,
+			by: "src",
+		} as const;
+		const first = await w.approvals.issue(ask);
+		if (first.kind !== "issued") throw new Error(first.reason);
+		expect(signed).toHaveLength(1);
+		const length = first.statement.length;
+		const long = { kind: "refused", reason: "long" };
+		expect(await w.approvals.issue({ ...ask, fits: length - 1 })).toEqual(long);
+		expect(signed).toHaveLength(1);
+		const fits = await w.approvals.issue({ ...ask, fits: length });
+		if (fits.kind !== "issued") throw new Error(fits.reason);
+		expect(fits.statement).toHaveLength(length);
+	});
+
+	it("counts no statement refused long, as none refused for its items", async () => {
+		const w = await world({ approvals: { "issue-limit": 1 } });
+		const long = await w.approvals.issue({ ...(await askOf()), fits: 1 });
+		expect(long).toEqual({ kind: "refused", reason: "long" });
+		await issued(w);
+		expect(await w.approvals.issue(await askOf())).toEqual({ kind: "refused", reason: "limited" });
+	});
+
 	it("refuses items no module fills, and items the schema refuses", async () => {
 		const narrow = defineModule({ name: "narrow", replicaSafe: true, takes: [] }, (m) => [
 			m.contribute(statementItems).by(() => ({

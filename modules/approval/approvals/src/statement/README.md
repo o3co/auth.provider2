@@ -12,7 +12,7 @@ Internal module of `approvals`: issuing statements, using each once, and reading
 
 ## Offers
 - `statementsOver` (`StatementParts`) → `issue`, `use`, `usedOf`, `creationOf`, `rootOf`, `passkeyAddOf`, `keptChangeOf`, `signUpOf`, `signUpSubject`, `completionOf`, `publish`, as `approvals` offers them:
-  - `issue` (purpose, items, the screen's `eEnc` and `eSig`, the key it is counted by; a T's stages its owner allows, `continues`) → the statement (`approval+jwt`), its hash, its challenge; or refused: `items` (a screen key of no point or no thumbprint among them), `limited`, `busy`, `withdrawn`.
+  - `issue` (purpose, items, the screen's `eEnc` and `eSig`, the key it is counted by; a T's stages its owner allows, `continues`; the longest it may be, `fits`) → the statement (`approval+jwt`), its hash, its challenge; or refused: `items` (a screen key of no point or no thumbprint among them), `limited`, `busy`, `withdrawn`, `long` (its length, known from the header, the payload and the signature's size before signing, over `fits`: before it is counted, never signed or kept).
   - `use` (statement; an assertion's JSON text as sent, or a possession's verification) → the approval (hash, purpose, items, subject, credential and the key's registration's record id, or the verification; when used, its `eSig`'s thumbprint `esig`); or refused. A passkey-add's and a passkey-manage's items are none.
   - `usedOf` (hash) → a used statement's approval, with its statement's issue time, `completed` once its completion is kept. `creationOf` (hash) → a creation's record until it expires.
   - `rootOf` (hash) → what a used authorization rests on, for a refresh family to check again: its statement, the assertion as received, its credential; none once its record is gone.

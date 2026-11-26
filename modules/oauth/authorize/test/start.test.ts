@@ -1,5 +1,6 @@
 import type { Approvals, IssueAsk } from "@mod/approvals";
 import type { Client } from "@mod/clients";
+import { requests } from "@mod/front-core-wire";
 import { type TargetRule, targetRules } from "@mod/grants";
 import type { HttpRequest } from "@mod/http";
 import { assemble, contract, defineModule, kernelConfig } from "@mod/kernel";
@@ -11,7 +12,7 @@ import { describe, expect, it } from "vitest";
 import { codeNeedsOver } from "../src/code-needs/code-needs.ts";
 import type { JarReservations, RequestSource, StoredReservation } from "../src/contract.ts";
 import { reserving } from "../src/jar/jar.ts";
-import { byValue, claimsUnread, type StartParts, starting } from "../src/start/start.ts";
+import { byValue, claimsUnread, type StartParts, starting, tFits } from "../src/start/start.ts";
 
 const now = 1_800_000_000_000;
 const issuer = "https://issuer.example";
@@ -94,6 +95,8 @@ function harness(
 		rule?: Pick<TargetRule, "target">;
 		/** The claims' reader; one that takes any unless told. */
 		claims?: StartParts["claims"];
+		/** The longest T asked; the route contract's unless told. */
+		fits?: StartParts["fits"];
 	} = {},
 ) {
 	const asked: IssueAsk[] = [];
@@ -143,6 +146,7 @@ function harness(
 			},
 		}),
 		approvals,
+		fits: p.fits ?? tFits,
 		withoutPasskey: p.allows === undefined ? undefined : { allows: async () => p.allows === true },
 		signUp: p.signUp ?? false,
 		claims: p.claims ?? { refusal: () => undefined },
@@ -538,6 +542,28 @@ describe("a login's start (②)", () => {
 		} finally {
 			(client as { section: unknown }).section = allowance;
 		}
+	});
+
+	it("asks T to fit the way back, a sign-up's continue too where it may continue, and refuses a longer one as the request object's", async () => {
+		const fits = (signUp: boolean) => (signUp ? 111 : 222);
+		const h = harness({ fits });
+		await h.body(h.fields(jar(claims())));
+		expect(h.asked[0]?.fits).toBe(222);
+		const both = harness({ allows: true, signUp: true, fits });
+		await both.body(both.fields(jar(claims())));
+		expect(both.asked[0]?.fits).toBe(111);
+		// The route contract's: its finish's statement, and the smaller with its continue's.
+		const finish = requests.loginFinish.fields.find((f) => f.name === "statement")?.max ?? 0;
+		const signUp = requests.continue.fields.find((f) => f.name === "statement")?.max ?? 0;
+		expect([tFits(false), tFits(true)]).toEqual([finish, Math.min(finish, signUp)]);
+		const long = harness({ refuse: () => "long" });
+		expect(await long.body(long.fields(jar(claims())))).toEqual({
+			status: 400,
+			json: {
+				error: "invalid_request_object",
+				error_description: "the request object makes a statement too long",
+			},
+		});
 	});
 
 	it("refuses, before T, a client not allowed the code grant", async () => {

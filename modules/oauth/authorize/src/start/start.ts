@@ -1,6 +1,7 @@
 import { type Approvals, approvals } from "@mod/approvals";
 import { clientAssertion } from "@mod/client-assertion";
 import { type Clients, clients } from "@mod/clients";
+import { requests } from "@mod/front-core-wire";
 import { type HttpRequest, type HttpResponse, jsonAnswer, use } from "@mod/http";
 import { issuer } from "@mod/issuer";
 import type { BuildContext } from "@mod/kernel";
@@ -44,6 +45,8 @@ export interface StartParts {
 		make: () => Promise<StartAnswer | { readonly refused: Refusal }>,
 	) => Promise<StartAnswer | { readonly refused: Refusal }>;
 	readonly approvals: Pick<Approvals, "issue">;
+	/** The longest T, in characters, the way back takes: to the finish, and to a sign-up's continue where it may continue. */
+	readonly fits: (signUp: boolean) => number;
 	readonly withoutPasskey: WithoutPasskey | undefined;
 	/**
 	 * Whether a person with no passkey may sign up (F1): a module offers it (`signUpOffers`). Without,
@@ -91,9 +94,24 @@ const statusOf: Readonly<Record<string, number>> = {
 const issueRefusal = (reason: string): Refusal =>
 	reason === "items"
 		? { error: "invalid_request_object", description: "the request's items are refused" }
-		: reason === "limited"
-			? { error: "rate_limited", description: "too many statements are being issued" }
-			: { error: "temporarily_unavailable", description: `the statement was refused: ${reason}` };
+		: reason === "long"
+			? {
+					error: "invalid_request_object",
+					description: "the request object makes a statement too long",
+				}
+			: reason === "limited"
+				? { error: "rate_limited", description: "too many statements are being issued" }
+				: { error: "temporarily_unavailable", description: `the statement was refused: ${reason}` };
+
+const statementMax = (fields: readonly { readonly name: string; readonly max: number }[]) => {
+	const max = fields.find((f) => f.name === "statement")?.max;
+	if (max === undefined) throw new TypeError("authorize: its route contract names no statement");
+	return max;
+};
+const finishMax = statementMax(requests.loginFinish.fields);
+const continueMax = statementMax(requests.continue.fields);
+/** The longest T its route contract (`front-core-wire`) carries back: to the finish, and to a sign-up's continue. */
+export const tFits = (signUp: boolean) => (signUp ? Math.min(finishMax, continueMax) : finishMax);
 
 const answerOf = (status: number, r: Refusal): HttpResponse =>
 	jsonAnswer(status, { error: r.error, error_description: r.description });
@@ -176,6 +194,7 @@ export function starting(p: StartParts) {
 				screen: { eEnc, eSig },
 				by: sourceKey(request.source.address),
 				...(create && p.signUp ? { continues: ["sign-up"] as const } : {}),
+				fits: p.fits(create && p.signUp),
 			});
 			if (issued.kind === "refused") return { refused: issueRefusal(issued.reason) };
 			return { statement: issued.statement, challenge: issued.challenge, create };
@@ -257,6 +276,7 @@ export async function startRouteIn(
 				token: () => Buffer.from(c.random.bytes(16)).toString("base64url"),
 			}),
 			approvals: await c.get(approvals),
+			fits: tFits,
 			withoutPasskey: p.withoutPasskey,
 			signUp: p.signUp,
 			needs: await codeNeedsIn(c, url),
