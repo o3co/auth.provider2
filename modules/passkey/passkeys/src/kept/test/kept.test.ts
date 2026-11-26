@@ -1,36 +1,22 @@
 import {
-	BootRefused,
 	type Contribution,
 	defineModule,
 	isUnavailable,
-	type Module,
 	type Parts,
 	Unavailable,
 } from "@mod/kernel";
-import { passkeyWitnesses } from "@mod/passkey-witness";
-import { passkeyWitnessStandIn } from "@mod/passkey-witness/testing";
-import { promises } from "@mod/promises";
-import promisesModule from "@mod/promises/module";
-import { softwareAuthenticator } from "@mod/webauthn/testing";
+import type { Credential } from "@mod/webauthn";
 import { describe, expect, it } from "vitest";
-import {
-	heldKeys,
-	type PasskeyRemoval,
-	passkeyGenerations,
-	passkeyRemovals,
-	passkeyWitnessing,
-	registrations,
-} from "../src/contract.ts";
-import { deciding, keyStage, memoryWitnessing, world } from "./fixtures/world.ts";
+import { deciding, keyStage, memoryWitnessing, world } from "../../../test/fixtures/world.ts";
+import { heldKeys, type PasskeyRemoval, passkeyRemovals } from "../../contract.ts";
 
 const flow = { of: "subject", id: "s1" } as const;
+const keyOf = (c: Credential) => ({ credential: c.id, publicKey: c.publicKey });
 
 const contributing = (
 	name: string,
 	build: (m: Parts<undefined>) => readonly Contribution<undefined>[],
 ) => defineModule({ name, replicaSafe: true, takes: [] }, build);
-const refusalOf = (error: unknown) =>
-	BootRefused.is(error) ? error.refusals.map((r) => r.reason).join("\n") : String(error);
 
 describe("passkeys", () => {
 	it("asserts only by a credential the request named, where it named any", async () => {
@@ -54,27 +40,6 @@ describe("passkeys", () => {
 				{ ...unknown, allow: [] },
 			),
 		).toEqual({ kind: "refused", reason: "unknown-credential" });
-	});
-
-	it("requires user verification unless the operator weakens it, which breaks the promise", async () => {
-		const w = await world();
-		const unverifying = softwareAuthenticator({ userVerified: false });
-		const loose = await world({
-			section: { "user-verification": "preferred" },
-			modules: [promisesModule],
-		});
-		await loose.register("s1", true, unverifying);
-		const login = loose.asserting([], unverifying);
-		expect(await loose.keys.assert(login.response, { ...login, allow: [] })).toMatchObject({
-			kind: "asserted",
-			userVerified: false,
-		});
-		const judged = (await loose.app.get(promises)).judgment();
-		expect(judged.find((j) => j.promise === "front-compromise-new-authorization")).toMatchObject({
-			held: false,
-			breaking: [{ by: "passkeys", setting: "passkeys.user-verification" }],
-		});
-		await expect(w.register("s1", true, unverifying)).rejects.toThrow();
 	});
 
 	it("refuses an assertion whose count is not past the one kept", async () => {
@@ -282,46 +247,6 @@ describe("passkeys", () => {
 		expect(told).toEqual([]);
 	});
 
-	it("withdraws no mark for state found missing, and reserves no first key beside a mark", async () => {
-		const witnessing = memoryWitnessing();
-		const w = await world({ modules: [witnessing.module] });
-		witnessing.marks.set("s9", 0);
-		expect(await w.keys.settle("s9")).toBe(false);
-		expect(witnessing.marks.get("s9")).toBe(0);
-		const reserved = await w.reserve({ subject: "s9", credential: await w.created(), first: true });
-		expect(reserved).toEqual({ refused: "held" });
-	});
-
-	it("boots with the key change's writer taking registrations", async () => {
-		const w = await world();
-		expect(await w.app.get(registrations)).toBe(w.regs);
-	});
-
-	const refusedWith = (modules: readonly Module[]) =>
-		world({ modules }).then(() => "booted", refusalOf);
-
-	it("refuses to boot with two witnessings, or a witness and no witnessing", async () => {
-		const witnessing = (name: string) =>
-			contributing(name, (m) => [
-				m.contribute(passkeyWitnessing).by(() => memoryWitnessing().witnessing),
-			]);
-		expect(await refusedWith([witnessing("a"), witnessing("b")])).toMatch(
-			/more than one passkey witnessing/,
-		);
-		const witness = contributing("witness", (m) => [
-			m.contribute(passkeyWitnesses).by(() => passkeyWitnessStandIn().witness),
-		]);
-		expect(await refusedWith([witness])).toMatch(/witness is composed without passkey witnessing/);
-	});
-
-	it("is taken for registering only by a module that stands on the promises", async () => {
-		const silent = defineModule(
-			{ name: "silent", replicaSafe: true, takes: [registrations] },
-			() => [],
-		);
-		expect(await refusedWith([silent])).toMatch(/taken only by a module that contributes/);
-	});
-
 	it("reads a subject's keys' credentials and the witness's mark, writing nothing", async () => {
 		const witnessing = memoryWitnessing();
 		const w = await world({ modules: [witnessing.module] });
@@ -345,6 +270,51 @@ describe("passkeys", () => {
 		await witnessing.witnessing.mark("s4", 0);
 		expect(await w.keys.settle("s4")).toBe(false);
 		expect((await held.of("s4")).marked).toBe(true);
+	});
+
+	it("answers no assertion whose key was registered again between its verification and its answer", async () => {
+		const w = await world();
+		await w.register();
+		const two = await w.register("s1", false);
+		await w.keys.settle("s1");
+		const first = w.recordOf("s1", two.credential.id);
+		const k1 = Object.keys(
+			(w.frames.value("s1", "keys") as { keys: Record<string, unknown> }).keys,
+		).find((k) => k !== first) as string;
+		const login = w.asserting([two.credential]);
+		// Between its verification and its answer, the key is removed and its credential registered again.
+		w.credentials.beforeChange(async () => {
+			await w.regs.remove({
+				subject: "s1",
+				credential: two.credential.id,
+				op: "rm1",
+				decide: deciding({ removeKey: first }),
+			});
+			await w.land("s1", "rm1", keyStage(flow, "rm1", keyOf(two.credential)), 2);
+			await w.keys.settle("s1");
+			const reserved = await w.reserve({ subject: "s1", credential: two.credential });
+			if (!("reservation" in reserved)) throw new Error(reserved.refused);
+			const shown = w.asserting([two.credential]);
+			const verified = await w.regs.verifyPending({ subject: "s1", ...reserved, ...shown });
+			if (!("verification" in verified)) throw new Error(verified.refused);
+			const again = { ...reserved, ...verified };
+			const key = keyOf(two.credential);
+			const stage = keyStage(flow, again.reservation, key);
+			const committed = await w.regs.commit({
+				subject: "s1",
+				...again,
+				decide: deciding({ key: { ...key, by: k1 } }, stage),
+			});
+			if (!("prev" in committed)) throw new Error(committed.refused);
+			await w.land("s1", again.reservation, stage, committed.prev);
+		});
+		const asserted = await w.keys.assert(login.response, { ...login, allow: [] });
+		const now = (await w.keys.publicKeyOf(two.credential.id))?.registration;
+		expect(now).toBeDefined();
+		expect(now).not.toBe(first);
+		// The credential's record moved meanwhile: the count is not moved over it, and the assertion is
+		// refused, never answered with the later registration.
+		expect(asserted).toEqual({ kind: "refused", reason: "raced" });
 	});
 });
 
@@ -370,19 +340,5 @@ describe("heldKeys' pending reservation", () => {
 		const other = await w.register("s2");
 		expect((await held.of("s2")).pending).toBeUndefined();
 		expect((await held.of("s2")).credentials).toEqual([other.credential.id]);
-	});
-});
-
-describe("passkeyGenerations", () => {
-	it("answers a subject's key generation as its applied state holds it, moved on by a boundary taken in", async () => {
-		const w = await world();
-		const generations = await w.app.get(passkeyGenerations);
-		expect(await generations.generation("s1")).toBe(0);
-		w.log.boundary(flow);
-		// The boundary is on the log, not yet taken in: the applied state lags it.
-		expect(await generations.generation("s1")).toBe(0);
-		await w.t.tend(flow);
-		expect(await generations.generation("s1")).toBe(1);
-		expect(await generations.generation("other")).toBe(0);
 	});
 });

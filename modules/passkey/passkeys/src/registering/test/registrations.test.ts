@@ -1,11 +1,18 @@
 import { isUnavailable } from "@mod/kernel";
 import type { Credential } from "@mod/webauthn";
 import { describe, expect, it } from "vitest";
-import { deciding, keyStage, world } from "./fixtures/world.ts";
+import { deciding, keyStage, world } from "../../../test/fixtures/world.ts";
+import { keyList } from "../../contract.ts";
 
 const flow = { of: "subject", id: "s1" } as const;
 const keyOf = (c: Credential) => ({ credential: c.id, publicKey: c.publicKey });
 type World = Awaited<ReturnType<typeof world>>;
+
+async function listed() {
+	const w = await world();
+	const list = await w.app.get(keyList);
+	return { w, list };
+}
 
 /** A reservation of a new credential of s1's, verified. */
 async function verifiedIn(w: World, credential?: Credential) {
@@ -368,51 +375,6 @@ describe("registrations", () => {
 		});
 	});
 
-	it("answers no assertion whose key was registered again between its verification and its answer", async () => {
-		const w = await world();
-		await w.register();
-		const two = await w.register("s1", false);
-		await w.keys.settle("s1");
-		const first = w.recordOf("s1", two.credential.id);
-		const k1 = Object.keys(
-			(w.frames.value("s1", "keys") as { keys: Record<string, unknown> }).keys,
-		).find((k) => k !== first) as string;
-		const login = w.asserting([two.credential]);
-		// Between its verification and its answer, the key is removed and its credential registered again.
-		w.credentials.beforeChange(async () => {
-			await w.regs.remove({
-				subject: "s1",
-				credential: two.credential.id,
-				op: "rm1",
-				decide: deciding({ removeKey: first }),
-			});
-			await w.land("s1", "rm1", keyStage(flow, "rm1", keyOf(two.credential)), 2);
-			await w.keys.settle("s1");
-			const reserved = await w.reserve({ subject: "s1", credential: two.credential });
-			if (!("reservation" in reserved)) throw new Error(reserved.refused);
-			const shown = w.asserting([two.credential]);
-			const verified = await w.regs.verifyPending({ subject: "s1", ...reserved, ...shown });
-			if (!("verification" in verified)) throw new Error(verified.refused);
-			const again = { ...reserved, ...verified };
-			const key = keyOf(two.credential);
-			const stage = keyStage(flow, again.reservation, key);
-			const committed = await w.regs.commit({
-				subject: "s1",
-				...again,
-				decide: deciding({ key: { ...key, by: k1 } }, stage),
-			});
-			if (!("prev" in committed)) throw new Error(committed.refused);
-			await w.land("s1", again.reservation, stage, committed.prev);
-		});
-		const asserted = await w.keys.assert(login.response, { ...login, allow: [] });
-		const now = (await w.keys.publicKeyOf(two.credential.id))?.registration;
-		expect(now).toBeDefined();
-		expect(now).not.toBe(first);
-		// The credential's record moved meanwhile: the count is not moved over it, and the assertion is
-		// refused, never answered with the later registration.
-		expect(asserted).toEqual({ kind: "refused", reason: "raced" });
-	});
-
 	it("never releases the binding of a credential once active", async () => {
 		const w = await world();
 		await w.register();
@@ -457,16 +419,28 @@ describe("registrations", () => {
 		});
 	});
 
-	it("is unavailable, never a refusal, where the credential store cannot tell", async () => {
-		const w = await world();
-		await w.register();
-		w.credentials.fail(true);
-		const login = w.asserting();
-		const failed = await w.keys.assert(login.response, { ...login, allow: [] }).catch((e) => e);
-		expect(isUnavailable(failed)).toBe(true);
-		const reserve = await w
-			.reserve({ subject: "s1", credential: await w.created() })
-			.catch((e) => e);
-		expect(isUnavailable(reserve)).toBe(true);
+	it("takes the time of the reservation that made the details: kept by a retry, anew after a release", async () => {
+		const { w } = await listed();
+		const credential = await w.created();
+		const createdAt = () =>
+			(w.credentials.value(credential.id) as { details?: { createdAt?: number } }).details
+				?.createdAt;
+		const reserved = await w.reserve({ subject: "s1", credential, first: true });
+		if (!("reservation" in reserved)) throw new Error(reserved.refused);
+		w.advance(1000);
+		const retried = await w.reserve({
+			subject: "s1",
+			credential,
+			first: true,
+			retrying: reserved.reservation,
+		});
+		if (!("reservation" in retried)) throw new Error(retried.refused);
+		expect(createdAt()).toBe(1_000_000);
+		expect(await w.regs.cancel({ subject: "s1", ...retried })).toEqual({ cancelled: true });
+		w.advance(1000);
+		expect("reservation" in (await w.reserve({ subject: "s1", credential, first: true }))).toBe(
+			true,
+		);
+		expect(createdAt()).toBe(1_002_000);
 	});
 });

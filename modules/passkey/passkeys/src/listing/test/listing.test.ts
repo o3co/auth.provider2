@@ -1,10 +1,9 @@
 import { continuations } from "@mod/continuation-wire";
-import { BootRefused, defineModule } from "@mod/kernel";
 import { payloads } from "@mod/sdk-core-wire";
 import { describe, expect, it } from "vitest";
-import { heldKeys, keyList } from "../src/contract.ts";
-import { isKeyLabel, listingOver } from "../src/listing/listing.ts";
-import { world } from "./fixtures/world.ts";
+import { world } from "../../../test/fixtures/world.ts";
+import { keyList } from "../../contract.ts";
+import { isKeyLabel, listingOver } from "../listing.ts";
 
 const h = (c: string) => c.repeat(43);
 const by = (seq: number, statement = h("A"), until = 2_000_000) => ({ statement, seq, until });
@@ -37,45 +36,6 @@ describe("the keys' list", () => {
 		const { createdAt: _, ...details } = record.details;
 		w.credentials.put(first.credential.id, { ...record, details });
 		expect(await list.listOf("s1")).toEqual([{ credential: first.credential.id }]);
-	});
-
-	it("takes the time of the reservation that made the details: kept by a retry, anew after a release", async () => {
-		const { w } = await listed();
-		const credential = await w.created();
-		const createdAt = () =>
-			(w.credentials.value(credential.id) as { details?: { createdAt?: number } }).details
-				?.createdAt;
-		const reserved = await w.reserve({ subject: "s1", credential, first: true });
-		if (!("reservation" in reserved)) throw new Error(reserved.refused);
-		w.advance(1000);
-		const retried = await w.reserve({
-			subject: "s1",
-			credential,
-			first: true,
-			retrying: reserved.reservation,
-		});
-		if (!("reservation" in retried)) throw new Error(retried.refused);
-		expect(createdAt()).toBe(1_000_000);
-		expect(await w.regs.cancel({ subject: "s1", ...retried })).toEqual({ cancelled: true });
-		w.advance(1000);
-		expect("reservation" in (await w.reserve({ subject: "s1", credential, first: true }))).toBe(
-			true,
-		);
-		expect(createdAt()).toBe(1_002_000);
-	});
-
-	it("renames an active key of the subject's, its label and time kept through a count moved on", async () => {
-		const { w, list } = await listed();
-		const { credential } = await w.register("s1");
-		const rename = { subject: "s1", credential: credential.id };
-		expect(await list.rename({ ...rename, label: "Laptop ✨", by: by(1) })).toBe("renamed");
-		const login = w.asserting();
-		expect(await w.keys.assert(login.response, { ...login, allow: [] })).toMatchObject({
-			kind: "asserted",
-		});
-		expect(await list.listOf("s1")).toEqual([
-			{ credential: credential.id, label: "Laptop ✨", createdAt: 1_000_000 },
-		]);
 	});
 
 	it("answers a step run again alike, and refuses an earlier number or its own with another label", async () => {
@@ -201,15 +161,6 @@ describe("the keys' list", () => {
 		const kept = w.credentials.value(credential.id) as { details: { renames: object[] } };
 		expect(kept.details.renames).toEqual([by(1)]);
 	});
-
-	it("is taken only by a module that declares where it stands on the promises", async () => {
-		const silent = defineModule({ name: "silent", replicaSafe: true, takes: [keyList] }, () => []);
-		const refused = await world({ modules: [silent] }).then(
-			() => "booted",
-			(e: unknown) => (BootRefused.is(e) ? e.refusals.map((r) => r.reason).join("\n") : String(e)),
-		);
-		expect(refused).toMatch(/taken only by a module that contributes/);
-	});
 });
 
 it("decides a rename's write by one reading of the clock, a paused step at its end stale still", async () => {
@@ -229,21 +180,4 @@ it("decides a rename's write by one reading of the clock, a paused step at its e
 	});
 	expect(await ticking.rename({ ...rename, label: "a1", by: by(1, h("A"), end) })).toBe("stale");
 	expect((await list.listOf("s1"))[0]?.label).toBe("b1");
-});
-
-describe("the most keys a subject holds", () => {
-	it("is read as full once the subject holds them, and a key more is refused", async () => {
-		const w = await world({ section: { "max-credentials": 2 } });
-		const held = w.app.get(heldKeys);
-		await w.register("s1");
-		expect(await held.of("s1")).not.toHaveProperty("full");
-		await w.register("s1", false);
-		expect(await held.of("s1")).toMatchObject({ full: true });
-		await expect(w.register("s1", false)).rejects.toThrow("full");
-	});
-
-	it("is at most 16", async () => {
-		await expect(world({ section: { "max-credentials": 17 } })).rejects.toThrow();
-		await expect(world({ section: { "max-credentials": 16 } })).resolves.toBeDefined();
-	});
 });

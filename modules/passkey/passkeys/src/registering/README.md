@@ -21,3 +21,6 @@ Internal module of `passkeys`: registering and removing keys, over the reservati
 
 ## Depends on
 - `webauthn` (the credential's form), `transparency`; the package's contract, and the internal modules `records` and `kept`.
+
+## Vocabulary
+- version: a reservation's op id; a retry makes a new one.

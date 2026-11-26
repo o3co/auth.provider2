@@ -40,4 +40,4 @@
 - `kernel`, `promises` (the stances its takers declare), `transparency` and `transparency-wire` (the frame, the kinds, the owners, flows), `authority-rules` (the state's schema, taken by internal module `records`), `webauthn` (the ceremonies, the credential's form), `passkey-witness` (whether a witness is composed).
 
 ## Vocabulary
-- key: a credential the subject's flow state holds active. reservation: a key's registration in progress, one per subject. version: a reservation's op id; a retry makes a new one. binding: a credential record's subject.
+- key: a credential the subject's flow state holds active. reservation: a key's registration in progress, one per subject. binding: a credential record's subject.
