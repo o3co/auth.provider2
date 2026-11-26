@@ -1,4 +1,4 @@
-import type { Section } from "@mod/clients";
+import type { Client, Section } from "@mod/clients";
 import { type Algorithm, boundAlgorithm, type KeySource } from "@mod/external-jwt";
 import type { BuildContext } from "@mod/kernel";
 import { publicJwk, verifiesUnder } from "@mod/keys";
@@ -57,6 +57,16 @@ export function keysOf(section: ClientKeys): KeySource {
 	return uri === undefined
 		? { inline: section.keys }
 		: { jwks: { url: uri, hosts: [new URL(uri).hostname] } };
+}
+
+/**
+ * The client's keys as an assertion or a JWT of its is checked against: a source's client takes its
+ * written keys alone, as a source never names a key set to fetch (R8, §3.11): one naming a `jwks-uri`
+ * has no key, and nothing is fetched for it.
+ */
+export function keysFor(client: Pick<Client, "registered" | "section">): KeySource {
+	const section = client.section(clientKeys);
+	return !client.registered && section["jwks-uri"] !== undefined ? { inline: [] } : keysOf(section);
 }
 
 /** The places (`keys.<n>`) of the written keys that none of the algorithms taken reads. */

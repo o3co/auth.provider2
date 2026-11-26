@@ -12,7 +12,7 @@ import type {
 	RecordRefusal,
 	Section,
 } from "../contract.ts";
-import { none, sends } from "../methods/methods.ts";
+import { none, secretMethods, sends } from "../methods/methods.ts";
 
 /**
  * The parameters a client authenticates with (RFC 6749 §2.3.1, RFC 7521 §4.2), sent at all,
@@ -169,6 +169,8 @@ export function registry(
 		}
 		const { version, ...data } = parsed.data;
 		if (!methods.some((m) => m.name === data.method)) return { refusals: [{ path: "method" }] };
+		// A source never names a shared secret (§0.2): a secret is the operator's registered choice alone.
+		if (secretMethods.includes(data.method)) return { refusals: [{ path: "method" }] };
 		const read = await readRecord(
 			{ ...data, ...(version === undefined ? {} : { version }) },
 			known,

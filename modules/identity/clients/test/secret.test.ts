@@ -124,17 +124,29 @@ it("refuses boot on a registered client whose method needs a secret and that hol
 	expect(JSON.stringify(refusals)).not.toMatch(/bare|empty|blank/);
 });
 
-it("refuses a source's client whose secret is no hash, or that holds none, matching it by no form", async () => {
+it("refuses a source's client of a secret method, its hash reading or not, or none held: a source never names a shared secret (§0.2)", async () => {
 	const answers: Record<string, ClientRecord> = {
+		shared: confidential("shared", "client_secret_post", testScryptHash("s3cret")) as ClientRecord,
+		basic: confidential("basic", "client_secret_basic", testScryptHash("s3cret")) as ClientRecord,
 		remote: confidential("remote", "client_secret_post", "plain") as ClientRecord,
 		bare: { id: "bare", kind: "confidential", method: "client_secret_post", sections: {} },
 	};
 	const source = defineModule({ name: "source", replicaSafe: true, takes: [] }, (m) => [
-		m.contribute(clientSources).by(() => ({ find: async (id: string) => answers[id] })),
+		m.contribute(clientSources).by(() => ({
+			find: async (id: string) => answers[id],
+			listed: async () => Object.values(answers),
+		})),
 	]);
 	const c = await boot([], [source]);
-	expect(await c.authenticate(post("remote", "plain"))).toMatchObject(refused("bad_credentials"));
-	expect(await c.authenticate(post("bare", "x"))).toMatchObject(refused("bad_credentials"));
+	expect(await c.listed()).toEqual([]);
+	expect(await c.authenticate(post("shared", "s3cret"))).toMatchObject(refused("invalid_record"));
+	expect(await c.authenticate(basicRequest("basic", "s3cret"))).toMatchObject(
+		refused("invalid_record"),
+	);
+	expect(await c.authenticate(post("remote", "plain"))).toMatchObject(refused("invalid_record"));
+	expect(await c.authenticate(post("bare", "x"))).toMatchObject(refused("invalid_record"));
+	expect(await c.find("shared")).toBeUndefined();
+	expect(await c.checkRecord(answers.shared as ClientRecord)).toEqual([{ path: "method" }]);
 });
 
 it("computes one scrypt per work in use for a known client, an unknown client, an invalid record and another method's client alike, another client_id beside included", async () => {

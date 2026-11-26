@@ -2,7 +2,7 @@ import type { Algorithm, ExternalJwt } from "@mod/external-jwt";
 import { Unavailable } from "@mod/kernel";
 import { said } from "./check.ts";
 import type { ClientAssertion } from "./contract.ts";
-import { clientKeys, keysOf } from "./keys/keys.ts";
+import { keysFor } from "./keys/keys.ts";
 import { verifiedOf } from "./proof.ts";
 
 /** `verifiedOf`, and `verifySignedBy` over the client's keys, under the operator's section. */
@@ -16,7 +16,7 @@ export function signedBy(p: {
 		verifiedOf,
 		verifySignedBy: async (client, jwt, typ) => {
 			const { algorithms, skewMs, maxLifetimeMs } = p;
-			const verifier = p.jwt.verifierOf(keysOf(client.section(clientKeys)), {
+			const verifier = p.jwt.verifierOf(keysFor(client), {
 				algorithms,
 				skewMs,
 				maxLifetimeMs,

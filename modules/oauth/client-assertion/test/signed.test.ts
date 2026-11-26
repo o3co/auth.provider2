@@ -43,7 +43,9 @@ async function boot() {
 			find: async (id) =>
 				id === "listed"
 					? { ...keyed(id, clientKeysFor([jwk(ec.publicKey, { kid: "ec" })])), version: 9 }
-					: undefined,
+					: id === "fetched"
+						? keyed(id, { "client-assertion": { "jwks-uri": "https://keys.example/jwks" } })
+						: undefined,
 		})),
 	]);
 	const app = await assemble({
@@ -87,6 +89,16 @@ const signed = (key: KeyObject, typ: string, claims: object = {}, alg = "ES256")
 		.sign(key);
 
 describe("a JWT a client signed", () => {
+	it("is refused for a source's client naming a jwks-uri, its keys never fetched: a source's keys are written in alone (R8, §3.11)", async () => {
+		const { checks, client } = await boot();
+		const fetched = await client("fetched");
+		const jwt = await signed(ec.privateKey, "jwt");
+		expect(await checks.verifySignedBy(fetched, jwt, "jwt")).toEqual({
+			kind: "refused",
+			reason: "no key fits",
+		});
+	});
+
 	it("is the client's, under the `typ` asked, with its claims", async () => {
 		const { checks, client } = await boot();
 		const app = await client("app");

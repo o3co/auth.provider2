@@ -30,9 +30,10 @@ export interface ClientAssertion {
 	 */
 	verifiedOf(proof: unknown, client: Client): VerifiedKey | undefined;
 	/**
-	 * A JWT signed by one of the client's keys, written or at its jwks-uri, under the operator's
-	 * algorithms, clock allowance and longest lifetime, its header's `typ` the one asked: its claims,
-	 * the rest the caller's. Throws Unavailable while its key set cannot be had.
+	 * A JWT signed by one of the client's keys, written or, a registered client's, at its jwks-uri
+	 * (a source's client naming one has no key), under the operator's algorithms, clock allowance and
+	 * longest lifetime, its header's `typ` the one asked: its claims, the rest the caller's. Throws
+	 * Unavailable while a registered client's key set cannot be had.
 	 */
 	verifySignedBy(client: Client, jwt: string, typ: string): Promise<SignedBy>;
 }

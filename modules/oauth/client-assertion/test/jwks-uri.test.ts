@@ -1,7 +1,7 @@
 import { generateKeyPairSync, type KeyObject } from "node:crypto";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
-import { clients } from "@mod/clients";
+import { clientSources, clients } from "@mod/clients";
 import clientsModule from "@mod/clients/module";
 import { clientsConfig } from "@mod/clients/testing";
 import externalJwtModule from "@mod/external-jwt/module";
@@ -50,8 +50,19 @@ beforeAll(async () => {
 afterAll(() => new Promise<void>((done) => server.close(() => done())));
 const jwksUri = () => `http://127.0.0.1:${port}/jwks`;
 
-/** Clients over outbound reaching the key set server alone; `section` is the client's own. */
-async function boot(section: Record<string, unknown>, reach = true) {
+/** Clients over outbound reaching the key set server alone; `section` is the client's own, registered or, `fromSource`, a source's. */
+async function boot(section: Record<string, unknown>, reach = true, fromSource = false) {
+	const record = {
+		id: "app",
+		kind: "confidential",
+		method: "private_key_jwt",
+		sections: { "client-assertion": section },
+	} as const;
+	const source = defineModule({ name: "source", replicaSafe: true, takes: [] }, (m) => [
+		m
+			.contribute(clientSources)
+			.by(() => ({ find: async (id: string) => (id === "app" ? record : undefined) })),
+	]);
 	const stand = memoryRecords<true>(() => Date.now(), { shards: 1, perShard: 1 });
 	const location = defineModule({ name: "token-endpoint", replicaSafe: true, takes: [] }, (m) => [
 		m.provide(tokenEndpointLocation).by(() => ({ url: tokenUrl })),
@@ -74,6 +85,7 @@ async function boot(section: Record<string, unknown>, reach = true) {
 			assertionModule,
 			spent,
 			location,
+			...(fromSource ? [source] : []),
 		],
 		config: {
 			...kernelConfig(),
@@ -81,14 +93,7 @@ async function boot(section: Record<string, unknown>, reach = true) {
 			...httpConfig({ "public-origin": issuer }),
 			...issuerConfig({ url: issuer }),
 			...clientAssertionConfig(),
-			...clientsConfig([
-				{
-					id: "app",
-					kind: "confidential",
-					method: "private_key_jwt",
-					sections: { "client-assertion": section },
-				},
-			]),
+			...clientsConfig(fromSource ? [] : [record]),
 		},
 		runtime: quietRuntime(),
 	});
@@ -123,6 +128,13 @@ it("authenticates a client by keys it publishes at its jwks-uri, fetching the se
 		expect(await authenticate(c)).toMatchObject({ kind: "authenticated", client: { id: "app" } });
 	}
 	expect(fetched - before).toBe(1);
+});
+
+it("refuses a source's client naming a jwks-uri, fetching nothing: a source's keys are written in alone (R8, §3.11)", async () => {
+	const c = await boot({ "jwks-uri": jwksUri() }, true, true);
+	const before = fetched;
+	expect(await authenticate(c)).toMatchObject({ kind: "refused" });
+	expect(fetched - before).toBe(0);
 });
 
 it("answers the key of the set its assertion was verified with, naming the client", async () => {

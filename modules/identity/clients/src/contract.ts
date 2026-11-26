@@ -128,9 +128,9 @@ export type Authentication =
 export interface Clients {
 	find(id: string): Promise<Client | undefined>;
 	/**
-	 * Checks a record as `find` holds a source's: the rule for a registered one, a known method and
-	 * each section's schema. Answers where each part fails, nothing when it fits; rejects when a
-	 * schema throws.
+	 * Checks a record as `find` holds a source's: the rule for a registered one, a known method that
+	 * is no secret method (a source never names a shared secret), and each section's schema. Answers
+	 * where each part fails, nothing when it fits; rejects when a schema throws.
 	 */
 	checkRecord(record: ClientRecord): Promise<readonly RecordRefusal[] | undefined>;
 	authenticate(request: HttpRequest): Promise<Authentication>;
