@@ -18,6 +18,7 @@ import {
 	filledItems,
 	type StartParts,
 	starting,
+	takenOf,
 	tFits,
 } from "../src/start/start.ts";
 
@@ -370,6 +371,34 @@ describe("a login's start (②)", () => {
 		expect("request_uri" in (h.asked.at(-1)?.items ?? {})).toBe(false);
 		// It is declared among the items authorize fills, or approvals would refuse every T naming it.
 		expect(filledItems.names).toContain("request_uri");
+	});
+
+	it("takes only the source that says it is the only one, so a start by value is refused where pushed requests alone are taken", async () => {
+		const only: RequestSource = {
+			name: "pushed",
+			only: true,
+			jarOf: async (fields) =>
+				fields.requestUri === undefined ? undefined : { jar: jar(claims({ jti: "o1" })) },
+		};
+		expect(takenOf([byValue, only])).toContain(only);
+		expect(takenOf([byValue, only])).not.toContain(byValue);
+		expect(takenOf([byValue, { ...only, only: false }])).toEqual([
+			byValue,
+			{ ...only, only: false },
+		]);
+		const h = harness({ sources: takenOf([byValue, only]) });
+		expect(await h.body(h.fields(jar(claims())))).toMatchObject({
+			status: 400,
+			json: { error: "invalid_request", error_description: "a request by value is not taken" },
+		});
+		// No T was asked for the JAR refused.
+		expect(h.asked).toHaveLength(0);
+		const { request: _none, ...keys } = h.fields(jar(claims()));
+		expect(
+			await h.body({ ...keys, requestUri: "urn:ietf:params:oauth:request_uri:o1" }),
+		).toMatchObject({
+			status: 200,
+		});
 	});
 
 	it("answers prompt=none with login_required, takes the words every tap meets, and refuses others", async () => {

@@ -4,7 +4,7 @@ Internal module of `attack-harness`: the harness's Core, `nextgen-core` as creat
 
 ## Responsibilities
 - Holds the harness's Core: `nextgen-core`'s selection (create-app's `selectionOf`), with `sign-up` and `client-credentials` beside it, which the harness attacks, and in-process places for the axes reaching an outside system (keys, audit, store, mail, clients).
-- Holds each module's configuration from its own `./testing`, the spec a harness varies (its clients, seeds, outbound, released claims, its answer to a violation, a ring of two generations from a key the test keeps, the reset's installation and signers), and its boot within its limit.
+- Holds each module's configuration from its own `./testing`, the spec a harness varies (its clients, seeds, outbound, released claims, whether requests are taken pushed alone, off unless asked, its answer to a violation, a ring of two generations from a key the test keeps, the reset's installation and signers), and its boot within its limit.
 - Starts it in a process of its own, reached over the wire alone, with what the operator publishes (the key sets, the discovery document), its mail and its log lines; or in this process, on the runtime parts given (a clock, a log), the same steps after its start: its seeds imported, its key sets and discovery document published.
 - Registers the clients a step needs: a relying party, a machine client of a signed registry, one naming a `jwks-uri`.
 - Holds the wire's certificates for the process: one set, removed when the last hold is let go.

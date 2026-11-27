@@ -4,7 +4,7 @@ Internal module of `attack-harness`: the world a step acts in, on a Core started
 
 ## Responsibilities
 - Makes the relying parties a Core is started with, and the records an operator registers them by.
-- On a Core started: its Fronts, each on its own connection and declaring a source of its own, made by the function a harness gives; the screen as the page pins the Core; people signed up (F1) through an honest Front of its own; an authorization started through a Front; a first-key mail's token, the first to an address but those already had.
+- On a Core started: its Fronts, each on its own connection and declaring a source of its own, made by the function a harness gives; the screen as the page pins the Core; people signed up (F1) through an honest Front of its own; an authorization started through a Front, each start pushed first where the Core requires pushed requests (its metadata); a first-key mail's token, the first to an address but those already had.
 
 ## Not here
 - Starting a Core, and what only a Core of one start has (its process's log, its published keys): their starts', the package's internal module `pattern` and the in-process start. The wire's certificates: `pattern`'s hold.

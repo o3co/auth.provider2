@@ -2818,6 +2818,9 @@ importers:
       '@mod/mail-smtp':
         specifier: workspace:*
         version: link:../../smtp/mail-smtp
+      '@mod/par':
+        specifier: workspace:*
+        version: link:../../oauth/par
       '@mod/promises':
         specifier: workspace:*
         version: link:../../foundation/promises

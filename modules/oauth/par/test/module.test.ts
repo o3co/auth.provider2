@@ -10,6 +10,7 @@ import { senderBinding } from "@mod/sender-binding";
 import { expect, it } from "vitest";
 import { pushedRequests } from "../src/contract.ts";
 import par from "../src/module.ts";
+import { parConfig } from "../src/testing.ts";
 
 const seen = contract<{
 	readonly routes: readonly Route[];
@@ -35,18 +36,30 @@ it("serves the wire's par path under a per-source policy, publishes it, and give
 			})),
 		],
 	);
-	const app = await assemble({
-		modules: [fakes, par],
-		config: kernelConfig(),
-		runtime: quietRuntime(),
-	});
-	const { routes: served, metadata: items, sources } = await app.get(seen);
+	const booted = async (section: Record<string, unknown> = {}) =>
+		(
+			await assemble({
+				modules: [fakes, par],
+				config: { ...kernelConfig(), ...parConfig(section) },
+				runtime: quietRuntime(),
+			})
+		).get(seen);
+	const { routes: served, metadata: items, sources } = await booted();
 	expect(served.map((r) => `${r.method} ${r.path}`)).toEqual([
 		`POST ${overHttp.operations.par.path}`,
 	]);
 	expect(served[0]?.uses).toHaveLength(1);
+	// Pushed alone by default (FAPI 2.0): the source is the only one taken, and the metadata says so.
 	expect(items).toEqual([
+		{ name: "require_pushed_authorization_requests", value: true },
 		{ name: "pushed_authorization_request_endpoint", value: "https://front.example/oauth/par" },
 	]);
-	expect(sources.map((s) => s.name)).toEqual(["request_uri"]);
+	expect(sources.map((s) => [s.name, s.only])).toEqual([["request_uri", true]]);
+	// Turned off, a JAR by value is taken too, and the metadata says so.
+	const byValueToo = await booted({ "pushed-only": false });
+	expect(byValueToo.metadata).toContainEqual({
+		name: "require_pushed_authorization_requests",
+		value: false,
+	});
+	expect(byValueToo.sources.map((s) => s.only)).toEqual([false]);
 });

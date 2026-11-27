@@ -9,10 +9,10 @@
 
 ## Offers
 - `POST /oauth/par` (`front-core-wire`'s `par`: a form of the client's authentication and `request`, a `DPoP` header where sent) → `201` `{ request_uri, expires_in }`; or an OAuth error: `invalid_client` (`401`), `invalid_request`, `invalid_request_object`, `invalid_dpop_proof` and a binding kind's own words with its headers (`use_dpop_nonce` with `DPoP-Nonce`) (`400`), `rate_limited` (`429`). Pushes are counted per source (`requests` in `window`).
-- A contribution to `authorize`'s `requestSources` (`request_uri`: a start's `requestUri` → the JAR pushed under it, for the client that pushed it; `invalid_request_uri` for any other).
-- A contribution to `issuer`'s metadata: `pushed_authorization_request_endpoint`.
+- A contribution to `authorize`'s `requestSources` (`request_uri`: a start's `requestUri` → the JAR pushed under it, for the client that pushed it; `invalid_request_uri` for any other), the `only` one taken where `pushed-only` is on, so no JAR is taken by value.
+- A contribution to `issuer`'s metadata: `pushed_authorization_request_endpoint`, and `require_pushed_authorization_requests` (`pushed-only`).
 - `pushedRequests`, the store interface (create unless held, read), and `pushedRequestsNeeds`.
-- Operator section: `jar-max-lifetime` (default 90 seconds; at most `authorize`'s, or a JAR pushed is refused where its login starts), `requests` and `window` (default 60 a minute per source), `clock-skew` (default 30 seconds).
+- Operator section: `pushed-only` (default `true`, FAPI 2.0's: a request pushed alone; `false` takes a JAR by value too, outside a FAPI configuration), `jar-max-lifetime` (default 90 seconds; at most `authorize`'s, or a JAR pushed is refused where its login starts), `requests` and `window` (default 60 a minute per source), `clock-skew` (default 30 seconds).
 - `./testing`: `parConfig` (`ParSettings`), and `pushedRequestsContract`, the store interface's contract test.
 
 ## Invariants

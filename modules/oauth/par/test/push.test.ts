@@ -271,7 +271,7 @@ describe("the login's start by request_uri", () => {
 		const h = harness();
 		const request = jar(claims());
 		await h.send({ request });
-		const source = pushedSource(h.store.pushed);
+		const source = pushedSource(h.store.pushed, true);
 		const uri = `${requestUriPrefix}t1`;
 		expect(await source.jarOf({ requestUri: uri }, client)).toEqual({ jar: request });
 		expect(await source.jarOf({ requestUri: uri }, { ...client, id: "c2" })).toMatchObject({

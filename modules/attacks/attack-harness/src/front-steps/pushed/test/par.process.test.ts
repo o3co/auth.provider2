@@ -1,10 +1,10 @@
 import { createHash } from "node:crypto";
 import type { Message } from "@mod/front-core-codec";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { readyWithinMs } from "../../pattern/test/launch.ts";
-import { claimsOf, type Started as Session } from "../../roles/test/rp.ts";
-import { stopped } from "../../roles/test/screen.ts";
-import { type World, world } from "./world.ts";
+import { readyWithinMs } from "../../../pattern/test/launch.ts";
+import { claimsOf, type Started as Session } from "../../../roles/test/rp.ts";
+import { stopped } from "../../../roles/test/screen.ts";
+import { type World, world } from "../../test/world.ts";
 
 // A PAR login through the real SDK (§3.3): the RP pushes its JAR, the screen is reached by client_id
 // and request_uri alone and holds no JAR, and reads T by readPushed. Beside it, the compromised Front's

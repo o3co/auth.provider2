@@ -21,7 +21,15 @@ export default defineModule(
 		takes: [clients, clientAssertion, senderBinding, issuer, pushedRequests],
 	},
 	(m) => [
-		m.contribute(requestSources).by(async (c) => pushedSource(await c.get(pushedRequests))),
+		m
+			.contribute(requestSources)
+			.by(async (c: Context) =>
+				pushedSource(await c.get(pushedRequests), c.section["pushed-only"]),
+			),
+		m.contribute(metadata).by((c: Context) => ({
+			name: "require_pushed_authorization_requests",
+			value: c.section["pushed-only"],
+		})),
 		m.contribute(metadata).by(async (c) => ({
 			name: "pushed_authorization_request_endpoint",
 			value: new URL(parPath, (await c.get(issuer)).endpointOrigin).href,

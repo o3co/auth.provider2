@@ -94,8 +94,9 @@ export function pushing(p: PushParts) {
  * client that pushed it alone. Many pushes of one JAR meet at the JAR's one start, which `authorize`
  * reserves by client and `jti`.
  */
-export const pushedSource = (pushed: PushedRequests): RequestSource => ({
+export const pushedSource = (pushed: PushedRequests, only: boolean): RequestSource => ({
 	name: "request_uri",
+	only,
 	jarOf: async (fields, client) => {
 		const uri = fields.requestUri;
 		if (uri === undefined) return undefined;

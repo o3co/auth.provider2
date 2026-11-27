@@ -1,5 +1,5 @@
 import { generateKeyPairSync } from "node:crypto";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { clientsConfig, confidentialClient } from "@mod/clients/testing";
@@ -94,6 +94,23 @@ describe("nextgen-core", () => {
 			const run = await running(app.dir, "src/main.ts", local, { ...env, ...awsEnv });
 			try {
 				await bootsAndStops(run, port);
+				// As generated, a login's request is taken pushed alone: the document it publishes says so.
+				const published = join(app.dir, "published");
+				const publish = await running(
+					app.dir,
+					"src/discovery-publish.ts",
+					local,
+					{ ...env, ...awsEnv },
+					[published],
+				);
+				expect(await publish.exited, publish.out()).toBe(0);
+				const document = JSON.parse(
+					await readFile(join(published, ".well-known", "openid-configuration"), "utf8"),
+				);
+				expect(document).toMatchObject({
+					require_pushed_authorization_requests: true,
+					request_parameter_supported: false,
+				});
 			} finally {
 				await run.stop();
 				await app.remove();
@@ -262,6 +279,11 @@ describe("nextgen-dev", () => {
 						readonly jwks_uri: string;
 					};
 					expect(document.issuer).toBe(issuer);
+					// The operator's own configuration turned pushed-only off: the document says so.
+					expect(document).toMatchObject({
+						require_pushed_authorization_requests: false,
+						request_parameter_supported: true,
+					});
 					const rfc8414 = await fetch(
 						`http://127.0.0.1:${issuerPort}/.well-known/oauth-authorization-server/tenant`,
 					);

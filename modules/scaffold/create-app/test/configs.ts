@@ -13,6 +13,7 @@ import { httpConfig } from "@mod/http/testing";
 import { issuerConfig } from "@mod/issuer/testing";
 import { kernelConfig } from "@mod/kernel";
 import { keysConfig } from "@mod/keys/testing";
+import { parConfig } from "@mod/par/testing";
 import { tokensConfig } from "@mod/tokens/testing";
 import { webauthnConfig } from "@mod/webauthn/testing";
 
@@ -116,6 +117,8 @@ export const devConfig = (fakes: {
 		from: "idp@example.invalid",
 	},
 	...auditConfig({ receivers: ["stdout"] }),
+	// A development screen may send by value: pushed requests alone is the default, a FAPI one.
+	...parConfig({ "pushed-only": false }),
 	...fakes.registry,
 	...features(fakes.issuer),
 	...httpConfig({

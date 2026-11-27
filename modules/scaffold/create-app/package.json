@@ -32,6 +32,7 @@
 		"@mod/keys": "workspace:*",
 		"@mod/keys-kms": "workspace:*",
 		"@mod/mail-smtp": "workspace:*",
+		"@mod/par": "workspace:*",
 		"@mod/promises": "workspace:*",
 		"@mod/redis": "workspace:*",
 		"@mod/references": "workspace:*",

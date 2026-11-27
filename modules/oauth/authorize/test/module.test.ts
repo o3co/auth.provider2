@@ -22,7 +22,13 @@ import { senderBinding } from "@mod/sender-binding";
 import { sessions } from "@mod/session";
 import { accessTokenIssuance } from "@mod/tokens";
 import { describe, expect, it } from "vitest";
-import { jarReservations, requestClaims, signUpOffers, withoutPasskey } from "../src/contract.ts";
+import {
+	jarReservations,
+	requestClaims,
+	requestSources,
+	signUpOffers,
+	withoutPasskey,
+} from "../src/contract.ts";
 import authorize from "../src/module.ts";
 import { authorizeConfig } from "../src/testing.ts";
 
@@ -135,6 +141,32 @@ describe("authorize, composed", () => {
 				BootRefused.is(error) ? error.refusals.map((r) => r.reason) : [String(error)],
 		);
 		expect(refused).toEqual(["more than one rule reads the audience asked (resource)"]);
+	});
+
+	it("takes the JAR by value, and says so, unless a request source is the only one taken; two such refuse boot", async () => {
+		const parameter = async (more: readonly Module[]) =>
+			(await (await boot(more)).get(seen)).metadata.find(
+				(i) => i.name === "request_parameter_supported",
+			)?.value;
+		const source = (name: string, only?: boolean) =>
+			defineModule({ name, replicaSafe: true, takes: [] }, (m) => [
+				m.contribute(requestSources).by(() => ({
+					name,
+					...(only === undefined ? {} : { only }),
+					jarOf: async () => undefined,
+				})),
+			]);
+		expect(await parameter([])).toBe(true);
+		expect(await parameter([source("pushed", false)])).toBe(true);
+		expect(await parameter([source("pushed", true)])).toBe(false);
+		const refused = await boot([source("one", true), source("two", true)]).then(
+			() => [],
+			(error: unknown) =>
+				BootRefused.is(error) ? error.refusals.map((r) => r.reason) : [String(error)],
+		);
+		expect(refused).toContainEqual(
+			expect.stringMatching(/more than one request source says it is the only one/),
+		);
 	});
 
 	it("refuses boot with two answers to a person with no passkey, or two sign-ups offered", async () => {

@@ -227,6 +227,7 @@ export async function inProcess<F extends Front>(
 				certificates: held.certificates,
 				ring: here.ring,
 				sealingKey: here.sealingKey,
+				metadata: here.metadata,
 				mailWhere: waitingOver(mail, "mail"),
 				stop: () => here.app.stop(2000),
 			},

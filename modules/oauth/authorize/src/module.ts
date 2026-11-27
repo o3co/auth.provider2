@@ -16,8 +16,10 @@ import {
 	byValue,
 	filledItems,
 	issuerMetadata,
+	onlyOf,
 	startRouteIn,
 	startTakes,
+	takenOf,
 	unfilled,
 } from "./start/start.ts";
 
@@ -62,7 +64,11 @@ export default defineModule(
 		m.contribute(metadata).by(() => issuerMetadata.responseModes),
 		m.contribute(metadata).by(() => issuerMetadata.challengeMethods),
 		m.contribute(metadata).by(() => issuerMetadata.signedRequest),
-		m.contribute(metadata).by(() => issuerMetadata.requestParameter),
+		// The JAR by value is supported where the start takes it.
+		m.contribute(metadata).by(async (c: Context) => ({
+			...issuerMetadata.requestParameter,
+			value: takenOf(await c.collect(requestSources)).includes(byValue),
+		})),
 		m.contribute(metadata).by(() => issuerMetadata.issParameter),
 		m.contribute(routes).by(async (c: Context) => {
 			const passkeyless = await c.collect(withoutPasskey);
@@ -71,6 +77,8 @@ export default defineModule(
 					"authorize",
 					"more than one answer to a person with no passkey is contributed",
 				);
+			if (onlyOf(await c.collect(requestSources)).length > 1)
+				return c.refuse("authorize", "more than one request source says it is the only one");
 			if ((await c.collect(requestClaims)).length > 1)
 				return c.refuse("authorize", "more than one module reads a request's claims");
 			const offers = await c.collect(signUpOffers);

@@ -2,6 +2,12 @@ import { setting } from "@mod/kernel";
 import { z } from "zod";
 
 export const section = z.strictObject({
+	"pushed-only": z
+		.boolean()
+		.prefault(true)
+		.describe(
+			"Whether a login's request is taken pushed alone (FAPI 2.0), never by value: `false` takes a JAR by value too, outside a FAPI configuration.",
+		),
 	"jar-max-lifetime": setting
 		.duration("s")
 		.pipe(z.number().int().min(10).max(600))

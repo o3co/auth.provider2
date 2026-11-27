@@ -14,6 +14,8 @@ export type StartFields = Readonly<Record<string, string>>;
  */
 export interface RequestSource {
 	readonly name: string;
+	/** Whether this source is the only one taken: then no other is, the JAR by value among them. */
+	readonly only?: boolean;
 	jarOf(
 		fields: StartFields,
 		client: Client,

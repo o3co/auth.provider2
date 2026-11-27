@@ -97,6 +97,11 @@ export interface PatternSpec {
 	readonly released?: readonly string[];
 	/** What the wire does to a Front instance that sent a violation (core-wire's `on-violation`), `notify` unless said. */
 	readonly onViolation?: "notify" | "cut";
+	/**
+	 * Whether the Core takes a login's request pushed alone (par's `pushed-only`): off unless a step asks,
+	 * the harness's steps sending JARs by value as well as pushed.
+	 */
+	readonly pushedOnly?: boolean;
 	/** The operator's `outbound` section (outbound's words), where a step's Core reaches a server of the harness. */
 	readonly outbound?: Readonly<Record<string, unknown>>;
 	/**
@@ -238,6 +243,7 @@ async function configOf(spec: PatternSpec, kernelConfig: any) {
 	const { auditConfig } = await testing("@mod/audit");
 	const { coreWireConfig } = await testing("@mod/core-wire");
 	const { httpConfig } = await testing("@mod/http");
+	const { parConfig } = await testing("@mod/par");
 	const { promiseNames } = await entry("@mod/promises");
 	return {
 		...kernelConfig(),
@@ -270,6 +276,7 @@ async function configOf(spec: PatternSpec, kernelConfig: any) {
 			],
 		},
 		...(spec.outbound === undefined ? {} : { outbound: spec.outbound }),
+		...parConfig({ "pushed-only": spec.pushedOnly ?? false }),
 		"users-local": { "password-work": "scrypt:10,8,1,32,16" },
 		"transparency-local": {
 			origin: spec.screen,

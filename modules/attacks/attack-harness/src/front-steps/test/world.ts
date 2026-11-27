@@ -22,7 +22,7 @@ export async function world(
 	clientIds: readonly string[],
 	more: Pick<
 		PatternSpec,
-		"signedClients" | "change" | "seeds" | "outbound" | "released" | "onViolation"
+		"signedClients" | "change" | "seeds" | "outbound" | "released" | "onViolation" | "pushedOnly"
 	> & {
 		/** More clients the operator registers, beside the relying parties': each as `clients`' `registered` takes it. */
 		readonly clients?: readonly unknown[];

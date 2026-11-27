@@ -6,6 +6,12 @@
 	"kind": "feature",
 	"optIn": true,
 	"storeWiring": true,
+	"asks": [
+		{
+			"line": "`par.pushed-only`: a login's request pushed alone (FAPI 2.0, the default); `false` takes a JAR by value too (`request=`), for a deployment outside a FAPI configuration or a screen sending by value.",
+			"decides": true
+		}
+	],
 	"exports": {
 		".": "./src/contract.ts",
 		"./testing": "./src/testing.ts",

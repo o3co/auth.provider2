@@ -107,7 +107,7 @@ export function loginScreen(
 	const rpId = page.rpId ?? new URL(browser.origin).hostname;
 	const sdk = { ring: pins.ring, issuer: pins.issuer };
 
-	/** ② sent, and T read by `readT`: a refusal, or T, the screen's keys and the creation it asks. */
+	/** ② sent under `given` keys or new ones, and T read by `readT`: a refusal, or T, the screen's keys and the creation it asks. */
 	const started = async (
 		front: Front,
 		body: Record<string, unknown>,
@@ -116,8 +116,9 @@ export function loginScreen(
 			keys: ScreenKeys,
 		) => Promise<{ readonly t: ReadT } | { readonly error: string }>,
 		at: string,
+		given?: ScreenKeys,
 	): Promise<Started | Stopped> => {
-		const keys = await screenKeys();
+		const keys = given ?? (await screenKeys());
 		const answered = await front.post({
 			path: "/login/start",
 			body: { ...body, eEnc: keys.eEnc, eSigX: keys.eSig.x, eSigY: keys.eSig.y },
@@ -130,13 +131,22 @@ export function loginScreen(
 		return { t: t.t, keys, create: read.create };
 	};
 
-	/** ② The login's start, for the JAR the RP gave, sent as it is: T read against the JAR the screen holds. */
-	const start = (front: Front, clientId: string, jar: string): Promise<Started | Stopped> =>
+	/**
+	 * ② The login's start, for the JAR the RP gave, sent as it is: T read against the JAR the screen
+	 * holds. Under the screen keys given (a resend's), or new ones.
+	 */
+	const start = (
+		front: Front,
+		clientId: string,
+		jar: string,
+		keys?: ScreenKeys,
+	): Promise<Started | Stopped> =>
 		started(
 			front,
 			{ clientId, request: jar },
-			(statement, keys) => authorization.read(statement, jar, { ...sdk, keys }),
+			(statement, k) => authorization.read(statement, jar, { ...sdk, keys: k }),
 			"authorization.read",
+			keys,
 		);
 
 	/**

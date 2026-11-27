@@ -222,6 +222,24 @@ export const byValue: RequestSource = {
 	jarOf: async (fields) => (fields.request === undefined ? undefined : { jar: fields.request }),
 };
 
+/** The JAR sent by value where another source is the only one taken: refused, in its own words. */
+const byValueRefused: RequestSource = {
+	name: "request",
+	jarOf: async (fields) =>
+		fields.request === undefined
+			? undefined
+			: { refused: { error: "invalid_request", description: "a request by value is not taken" } },
+};
+
+/** The sources that say they are the only one taken. */
+export const onlyOf = (sources: readonly RequestSource[]) => sources.filter((s) => s.only === true);
+
+/** The sources taken: one saying it is the only one, alone, the JAR by value refused beside it; else every source. */
+export const takenOf = (sources: readonly RequestSource[]): readonly RequestSource[] => {
+	const only = onlyOf(sources);
+	return only.length > 0 ? [...only, byValueRefused] : sources;
+};
+
 /** The authorization's items `authorize` fills: every one but `dpop_jkt`, which the sender binding's bridge fills; `request_uri` under PAR. */
 export const filledItems = {
 	purpose: "authorization",
@@ -235,7 +253,7 @@ export const issuerMetadata = Object.freeze({
 	responseModes: { name: "response_modes_supported", value: ["form_post"] },
 	challengeMethods: { name: "code_challenge_methods_supported", value: ["S256"] },
 	signedRequest: { name: "require_signed_request_object", value: true },
-	requestParameter: { name: "request_parameter_supported", value: true },
+	requestParameter: { name: "request_parameter_supported" },
 	issParameter: { name: "authorization_response_iss_parameter_supported", value: true },
 });
 
@@ -265,7 +283,7 @@ export async function startRouteIn(
 		{
 			clients: await c.get(clients),
 			jar: {
-				sources: await c.collect(requestSources),
+				sources: takenOf(await c.collect(requestSources)),
 				assertion: await c.get(clientAssertion),
 				issuer: url,
 				maxLifetimeS: c.section["jar-max-lifetime"],

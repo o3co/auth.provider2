@@ -23,6 +23,8 @@ export interface CoreAt {
 	readonly certificates: WireCertificates;
 	readonly ring: readonly Published[];
 	readonly sealingKey: Published;
+	/** The issuer's metadata it published: where it requires pushed requests, a login here starts pushed. */
+	readonly metadata: Readonly<Record<string, unknown>>;
 	readonly mailWhere: (
 		matches: (mail: Record<string, unknown>) => boolean,
 	) => Promise<Record<string, unknown>>;
@@ -77,12 +79,22 @@ export function world<F extends Front>(
 		...Buffer.from(core.sealingKey.y ?? "", "base64url"),
 	]);
 	const screenOf = (b: Browser) => loginScreen({ ring: core.ring, issuer: origin, sealingKey }, b);
+	const pushedOnly = core.metadata.require_pushed_authorization_requests === true;
+	/** ② by the JAR given: by value, or pushed first where the Core takes pushed requests alone. */
+	const begin = async (screen: LoginScreen, through: Front, rp: RelyingParty, jar: string) => {
+		if (!pushedOnly) return screen.start(through, rp.clientId, jar);
+		const pushed = await through.post(rp.par(jar));
+		const uri = (pushed.body as { request_uri?: string }).request_uri;
+		if (pushed.status !== 201 || uri === undefined)
+			throw new Error(`a push: ${JSON.stringify(pushed)}`);
+		return screen.startPushed(through, rp.clientId, uri);
+	};
 	/** A person signed up (F1) through an honest Front, at the RP given, the first of `rps` unless said. */
 	const person = async (rp: RelyingParty = rps[0] as RelyingParty): Promise<Person> => {
 		const honest = honestRelay(await connect(), fresh());
 		const b = browser(screenOrigin);
 		const screen = screenOf(b);
-		const s = await screen.start(honest, rp.clientId, rp.authorization().jar);
+		const s = await begin(screen, honest, rp, rp.authorization().jar);
 		if (stopped(s)) throw new Error(`a sign-up's start: ${JSON.stringify(s)}`);
 		const key = await screen.signUp(honest, s);
 		if (stopped(key)) throw new Error(`a sign-up: ${JSON.stringify(key)}`);
@@ -106,7 +118,7 @@ export function world<F extends Front>(
 		items: Record<string, unknown> = {},
 	) => {
 		const session = rp.authorization(items);
-		const s = await who.screen.start(through, rp.clientId, session.jar);
+		const s = await begin(who.screen, through, rp, session.jar);
 		if (stopped(s)) throw new Error(`a start: ${JSON.stringify(s)}`);
 		return { session, s: s as Started };
 	};
