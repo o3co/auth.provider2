@@ -1,6 +1,6 @@
 import type { RequestClaims } from "@mod/authorize";
 import type { ClaimsSelections } from "@mod/claims-selection";
-import { claimsAsked } from "@mod/oidc";
+import { claimsAsked, type HintReader } from "@mod/oidc";
 
 /**
  * A `claims` parameter as T holds it, read at ②, before T is made: why it is refused, or none. It
@@ -19,9 +19,12 @@ export function claimsRefusal(claims: unknown, openid: boolean): string | undefi
  */
 export function claimsReading(
 	selections: Pick<ClaimsSelections, "select" | "keepForCode">,
+	/** oidc's reader of an `id_token_hint`, where oidc is composed; without, no hint is read. */
+	hints?: HintReader,
 ): RequestClaims {
 	return {
 		refusal: claimsRefusal,
+		...(hints ? { hint: (hint: string, clientId: string) => hints.subjectOf(hint, clientId) } : {}),
 		select: async (client, subject, scope, claims, acr) => {
 			if (claims === undefined) return { kind: "none" };
 			const asked = claimsAsked(claims);

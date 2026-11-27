@@ -42,14 +42,56 @@ const shapeOrder = Object.keys(approval.shape) as (keyof typeof approval.shape)[
 
 /** The reference's reading of a JAR, written apart from `itemsFromJar`: its precedence, its projection. */
 function reference(payload: Record<string, unknown>, hash: string) {
-	const allowed: readonly string[] = [...jarClaims.items, ...jarClaims.envelope];
+	// The claims T never holds, spelled here apart from the wire's list.
+	const ignored = [
+		"display",
+		"ui_locales",
+		"claims_locales",
+		"login_hint",
+		"max_age",
+		"acr_values",
+	];
+	const allowed: readonly string[] = [
+		...jarClaims.items,
+		...jarClaims.envelope,
+		...ignored,
+		"id_token_hint",
+	];
 	const unknown = Object.keys(payload).find((k) => !allowed.includes(k));
 	if (unknown !== undefined) return { error: `unknown_item:${unknown}` };
 	const missing = jarClaims.required.find(
 		(k) => typeof payload[k] !== "string" || payload[k] === "",
 	);
 	if (missing !== undefined) return { error: `missing_item:${missing}` };
+	if (Object.hasOwn(payload, "max_age")) {
+		const age = payload.max_age;
+		const seconds =
+			typeof age === "number"
+				? Number.isInteger(age) && age >= 0 && age <= Number.MAX_SAFE_INTEGER
+				: typeof age === "string" && age.length > 0 && [...age].every((c) => c >= "0" && c <= "9");
+		if (!seconds) return { error: "item:max_age" };
+	}
 	const items: Record<string, unknown> = { jar_hash: hash };
+	if (Object.hasOwn(payload, "id_token_hint")) {
+		// Read apart: Node's base64url, re-encoded to the same text (the one spelling), its sub a string.
+		const hint = payload.id_token_hint;
+		const parts = typeof hint === "string" ? hint.split(".") : [];
+		const body = parts[1] ?? "";
+		let sub: unknown;
+		const spelled = (x: string) =>
+			/^[A-Za-z0-9_-]+$/.test(x) && Buffer.from(x, "base64url").toString("base64url") === x;
+		if (parts.length === 3 && parts.every(spelled)) {
+			const bytes = Buffer.from(body, "base64url");
+			try {
+				// A mark at the start kept, as the wire keeps it: JSON then refuses it.
+				const text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes);
+				const read: unknown = JSON.parse(text);
+				sub = isObject(read) ? read.sub : undefined;
+			} catch {}
+		}
+		if (typeof sub !== "string" || sub === "") return { error: "item:id_token_hint" };
+		items.hint_sub = sub;
+	}
 	for (const k of jarClaims.items) if (payload[k] !== undefined) items[k] = payload[k];
 	if (payload.claims !== undefined) {
 		const claims = payload.claims;
@@ -82,6 +124,7 @@ function reference(payload: Record<string, unknown>, hash: string) {
 		dpop_jkt: text,
 		jar_hash: text,
 		request_uri: optionalText,
+		hint_sub: optionalText,
 	};
 	if (Object.keys(rules).sort().join() !== [...shapeOrder].sort().join())
 		throw new Error("T's items and the rules part");
@@ -114,6 +157,23 @@ const payload = fc
 				fc.jsonValue().map(readBack),
 			),
 			fc.tuple(
+				fc.constant("add"),
+				fc.constantFrom(
+					"display",
+					"ui_locales",
+					"claims_locales",
+					"login_hint",
+					"max_age",
+					"acr_values",
+				),
+				fc.jsonValue().map(readBack),
+			),
+			fc.tuple(
+				fc.constant("add"),
+				fc.constant("max_age"),
+				fc.constantFrom(0, 60, 2 ** 53 - 1, 2 ** 53, -1, 1.5, "0", "600", "", "1e3", "-1", " 1"),
+			),
+			fc.tuple(
 				fc.constant("drop"),
 				fc.constantFrom(...jarClaims.required, "nonce", "dpop_jkt"),
 				fc.constant(undefined),
@@ -138,6 +198,61 @@ const payload = fc
 				),
 			),
 			fc.tuple(fc.constant("claims"), fc.constant("claims"), claims),
+			fc.tuple(
+				fc.constant("set"),
+				fc.constant("id_token_hint"),
+				fc.oneof(
+					fc
+						.tuple(fc.oneof(fc.string(), fc.constant(""), fc.integer()), fc.jsonValue())
+						.map(([sub, more]) =>
+							[
+								"eyJhbGciOiJFUzI1NiJ9",
+								Buffer.from(JSON.stringify({ sub, more: readBack(more) })).toString("base64url"),
+								"c2ln",
+							].join("."),
+						),
+					fc
+						.uint8Array({ maxLength: 24 })
+						.map((bytes) =>
+							[
+								"eyJhbGciOiJFUzI1NiJ9",
+								Buffer.concat([Buffer.from('{"sub":"'), bytes, Buffer.from('"}')]).toString(
+									"base64url",
+								),
+								"c2ln",
+							].join("."),
+						),
+					// A payload that reads, under outer parts of any form: empty, too few or many, out of the alphabet.
+					fc
+						.tuple(
+							fc.constantFrom("", "eyJ9", "!", "a=", "a.b"),
+							fc.constantFrom("", "c2ln", "c2ln.x", "+", "c2ln.x.y"),
+						)
+						.map(([head, sig]) =>
+							[head, Buffer.from('{"sub":"alice"}').toString("base64url"), sig].join("."),
+						),
+					// A payload that starts with a byte order mark, or with any bytes.
+					fc
+						.uint8Array({ maxLength: 6 })
+						.map((bytes) =>
+							[
+								"eyJ9",
+								Buffer.concat([bytes, Buffer.from('{"sub":"alice"}')]).toString("base64url"),
+								"c2ln",
+							].join("."),
+						),
+					fc.constant(
+						[
+							"eyJ9",
+							Buffer.from([0xef, 0xbb, 0xbf, ...Buffer.from('{"sub":"alice"}')]).toString(
+								"base64url",
+							),
+							"c2ln",
+						].join("."),
+					),
+					fc.constantFrom("h.p.s", "a.b", "a.b.c.d.e", ".b.c", "a.b.", "", "h.p.s=", 7, null),
+				),
+			),
 		),
 		{ maxLength: 3 },
 	)
@@ -156,7 +271,20 @@ const payload = fc
 
 describe("the items T approves, from any JAR's payload", () => {
 	it("are what a reference written apart reads: an unknown claim first, then a missing item, then T's first refused item, else the projection", () => {
-		const seen = { unknown: 0, missing: 0, item: 0, claimsNull: 0, claimsForm: 0, ok: 0 };
+		const seen = {
+			unknown: 0,
+			missing: 0,
+			item: 0,
+			claimsNull: 0,
+			claimsForm: 0,
+			maxAge: 0,
+			hint: 0,
+			ok: 0,
+			okHint: 0,
+			okIgnored: 0,
+			okMaxAge: 0,
+		};
+		const ignored = ["display", "ui_locales", "claims_locales", "login_hint", "acr_values"];
 		fc.assert(
 			fc.property(payload, fc.string({ minLength: 1, maxLength: 8 }), (p, hash) => {
 				const got = itemsFromJar(p, hash);
@@ -164,11 +292,21 @@ describe("the items T approves, from any JAR's payload", () => {
 				expect(got).toEqual(expected);
 				if ("items" in got) {
 					seen.ok++;
+					if (ignored.some((k) => Object.hasOwn(p, k))) seen.okIgnored++;
+					if (Object.hasOwn(p, "max_age")) seen.okMaxAge++;
+					if (got.items.hint_sub !== undefined) seen.okHint++;
+					// The hint itself is never in T.
+					expect(Object.hasOwn(got.items, "id_token_hint")).toBe(false);
+					// T holds none of the claims it ignores.
+					for (const k of [...ignored, "max_age"])
+						expect(Object.hasOwn(got.items, k), k).toBe(false);
 					// No null at any depth in T's claims, and its claims an object where given.
 					expect(holdsNull(got.items.claims)).toBe(false);
 					if (got.items.claims !== undefined) expect(isObject(got.items.claims)).toBe(true);
 				} else if (got.error.startsWith("unknown_item:")) seen.unknown++;
 				else if (got.error.startsWith("missing_item:")) seen.missing++;
+				else if (got.error === "item:max_age") seen.maxAge++;
+				else if (got.error === "item:id_token_hint") seen.hint++;
 				else if (got.error === "item:claims")
 					isObject(p.claims) ? seen.claimsNull++ : seen.claimsForm++;
 				else seen.item++;

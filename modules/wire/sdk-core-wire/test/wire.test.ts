@@ -130,6 +130,169 @@ describe("the items T approves, from a JAR", () => {
 			);
 	});
 
+	it("writes T for a JAR of items alone as it always did, byte for byte", () => {
+		const read = itemsFromJar({ ...jar, claims: { id_token: { email: null } } }, "h");
+		if (!("items" in read)) throw new Error(read.error);
+		expect(canonicalText(read.items)).toBe(
+			'{"claims":{"id_token":{"email":{}}},"client_id":"rp-1","code_challenge":"c",' +
+				'"code_challenge_method":"S256","dpop_jkt":"k","jar_hash":"h","nonce":"n",' +
+				'"redirect_uri":"https://rp.example/cb","response_mode":"form_post",' +
+				'"response_type":"code","scope":"openid","state":"s"}',
+		);
+	});
+
+	it("takes display, ui_locales, claims_locales, login_hint and acr_values of any value, and holds none of them in T", () => {
+		const plain = itemsFromJar(jar, "h");
+		const names = ["display", "ui_locales", "claims_locales", "login_hint", "acr_values"];
+		for (const name of names)
+			for (const value of ["page", "", " ", 7, null, true, [], ["x"], { a: null }])
+				expect(
+					itemsFromJar({ ...jar, [name]: value }, "h"),
+					`${name} ${JSON.stringify(value)}`,
+				).toEqual(plain);
+		const all = Object.freeze({
+			...jar,
+			display: "popup",
+			ui_locales: "ja en",
+			claims_locales: "ja",
+			login_hint: "a@b",
+			acr_values: "urn:a urn:b",
+		});
+		const before = JSON.stringify(all);
+		expect(itemsFromJar(all, "h")).toEqual(plain);
+		expect(JSON.stringify(all)).toBe(before);
+	});
+
+	it("holds in T the subject an id_token_hint reads as (hint_sub), never the hint, and refuses one that reads as none", () => {
+		const b64 = (text: string) => Buffer.from(text).toString("base64url");
+		const hintOf = (payload: string, head = b64('{"alg":"ES256"}'), sig = "c2ln") =>
+			`${head}.${b64(payload)}.${sig}`;
+		const read = itemsFromJar(
+			{ ...jar, id_token_hint: hintOf('{"sub":"alice","aud":"rp-1"}') },
+			"h",
+		);
+		if (!("items" in read)) throw new Error(read.error);
+		expect(read.items.hint_sub).toBe("alice");
+		expect("id_token_hint" in read.items).toBe(false);
+		// A subject of any text, read from its UTF-8 bytes.
+		expect(
+			itemsFromJar({ ...jar, id_token_hint: hintOf('{"sub":"ユーザー/1 😀 é"}') }, "h"),
+		).toMatchObject({ items: { hint_sub: "ユーザー/1 😀 é" } });
+		// UTF-8 read strictly: an overlong, a surrogate, one past U+10FFFF, a cut or stray byte is none.
+		const raw = (bad: readonly number[]) =>
+			`${b64("{}")}.${Buffer.concat([Buffer.from('{"sub":"a'), Buffer.from(bad), Buffer.from('"}')]).toString("base64url")}.c2ln`;
+		for (const bad of [
+			[0xc0, 0x80],
+			[0xed, 0xa0, 0x80],
+			[0xf4, 0x90, 0x80, 0x80],
+			[0xe3, 0x81],
+			[0x80],
+			[0xff],
+			// 3- and 4-byte overlongs, past the lead byte's class.
+			[0xe0, 0x80, 0x80],
+			[0xf0, 0x80, 0x80, 0x80],
+			// A lead byte followed by no continuation.
+			[0xc3, 0x41],
+			[0xe3, 0x81, 0x41],
+		])
+			expect(itemsFromJar({ ...jar, id_token_hint: raw(bad) }, "h"), String(bad)).toEqual({
+				error: "item:id_token_hint",
+			});
+		// A payload that reads, under a form that is no compact JWS: an empty header or signature, 2, 4 or 5 parts.
+		const body = b64('{"sub":"alice"}');
+		for (const id_token_hint of [
+			`.${body}.c2ln`,
+			`${b64("{}")}.${body}.`,
+			`${b64("{}")}.${body}`,
+			`${b64("{}")}.${body}.c2ln.x`,
+			`${b64("{}")}.${body}.c2ln.x.y`,
+		])
+			expect(itemsFromJar({ ...jar, id_token_hint }, "h"), id_token_hint).toEqual({
+				error: "item:id_token_hint",
+			});
+		// A header or signature in the alphabet but not its one spelling (bits past the end set).
+		for (const id_token_hint of [
+			`${b64("{}")}.${body}.c3`,
+			`eyJ.${body}.c2ln`,
+			`${b64("{}")}.${body}.c2lu1`,
+		])
+			expect(itemsFromJar({ ...jar, id_token_hint }, "h"), id_token_hint).toEqual({
+				error: "item:id_token_hint",
+			});
+		// A byte order mark is no JSON (RFC 8259 §8.1): the payload's text read as it is, the mark kept, refused.
+		const marked = `${b64("{}")}.${Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from('{"sub":"alice"}')]).toString("base64url")}.c2ln`;
+		expect(itemsFromJar({ ...jar, id_token_hint: marked }, "h")).toEqual({
+			error: "item:id_token_hint",
+		});
+		const plain = itemsFromJar(jar, "h");
+		expect("items" in plain && "hint_sub" in plain.items).toBe(false);
+		// An encrypted one (five parts) is the client's to decrypt first (§3.1.2.1); no other form reads.
+		for (const id_token_hint of [
+			"a.b.c.d.e",
+			"a.b",
+			"a..c",
+			".b.c",
+			"a.b.",
+			"",
+			" a.b.c",
+			1,
+			null,
+			["a.b.c"],
+			hintOf('{"aud":"rp-1"}'),
+			hintOf('{"sub":""}'),
+			hintOf('{"sub":7}'),
+			hintOf('["alice"]'),
+			hintOf('"alice"'),
+			hintOf("not json"),
+			`${b64("{}")}.${b64('{"sub":"alice"}')}=.c2ln`,
+			`${b64("{}")}.${Buffer.from([0xff, 0xfe]).toString("base64url")}.c2ln`,
+			`${b64("{}")}.eyJzdWIiOiJhIn1.c2ln`,
+		])
+			expect(itemsFromJar({ ...jar, id_token_hint }, "h"), JSON.stringify(id_token_hint)).toEqual({
+				error: "item:id_token_hint",
+			});
+	});
+
+	it("takes max_age of a whole number of seconds, as a number or its digits, and holds it nowhere in T", () => {
+		const plain = itemsFromJar(jar, "h");
+		for (const max_age of [0, 60, 86400, "0", "3600"])
+			expect(itemsFromJar({ ...jar, max_age }, "h"), JSON.stringify(max_age)).toEqual(plain);
+	});
+
+	it("refuses a max_age that is no whole number of seconds", () => {
+		for (const max_age of [
+			-1,
+			1.5,
+			Number.NaN,
+			2 ** 53,
+			"",
+			" ",
+			"x",
+			"-1",
+			"1.5",
+			"1e3",
+			" 1",
+			"0x10",
+			null,
+			true,
+			[],
+			[1],
+			{},
+		])
+			expect(itemsFromJar({ ...jar, max_age }, "h"), JSON.stringify(max_age)).toEqual({
+				error: "item:max_age",
+			});
+		// Before T's own items' rules, after the items it must carry.
+		expect(itemsFromJar({ ...jar, response_mode: "query", max_age: "x" }, "h")).toEqual({
+			error: "item:max_age",
+		});
+		// The items it must carry are named first, as before.
+		const { nonce: _, ...without } = jar;
+		expect(itemsFromJar({ ...without, max_age: "x" }, "h")).toEqual({
+			error: "missing_item:nonce",
+		});
+	});
+
 	it("refuses a claim outside the closed set, authorization_details among them", () => {
 		expect(itemsFromJar({ ...jar, authorization_details: [] }, "h")).toEqual({
 			error: "unknown_item:authorization_details",

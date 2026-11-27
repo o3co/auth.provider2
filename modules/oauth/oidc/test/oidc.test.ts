@@ -15,7 +15,7 @@ import { keysConfig, testHolder } from "@mod/keys/testing";
 import { promiseNames, stances } from "@mod/promises";
 import { subjectAttributes } from "@mod/subject-attributes";
 import { afterEach, expect, it } from "vitest";
-import { releasedClaims } from "../src/contract.ts";
+import { idTokenHints, releasedClaims } from "../src/contract.ts";
 import oidcModule from "../src/module.ts";
 
 /** The bundle's record, as the endpoint hands it on. */
@@ -59,6 +59,8 @@ const standIns = defineModule({ name: "stand-ins", replicaSafe: true, takes: [] 
 	m.provide(claimsSelections).by(() => ({ forCode: async () => undefined }) as never),
 ]);
 const ed25519 = generateKeyPairSync("ed25519").privateKey;
+/** A second P-256 key, for the ring rotated. */
+const rotated = generateKeyPairSync("ec", { namedCurve: "P-256" }).privateKey;
 
 async function serve(authority?: object, log = quietRuntime().log) {
 	const app = await assemble({
@@ -67,7 +69,7 @@ async function serve(authority?: object, log = quietRuntime().log) {
 			testServer(),
 			issuerModule,
 			keysModule,
-			testHolder({ ed: ed25519 }),
+			testHolder({ ed: ed25519, rotated }),
 			standIns,
 			reader,
 			oidcModule,
@@ -107,6 +109,52 @@ it("makes an ID token the authority's ring verifies under JWT, of the issuer, fo
 	expect(checked).toMatchObject({
 		kind: "valid",
 		claims: { iss: "https://as.example", sub: "alice", aud: "app", name: "Alice" },
+	});
+});
+
+/** An ID token of the ring as `serve` set it, for the client `app` and the subject `alice`. */
+async function idTokenOf(app: Awaited<ReturnType<typeof serve>>) {
+	const [maker] = app.get(seen).makers;
+	if (!maker) throw new Error("no ID token maker");
+	const part = await maker.part({
+		subject: "alice",
+		clientId: "app",
+		nonce: "n",
+		amr: ["pop", "user"],
+		scope: ["openid"],
+		session: "sid",
+		code: "47DEQpj8HBSa-_TImW-5JCeuQeRkm5NMpJWZG3hSuFU",
+		esig: "e",
+		apr: { shard: "s1", n: 1 },
+		approvedAt: Date.now(),
+	});
+	const ready = await part.prepare(Date.now());
+	return part.sign(ready.prepared, "h.p1.s", placed);
+}
+
+it("reads its own ID token given back as a hint: its subject, by a key rotated out until that key's expires-at", async () => {
+	const first = await serve();
+	const hint = await idTokenOf(first);
+	expect(await first.get(idTokenHints).subjectOf(hint, "app")).toEqual({ subject: "alice" });
+	expect(await first.get(idTokenHints).subjectOf(hint, "other")).toEqual({
+		refused: "the id_token_hint is for another client",
+	});
+	await stop();
+	const later = new Date(Date.now() + 86_400_000).toISOString();
+	const rotatedOut = await serve({
+		signing: { kid: "rotated", alg: "ES256" },
+		previous: [{ kid: "test", alg: "ES256", "expires-at": later }],
+	});
+	expect(await rotatedOut.get(idTokenHints).subjectOf(hint, "app")).toEqual({ subject: "alice" });
+	await stop();
+	const gone = await serve({
+		signing: { kid: "rotated", alg: "ES256" },
+		previous: [
+			{ kid: "test", alg: "ES256", "expires-at": new Date(Date.now() - 1000).toISOString() },
+		],
+	});
+	expect(await gone.get(idTokenHints).subjectOf(hint, "app")).toEqual({
+		refused: "the id_token_hint is not an ID token of this issuer (kid_expired)",
 	});
 });
 

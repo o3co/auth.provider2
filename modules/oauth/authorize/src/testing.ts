@@ -28,7 +28,7 @@ export const authorizeConfig = (settings: Partial<AuthorizeSettings> = {}) => ({
 export const authorizationRequestsStandIn = (
 	answer?: (verified: Verified) => CheckedRequest,
 ): AuthorizationRequests => ({
-	check: (_client, verified) =>
+	checked: async (_client, verified) =>
 		answer?.(verified) ?? { items: verified.claims as unknown as AuthorizationItems },
 });
 
@@ -41,7 +41,7 @@ export const authorizationRequestsOf = (p: {
 	readonly bindings: Pick<SenderBindings, "requestedOf">;
 	readonly issuer: string;
 	readonly idTokens?: boolean;
-	readonly claims?: Pick<RequestClaims, "refusal">;
+	readonly claims?: Pick<RequestClaims, "refusal" | "hint">;
 }): AuthorizationRequests =>
 	requestsOver({
 		needs: codeNeedsOver({

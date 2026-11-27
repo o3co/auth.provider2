@@ -81,6 +81,14 @@ export interface RequestClaims {
 		/** The acr the login meets, which an essential acr asked is held to. */
 		acr: string | undefined,
 	): Promise<ClaimsPicked>;
+	/**
+	 * An ID token given back as a hint (OIDC Core §3.1.2.2), verified at a push and at the start: its
+	 * subject, or why it is none. A module reading no hint leaves it out, and a hint is refused.
+	 */
+	hint?(
+		hint: string,
+		clientId: string,
+	): Promise<{ readonly subject: string } | { readonly refused: string }>;
 }
 
 /** At most one; two refuse boot. */
@@ -143,7 +151,17 @@ export type CheckedRequest =
  * PAR, which T then names. A push gives none.
  */
 export interface AuthorizationRequests {
-	check(client: Client, verified: Verified, jar: string, requestUri?: string): CheckedRequest;
+	/**
+	 * The check, then the JAR's `id_token_hint` verified (OIDC Core §3.1.2.2): an ID token of this
+	 * issuer for the client, verified for the subject T's `hint_sub` reads as. One that is not, or any
+	 * where no module reads hints, is `invalid_request` in the reader's words.
+	 */
+	checked(
+		client: Client,
+		verified: Verified,
+		jar: string,
+		requestUri?: string,
+	): Promise<CheckedRequest>;
 }
 
 /** `authorize`'s check of a login's request, for its start and a module taking a JAR elsewhere (`par`). */

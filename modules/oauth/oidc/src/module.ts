@@ -6,7 +6,8 @@ import { keys } from "@mod/keys";
 import { promiseNames, stances } from "@mod/promises";
 import { subjectAttributes } from "@mod/subject-attributes";
 import { releasedOver, scopeOfClaim, tableClaims, tableScopes } from "./claims/claims.ts";
-import { releasedClaims } from "./contract.ts";
+import { idTokenHints, releasedClaims } from "./contract.ts";
+import { hintReader } from "./hint/hint.ts";
 import { idTokenMaker } from "./id-token/id-token.ts";
 import { section } from "./section.ts";
 
@@ -57,6 +58,13 @@ export default defineModule({ name: "oidc", replicaSafe: true, section, takes },
 				return releasedOver(answer.kind === "known" ? answer : undefined, scope, asked);
 			},
 		};
+	}),
+	m.provide(idTokenHints).by(async (c) => {
+		const signing = await c.get(keys);
+		return hintReader({
+			verify: (ring, token, typ) => signing.verify(ring, token, typ),
+			issuer: (await c.get(issuer)).url,
+		});
 	}),
 	m.contribute(claimScopes).by(() => ({ scopeOf: scopeOfClaim })),
 	m.contribute(metadata).by(() => ({ name: "scopes_supported", value: [openid, ...tableScopes] })),

@@ -3,15 +3,17 @@
 ## Responsibilities
 - Makes a redemption's ID token, a part of its bundle (a contribution to `code-grant`'s `idTokens`, for the `openid` scope), signed by the authority's ring (internal module `id-token`).
 - Holds the fixed claim table and maps a subject's attributes through it, and reads the `claims` request parameter for `authorize-claims` (internal module `claims`).
+- Reads its own ID token given back as a hint, `id_token_hint` (internal module `hint`).
 
 ## Not here
 - When an ID token is asked, and the code's facts (`code-grant`, from `authorize` and `approvals`). Recording the bundle (`token-endpoint`). Signing, the rings and their algorithms (`keys`). `c_hash` from the code's digest (`authority-rules`).
 - What a subject's attributes hold and where they come from (`subject-attributes`). Which names a client and the approval allow, and the pin (`claims-selection`).
 - Whether the `claims` parameter is read, and its metadata item `claims_parameter_supported` (`authorize-claims`, which reads it).
-- An ID token given back as a hint, a client's choice of algorithm (`id_token_signed_response_alg`) and the refresh response (which returns no ID token): none here. Accepting a token for userinfo (`userinfo`).
+- Whether a login meets a hint's subject (`authorize`, at the finish). A client's choice of algorithm (`id_token_signed_response_alg`) and the refresh response (which returns no ID token): none here. Accepting a token for userinfo (`userinfo`).
 
 ## Offers
 - `claimsAsked` (a `claims` parameter, a JSON object → the `sub` values each member asks and the selection; or `malformed`); `scopeOfClaim`, `tableScopes`, `tableClaims`; the type `Claim`; `idTokenTyp` (`JWT`).
+- Contract `idTokenHints`: `subjectOf` (a hint, the client → its subject, or why none), read by `authorize-claims`.
 - Contract `releasedClaims`: `of` (subject, scope words, the session's handle, what a request asked beyond its scope → the claims released by the ID token's own rule; never `sub`), the one way userinfo reads claims.
 - A contribution to `code-grant`'s `idTokens`; to `claims-selection`'s `claimScopes` (each table claim's scope, none outside the table).
 - `issuer`'s metadata items: `scopes_supported` (`openid` and the table's), `claims_supported` (`sub` and the table's), `subject_types_supported` (`public`), `id_token_signing_alg_values_supported` (the authority's ring's algorithm, as `keys` names it).

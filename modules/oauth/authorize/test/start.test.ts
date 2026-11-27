@@ -10,7 +10,12 @@ import resourceIndicators from "@mod/resource-indicators/module";
 import { payloads, typs } from "@mod/sdk-core-wire";
 import { describe, expect, it } from "vitest";
 import { codeNeedsOver } from "../src/code-needs/code-needs.ts";
-import type { JarReservations, RequestSource, StoredReservation } from "../src/contract.ts";
+import type {
+	JarReservations,
+	RequestClaims,
+	RequestSource,
+	StoredReservation,
+} from "../src/contract.ts";
 import { reserving } from "../src/jar/jar.ts";
 import { claimsUnread, type RequestParts, requestsOver } from "../src/request/request.ts";
 import {
@@ -42,6 +47,13 @@ const client: Client = {
 				}) as T,
 };
 
+/** An ID token's compact form whose payload names `sub`, as the JAR would carry it back; unsigned, as the reader is a stand-in. */
+const hintOf = (sub: string) =>
+	[
+		"eyJhbGciOiJFUzI1NiJ9",
+		Buffer.from(JSON.stringify({ sub, aud: "c1" })).toString("base64url"),
+		"c2ln",
+	].join(".");
 const claims = (more: Record<string, unknown> = {}) => ({
 	iss: "c1",
 	aud: issuer,
@@ -106,6 +118,8 @@ function harness(
 		claims?: RequestParts["claims"];
 		/** The longest T asked; the route contract's unless told. */
 		fits?: StartParts["fits"];
+		/** The hint's reader; none unless told. */
+		hint?: RequestClaims["hint"];
 	} = {},
 ) {
 	const asked: IssueAsk[] = [];
@@ -165,7 +179,7 @@ function harness(
 		withoutPasskey: p.allows === undefined ? undefined : { allows: async () => p.allows === true },
 		signUp: p.signUp ?? false,
 		requests: requestsOver({
-			claims: p.claims ?? { refusal: () => undefined },
+			claims: p.claims ?? { refusal: () => undefined, ...(p.hint ? { hint: p.hint } : {}) },
 			needs: codeNeedsOver({
 				idTokens: p.idTokens ?? true,
 				targets: p.rule,
@@ -376,6 +390,11 @@ describe("a login's start (②)", () => {
 		expect(filledItems.names).toContain("request_uri");
 	});
 
+	it("declares every item of T it fills, so approvals refuses none it writes: all of T's but the binding bridge's dpop_jkt", () => {
+		const declared = [...filledItems.names, "dpop_jkt"].sort();
+		expect(declared).toEqual(Object.keys(payloads.statement.shape.approval.shape).sort());
+	});
+
 	it("takes only the source that says it is the only one, so a start by value is refused where pushed requests alone are taken", async () => {
 		const only: RequestSource = {
 			name: "pushed",
@@ -421,12 +440,117 @@ describe("a login's start (②)", () => {
 
 	it("refuses a claim that is no item, and says whether a person with no passkey may create one", async () => {
 		const h = harness({ allows: true });
-		expect(await h.body(h.fields(jar(claims({ max_age: 60 }))))).toMatchObject({
+		expect(await h.body(h.fields(jar(claims({ authorization_details: [] }))))).toMatchObject({
 			json: { error: "invalid_request_object" },
 		});
 		expect(await h.body(h.fields(jar(claims({ jti: "j4" }))))).toMatchObject({
 			json: { create: true },
 		});
+	});
+
+	it("takes display, ui_locales, claims_locales, login_hint and max_age, and T holds none of them (OIDC Core §3.1.2.1, §15.1)", async () => {
+		const plain = harness();
+		expect(await plain.body(plain.fields(jar(claims())))).toMatchObject({ status: 200 });
+		const h = harness();
+		const ignored = {
+			display: "popup",
+			ui_locales: "ja en",
+			claims_locales: "ja",
+			login_hint: "a@example.com",
+			max_age: 0,
+		};
+		expect(await h.body(h.fields(jar(claims(ignored))))).toMatchObject({ status: 200 });
+		const items = h.asked[0]?.items ?? {};
+		for (const name of Object.keys(ignored)) expect(Object.hasOwn(items, name), name).toBe(false);
+		// The items of the JAR without them, but for its hash: the signed bytes differ.
+		const { jar_hash: _, ...rest } = items as Record<string, unknown>;
+		const { jar_hash: __, ...plainRest } = (plain.asked[0]?.items ?? {}) as Record<string, unknown>;
+		expect(rest).toEqual(plainRest);
+	});
+
+	it("verifies an id_token_hint before T, which holds the subject it reads as, never the hint", async () => {
+		const read: [string, string][] = [];
+		const h = harness({
+			hint: async (hint, clientId) => {
+				read.push([hint, clientId]);
+				return { subject: "alice" };
+			},
+		});
+		expect(await h.body(h.fields(jar(claims({ id_token_hint: hintOf("alice") }))))).toMatchObject({
+			status: 200,
+		});
+		expect(read).toEqual([[hintOf("alice"), "c1"]]);
+		expect(h.asked[0]?.items).toMatchObject({ hint_sub: "alice" });
+		expect(Object.hasOwn(h.asked[0]?.items ?? {}, "id_token_hint")).toBe(false);
+	});
+
+	it("refuses a hint whose payload reads as another subject than it is verified for: no forged sub reaches T", async () => {
+		const h = harness({ hint: async () => ({ subject: "mallory" }) });
+		expect(await h.body(h.fields(jar(claims({ id_token_hint: hintOf("alice") }))))).toEqual({
+			status: 400,
+			json: {
+				error: "invalid_request",
+				error_description: "the id_token_hint reads as another subject than it is verified for",
+			},
+		});
+		expect(h.asked).toHaveLength(0);
+	});
+
+	it("offers no sign-up under a hinted T: a new subject is never the one the hint names", async () => {
+		const h = harness({ allows: true, signUp: true, hint: async () => ({ subject: "alice" }) });
+		expect(await h.body(h.fields(jar(claims({ id_token_hint: hintOf("alice") }))))).toMatchObject({
+			status: 200,
+			json: { create: false },
+		});
+		expect(h.asked[0]?.continues).toBeUndefined();
+		// Without the hint, the same composition offers it.
+		expect(await h.body(h.fields(jar(claims({ jti: "j2" }))))).toMatchObject({
+			json: { create: true },
+		});
+		expect(h.asked[1]?.continues).toEqual(["sign-up"]);
+	});
+
+	it("refuses, before T and with its words, a hint its reader refuses, and any hint where no module reads one (OIDC Core §3.1.2.2)", async () => {
+		const refusing = harness({
+			hint: async () => ({ refused: "the id_token_hint is of another issuer" }),
+		});
+		expect(
+			await refusing.body(refusing.fields(jar(claims({ id_token_hint: hintOf("alice") })))),
+		).toEqual({
+			status: 400,
+			json: {
+				error: "invalid_request",
+				error_description: "the id_token_hint is of another issuer",
+			},
+		});
+		expect(refusing.asked).toHaveLength(0);
+		const unread = harness();
+		expect(
+			await unread.body(unread.fields(jar(claims({ id_token_hint: hintOf("alice") })))),
+		).toEqual({
+			status: 400,
+			json: { error: "invalid_request", error_description: "an id_token_hint is not read here" },
+		});
+		expect(unread.asked).toHaveLength(0);
+		// A request with none asks no reader, where one is composed too.
+		let asked = 0;
+		const reading = harness({
+			hint: async () => {
+				asked += 1;
+				return { subject: "alice" };
+			},
+		});
+		expect(await reading.body(reading.fields(jar(claims())))).toMatchObject({ status: 200 });
+		expect(asked).toBe(0);
+	});
+
+	it("refuses a max_age that is no whole number of seconds as a request's parameter", async () => {
+		const h = harness();
+		expect(await h.body(h.fields(jar(claims({ max_age: "soon" }))))).toMatchObject({
+			status: 400,
+			json: { error: "invalid_request", error_description: "item:max_age" },
+		});
+		expect(h.asked).toHaveLength(0);
 	});
 
 	it("allows T's sign-up (F1) at its issue only where a person with no passkey may create one and a sign-up is offered", async () => {

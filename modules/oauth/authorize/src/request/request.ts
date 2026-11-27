@@ -1,7 +1,8 @@
+import type { Client } from "@mod/clients";
 import { issuer } from "@mod/issuer";
 import type { BuildContext } from "@mod/kernel";
 import { matches, redirects } from "@mod/redirect-uris";
-import { itemsFromJar } from "@mod/sdk-core-wire";
+import { itemsFromJar, jarClaims } from "@mod/sdk-core-wire";
 import {
 	type CodeNeeds,
 	codeNeedsIn,
@@ -9,15 +10,20 @@ import {
 	targetsIn,
 	type Unmet,
 } from "../code-needs/code-needs.ts";
-import { type AuthorizationRequests, type RequestClaims, requestClaims } from "../contract.ts";
-import { type Refusal, sha256 } from "../jar/jar.ts";
+import {
+	type AuthorizationRequests,
+	type CheckedRequest,
+	type RequestClaims,
+	requestClaims,
+} from "../contract.ts";
+import { type Refusal, sha256, type Verified } from "../jar/jar.ts";
 
 /** What a request is checked with: what a code needs, and why an OpenID request's `claims` is refused. */
 export interface RequestParts {
 	/** What a code needs, checked before T (internal module `code-needs`). */
 	readonly needs: CodeNeeds;
-	/** Why an OpenID request's `claims` is refused before T: the `requestClaims` contributed, else `claimsUnread`. */
-	readonly claims: Pick<RequestClaims, "refusal">;
+	/** Why an OpenID request's `claims` is refused before T, and a hint's reader: the `requestClaims` contributed, else `claimsUnread`. */
+	readonly claims: Pick<RequestClaims, "refusal" | "hint">;
 }
 
 /** Where no module reads a request's `claims`, any is refused before T. */
@@ -88,32 +94,51 @@ function withoutPrompt(claims: Readonly<Record<string, unknown>>) {
 
 /** The check of a verified JAR's request, over what a code needs and the `claims` reader. */
 export function requestsOver(p: RequestParts): AuthorizationRequests {
+	// The check alone, whose items' hint_sub is unverified: offered only inside checked.
+	const check = (
+		client: Client,
+		verified: Verified,
+		jar: string,
+		requestUri?: string,
+	): CheckedRequest => {
+		const redirectUri = verified.claims.redirect_uri;
+		const registered = client.section(redirects)["redirect-uris"];
+		if (typeof redirectUri !== "string" || !registered.some((r) => matches(r, redirectUri)))
+			return refused("invalid_request", "the redirect URI is not one the client registered");
+		const prompted = withoutPrompt(verified.claims);
+		if ("refused" in prompted) return prompted;
+		// Under PAR, T names the request_uri the start named, as it came, its source having resolved it.
+		const made = itemsFromJar(prompted.claims, sha256(jar), requestUri);
+		if ("error" in made) return { refused: itemsRefusal(made.error) };
+		for (const name of ["state", "nonce"] as const)
+			if (longer(made.items[name]))
+				return refused("invalid_request", `${name} is longer than ${itemMaxBytes} bytes`);
+		// Where no ID token is made, an OpenID request is refused before T, never once the person tapped.
+		if (p.needs.openidUnmet(made.items)) return refused("invalid_scope", "no ID token is issued");
+		// Its claims, read before T is made: one asked malformed, or without openid, is refused.
+		const claimsRefused = p.claims.refusal(made.items.claims, p.needs.asksOpenid(made.items.scope));
+		if (claimsRefused) return refused("invalid_request_object", claimsRefused);
+		// What a code needs, before T, so the finish fails on none of it once the person tapped.
+		const unmet = p.needs.atStart(client, made.items);
+		if (unmet) return { refused: unmetRefusal(unmet) };
+		return { items: made.items };
+	};
 	return {
-		check: (client, verified, jar, requestUri) => {
-			const redirectUri = verified.claims.redirect_uri;
-			const registered = client.section(redirects)["redirect-uris"];
-			if (typeof redirectUri !== "string" || !registered.some((r) => matches(r, redirectUri)))
-				return refused("invalid_request", "the redirect URI is not one the client registered");
-			const prompted = withoutPrompt(verified.claims);
-			if ("refused" in prompted) return prompted;
-			// Under PAR, T names the request_uri the start named, as it came, its source having resolved it.
-			const made = itemsFromJar(prompted.claims, sha256(jar), requestUri);
-			if ("error" in made) return { refused: itemsRefusal(made.error) };
-			for (const name of ["state", "nonce"] as const)
-				if (longer(made.items[name]))
-					return refused("invalid_request", `${name} is longer than ${itemMaxBytes} bytes`);
-			// Where no ID token is made, an OpenID request is refused before T, never once the person tapped.
-			if (p.needs.openidUnmet(made.items)) return refused("invalid_scope", "no ID token is issued");
-			// Its claims, read before T is made: one asked malformed, or without openid, is refused.
-			const claimsRefused = p.claims.refusal(
-				made.items.claims,
-				p.needs.asksOpenid(made.items.scope),
-			);
-			if (claimsRefused) return refused("invalid_request_object", claimsRefused);
-			// What a code needs, before T, so the finish fails on none of it once the person tapped.
-			const unmet = p.needs.atStart(client, made.items);
-			if (unmet) return { refused: unmetRefusal(unmet) };
-			return { items: made.items };
+		checked: async (client, verified, jar, requestUri) => {
+			const made = check(client, verified, jar, requestUri);
+			const hint = verified.claims[jarClaims.hint];
+			if ("refused" in made || typeof hint !== "string") return made;
+			const read = p.claims.hint
+				? await p.claims.hint(hint, client.id)
+				: { refused: "an id_token_hint is not read here" };
+			if ("refused" in read) return refused("invalid_request", read.refused);
+			// Its verified subject is the one T holds, read unverified: a payload that reads otherwise is none.
+			return read.subject === made.items.hint_sub
+				? made
+				: refused(
+						"invalid_request",
+						"the id_token_hint reads as another subject than it is verified for",
+					);
 		},
 	};
 }

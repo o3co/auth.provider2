@@ -116,6 +116,13 @@ export function finishing(p: FinishParts) {
 		};
 		const admitted = await p.issuance.admits({ grant, grantType: codeGrantType });
 		if (admitted.kind === "refused") return denied("the login was not approved");
+		// OIDC Core §3.1.2.1: a login of another subject than the hint's (verified before T) is no positive answer.
+		if (items.hint_sub !== undefined && items.hint_sub !== subject)
+			return refused(
+				400,
+				"login_required",
+				"the login is not of the subject the id_token_hint names",
+			);
 		// An OpenID request's claims, selected before the session opens; a `sub` asked of another refuses it.
 		const picked = p.needs.asksOpenid(scope)
 			? await p.claims.select(client, subject, items.scope.split(" "), items.claims, p.acr)

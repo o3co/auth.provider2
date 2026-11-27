@@ -10,7 +10,10 @@ export {
 	tableClaims,
 	tableScopes,
 } from "./claims/claims.ts";
+export type { HintReader, HintSubject } from "./hint/hint.ts";
 export { idTokenTyp } from "./id-token/id-token.ts";
+
+import type { HintReader } from "./hint/hint.ts";
 
 /** The claims `oidc` releases for a subject outside an ID token: what userinfo answers. */
 export interface ReleasedClaims {
@@ -29,3 +32,6 @@ export interface ReleasedClaims {
 }
 
 export const releasedClaims = contract<ReleasedClaims>("oidc.released-claims");
+
+/** An ID token given back as a hint (OIDC Core §3.1.2.2): its subject, where it is this issuer's for the client; optional, as a composition may hold no oidc. */
+export const idTokenHints = contract<HintReader>("oidc.id-token-hints", { optional: true });

@@ -83,3 +83,21 @@ describe("an OpenID request's claims", () => {
 		);
 	});
 });
+
+describe("an id_token_hint", () => {
+	it("is read by oidc's reader where one is composed, and not read where none is", async () => {
+		const asked: [string, string][] = [];
+		const r = claimsReading(
+			{ select: async () => none, keepForCode: async () => {} },
+			{
+				subjectOf: async (hint, clientId) => {
+					asked.push([hint, clientId]);
+					return { subject: "alice" };
+				},
+			},
+		);
+		expect(await r.hint?.("h.p.s", "c1")).toEqual({ subject: "alice" });
+		expect(asked).toEqual([["h.p.s", "c1"]]);
+		expect(reading().r.hint).toBeUndefined();
+	});
+});

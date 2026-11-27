@@ -97,6 +97,56 @@ describe("authorization.read", () => {
 		expect(await authorization.read(nulled, jar, options)).toEqual({ error: "payload" });
 	});
 
+	it("reads T where its JAR also carries display, ui_locales, claims_locales, login_hint and max_age, and T holds none of them", async () => {
+		const { ring, t, options } = await world();
+		const ignored = {
+			display: "page",
+			ui_locales: "ja",
+			claims_locales: "ja",
+			login_hint: "a@example.com",
+			max_age: 300,
+		};
+		const jar = jarOf({ ...jarPayload, ...ignored });
+		const approval = { ...t.approval, jar_hash: await digest(jar) };
+		const asked = await signCompact(ring, { ...t, approval }, { typ: typs.statement });
+		expect(await authorization.read(asked, jar, options)).toMatchObject({ t: { compact: asked } });
+		// T holding one of them is no T: its own schema refuses it.
+		const held = await signCompact(
+			ring,
+			{ ...t, approval: { ...approval, login_hint: "a@example.com" } },
+			{ typ: typs.statement },
+		);
+		expect(await authorization.read(held, jar, options)).toEqual({ error: "payload" });
+		// A max_age that is no whole number of seconds is a JAR the rule refuses.
+		const bad = jarOf({ ...jarPayload, max_age: "soon" });
+		expect(await authorization.read(asked, bad, options)).toEqual({ error: "jar" });
+	});
+
+	it("reads T holding the subject the JAR's id_token_hint reads as (hint_sub), not the hint, and none of its acr_values", async () => {
+		const { ring, t, options } = await world();
+		const hint = ["eyJhbGciOiJFUzI1NiJ9", b64({ sub: "alice", aud: "c1" }), "c2ln"].join(".");
+		const jar = jarOf({ ...jarPayload, id_token_hint: hint, acr_values: "urn:a" });
+		const approval = { ...t.approval, hint_sub: "alice", jar_hash: await digest(jar) };
+		const asked = await signCompact(ring, { ...t, approval }, { typ: typs.statement });
+		expect(await authorization.read(asked, jar, options)).toMatchObject({ t: { compact: asked } });
+		// T without the subject, or with another, is not the JAR's: a Front's swap is caught here.
+		const { hint_sub: _, ...without } = approval;
+		for (const other of [without, { ...approval, hint_sub: "mallory" }]) {
+			const signed = await signCompact(ring, { ...t, approval: other }, { typ: typs.statement });
+			expect(await authorization.read(signed, jar, options)).toEqual({ error: "items" });
+		}
+		// T holding the hint itself is no T: its own schema refuses it.
+		const held = await signCompact(
+			ring,
+			{ ...t, approval: { ...approval, id_token_hint: hint } },
+			{ typ: typs.statement },
+		);
+		expect(await authorization.read(held, jar, options)).toEqual({ error: "payload" });
+		// A hint that reads as no subject is a JAR the rule refuses.
+		const bad = jarOf({ ...jarPayload, id_token_hint: "a.b.c.d.e" });
+		expect(await authorization.read(asked, bad, options)).toEqual({ error: "jar" });
+	});
+
 	it("refuses a JAR of the same claims whose bytes differ: its hash is another", async () => {
 		const { tCompact, options, jar } = await world();
 		expect(await authorization.read(tCompact, `${jar}x`, options)).toEqual({ error: "items" });

@@ -43,7 +43,7 @@ export const hpke = Object.freeze({
 	unpaddedCompletion: padding.unpadded,
 });
 
-/** An authorization's items (a closed set): a JAR with any other claim beside its envelope is refused. */
+/** An authorization's items (a closed set): a JAR with a claim neither item, envelope nor ignored is refused. */
 const authorizationItems = Object.freeze([
 	"client_id",
 	"redirect_uri",
@@ -74,11 +74,31 @@ const requiredItems = Object.freeze([
 /** A JAR's envelope: claims that are no item, so T holds none of them (`prompt`, read by the Core before T, among them). */
 const jarEnvelope = Object.freeze(["iss", "aud", "iat", "nbf", "exp", "jti", "prompt"] as const);
 
-/** A JAR's claims as T reads them: the items, those it must carry, and its envelope. */
+/** Claims a JAR may carry that T never holds and nothing reads (OIDC Core §3.1.2.1, §5.2). */
+const ignoredItems = Object.freeze([
+	"display",
+	"ui_locales",
+	"claims_locales",
+	"login_hint",
+	"max_age",
+	"acr_values",
+] as const);
+
+/** Those checked before they are dropped: max_age in seconds, a JSON number or its digits. */
+const ignoredChecked: Readonly<Record<string, (value: unknown) => boolean>> = Object.freeze({
+	max_age: (value) =>
+		(typeof value === "number" && Number.isSafeInteger(value) && value >= 0) ||
+		(typeof value === "string" && /^[0-9]+$/.test(value)),
+});
+
+/** A JAR's claims as T reads them: the items, those it must carry, its envelope, those it ignores, the hint. */
 export const jarClaims = Object.freeze({
 	items: authorizationItems,
 	required: requiredItems,
 	envelope: jarEnvelope,
+	ignored: ignoredItems,
+	/** An ID token given back (OIDC Core §3.1.2.1): T holds the subject it reads as (`hint_sub`), not it. */
+	hint: "id_token_hint",
 });
 
 /** The screen's signing key as T and the first key's requests carry it: P-256's x and y alone. */
@@ -131,6 +151,8 @@ const approval = z
 		jar_hash: z.string().min(1),
 		/** Under PAR, the `request_uri` the login's start named (RFC 9126): no claim of the JAR, absent by value. */
 		request_uri: z.string().min(1).optional(),
+		/** The subject the JAR's id_token_hint reads as, unverified (`hintSubject`); the Core verifies it. */
+		hint_sub: z.string().min(1).optional(),
 	})
 	.strict();
 
@@ -382,14 +404,26 @@ export function itemsFromJar(
 	jarHash: string,
 	requestUri?: string,
 ): { readonly items: AuthorizationItems } | { readonly error: string } {
-	const allowed: readonly string[] = [...authorizationItems, ...jarEnvelope];
+	const allowed: readonly string[] = [
+		...authorizationItems,
+		...jarEnvelope,
+		...ignoredItems,
+		jarClaims.hint,
+	];
 	for (const key of Object.keys(payload))
 		if (!allowed.includes(key)) return { error: `unknown_item:${key}` };
 	for (const key of requiredItems) {
 		if (typeof payload[key] !== "string" || payload[key] === "")
 			return { error: `missing_item:${key}` };
 	}
+	for (const [key, fits] of Object.entries(ignoredChecked))
+		if (Object.hasOwn(payload, key) && !fits(payload[key])) return { error: `item:${key}` };
 	const items: Record<string, unknown> = { jar_hash: jarHash };
+	if (Object.hasOwn(payload, jarClaims.hint)) {
+		const sub = hintSubject(payload[jarClaims.hint]);
+		if (sub === undefined) return { error: `item:${jarClaims.hint}` };
+		items.hint_sub = sub;
+	}
 	for (const key of authorizationItems) if (payload[key] !== undefined) items[key] = payload[key];
 	if (payload.claims !== undefined) items.claims = askedInDefault(payload.claims);
 	if (requestUri !== undefined) items.request_uri = requestUri;
@@ -397,6 +431,65 @@ export function itemsFromJar(
 	return read.success
 		? { items: read.data }
 		: { error: `item:${String(read.error.issues[0]?.path[0])}` };
+}
+
+/** A base64url text's bytes, read by the one spelling `canonical` takes; none for any other. */
+function bytesOf(text: string): number[] | undefined {
+	if (!canonical(text)) return undefined;
+	const out: number[] = [];
+	let bits = 0;
+	let held = 0;
+	for (let i = 0; i < text.length; i++) {
+		held = ((held << 6) | sextet(text, i)) & 0xfff;
+		bits += 6;
+		if (bits >= 8) {
+			bits -= 8;
+			out.push((held >> bits) & 0xff);
+		}
+	}
+	return out;
+}
+
+/** UTF-8 read strictly, as a fatal decoder reads it: none for an overlong, surrogate or cut form. */
+function utf8(bytes: readonly number[]): string | undefined {
+	let out = "";
+	for (let i = 0; i < bytes.length; ) {
+		const b = bytes[i] as number;
+		const n =
+			b < 0x80 ? 0 : b >= 0xc2 && b < 0xe0 ? 1 : b >= 0xe0 && b < 0xf0 ? 2 : b < 0xf5 ? 3 : -1;
+		if (n < 0 || (n === 3 && b < 0xf0)) return undefined;
+		let point = n === 0 ? b : b & (0x3f >> n);
+		for (let k = 1; k <= n; k++) {
+			const c = bytes[i + k];
+			if (c === undefined || (c & 0xc0) !== 0x80) return undefined;
+			point = (point << 6) | (c & 0x3f);
+		}
+		const least = [0, 0x80, 0x800, 0x10000][n] as number;
+		if (point < least || point > 0x10ffff || (point >= 0xd800 && point <= 0xdfff)) return undefined;
+		out += String.fromCodePoint(point);
+		i += n + 1;
+	}
+	return out;
+}
+
+/**
+ * The subject an `id_token_hint` reads as, unverified: a compact JWS whose payload is a JSON object
+ * with a `sub` that is a string, not empty; none for anything else. The Core verifies the hint names it.
+ */
+function hintSubject(hint: unknown): string | undefined {
+	if (typeof hint !== "string") return undefined;
+	const parts = hint.split(".");
+	if (parts.length !== 3 || parts.some((part) => part === "" || !canonical(part))) return undefined;
+	const bytes = bytesOf(parts[1] as string);
+	const text = bytes && utf8(bytes);
+	if (text === undefined) return undefined;
+	try {
+		const claims: unknown = JSON.parse(text);
+		const sub = isObject(claims) ? claims.sub : undefined;
+		return typeof sub === "string" && sub !== "" ? sub : undefined;
+	} catch {
+		return undefined;
+	}
 }
 
 /** What a WebAuthn challenge is the hash of: the use and the statement's compact bytes. */

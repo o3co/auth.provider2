@@ -374,6 +374,72 @@ describe("a pushed request checked by authorize's own check", () => {
 				}),
 		});
 
+	it("refuses, at the push and in the reader's words, an id_token_hint authorize refuses, before any proof is read or anything kept (RFC 9126 §2.1)", async () => {
+		const hint = [
+			"eyJhbGciOiJFUzI1NiJ9",
+			Buffer.from('{"sub":"alice"}').toString("base64url"),
+			"c2ln",
+		].join(".");
+		const read: unknown[] = [];
+		const checking =
+			(answer: { subject: string } | { refused: string }) =>
+			(bindings: Pick<SenderBindings, "requestedOf">) =>
+				authorizationRequestsOf({
+					bindings,
+					issuer,
+					claims: {
+						refusal: () => undefined,
+						hint: async (given, clientId) => {
+							read.push([given, clientId]);
+							return answer;
+						},
+					},
+				});
+		for (const [answer, description] of [
+			[
+				{ refused: "the id_token_hint is of another issuer" },
+				"the id_token_hint is of another issuer",
+			],
+			[
+				{ subject: "mallory" },
+				"the id_token_hint reads as another subject than it is verified for",
+			],
+		] as const) {
+			const h = harness({ client: registered, requests: checking(answer) });
+			expect(await h.send({ request: jar(full({ id_token_hint: hint })) })).toEqual({
+				status: 400,
+				json: { error: "invalid_request", error_description: description },
+				headers: expect.anything(),
+			});
+			expect(h.proofs()).toBe(0);
+			expect(h.store.kept.size).toBe(0);
+		}
+		expect(read).toEqual([
+			[hint, registered.id],
+			[hint, registered.id],
+		]);
+	});
+
+	it("keeps a pushed request whose id_token_hint is verified for the subject it reads as", async () => {
+		const hint = [
+			"eyJhbGciOiJFUzI1NiJ9",
+			Buffer.from('{"sub":"alice"}').toString("base64url"),
+			"c2ln",
+		].join(".");
+		const h = harness({
+			client: registered,
+			requests: (bindings) =>
+				authorizationRequestsOf({
+					bindings,
+					issuer,
+					claims: { refusal: () => undefined, hint: async () => ({ subject: "alice" }) },
+				}),
+		});
+		expect(await h.send({ request: jar(full({ id_token_hint: hint })) })).toMatchObject({
+			status: 201,
+		});
+	});
+
 	it("takes a good request, and refuses each of the suite's kinds with its code, reading no proof and keeping nothing", async () => {
 		expect(await composed().send({ request: jar(full()) })).toMatchObject({ status: 201 });
 		const kinds: [

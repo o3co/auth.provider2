@@ -29,7 +29,7 @@ const pushOf = (kept: StoredPush | undefined) => {
 /** What a push takes: what `authorize`'s checks of a JAR and its request are made with (the longest life par's own), and its own parts. */
 export interface PushParts extends JarVerifying {
 	/** `authorize`'s check of the request, as its start checks it. */
-	readonly requests: Pick<AuthorizationRequests, "check">;
+	readonly requests: Pick<AuthorizationRequests, "checked">;
 	readonly clients: Pick<Clients, "authenticate">;
 	readonly bindings: Pick<SenderBindings, "bindingOf" | "requestedOf">;
 	readonly pushed: PushedRequests;
@@ -66,7 +66,8 @@ export function pushing(p: PushParts) {
 		const verified = await jarVerified(p, client, jar);
 		if (verified.kind === "refused") return badObject(verified.reason);
 		// RFC 9126 §2.1: the request is checked as the start checks it, before a proof is read or anything kept.
-		const checked = p.requests.check(client, verified, jar);
+		// An id_token_hint is verified with it, as the start verifies it: its signature, issuer and audience.
+		const checked = await p.requests.checked(client, verified, jar);
 		if ("refused" in checked)
 			return refused(400, checked.refused.error, checked.refused.description);
 		const { exp } = verified;

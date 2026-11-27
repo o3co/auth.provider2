@@ -63,21 +63,27 @@ const checker = (over: Partial<RequestParts> & { idTokens?: boolean } = {}) =>
 			}),
 	});
 const check = (c: Record<string, unknown>, at = client, parts = checker(), requestUri?: string) =>
-	parts.check(at, verified(c), "jar-bytes", requestUri);
-const refusal = (c: Record<string, unknown>, at?: Client, parts?: ReturnType<typeof checker>) => {
-	const answer = check(c, at, parts);
+	parts.checked(at, verified(c), "jar-bytes", requestUri);
+const refusal = async (
+	c: Record<string, unknown>,
+	at?: Client,
+	parts?: ReturnType<typeof checker>,
+) => {
+	const answer = await check(c, at, parts);
 	return "refused" in answer ? answer.refused : "items";
 };
 
 describe("a login's request checked", () => {
-	it("answers T's items, naming the request_uri the start gives and none a push gives", () => {
-		expect(check(claims())).toMatchObject({ items: { state: "st", scope: "read" } });
-		const pushed = check(claims(), client, checker(), "urn:ietf:params:oauth:request_uri:x");
+	it("answers T's items, naming the request_uri the start gives and none a push gives", async () => {
+		expect(await check(claims())).toMatchObject({ items: { state: "st", scope: "read" } });
+		const pushed = await check(claims(), client, checker(), "urn:ietf:params:oauth:request_uri:x");
 		expect(pushed).toMatchObject({ items: { request_uri: "urn:ietf:params:oauth:request_uri:x" } });
-		expect("request_uri" in ((check(claims()) as { items: object }).items ?? {})).toBe(false);
+		expect("request_uri" in (((await check(claims())) as { items: object }).items ?? {})).toBe(
+			false,
+		);
 	});
 
-	it("reads the wire's spellings by one rule: a parameter's fault invalid_request, the request object's invalid_request_object", () => {
+	it("reads the wire's spellings by one rule: a parameter's fault invalid_request, the request object's invalid_request_object", async () => {
 		// The spellings sdk-core-wire gives, pinned here, so a change of its text fails this test.
 		const spelled = (c: Record<string, unknown>) => {
 			const made = itemsFromJar(c, "h");
@@ -103,7 +109,7 @@ describe("a login's request checked", () => {
 			[claims({ request_uri: "urn:x" }), "invalid_request_object"],
 			[claims({ claims: { id_token: { email: { essential: null } } } }), "invalid_request_object"],
 		] as const)
-			expect(refusal(c), JSON.stringify(c)).toMatchObject({ error });
+			expect(await refusal(c), JSON.stringify(c)).toMatchObject({ error });
 		expect(itemsRefusal("missing_item:state")).toEqual({
 			error: "invalid_request",
 			description: "missing_item:state",
@@ -114,95 +120,99 @@ describe("a login's request checked", () => {
 		expect(itemsRefusal("odd").error).toBe("invalid_request_object");
 	});
 
-	it("takes a state and a nonce of at most 512 bytes each, counted in UTF-8, the suite's 384-character nonce among them", () => {
+	it("takes a state and a nonce of at most 512 bytes each, counted in UTF-8, the suite's 384-character nonce among them", async () => {
 		expect(itemMaxBytes).toBe(512);
-		expect(check(claims({ state: "s".repeat(512), nonce: "n".repeat(384) }))).toHaveProperty(
+		expect(await check(claims({ state: "s".repeat(512), nonce: "n".repeat(384) }))).toHaveProperty(
 			"items",
 		);
-		expect(check(claims({ nonce: "n".repeat(512) }))).toHaveProperty("items");
-		expect(refusal(claims({ state: "s".repeat(513) }))).toEqual({
+		expect(await check(claims({ nonce: "n".repeat(512) }))).toHaveProperty("items");
+		expect(await refusal(claims({ state: "s".repeat(513) }))).toEqual({
 			error: "invalid_request",
 			description: "state is longer than 512 bytes",
 		});
 		// The suite's 1000-character state: refused, which it marks a warning.
-		expect(refusal(claims({ state: "s".repeat(1000) }))).toMatchObject({
+		expect(await refusal(claims({ state: "s".repeat(1000) }))).toMatchObject({
 			error: "invalid_request",
 		});
-		expect(refusal(claims({ nonce: "n".repeat(513) }))).toEqual({
+		expect(await refusal(claims({ nonce: "n".repeat(513) }))).toEqual({
 			error: "invalid_request",
 			description: "nonce is longer than 512 bytes",
 		});
 		// 171 three-byte characters are 513 bytes: counted as UTF-8, not as characters.
-		expect(refusal(claims({ state: "あ".repeat(171) }))).toMatchObject({
+		expect(await refusal(claims({ state: "あ".repeat(171) }))).toMatchObject({
 			error: "invalid_request",
 		});
-		expect(check(claims({ state: "あ".repeat(170) }))).toHaveProperty("items");
+		expect(await check(claims({ state: "あ".repeat(170) }))).toHaveProperty("items");
 		// A missing one is its own refusal first, and an over-long one comes before the needs.
-		expect(refusal(claims({ state: undefined, nonce: "n".repeat(513) }))).toMatchObject({
+		expect(await refusal(claims({ state: undefined, nonce: "n".repeat(513) }))).toMatchObject({
 			description: "missing_item:state",
 		});
-		expect(refusal(claims({ state: "s".repeat(513) }), clientOf([]))).toMatchObject({
+		expect(await refusal(claims({ state: "s".repeat(513) }), clientOf([]))).toMatchObject({
 			error: "invalid_request",
 		});
 	});
 
-	it("answers prompt=none login_required, takes the words every tap meets, and refuses others", () => {
-		expect(refusal(claims({ prompt: "none" }))).toEqual({
+	it("answers prompt=none login_required, takes the words every tap meets, and refuses others", async () => {
+		expect(await refusal(claims({ prompt: "none" }))).toEqual({
 			error: "login_required",
 			description: "every login asks the person's passkey",
 		});
-		expect(check(claims({ prompt: "login consent" }))).toHaveProperty("items");
-		expect(refusal(claims({ prompt: "create" }))).toMatchObject({ error: "invalid_request" });
+		expect(await check(claims({ prompt: "login consent" }))).toHaveProperty("items");
+		expect(await refusal(claims({ prompt: "create" }))).toMatchObject({ error: "invalid_request" });
 	});
 
-	it("answers each need unmet by its code: the grant, the challenge, the scope, the binding", () => {
-		expect(refusal(claims(), clientOf([]))).toMatchObject({ error: "unauthorized_client" });
-		expect(refusal(claims({ code_challenge: "short" }))).toMatchObject({
+	it("answers each need unmet by its code: the grant, the challenge, the scope, the binding", async () => {
+		expect(await refusal(claims(), clientOf([]))).toMatchObject({ error: "unauthorized_client" });
+		expect(await refusal(claims({ code_challenge: "short" }))).toMatchObject({
 			error: "invalid_request",
 		});
-		expect(refusal(claims({ scope: "write" }))).toMatchObject({ error: "invalid_scope" });
-		expect(refusal(claims({ dpop_jkt: "bad" }))).toEqual({
+		expect(await refusal(claims({ scope: "write" }))).toMatchObject({ error: "invalid_scope" });
+		expect(await refusal(claims({ dpop_jkt: "bad" }))).toEqual({
 			error: "invalid_request",
 			description: "dpop_jkt is out of its form",
 		});
-		expect(refusal(claims({ resource: "https://api" }))).toMatchObject({ error: "invalid_target" });
-		expect(refusal(claims({ scope: "openid read" }), client, checker({ idTokens: false }))).toEqual(
-			{
-				error: "invalid_scope",
-				description: "no ID token is issued",
-			},
-		);
+		expect(await refusal(claims({ resource: "https://api" }))).toMatchObject({
+			error: "invalid_target",
+		});
+		expect(
+			await refusal(claims({ scope: "openid read" }), client, checker({ idTokens: false })),
+		).toEqual({
+			error: "invalid_scope",
+			description: "no ID token is issued",
+		});
 		const reader = checker({ claims: { refusal: (c) => (c === undefined ? undefined : "no") } });
-		expect(refusal(claims({ claims: { id_token: {} } }), client, reader)).toEqual({
+		expect(await refusal(claims({ claims: { id_token: {} } }), client, reader)).toEqual({
 			error: "invalid_request_object",
 			description: "no",
 		});
 	});
 
-	it("answers the first fault in its order: the redirect URI, prompt, the items, OpenID, claims, then the needs", () => {
+	it("answers the first fault in its order: the redirect URI, prompt, the items, OpenID, claims, then the needs", async () => {
 		const elsewhere = { redirect_uri: "https://evil.example/cb" };
-		expect(refusal(claims({ ...elsewhere, prompt: "none" }))).toMatchObject({
+		expect(await refusal(claims({ ...elsewhere, prompt: "none" }))).toMatchObject({
 			error: "invalid_request",
 			description: "the redirect URI is not one the client registered",
 		});
-		expect(refusal(claims({ redirect_uri: undefined }))).toMatchObject({
+		expect(await refusal(claims({ redirect_uri: undefined }))).toMatchObject({
 			description: "the redirect URI is not one the client registered",
 		});
-		expect(refusal(claims({ prompt: "none", state: undefined }))).toMatchObject({
+		expect(await refusal(claims({ prompt: "none", state: undefined }))).toMatchObject({
 			error: "login_required",
 		});
-		expect(refusal(claims({ other: 1, scope: "write" }))).toMatchObject({
+		expect(await refusal(claims({ other: 1, scope: "write" }))).toMatchObject({
 			error: "invalid_request_object",
 		});
 		const reader = checker({
 			idTokens: false,
 			claims: { refusal: () => "no" },
 		});
-		expect(refusal(claims({ scope: "openid read", claims: {} }), client, reader)).toMatchObject({
+		expect(
+			await refusal(claims({ scope: "openid read", claims: {} }), client, reader),
+		).toMatchObject({
 			description: "no ID token is issued",
 		});
 		expect(
-			refusal(
+			await refusal(
 				claims({ claims: {}, scope: "write" }),
 				client,
 				checker({ claims: { refusal: () => "no" } }),
@@ -211,9 +221,72 @@ describe("a login's request checked", () => {
 			error: "invalid_request_object",
 		});
 		expect(
-			refusal(claims({ code_challenge: "short", scope: "write" }), clientOf([])),
+			await refusal(claims({ code_challenge: "short", scope: "write" }), clientOf([])),
 		).toMatchObject({
 			error: "unauthorized_client",
 		});
+	});
+});
+
+describe("a login's request checked with its id_token_hint", () => {
+	const hintOf = (sub: string) =>
+		[
+			"eyJhbGciOiJFUzI1NiJ9",
+			Buffer.from(JSON.stringify({ sub })).toString("base64url"),
+			"c2ln",
+		].join(".");
+	const reading = (answer: { subject: string } | { refused: string }) => {
+		const read: [string, string][] = [];
+		const parts = checker({
+			claims: {
+				refusal: () => undefined,
+				hint: async (hint, clientId) => {
+					read.push([hint, clientId]);
+					return answer;
+				},
+			},
+		});
+		return { read, parts };
+	};
+
+	it("holds in T the subject the hint is verified for, the hint verified by the reader for the client", async () => {
+		const { read, parts } = reading({ subject: "alice" });
+		expect(await check(claims({ id_token_hint: hintOf("alice") }), client, parts)).toMatchObject({
+			items: { hint_sub: "alice" },
+		});
+		expect(read).toEqual([[hintOf("alice"), "c1"]]);
+	});
+
+	it("refuses one verified for another subject than its payload reads as: no forged sub reaches T", async () => {
+		const { parts } = reading({ subject: "mallory" });
+		expect(await refusal(claims({ id_token_hint: hintOf("alice") }), client, parts)).toEqual({
+			error: "invalid_request",
+			description: "the id_token_hint reads as another subject than it is verified for",
+		});
+	});
+
+	it("refuses, in the reader's words, one the reader refuses, and any where no module reads hints: never dropped", async () => {
+		const { parts } = reading({
+			refused: "the id_token_hint is not an ID token of this issuer (signature)",
+		});
+		expect(await refusal(claims({ id_token_hint: hintOf("alice") }), client, parts)).toEqual({
+			error: "invalid_request",
+			description: "the id_token_hint is not an ID token of this issuer (signature)",
+		});
+		expect(await refusal(claims({ id_token_hint: hintOf("alice") }))).toEqual({
+			error: "invalid_request",
+			description: "an id_token_hint is not read here",
+		});
+	});
+
+	it("asks no reader where the JAR has no hint, nor where the check refused first", async () => {
+		const { read, parts } = reading({ subject: "alice" });
+		expect(await check(claims(), client, parts)).toHaveProperty("items");
+		expect(
+			await refusal(claims({ id_token_hint: hintOf("alice"), state: undefined }), client, parts),
+		).toMatchObject({
+			error: "invalid_request",
+		});
+		expect(read).toEqual([]);
 	});
 });

@@ -59,6 +59,8 @@ function harness(
 			| { kind: "acrUnmet" };
 		/** The acr a passkey's login meets. */
 		acr?: string;
+		/** The subject T's id_token_hint was verified for (its hint_sub). */
+		hintSub?: string;
 	} = {},
 ) {
 	const log: string[] = [];
@@ -84,6 +86,7 @@ function harness(
 			code_challenge: p.code_challenge ?? items.code_challenge,
 			scope: p.scope ?? items.scope,
 			...(p.claims === undefined ? {} : { claims: p.claims }),
+			...(p.hintSub === undefined ? {} : { hint_sub: p.hintSub }),
 		},
 	};
 	const scopes = p.scopes ?? ["read"];
@@ -306,6 +309,31 @@ describe("a login's finish (⑤⑥)", () => {
 		expect(plain.log.some((line) => line.startsWith("select") || line.startsWith("keep"))).toBe(
 			false,
 		);
+	});
+
+	it("opens no session and makes no code where the login is not the subject T's hint was verified for (login_required)", async () => {
+		const same = harness({ hintSub: "alice" });
+		expect(await same.send()).toMatchObject({ status: 200 });
+		const other = harness({ hintSub: "bob" });
+		expect(await other.send()).toMatchObject({
+			status: 400,
+			json: {
+				error: "login_required",
+				error_description: "the login is not of the subject the id_token_hint names",
+			},
+		});
+		expect(other.log.some((line) => line.startsWith("open"))).toBe(false);
+		expect(other.issued).toHaveLength(0);
+		// Before the claims are read: a mismatched hint is login_required, whatever the claims ask.
+		const both = harness({
+			hintSub: "bob",
+			scope: "openid read",
+			scopes: ["openid", "read"],
+			claims: {},
+			picked: { kind: "otherSubject" },
+		});
+		expect(await both.send()).toMatchObject({ status: 400, json: { error: "login_required" } });
+		expect(both.log.some((line) => line.startsWith("select"))).toBe(false);
 	});
 
 	it("gives the code the acr a passkey's login meets, and opens no session where an essential acr asked is not met", async () => {

@@ -116,11 +116,15 @@ export function starting(p: StartParts) {
 		if ("refused" in read) return answerOf(statusOf[read.refused.error] ?? 400, read.refused);
 		const { jar } = read;
 		// The request checked before anything is reserved or signed; under PAR, T names this start's request_uri.
-		const made = p.requests.check(client, jar, jar.jar, fields.requestUri);
+		// OIDC Core §3.1.2.2: an id_token_hint verified with it, before T, which holds its subject.
+		const made = await p.requests.checked(client, jar, jar.jar, fields.requestUri);
 		if ("refused" in made) return answerOf(400, made.refused);
 		const answer = await p.reserve(client.id, jar, startDigest(jar.jar, eEnc, eSig), async () => {
 			// Decided before T is signed, and kept on its record: the answer's `create` is only its copy.
-			const create = (await p.withoutPasskey?.allows({ client, items: made.items })) ?? false;
+			// A sign-up makes a new subject, never the one an id_token_hint names: a hinted T offers none.
+			const create =
+				made.items.hint_sub === undefined &&
+				((await p.withoutPasskey?.allows({ client, items: made.items })) ?? false);
 			const issued = await p.approvals.issue({
 				purpose: "authorization",
 				items: made.items,
@@ -171,10 +175,15 @@ export const takenOf = (sources: readonly RequestSource[]): readonly RequestSour
 	return only.length > 0 ? [...only, byValueRefused] : sources;
 };
 
-/** The authorization's items `authorize` fills: every one but `dpop_jkt`, which the sender binding's bridge fills; `request_uri` under PAR. */
+/** The authorization's items `authorize` fills: every one but `dpop_jkt`, which the sender binding's bridge fills; `request_uri` under PAR; `hint_sub`. */
 export const filledItems = {
 	purpose: "authorization",
-	names: [...jarClaims.items.filter((name) => name !== "dpop_jkt"), "jar_hash", "request_uri"],
+	names: [
+		...jarClaims.items.filter((name) => name !== "dpop_jkt"),
+		"jar_hash",
+		"request_uri",
+		"hint_sub",
+	],
 	by: "authorize",
 } as const;
 
