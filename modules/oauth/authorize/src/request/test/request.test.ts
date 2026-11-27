@@ -163,6 +163,9 @@ describe("a login's request checked", () => {
 		});
 		expect(await check(claims({ prompt: "login consent" }))).toHaveProperty("items");
 		expect(await refusal(claims({ prompt: "create" }))).toMatchObject({ error: "invalid_request" });
+		// A prompt of null is not sent (RFC 6749 §3.1), as the item rule reads any top-level null; "" is a word.
+		expect(await check(claims({ prompt: null }))).toEqual(await check(claims()));
+		expect(await refusal(claims({ prompt: "" }))).toMatchObject({ error: "invalid_request" });
 	});
 
 	it("answers each need unmet by its code: the grant, the challenge, the scope, the binding", async () => {
@@ -281,6 +284,15 @@ describe("a login's request checked with its id_token_hint", () => {
 			error: "invalid_request",
 			description: "an id_token_hint is not read here",
 		});
+	});
+
+	it("reads an id_token_hint of null as not sent: no reader asked, with or without one composed", async () => {
+		const { read, parts } = reading({ subject: "alice" });
+		expect(await check(claims({ id_token_hint: null }), client, parts)).toEqual(
+			await check(claims(), client, parts),
+		);
+		expect(await check(claims({ id_token_hint: null }))).toEqual(await check(claims()));
+		expect(read).toEqual([]);
 	});
 
 	it("asks no reader where the JAR has no hint, nor where the check refused first", async () => {

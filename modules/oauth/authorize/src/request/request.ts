@@ -83,7 +83,8 @@ const promptWords = new Set(["login", "consent", "select_account"]);
 /** `prompt`, which is no item of T: refused where it asks no interaction, dropped where every tap meets it. */
 function withoutPrompt(claims: Readonly<Record<string, unknown>>) {
 	const { prompt, ...rest } = claims;
-	if (prompt === undefined) return { claims: rest };
+	// A null is a parameter sent without a value, so not sent (RFC 6749 §3.1), as the item rule reads it.
+	if (prompt === undefined || prompt === null) return { claims: rest };
 	const words = typeof prompt === "string" ? prompt.split(" ") : [];
 	if (words.includes("none"))
 		return refused("login_required", "every login asks the person's passkey");

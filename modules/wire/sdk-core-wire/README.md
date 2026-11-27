@@ -22,13 +22,13 @@
 
 ## Invariants
 - A protocol (G33): types, frozen constants, fixed schemas and the functions that build by them; no I/O, clock, randomness or state.
-- A value nested however deep JSON reads it is read and written whole (`canonicalText`, T's `claims` check): no walk recurses, so no value JSON reads is a RangeError.
+- A value however deep is read and written whole (`canonicalText`, T's `claims` check): no walk recurses, so none is a RangeError.
 - Every reader parses T strictly, so a member added after a release raises `v` or waits for every reader to take it (V22); the schema does not tell T's two forms apart, the Core writing `request_uri` on every start by it and the screen holding T to its URL's.
-- Every payload refuses a field it does not know; T's items are a closed set. A JAR's claim no rule names is taken, T unchanged (RFC 6749 §3.1); `request`, `request_uri` (RFC 9101 §4) and `authorization_details` (A25) are known and refused. `id_token_hint` gives `hint_sub`, unverified.
+- Every payload refuses a field it does not know; T's items are a closed set. A claim no rule names, or a top-level null (a required item's: missing), is taken unread (RFC 6749 §3.1); `request`, `request_uri` (RFC 9101 §4) and `authorization_details` (A25) are known and refused, null too. `id_token_hint` gives `hint_sub`, unverified.
 - T's `claims` is a JSON object (OIDC Core §5.5), any other `item:claims`, and holds no null: T is signed whole, and its signer writes none. A claim an ID token's or userinfo's request asks by `null` is written `{}`, as both ask it in the default manner (OIDC Core §5.5.1), on both sides alike; any other null in `claims` is `item:claims`, though §5.5 has a member not understood ignored: that null rule alone is a stricter reading, kept as a deviation.
 - The identifier goes in a statement masked alone, for display; a creation names its account by `account` or `user_name`, one alone: the first key's path by `account`, F1's by `user_name` (its subject has none), passkey-add's by either.
 - A creation's `basis` fixes what its evidence hashes: the mail token (`first-key`), the approved `passkey-add` statement, or the T read before signing up (`sign-up`); `ct_hash` is `first-key`'s alone, a creation with no basis read as such.
-- ②'s answer: T, its get challenge (SHA-256 of `challengeInput(T, "get")`, which the screen recomputes and uses) and `create`, an unsigned hint for F1.
+- ②'s answer: T, its get challenge (SHA-256 of `challengeInput(T, "get")`, the screen's to recompute and use) and `create`, an unsigned hint for F1.
 - A sealed value is `{ enc, ct }`: a 65-byte uncompressed point and the ciphertext with its 16-byte tag, base64url in one spelling; a nonce is 32 bytes.
 - An approval's completion binds the statement's and assertion's SHA-256, sealed under `completionAad` of the statement answered (a key change's: the `possession` for an add, the `passkey-manage` statement for a delete). A reader parses the form its request expects.
 - A label is 1 to 64 code points, no control, format, surrogate or line separator.

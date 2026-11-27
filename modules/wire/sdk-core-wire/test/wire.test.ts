@@ -90,7 +90,6 @@ describe("the items T approves, from a JAR", () => {
 
 	it("refuses any null left in claims, where none reads as a request asked in the default manner", () => {
 		for (const claims of [
-			null,
 			{ id_token: null },
 			{ other: null },
 			{ id_token: { email: { essential: true, purpose: null } } },
@@ -236,7 +235,6 @@ describe("the items T approves, from a JAR", () => {
 			"",
 			" a.b.c",
 			1,
-			null,
 			["a.b.c"],
 			hintOf('{"aud":"rp-1"}'),
 			hintOf('{"sub":""}'),
@@ -273,7 +271,6 @@ describe("the items T approves, from a JAR", () => {
 			"1e3",
 			" 1",
 			"0x10",
-			null,
 			true,
 			[],
 			[1],
@@ -290,6 +287,37 @@ describe("the items T approves, from a JAR", () => {
 		const { nonce: _, ...without } = jar;
 		expect(itemsFromJar({ ...without, max_age: "x" }, "h")).toEqual({
 			error: "missing_item:nonce",
+		});
+	});
+
+	it("reads a top-level item of JSON null as not sent (RFC 6749 §3.1), T byte for byte the same JAR's without it", () => {
+		const plain = itemsFromJar(jar, "h");
+		if (!("items" in plain)) throw new Error(plain.error);
+		for (const name of [
+			"resource",
+			"claims",
+			"id_token_hint",
+			"max_age",
+			"display",
+			"acr_values",
+			"login_hint",
+			"other",
+		]) {
+			const read = itemsFromJar({ ...jar, [name]: null }, "h");
+			if (!("items" in read)) throw new Error(`${name}: ${read.error}`);
+			expect(canonicalText(read.items), name).toBe(canonicalText(plain.items));
+		}
+		// An item it must carry sent as null is missing; a known item refused is refused whatever its value.
+		expect(itemsFromJar({ ...jar, nonce: null }, "h")).toEqual({ error: "missing_item:nonce" });
+		for (const name of ["request", "request_uri", "authorization_details"])
+			expect(itemsFromJar({ ...jar, [name]: null }, "h"), name).toEqual({
+				error: `refused_item:${name}`,
+			});
+		// An empty text is a value, judged by its item's rule; a null inside claims keeps its rule (V26).
+		expect(itemsFromJar({ ...jar, resource: "" }, "h")).toEqual({ error: "item:resource" });
+		expect(itemsFromJar({ ...jar, claims: "" }, "h")).toEqual({ error: "item:claims" });
+		expect(itemsFromJar({ ...jar, claims: { other: null } }, "h")).toEqual({
+			error: "item:claims",
 		});
 	});
 

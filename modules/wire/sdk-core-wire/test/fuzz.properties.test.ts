@@ -41,7 +41,13 @@ const approval = payloads.statement.shape.approval;
 const shapeOrder = Object.keys(approval.shape) as (keyof typeof approval.shape)[];
 
 /** The reference's reading of a JAR, written apart from `itemsFromJar`: its precedence, its projection. */
-function reference(payload: Record<string, unknown>, hash: string) {
+function reference(given: Record<string, unknown>, hash: string) {
+	// A top-level null is not sent, but where the item is a refused one.
+	const payload = Object.fromEntries(
+		Object.entries(given).filter(
+			([k, v]) => v !== null || ["request", "request_uri", "authorization_details"].includes(k),
+		),
+	);
 	// The known items refused, spelled here apart from the wire's list; any other claim no rule names is taken.
 	const refused = ["request", "request_uri", "authorization_details"];
 	const named = Object.keys(payload).find((k) => refused.includes(k));
@@ -275,6 +281,7 @@ describe("the items T approves, from any JAR's payload", () => {
 		const seen = {
 			refused: 0,
 			okUnknown: 0,
+			okNull: 0,
 			missing: 0,
 			item: 0,
 			claimsNull: 0,
@@ -297,6 +304,8 @@ describe("the items T approves, from any JAR's payload", () => {
 					if (ignored.some((k) => Object.hasOwn(p, k))) seen.okIgnored++;
 					if (Object.hasOwn(p, "max_age")) seen.okMaxAge++;
 					if (got.items.hint_sub !== undefined) seen.okHint++;
+					// A top-level null taken as not sent.
+					if (Object.values(p).includes(null)) seen.okNull++;
 					// A claim no rule names, taken: T is the same JAR's without it, byte for byte.
 					const named = new Set<string>([
 						...Object.keys(jar),
