@@ -112,6 +112,13 @@ export const words: readonly Word[] = [
 		error: "invalid_request",
 		description: "authorization_details are not taken",
 	},
+	// The same item as a JAR's claim: the request object's, by its spelling.
+	...atBoth({
+		key: "rar-refused",
+		refuser: "core",
+		error: "invalid_request_object",
+		description: "refused_item:authorization_details",
+	}),
 	...atBoth({
 		key: "form-post-required",
 		refuser: "core",

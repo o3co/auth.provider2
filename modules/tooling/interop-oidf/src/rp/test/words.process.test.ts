@@ -79,6 +79,8 @@ const driven: Readonly<Record<string, () => Promise<Driven>>> = {
 	"jar-dpop-jkt-required/par": pushed(() => ({ drop: ["dpop_jkt"] })),
 	"par-dpop-header-only/par": pushed(() => ({ drop: ["dpop_jkt"] }), true),
 	"rar-refused/par": pushed(() => ({}), false, { authorization_details: "[]" }),
+	"rar-refused/par/claim": pushed(() => ({ items: { authorization_details: [] } })),
+	"rar-refused/start/claim": startedByValue(() => ({ items: { authorization_details: [] } })),
 	"form-post-required/par": pushed(() => ({ drop: ["response_mode"] })),
 	"state-required/par": pushed(() => ({ drop: ["state"] })),
 	"nonce-required/par": pushed(() => ({ drop: ["nonce"] })),
@@ -148,6 +150,8 @@ const driven: Readonly<Record<string, () => Promise<Driven>>> = {
 function nameOf(word: Word): string {
 	const place = `${word.key}/${word.place}`;
 	if (word.key === "state-nonce-bound") return `${place}/${word.description.split(" ")[0]}`;
+	if (word.key === "rar-refused" && word.description.startsWith("refused_item"))
+		return `${place}/claim`;
 	if (word.key === "jar-required")
 		return `${place}/${word.description.includes("by value") ? "by-value" : "neither"}`;
 	return place;

@@ -38,9 +38,9 @@
 	{
 		"key": "rar-refused",
 		"kind": "strict",
-		"standard": "RFC 9396; FAPI 2.0 (RAR allowed)",
+		"standard": "RFC 9396; RFC 6749 §3.1, §3.2; FAPI 2.0 (RAR allowed)",
 		"text": "An AS may accept `authorization_details`",
-		"behaviour": "`authorization_details` is refused at PAR and on every grant at the token endpoint",
+		"behaviour": "`authorization_details` is known and refused, never ignored as an unknown parameter is (RFC 6749 §3.1, §3.2): as a parameter at PAR and on every grant at the token endpoint (`invalid_request`), and as a JAR's claim at the push and a login's start (`invalid_request_object`, `refused_item:authorization_details`). No structure is read, so the error is not RFC 9396 §5's `invalid_authorization_details`",
 		"why": "Per-operation authorization belongs to the RS and 4s-intent, not the IdP (V6); accepting it would make the IdP decide operations",
 		"decision": "A25"
 	},
@@ -205,15 +205,6 @@
 		"behaviour": "client_credentials (opt-in, a weakening choice) takes `private_key_jwt` by a key written in the client's registry record alone, and its DPoP proof must be by that same key, the token's `cnf`; a proof by another key is refused `invalid_dpop_proof`",
 		"why": "TLS ends at the Front, so a compromised Front could pass the client's assertion on and swap the proof for one by its own key, getting a token bound to the attacker's key in the client's name (claim 2; Tamarin `CC_PROOF_ANY_REGISTERED`)",
 		"decision": "V21"
-	},
-	{
-		"key": "authorization-items-closed",
-		"kind": "deviation",
-		"standard": "RFC 6749 §3.1",
-		"text": "The authorization server MUST ignore unrecognized request parameters",
-		"behaviour": "A JAR naming a claim outside the login's items, its envelope and the claims below is refused (`unknown_item`, `invalid_request_object`). `display`, `ui_locales`, `claims_locales`, `login_hint`, `max_age` (whole seconds, met by every login's fresh tap) and `acr_values` are taken and never put in T; `id_token_hint` is verified and honoured (T holds its subject)",
-		"why": "The statement T the person approves is signed whole and compared exactly, its items one closed set; an item the screen neither checks nor shows could be added or changed by a compromised Front, so none is carried that is not named",
-		"decision": "A26, V29"
 	},
 	{
 		"key": "scope-not-understood-refused",
