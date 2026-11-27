@@ -129,6 +129,33 @@ const toldBy = (w: Word) =>
 		.flat()
 		.join(", ");
 
+/**
+ * The head's line of the wall: the explained and before-wall modules refused at PAR on a key a refusal
+ * there shows observed, those keys with how many modules each refused (a module under each of its
+ * keys), and, where the run passed, what it then is.
+ */
+function wallLine(modules: readonly Judged[], passed: boolean): string {
+	const keysAtPar = (m: Judged) =>
+		new Set(
+			m.refusals.flatMap((r) =>
+				r.place === "par" && r.reading.kind === "observed" ? [r.reading.key] : [],
+			),
+		);
+	const wall = modules.filter(
+		(m) => (m.class === "explained" || m.class === "before-wall") && keysAtPar(m).size > 0,
+	);
+	if (wall.length === 0)
+		return "- At the wall: no explained or before-wall module was refused at PAR on a key it observed there.";
+	const by = (c: Class) => wall.filter((m) => m.class === c).length;
+	const keys = [...new Set(wall.flatMap((m) => [...keysAtPar(m)]))].sort();
+	const named = keys
+		.map((k) => `\`${k}\` (${wall.filter((m) => keysAtPar(m).has(k)).length})`)
+		.join(", ");
+	const of = `${wall.length} of ${modules.length} module${modules.length === 1 ? "" : "s"}`;
+	const ran = passed ? " The run passed: no unexplained failure plus PAR's entry checks." : "";
+	return `- At the wall: ${of} (explained ${by("explained")}, before-wall ${by("before-wall")}) were refused at PAR on ${named}, the modules each key refused: these refusals show PAR's entry checks, not evidence past PAR.${ran}`;
+}
+
 /** The report as Markdown: the head, how to read it, and four tables joined by test, variant and key. */
 export function reportOf(input: ReportInput): string {
 	const { modules, problems, passed } = input.judged;
@@ -158,6 +185,7 @@ export function reportOf(input: ReportInput): string {
 		passed ? "- Every module read as its entry expects: the run passed." : "- The run failed:",
 		...problems.map((p) => `  - ${line(p)}`),
 		`- Modules: ${classes.map(count).join(", ")}.`,
+		wallLine(modules, passed),
 		`- What it cannot show: ${cannotShow[input.run]}`,
 		"",
 		"## The provider as run: its differences from the pattern",

@@ -97,6 +97,38 @@ describe("a run's report", () => {
 		expect(failed).not.toContain("- Every module read as its entry expects: the run passed.");
 	});
 
+	it("heads, right after the classes, with the explained and before-wall modules refused at PAR on a key observed there, by key, and what a passed run then is", () => {
+		const atPar = (key: string): RunRefusal => ({ ...typ, reading: { kind: "observed", key } });
+		const modules = [
+			module(),
+			module({ class: "before-wall", result: "PASSED" }),
+			module({ refusals: [atPar("jar-typ-required"), atPar("jar-jti-required")] }),
+			// Not counted: another class though refused at PAR on an observed key; a key observed at
+			// another place (a start's, a token's); a reading unconfirmed, even of one row.
+			module({ class: "crossed", result: "PASSED" }),
+			module({ class: "unconfirmed" }),
+			module({ class: "failed" }),
+			module({ refusals: [{ ...typ, place: "start" }] }),
+			module({ refusals: [{ ...typ, place: "token" }] }),
+			module({ refusals: [{ ...typ, reading: { kind: "unconfirmed", keys: ["jar-required"] } }] }),
+		];
+		const wall =
+			"- At the wall: 3 of 9 modules (explained 2, before-wall 1) were refused at PAR on `jar-jti-required` (1), `jar-typ-required` (3), the modules each key refused: these refusals show PAR's entry checks, not evidence past PAR.";
+		const passedRun = reportOf(input({ judged: judgedOf(...modules) })).split("\n");
+		const at = passedRun.findIndex((l) => l.startsWith("- Modules: "));
+		expect(passedRun[at + 1]).toBe(
+			`${wall} The run passed: no unexplained failure plus PAR's entry checks.`,
+		);
+		const failedRun = reportOf(
+			input({ judged: { modules, problems: ["x failed"], passed: false } }),
+		).split("\n");
+		expect(failedRun).toContain(wall);
+		expect(reportOf(input({ judged: judgedOf(module()) }))).toContain("1 of 1 module (explained 1");
+		expect(reportOf(input({ judged: judgedOf(module({ class: "crossed" })) }))).toContain(
+			"- At the wall: no explained or before-wall module was refused at PAR on a key it observed there.",
+		);
+	});
+
 	it("names the scene's differences, each on one line, and says how to read each class and key", () => {
 		const text = reportOf(input());
 		expect(section(text, "## The provider as run: its differences from the pattern")).toEqual(

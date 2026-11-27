@@ -3,7 +3,7 @@
 Internal module of `interop-oidf`: a run's report, its results as tables in the ledger's keys and words.
 
 ## Responsibilities
-- Writes, from a run judged, the ledger and the scene's differences from the pattern, the report as Markdown: its head (plan, pin, passed or why not, the classes, what the run cannot show), how to read it, and four tables joined by test and key.
+- Writes, from a run judged, the ledger and the scene's differences from the pattern, the report as Markdown: its head (plan, pin, passed or why not, the classes, the explained and before-wall modules refused at PAR on a key observed there, and what a passed run then is, what the run cannot show), how to read it, and four tables joined by test and key.
 
 ## Not here
 - Judging the run: `results`. The ledger's rows: `deviations`. The words and their names: `words`. The differences: the scene's. Writing the file and running the suite: `harness`.
