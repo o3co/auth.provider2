@@ -40,7 +40,7 @@
 		"kind": "strict",
 		"standard": "RFC 9396; RFC 6749 §3.1, §3.2; FAPI 2.0 (RAR allowed)",
 		"text": "An AS may accept `authorization_details`",
-		"behaviour": "`authorization_details` is known and refused, never ignored as an unknown parameter is (RFC 6749 §3.1, §3.2): as a parameter at PAR and on every grant at the token endpoint (`invalid_request`), and as a JAR's claim at the push and a login's start (`invalid_request_object`, `refused_item:authorization_details`). No structure is read, so the error is not RFC 9396 §5's `invalid_authorization_details`",
+		"behaviour": "`authorization_details` is known and refused, never ignored as an unknown parameter is (RFC 6749 §3.1, §3.2): as a parameter at PAR and on every grant at the token endpoint (`invalid_request`), and as a JAR's claim at the push and a login's start (`invalid_request_object`, `refused_item:authorization_details`). A JSON null is as if left out, as a JAR's claim and as a token request's JSON member, and through a Front an empty parameter arrives as not sent, at PAR and at the token endpoint (no details are taken all the same); any other value is refused, `[]` too and an empty text in a JAR. No structure is read, so the error is not RFC 9396 §5's `invalid_authorization_details`",
 		"why": "Per-operation authorization belongs to the RS and 4s-intent, not the IdP (V6); accepting it would make the IdP decide operations",
 		"decision": "A25"
 	},
