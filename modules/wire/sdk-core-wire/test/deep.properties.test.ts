@@ -19,11 +19,14 @@ const jar = {
 	code_challenge_method: "S256",
 	dpop_jkt: "k",
 };
-/** A JSON text nested `depth` deep, in objects or arrays, around one leaf. */
+/**
+ * A JSON text nested `depth` deep, in objects or arrays, around one leaf: its one member named `a`,
+ * no space, so the text is its own canonical text, which no engine's recursive JSON.stringify need write.
+ */
+const nestedText = (depth: number, inArrays: boolean, leaf: string) =>
+	`${(inArrays ? "[" : '{"a":').repeat(depth)}${leaf}${(inArrays ? "]" : "}").repeat(depth)}`;
 const nested = (depth: number, inArrays: boolean, leaf: string) =>
-	JSON.parse(
-		`${(inArrays ? "[" : '{"a":').repeat(depth)}${leaf}${(inArrays ? "]" : "}").repeat(depth)}`,
-	);
+	JSON.parse(nestedText(depth, inArrays, leaf));
 
 /** The rule as it was written, by recursion: the oracle the iterative walk keeps to, byte for byte. */
 function recursiveText(value: unknown): string {
@@ -44,8 +47,7 @@ describe("a value nested however deep JSON reads it", () => {
 
 	it("gives its canonical text, never a RangeError", () => {
 		for (const inArrays of [false, true]) {
-			const value = nested(depth, inArrays, "1");
-			expect(canonicalText(value)).toBe(JSON.stringify(value));
+			expect(canonicalText(nested(depth, inArrays, "1"))).toBe(nestedText(depth, inArrays, "1"));
 		}
 	});
 
