@@ -57,14 +57,17 @@ export function fuzzer(seed: number) {
 
 	/** A frame of this kind its encoder accepts, each field drawn within its spec. */
 	function validFrame(kind: RequestKind): Uint8Array {
-		for (;;) {
+		let last: unknown;
+		for (let tries = 0; tries < 100; tries++) {
 			const message = Object.fromEntries(requests[kind].fields.map((f) => [f.name, wellFormed(f)]));
 			try {
 				return encodeRequest(kind, int(2 ** 32), message as Message<typeof kind>);
-			} catch {
-				// A draw at a length's edge; draw again.
+			} catch (error) {
+				// A draw at a length's edge; draw again, a hundred times at most.
+				last = error;
 			}
 		}
+		throw new Error(`no ${kind} frame drawn: ${String(last)}`);
 	}
 
 	/** One to three mutations of a frame. */
