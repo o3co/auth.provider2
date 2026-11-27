@@ -34,14 +34,15 @@ const refused = (word: Word, detail = "", dpopNonce = "", retryAfter = ""): Repl
 		message: { error: refusals.indexOf(word) + 1, detail, dpopNonce, retryAfter },
 	}) as Reply;
 
-/** A refusal's detail as the wire carries it: control characters as spaces, cut to the field's bytes at a character's edge. */
+/** A refusal's detail as the wire carries it: control characters as spaces, a lone surrogate as U+FFFD, cut to the field's bytes at a character's edge. */
 function detailOf(value: unknown): string {
 	if (typeof value !== "string") return "";
 	let text = "";
 	let bytes = 0;
 	for (const c of value) {
 		const code = c.codePointAt(0) ?? 0;
-		const shown = code < 0x20 || code === 0x7f ? " " : c;
+		const shown =
+			code < 0x20 || code === 0x7f ? " " : code >= 0xd800 && code <= 0xdfff ? "\ufffd" : c;
 		bytes += encoder.encode(shown).length;
 		if (bytes > detailMax) break;
 		text += shown;

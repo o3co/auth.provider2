@@ -4,6 +4,7 @@ import {
 	decodeRequest,
 	encodeReply,
 	frameSplitter,
+	WireEncodeError,
 	type WireReply,
 	type WireRequest,
 } from "@mod/front-core-codec";
@@ -46,7 +47,8 @@ const failed = (id: number): WireReply => ({
 /**
  * Serves the wire on mutual TLS: each connection from a Front instance whose certificate the
  * authority issued, closed as that certificate expires; frames answered as they come, each by its id.
- * A frame rejected is answered with its code alone and ends the connection, nothing read after it.
+ * A frame rejected is answered with its code alone and ends the connection, nothing read after it;
+ * one frame's failure, its handling's or its reply's, is its own `server_error`, the connection kept.
  */
 export async function listenWire(w: WireListener): Promise<WireListening> {
 	let stopping = false;
@@ -90,12 +92,16 @@ export async function listenWire(w: WireListener): Promise<WireListening> {
 			const read = decodeRequest(frame);
 			if (!read.ok) return reject(read.error, read.id);
 			inFlight.set(socket, (inFlight.get(socket) ?? 0) + 1);
-			void w
-				.handle(read.value, peer)
-				.then(encodeReply, (error: unknown) => {
-					w.log.error("core-wire.failed", {
-						kind: error instanceof Error ? error.name : typeof error,
-					});
+			void Promise.resolve()
+				.then(() => w.handle(read.value, peer))
+				.then(encodeReply)
+				.catch((error: unknown) => {
+					w.log.error(
+						"core-wire.failed",
+						error instanceof WireEncodeError
+							? { kind: "reply_unencodable", field: error.field, code: error.code }
+							: { kind: error instanceof Error ? error.name : typeof error },
+					);
 					return encodeReply(failed(read.value.id));
 				})
 				.then(

@@ -46,9 +46,13 @@ describe("the compromised Front on a sign-up (F1)", () => {
 
 describe("the claims parameter's bridge (F-21)", () => {
 	/** A login of a person at an RP, its JAR's items given: its ID token's faults as the RP checks them (none for one it takes), or where it stopped. */
-	const login = async (of: World, items: Record<string, unknown> = {}) => {
+	const login = async (
+		of: World,
+		items: Record<string, unknown> = {},
+		through?: Awaited<ReturnType<World["front"]>>,
+	) => {
 		const person = await of.person(rpOf(of));
-		const front = await of.front();
+		const front = through ?? (await of.front());
 		const session = rpOf(of).authorization(items);
 		const s = await person.screen.start(front, rpOf(of).clientId, session.jar);
 		if (stopped(s)) return s;
@@ -125,6 +129,20 @@ describe("the claims parameter's bridge (F-21)", () => {
 			at: "/login/start",
 			answered: { status: 400, body: { error: "invalid_request_object" } },
 		});
+	});
+
+	it("refuses a JAR naming a claim no well-formed text spells (a lone surrogate) at the start, the same Front's link to the Core kept for the next login", async () => {
+		const front = await w.front();
+		const lone = await login(w, { "\ud800": "x" }, front);
+		expect(lone).toMatchObject({
+			stopped: "core",
+			at: "/login/start",
+			answered: {
+				status: 400,
+				body: { error: "invalid_request_object", error_description: "unknown_item:\ufffd" },
+			},
+		});
+		expect(await login(w, {}, front)).toEqual({ faults: [] });
 	});
 
 	it("not composed: the document names no such parameter, and a claims request is refused before T", async () => {
