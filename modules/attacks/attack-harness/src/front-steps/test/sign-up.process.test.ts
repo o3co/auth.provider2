@@ -109,6 +109,24 @@ describe("the claims parameter's bridge (F-21)", () => {
 		});
 	});
 
+	it("composed: a claims parameter nested deep is read by the Core into T and its signer and by the screen's SDK, the login finished and its ID token taken; one deeper than T holds refused at the start, never a server error", async () => {
+		// A member §5.5 does not name is ignored by the Core's reading, so its value rides in T whole.
+		const nested = (depth: number) => JSON.parse(`${"[".repeat(depth)}1${"]".repeat(depth)}`);
+		const asked = (depth: number) => ({
+			claims: { id_token: { email: { essential: true, x: nested(depth) } } },
+		});
+		// As deep as T (its route's 4096 characters) holds: issued, signed, approved, and the ID token taken
+		// (claims selection names no such member, so the ID token holds none of it).
+		expect(await login(w, asked(1000))).toEqual({ faults: [] });
+		// As deep as the JAR's one field (8192 characters) carries, past the walks' stacks once: too long a T.
+		expect(rpOf(w).authorization(asked(2700)).jar.length).toBeLessThanOrEqual(8192);
+		expect(await login(w, asked(2700))).toMatchObject({
+			stopped: "core",
+			at: "/login/start",
+			answered: { status: 400, body: { error: "invalid_request_object" } },
+		});
+	});
+
 	it("not composed: the document names no such parameter, and a claims request is refused before T", async () => {
 		expect(bare.core.metadata).not.toHaveProperty("claims_parameter_supported");
 		const asked = await login(bare, { claims: { id_token: { auth_time: { essential: true } } } });

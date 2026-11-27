@@ -1,14 +1,46 @@
-/** A canonical JSON text: object keys sorted, undefined members left out, so both sides build the same bytes. */
+/**
+ * A canonical JSON text: object keys sorted, undefined members left out, so both sides build the same
+ * bytes; by a stack, never recursion, the text the rule always wrote.
+ */
 export function canonical(value: unknown): string {
-	if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
-	if (value !== null && typeof value === "object") {
-		const record = value as Record<string, unknown>;
-		const keys = Object.keys(record)
-			.filter((key) => record[key] !== undefined)
-			.sort();
-		return `{${keys.map((key) => `${JSON.stringify(key)}:${canonical(record[key])}`).join(",")}}`;
+	if (value === null || typeof value !== "object") return JSON.stringify(value);
+	let text = "";
+	const left: (string | { readonly value: unknown; readonly inList: boolean })[] = [
+		{ value, inList: false },
+	];
+	for (let next = left.pop(); next !== undefined; next = left.pop()) {
+		if (typeof next === "string") {
+			text += next;
+			continue;
+		}
+		const at = next.value;
+		if (Array.isArray(at)) {
+			left.push("]");
+			for (let i = at.length - 1; i >= 0; i--) {
+				left.push({ value: at[i], inList: true });
+				if (i > 0) left.push(",");
+			}
+			left.push("[");
+		} else if (at !== null && typeof at === "object") {
+			const record = at as Record<string, unknown>;
+			const keys = Object.keys(record)
+				.filter((key) => record[key] !== undefined)
+				.sort();
+			left.push("}");
+			for (let i = keys.length - 1; i >= 0; i--) {
+				const key = keys[i] as string;
+				left.push({ value: record[key], inList: false });
+				left.push(`${JSON.stringify(key)}:`);
+				if (i > 0) left.push(",");
+			}
+			left.push("{");
+		} else {
+			// A leaf JSON writes as nothing: empty in a list, `undefined` as a member, as `join` and a template wrote it.
+			const leaf: string | undefined = JSON.stringify(at);
+			text += leaf ?? (next.inList ? "" : "undefined");
+		}
 	}
-	return JSON.stringify(value);
+	return text;
 }
 
 export const unique = <T>(list: readonly T[], key: (item: T) => unknown) =>
@@ -49,13 +81,15 @@ export function readJson(text: string): { readonly value: unknown } | { readonly
 			before = c;
 		} else if (c.trim() !== "") before = c;
 	}
-	const finite = (x: unknown): boolean =>
-		typeof x === "number"
-			? Number.isFinite(x)
-			: x !== null && typeof x === "object"
-				? Object.values(x).every(finite)
-				: true;
-	return finite(value) ? { value } : { error: "number" };
+	// Every number a double, at any depth: by a stack, never recursion.
+	const left: unknown[] = [value];
+	while (left.length > 0) {
+		const x = left.pop();
+		if (typeof x === "number" && !Number.isFinite(x)) return { error: "number" };
+		if (x !== null && typeof x === "object")
+			for (const inside of Object.values(x)) left.push(inside);
+	}
+	return { value };
 }
 
 export const isObject = (x: unknown): x is Record<string, unknown> =>

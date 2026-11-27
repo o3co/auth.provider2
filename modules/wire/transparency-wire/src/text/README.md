@@ -19,6 +19,7 @@ Internal module of `transparency-wire`: the one JSON reading, the canonical spel
 - `readJson` refuses a text that is not JSON, a key named twice in one object at any depth (keys compared as decoded, escapes and all), and a number past a double.
 - `bytesOf` takes bytes' one unpadded base64url spelling alone; `coordinate`, 43 base64url characters, the last one's two spare bits zero; `textOf`, strict UTF-8 alone (shortest forms, no surrogates). Each gives none for any other.
 - A point is P-256's where each coordinate is below the field prime and y² = x³ − 3x + b.
+- A value nested however deep JSON reads it is read (`readJson`) and written (`canonical`) whole: no walk recurses, so no value JSON reads is a RangeError.
 
 ## Depends on
 - Nothing, not even `zod`.

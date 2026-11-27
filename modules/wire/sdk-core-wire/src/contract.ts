@@ -93,12 +93,19 @@ const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789
 
 const sextet = (text: string, at: number) => alphabet.indexOf(text.charAt(at));
 
-/** Whether a JSON value holds a null anywhere: as an object's member or an array's element. */
-const holdsNull = (value: unknown): boolean =>
-	value === null ||
-	(Array.isArray(value)
-		? value.some(holdsNull)
-		: typeof value === "object" && Object.values(value as object).some(holdsNull));
+/** Whether a JSON value holds a null anywhere (a list by its indices, as `some` visits them); by a stack, never recursion. */
+function holdsNull(value: unknown): boolean {
+	const left: unknown[] = [value];
+	while (left.length > 0) {
+		const at = left.pop();
+		if (at === null) return true;
+		if (Array.isArray(at)) {
+			for (let i = 0; i < at.length; i++) if (i in at) left.push(at[i]);
+		} else if (typeof at === "object")
+			for (const inside of Object.values(at as object)) left.push(inside);
+	}
+	return false;
+}
 
 const approval = z
 	.object({
@@ -295,17 +302,49 @@ export type AuthorizationAnswer = z.infer<typeof authorizationAnswer>;
 export type AuthorizationItems = z.infer<typeof approval>;
 export type SigningKey = z.infer<typeof signingKey>;
 
-/** A canonical JSON text: object keys sorted, undefined members left out, so both sides build the same bytes. */
+/**
+ * A canonical JSON text: object keys sorted, undefined members left out, so both sides build the same
+ * bytes; by a stack, never recursion, the text the rule always wrote.
+ */
 export function canonicalText(value: unknown): string {
-	if (Array.isArray(value)) return `[${value.map(canonicalText).join(",")}]`;
-	if (value !== null && typeof value === "object") {
-		const record = value as Record<string, unknown>;
-		const keys = Object.keys(record)
-			.filter((key) => record[key] !== undefined)
-			.sort();
-		return `{${keys.map((key) => `${JSON.stringify(key)}:${canonicalText(record[key])}`).join(",")}}`;
+	if (value === null || typeof value !== "object") return JSON.stringify(value);
+	let text = "";
+	const left: (string | { readonly value: unknown; readonly inList: boolean })[] = [
+		{ value, inList: false },
+	];
+	for (let next = left.pop(); next !== undefined; next = left.pop()) {
+		if (typeof next === "string") {
+			text += next;
+			continue;
+		}
+		const at = next.value;
+		if (Array.isArray(at)) {
+			left.push("]");
+			for (let i = at.length - 1; i >= 0; i--) {
+				left.push({ value: at[i], inList: true });
+				if (i > 0) left.push(",");
+			}
+			left.push("[");
+		} else if (at !== null && typeof at === "object") {
+			const record = at as Record<string, unknown>;
+			const keys = Object.keys(record)
+				.filter((key) => record[key] !== undefined)
+				.sort();
+			left.push("}");
+			for (let i = keys.length - 1; i >= 0; i--) {
+				const key = keys[i] as string;
+				left.push({ value: record[key], inList: false });
+				left.push(`${JSON.stringify(key)}:`);
+				if (i > 0) left.push(",");
+			}
+			left.push("{");
+		} else {
+			// A leaf JSON writes as nothing: empty in a list, `undefined` as a member, as `join` and a template wrote it.
+			const leaf: string | undefined = JSON.stringify(at);
+			text += leaf ?? (next.inList ? "" : "undefined");
+		}
 	}
-	return JSON.stringify(value);
+	return text;
 }
 
 const isObject = (value: unknown): value is Readonly<Record<string, unknown>> =>

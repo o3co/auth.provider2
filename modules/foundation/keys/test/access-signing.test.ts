@@ -2,6 +2,7 @@ import { generateKeyPairSync, type KeyObject } from "node:crypto";
 import { assemble, type BootRefused, defineModule, kernelConfig } from "@mod/kernel";
 import { quietRuntime, recordingLog } from "@mod/kernel/testing";
 import { promiseNames, stances } from "@mod/promises";
+import fc from "fast-check";
 import { CompactSign, decodeProtectedHeader } from "jose";
 import { afterEach, describe, expect, it } from "vitest";
 import { accessTokenSigning, keys, type Signed } from "../src/contract.ts";
@@ -58,6 +59,65 @@ describe("accessTokenSigning", () => {
 		const verified = await access.verify(token);
 		expect(verified).toEqual({ kind: "valid", claims: { sub: "a", scope: "read" } });
 		expect(verified.kind === "valid" && Object.isFrozen(verified.claims)).toBe(true);
+	});
+
+	it("signs claims nested however deep JSON reads them, and refuses a null at their bottom by its path, never a RangeError", async () => {
+		const { k } = await open();
+		const deep = (leaf: string) =>
+			new TextEncoder().encode(
+				`{"sub":"a","deep":${'{"a":'.repeat(20_000)}${leaf}${"}".repeat(20_000)}}`,
+			);
+		await expect(k.sign(k.prepare("authority", "JWT"), deep('"x"'))).resolves.toBeDefined();
+		await expect(k.sign(k.prepare("authority", "JWT"), deep("null"))).rejects.toThrow(
+			`keys: claims are null: deep.${Array(19_999).fill("a").join(".")}.a`,
+		);
+	});
+
+	it("names the null claims by the paths, in the order, the recursive walk named them", async () => {
+		const { k } = await open();
+		function recursive(value: unknown, at = "", found: string[] = []): string[] {
+			if (Array.isArray(value)) {
+				for (const [i, item] of value.entries()) {
+					if (item === null) found.push(`${at}[${i}]`);
+					else recursive(item, `${at}[${i}]`, found);
+				}
+			} else if (typeof value === "object" && value !== null) {
+				for (const [key, claim] of Object.entries(value)) {
+					const path = at ? `${at}.${key}` : key;
+					if (claim === null) found.push(path);
+					else recursive(claim, path, found);
+				}
+			}
+			return found;
+		}
+		const json = fc.letrec((tie) => ({
+			any: fc.oneof(
+				{ depthSize: "small" },
+				fc.constant(null),
+				fc.integer(),
+				tie("array"),
+				tie("object"),
+			),
+			array: fc.array(tie("any"), { maxLength: 4 }),
+			object: fc.dictionary(fc.constantFrom("", "a", "b.c", "[0]"), tie("any"), { maxKeys: 4 }),
+		})).any;
+		await fc.assert(
+			fc.asyncProperty(
+				fc.dictionary(fc.constantFrom("", "x", "y"), json, { minKeys: 1 }),
+				async (claims) => {
+					const nulls = recursive(claims);
+					const signed = await k.sign(k.prepare("authority", "JWT"), bytes(claims)).then(
+						() => "signed",
+						(error: unknown) => (error instanceof Error ? error.message : String(error)),
+					);
+					// The whole message, not a part: no path invented, none dropped, in the recursive walk's order.
+					expect(signed).toBe(
+						nulls.length === 0 ? "signed" : `keys: claims are null: ${nulls.join(" ")}`,
+					);
+				},
+			),
+			{ numRuns: 300, seed: 20261127 },
+		);
 	});
 
 	it("refuses to sign claims holding a null, at any depth, on either ring and as an access token alike, naming the claims and not their values [oidc-core-13.3-a]", async () => {

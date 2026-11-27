@@ -37,25 +37,31 @@ export function jsonOf(bytes: Uint8Array): unknown {
 		const read = tokens.parse(text);
 		return "value" in read ? read.value : undefined;
 	} catch {
-		// A text nested past the reader's depth throws; it is no JSON this reads.
+		// The reader walks by a stack and throws on no JSON text; should one ever throw, it is no JSON this reads.
 		return undefined;
 	}
 }
 
-/** The key paths of the claims whose value is null at any depth: an object's member or an array's element. */
-function nullClaims(value: unknown, at = "", found: string[] = []): string[] {
-	if (Array.isArray(value)) {
-		for (const [i, item] of value.entries()) {
-			// An element that is null is a null claim, as an object's member is.
-			if (item === null) found.push(`${at}[${i}]`);
-			else nullClaims(item, `${at}[${i}]`, found);
-		}
-	} else if (typeof value === "object" && value !== null) {
-		for (const [key, claim] of Object.entries(value)) {
-			const path = at ? `${at}.${key}` : key;
-			if (claim === null) found.push(path);
-			else nullClaims(claim, path, found);
-		}
+/**
+ * The key paths of the claims whose value is null at any depth, an object's member or an array's
+ * element, in the order written; by a stack, never recursion, so claims however deep are walked.
+ */
+function nullClaims(value: unknown): string[] {
+	const found: string[] = [];
+	const left: [unknown, string][] = [];
+	const under = (at: unknown, path: string) => {
+		const inside: [unknown, string][] = Array.isArray(at)
+			? [...at.entries()].map(([i, item]) => [item, `${path}[${i}]`])
+			: typeof at === "object" && at !== null
+				? Object.entries(at).map(([key, claim]) => [claim, path ? `${path}.${key}` : key])
+				: [];
+		for (let i = inside.length - 1; i >= 0; i--) left.push(inside[i] as [unknown, string]);
+	};
+	under(value, "");
+	for (let next = left.pop(); next; next = left.pop()) {
+		const [at, path] = next;
+		if (at === null) found.push(path);
+		else under(at, path);
 	}
 	return found;
 }

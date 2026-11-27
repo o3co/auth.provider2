@@ -22,6 +22,7 @@
 
 ## Invariants
 - A protocol (G33): types, frozen constants, fixed schemas and the functions that build by them; no I/O, clock, randomness or state.
+- A value nested however deep JSON reads it is read and written whole (`canonicalText`, T's `claims` check): no walk recurses, so no value JSON reads is a RangeError.
 - Every payload refuses a field it does not know; T's items are a closed set, and a JAR with any other claim beside its envelope yields no items.
 - T's `claims` holds no null: T is signed whole, and its signer writes none. A claim an ID token's or userinfo's request asks by `null` is written `{}`, as both ask it in the default manner (OIDC Core §5.5.1), on both sides alike; any other null in `claims` is `item:claims`, though §5.5 has a member not understood ignored. A stricter reading, kept as a deviation.
 - The identifier goes in a statement masked alone, for display; a creation names its account by `account` or `user_name`, one alone: the first key's path by `account`, F1's by `user_name` (its subject has none), passkey-add's by either.
