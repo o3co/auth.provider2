@@ -49,7 +49,7 @@ describe("the items T approves, from a JAR", () => {
 		if (!("items" in byValue)) throw new Error(byValue.error);
 		expect("request_uri" in byValue.items).toBe(false);
 		expect(itemsFromJar({ ...jar, request_uri: "urn:x" }, "h")).toEqual({
-			error: "unknown_item:request_uri",
+			error: "refused_item:request_uri",
 		});
 		expect(itemsFromJar(jar, "h", "")).toMatchObject({ error: "item:request_uri" });
 	});
@@ -293,10 +293,48 @@ describe("the items T approves, from a JAR", () => {
 		});
 	});
 
-	it("refuses a claim outside the closed set, authorization_details among them", () => {
-		expect(itemsFromJar({ ...jar, authorization_details: [] }, "h")).toEqual({
-			error: "unknown_item:authorization_details",
+	it("refuses the known items refused, each by its rule: request and request_uri (RFC 9101 §4), authorization_details (A25)", () => {
+		for (const name of ["request", "request_uri", "authorization_details"])
+			for (const value of ["x", [], {}, null])
+				expect(itemsFromJar({ ...jar, [name]: value }, "h"), name).toEqual({
+					error: `refused_item:${name}`,
+				});
+		// Before an item missing, as an unknown claim was.
+		const { nonce: _, ...without } = jar;
+		expect(itemsFromJar({ ...without, request: "x" }, "h")).toEqual({
+			error: "refused_item:request",
 		});
+	});
+
+	it("takes a claim no rule names and holds nothing of it in T, byte for byte as the same JAR without it (RFC 6749 §3.1)", () => {
+		const plain = itemsFromJar(jar, "h");
+		if (!("items" in plain)) throw new Error(plain.error);
+		const bytes = canonicalText(plain.items);
+		// T's own names the JAR cannot set (jar_hash, hint_sub), case variants of items and refused items, and the rest.
+		const names = ["other", "x_vendor", "", "__proto__", "constructor", "\ud800", "ITEMS", "Scope"];
+		names.push("registration", "client_secret", "jar_hash", "hint_sub", "Resource", "Claims");
+		names.push("Request_URI", "REQUEST", "Authorization_Details");
+		const values: unknown[] = [
+			1,
+			"x",
+			null,
+			[],
+			{ scope: "admin" },
+			{ resource: "https://evil.example" },
+		];
+		values.push(
+			{ claims: { id_token: { email: {} } } },
+			{ id_token: { sub: { value: "mallory" } } },
+		);
+		for (const name of names)
+			for (const value of values) {
+				const payload = Object.fromEntries([...Object.entries(jar), [name, value]]);
+				const read = itemsFromJar(payload, "h");
+				if (!("items" in read)) throw new Error(`${JSON.stringify(name)}: ${read.error}`);
+				expect(canonicalText(read.items), `${JSON.stringify(name)} ${JSON.stringify(value)}`).toBe(
+					bytes,
+				);
+			}
 	});
 
 	it("refuses a missing or empty item, and a mode or method it does not allow", () => {

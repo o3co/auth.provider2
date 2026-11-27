@@ -131,17 +131,9 @@ describe("the claims parameter's bridge (F-21)", () => {
 		});
 	});
 
-	it("refuses a JAR naming a claim no well-formed text spells (a lone surrogate) at the start, the same Front's link to the Core kept for the next login", async () => {
+	it("takes a JAR naming a claim no well-formed text spells (a lone surrogate), the claim ignored (RFC 6749 §3.1), the same Front's link kept for the next login", async () => {
 		const front = await w.front();
-		const lone = await login(w, { "\ud800": "x" }, front);
-		expect(lone).toMatchObject({
-			stopped: "core",
-			at: "/login/start",
-			answered: {
-				status: 400,
-				body: { error: "invalid_request_object", error_description: "unknown_item:\ufffd" },
-			},
-		});
+		expect(await login(w, { "\ud800": "x" }, front)).toEqual({ faults: [] });
 		expect(await login(w, {}, front)).toEqual({ faults: [] });
 	});
 

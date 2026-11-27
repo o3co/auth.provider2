@@ -42,23 +42,10 @@ const shapeOrder = Object.keys(approval.shape) as (keyof typeof approval.shape)[
 
 /** The reference's reading of a JAR, written apart from `itemsFromJar`: its precedence, its projection. */
 function reference(payload: Record<string, unknown>, hash: string) {
-	// The claims T never holds, spelled here apart from the wire's list.
-	const ignored = [
-		"display",
-		"ui_locales",
-		"claims_locales",
-		"login_hint",
-		"max_age",
-		"acr_values",
-	];
-	const allowed: readonly string[] = [
-		...jarClaims.items,
-		...jarClaims.envelope,
-		...ignored,
-		"id_token_hint",
-	];
-	const unknown = Object.keys(payload).find((k) => !allowed.includes(k));
-	if (unknown !== undefined) return { error: `unknown_item:${unknown}` };
+	// The known items refused, spelled here apart from the wire's list; any other claim no rule names is taken.
+	const refused = ["request", "request_uri", "authorization_details"];
+	const named = Object.keys(payload).find((k) => refused.includes(k));
+	if (named !== undefined) return { error: `refused_item:${named}` };
 	const missing = jarClaims.required.find(
 		(k) => typeof payload[k] !== "string" || payload[k] === "",
 	);
@@ -153,7 +140,21 @@ const payload = fc
 		fc.oneof(
 			fc.tuple(
 				fc.constant("add"),
-				fc.constantFrom("authorization_details", "__proto__", "", "x", "request", "prompt"),
+				fc.constantFrom(
+					"authorization_details",
+					"__proto__",
+					"",
+					"x",
+					"request",
+					"request_uri",
+					"prompt",
+					"constructor",
+					"\ud800",
+					"jar_hash",
+					"hint_sub",
+					"Resource",
+					"Request_URI",
+				),
 				fc.jsonValue().map(readBack),
 			),
 			fc.tuple(
@@ -270,9 +271,10 @@ const payload = fc
 	});
 
 describe("the items T approves, from any JAR's payload", () => {
-	it("are what a reference written apart reads: an unknown claim first, then a missing item, then T's first refused item, else the projection", () => {
+	it("are what a reference written apart reads: a known item refused first, then a missing item, then T's first refused item, else the projection", () => {
 		const seen = {
-			unknown: 0,
+			refused: 0,
+			okUnknown: 0,
 			missing: 0,
 			item: 0,
 			claimsNull: 0,
@@ -295,6 +297,21 @@ describe("the items T approves, from any JAR's payload", () => {
 					if (ignored.some((k) => Object.hasOwn(p, k))) seen.okIgnored++;
 					if (Object.hasOwn(p, "max_age")) seen.okMaxAge++;
 					if (got.items.hint_sub !== undefined) seen.okHint++;
+					// A claim no rule names, taken: T is the same JAR's without it, byte for byte.
+					const named = new Set<string>([
+						...Object.keys(jar),
+						...jarClaims.items,
+						...jarClaims.envelope,
+						...jarClaims.ignored,
+						"id_token_hint",
+					]);
+					const unknown = Object.keys(p).filter((k) => !named.has(k));
+					if (unknown.length > 0) {
+						seen.okUnknown++;
+						const without = Object.fromEntries(Object.entries(p).filter(([k]) => named.has(k)));
+						const plain = itemsFromJar(without, hash);
+						expect("items" in plain && canonicalText(plain.items)).toBe(canonicalText(got.items));
+					}
 					// The hint itself is never in T.
 					expect(Object.hasOwn(got.items, "id_token_hint")).toBe(false);
 					// T holds none of the claims it ignores.
@@ -303,7 +320,7 @@ describe("the items T approves, from any JAR's payload", () => {
 					// No null at any depth in T's claims, and its claims an object where given.
 					expect(holdsNull(got.items.claims)).toBe(false);
 					if (got.items.claims !== undefined) expect(isObject(got.items.claims)).toBe(true);
-				} else if (got.error.startsWith("unknown_item:")) seen.unknown++;
+				} else if (got.error.startsWith("refused_item:")) seen.refused++;
 				else if (got.error.startsWith("missing_item:")) seen.missing++;
 				else if (got.error === "item:max_age") seen.maxAge++;
 				else if (got.error === "item:id_token_hint") seen.hint++;

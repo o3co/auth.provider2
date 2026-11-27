@@ -57,9 +57,9 @@ const refused = (error: string, description: string) => ({ refused: { error, des
 /**
  * `sdk-core-wire`'s refusal of T's items, read by its spelling (RFC 9101 §6.3: the request object
  * taken, its parameters are OAuth's): an item missing or of a value not allowed (`missing_item:`,
- * `item:`) is the parameter's fault, `invalid_request`; a claim outside the set (`unknown_item:`, a
- * `request_uri` among them), the `claims` (`item:claims`), and any spelling not known are the request
- * object's own, `invalid_request_object`. The wire's spelling is the description.
+ * `item:`) is the parameter's fault, `invalid_request`; a known item refused (`refused_item:`:
+ * `request`, `request_uri`, `authorization_details`), the `claims` (`item:claims`), and any spelling not
+ * known are the request object's own, `invalid_request_object`. The wire's spelling is the description.
  */
 export function itemsRefusal(error: string): Refusal {
 	const at = error.indexOf(":");

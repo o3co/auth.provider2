@@ -43,7 +43,7 @@ export const hpke = Object.freeze({
 	unpaddedCompletion: padding.unpadded,
 });
 
-/** An authorization's items (a closed set): a JAR with a claim neither item, envelope nor ignored is refused. */
+/** An authorization's items, a closed set: T holds these alone. */
 const authorizationItems = Object.freeze([
 	"client_id",
 	"redirect_uri",
@@ -84,6 +84,9 @@ const ignoredItems = Object.freeze([
 	"acr_values",
 ] as const);
 
+/** Claims known and refused: `request`, `request_uri` (RFC 9101 §4), `authorization_details` (A25, RFC 9396 §5). */
+const refusedItems = Object.freeze(["request", "request_uri", "authorization_details"] as const);
+
 /** Those checked before they are dropped: max_age in seconds, a JSON number or its digits. */
 const ignoredChecked: Readonly<Record<string, (value: unknown) => boolean>> = Object.freeze({
 	max_age: (value) =>
@@ -91,12 +94,13 @@ const ignoredChecked: Readonly<Record<string, (value: unknown) => boolean>> = Ob
 		(typeof value === "string" && /^[0-9]+$/.test(value)),
 });
 
-/** A JAR's claims as T reads them: the items, those it must carry, its envelope, those it ignores, the hint. */
+/** A JAR's claims as T reads them; any claim none of them names is taken and ignored (RFC 6749 §3.1). */
 export const jarClaims = Object.freeze({
 	items: authorizationItems,
 	required: requiredItems,
 	envelope: jarEnvelope,
 	ignored: ignoredItems,
+	refused: refusedItems,
 	/** An ID token given back (OIDC Core §3.1.2.1): T holds the subject it reads as (`hint_sub`), not it. */
 	hint: "id_token_hint",
 });
@@ -395,7 +399,7 @@ function askedInDefault(claims: unknown): unknown {
 
 /**
  * The items T approves, from a JAR's payload and its hash, by the one rule both sides run and compare
- * exactly: an error names the claim that is unknown or missing, or the value that is not allowed.
+ * exactly: an error names the claim refused or missing, or the value that is not allowed.
  * Under PAR, `requestUri` is the `request_uri` the start named, an item beside the JAR's; by value
  * none is given, and T holds none.
  */
@@ -404,14 +408,8 @@ export function itemsFromJar(
 	jarHash: string,
 	requestUri?: string,
 ): { readonly items: AuthorizationItems } | { readonly error: string } {
-	const allowed: readonly string[] = [
-		...authorizationItems,
-		...jarEnvelope,
-		...ignoredItems,
-		jarClaims.hint,
-	];
 	for (const key of Object.keys(payload))
-		if (!allowed.includes(key)) return { error: `unknown_item:${key}` };
+		if ((refusedItems as readonly string[]).includes(key)) return { error: `refused_item:${key}` };
 	for (const key of requiredItems) {
 		if (typeof payload[key] !== "string" || payload[key] === "")
 			return { error: `missing_item:${key}` };

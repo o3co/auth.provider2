@@ -155,9 +155,13 @@ describe("authorization.read", () => {
 	it("refuses a JAR that is no compact JWS, or whose claims sdk-core-wire's rule refuses", async () => {
 		const { tCompact, options } = await world();
 		expect(await authorization.read(tCompact, "nojar", options)).toEqual({ error: "jar" });
-		expect(await authorization.read(tCompact, jarOf({ ...jarPayload, extra: 1 }), options)).toEqual(
-			{ error: "jar" },
-		);
+		expect(
+			await authorization.read(
+				tCompact,
+				jarOf({ ...jarPayload, authorization_details: [] }),
+				options,
+			),
+		).toEqual({ error: "jar" });
 		expect(await authorization.read(tCompact, `${b64({})}.${b64([1])}.s`, options)).toEqual({
 			error: "jar",
 		});

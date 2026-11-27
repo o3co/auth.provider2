@@ -171,7 +171,7 @@ describe("a PAR login through the real SDK", () => {
 			["plain", { code_challenge_method: "plain" }, "invalid_request"],
 			["no state", { state: undefined }, "invalid_request"],
 			["a state over its bound", { state: "s".repeat(513) }, "invalid_request"],
-			["a claim outside the set", { other: "x" }, "invalid_request_object"],
+			["a known item refused", { authorization_details: [] }, "invalid_request_object"],
 			[
 				"a redirect URI not registered",
 				{ redirect_uri: "https://evil.example/cb" },

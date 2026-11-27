@@ -462,7 +462,7 @@ describe("a pushed request checked by authorize's own check", () => {
 			["code_challenge_method absent", { code_challenge_method: undefined }, "invalid_request"],
 			["code_challenge_method unknown", { code_challenge_method: "S512" }, "invalid_request"],
 			["a challenge malformed", { code_challenge: "short" }, "invalid_request"],
-			["a claim outside the set", { other: 1 }, "invalid_request_object"],
+			["a known item refused", { authorization_details: [] }, "invalid_request_object"],
 			[
 				"a request_uri in the JAR",
 				{ request_uri: `${requestUriPrefix}x` },

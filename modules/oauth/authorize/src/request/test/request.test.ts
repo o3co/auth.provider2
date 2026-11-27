@@ -91,7 +91,11 @@ describe("a login's request checked", () => {
 		};
 		expect(spelled(claims({ code_challenge: undefined }))).toBe("missing_item:code_challenge");
 		expect(spelled(claims({ code_challenge_method: "plain" }))).toBe("item:code_challenge_method");
-		expect(spelled(claims({ other: 1 }))).toBe("unknown_item:other");
+		expect(spelled(claims({ authorization_details: [] }))).toBe(
+			"refused_item:authorization_details",
+		);
+		// A claim no rule names is taken: no spelling, T made.
+		expect(spelled(claims({ other: 1 }))).toBe("items");
 		expect(spelled(claims({ claims: { id_token: { email: { essential: null } } } }))).toBe(
 			"item:claims",
 		);
@@ -105,7 +109,7 @@ describe("a login's request checked", () => {
 			[claims({ response_mode: "query" }), "invalid_request"],
 			[claims({ response_type: "token" }), "invalid_request"],
 			[claims({ dpop_jkt: undefined }), "invalid_request"],
-			[claims({ other: 1 }), "invalid_request_object"],
+			[claims({ authorization_details: [] }), "invalid_request_object"],
 			[claims({ request_uri: "urn:x" }), "invalid_request_object"],
 			[claims({ claims: { id_token: { email: { essential: null } } } }), "invalid_request_object"],
 		] as const)
@@ -199,7 +203,7 @@ describe("a login's request checked", () => {
 		expect(await refusal(claims({ prompt: "none", state: undefined }))).toMatchObject({
 			error: "login_required",
 		});
-		expect(await refusal(claims({ other: 1, scope: "write" }))).toMatchObject({
+		expect(await refusal(claims({ authorization_details: [], scope: "write" }))).toMatchObject({
 			error: "invalid_request_object",
 		});
 		const reader = checker({
