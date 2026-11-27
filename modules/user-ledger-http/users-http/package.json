@@ -6,7 +6,6 @@
 	"kind": "adapter",
 	"narrower": "internal",
 	"adapts": "@mod/users",
-	"default": true,
 	"asks": [
 		"Users from an outside ledger (`users-http.verify-url`; `users-http.credential` in the local layer when the ledger asks for one).",
 		"`users-http.subject-url`: the lookup by subject; without it, every lookup by subject is unanswerable.",

@@ -9,7 +9,7 @@
 - Verified contacts (`users`). Whether the ledger may be reached, redirects, and the caps on size and time (`outbound`). The names of attributes and the shape of a subject (`users`). Hashing passwords (the ledger's).
 
 ## Offers
-- Composition definition only (a contribution to `users`' `ledgers`). The users axis's default: a composition that names no adapter of it composes this one; one keeping its users in the provider names `users-local` instead.
+- Composition definition only (a contribution to `users`' `ledgers`). It is not the users axis's default, `users-local` is: a composition using an outside ledger names it to compose it.
 - Operator section, each URL whole (https or a plain-http pair outbound names, no fragment; optional, at least one):
   - `verify-url`: the password call; without it, no password matches and nothing is asked.
   - `subject-url`: the lookup by subject, posting `{"subject"}`; a `404` or `410` saying so is none, `401` and `403` unavailable.

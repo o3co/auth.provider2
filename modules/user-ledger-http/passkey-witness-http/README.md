@@ -8,7 +8,7 @@
 - When the witness is read, enrolled or withdrawn, and what is decided with it, and the witness's contract (`passkey-witness`). Whether the ledger may be reached, redirects, and the caps on size and time (`outbound`). Keeping the mark (the ledger's).
 
 ## Offers
-- Composition definition only (a contribution to `passkeys.witnesses`). Opt-in: no axis's default, so composing `passkeys` alone never brings it.
+- Composition definition only (a contribution to `passkeys.witnesses`). Opt-in: no axis's default, so composing `passkeys` alone never brings it. It is the outside ledger's witness, composed with `users-http` named on `users`' axis: beside the default `users-local`, which contributes its own, the two witnesses refuse boot.
 - `./testing`: `passkeyWitnessHttpConfig`, the section of a test's configuration, and `testCredential`, the credential it names.
 - Operator section:
   - `read-url`, `enroll-url` and `withdraw-url` (required: each URL whole, https or a plain-http pair outbound names, no fragment, all three at one origin).

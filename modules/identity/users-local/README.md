@@ -14,7 +14,7 @@
 
 ## Offers
 - Composition definition only: a contribution to `users`' `ledgers` (verification, by subject, by identifier, a create, an identifierless create (F1) and `keep`, an import with a password's hash, its `passwords` of `password-work`), a passkey witness (`passkey-witness`' `passkeyWitnesses`), a stance (`promises`' `stances`), its spaces and its eraser `users-local` (to `erasure-extensions`' `erasers`).
-- It is not the users axis's default, `users-http` is: a composition keeping its users in the provider names it to compose it.
+- The users axis's default: a composition that names no adapter of it composes this one; one using an outside ledger names `users-http` instead.
 - Probe `users-local.phase`: out of traffic while the records' phase cannot be read.
 - Operator section `users-local`: `password-work`, required, the work every password's hash it holds is of, as `secret-hash` names a work (`scrypt:15,8,1,32,16`).
 
