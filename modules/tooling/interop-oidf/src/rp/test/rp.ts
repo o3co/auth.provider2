@@ -29,30 +29,55 @@ export function es256(key: KeyObject, header: object, claims: object): string {
 	return `${input}.${b64u(signature)}`;
 }
 
-/** A P-256 key pair: its private half, and its public JWK's members. */
+/** A P-256 key pair: its private half (as a key and as a JWK), and its public JWK's members. */
 function p256() {
 	const pair = generateKeyPairSync("ec", { namedCurve: "P-256" });
 	const { x, y } = pair.publicKey.export({ format: "jwk" });
-	return { privateKey: pair.privateKey, jwk: { kty: "EC", crv: "P-256", x: x ?? "", y: y ?? "" } };
+	return {
+		privateKey: pair.privateKey,
+		privateJwk: pair.privateKey.export({ format: "jwk" }) as Readonly<Record<string, unknown>>,
+		jwk: { kty: "EC", crv: "P-256", x: x ?? "", y: y ?? "" },
+	};
 }
 
 /** RFC 7638's thumbprint of a P-256 public key, base64url. */
 export const thumbprint = (jwk: { readonly x: string; readonly y: string }) =>
 	b64u(sha256(`{"crv":"P-256","kty":"EC","x":"${jwk.x}","y":"${jwk.y}"}`));
 
-/** A DPoP proof of a key: the method, the URL, the nonce the server gave if any, the access token it goes with. */
-export type Proof = (htm: string, htu: string, nonce?: string, accessToken?: string) => string;
+/** A proof's header and claims as they would be signed, and the key's private JWK. */
+export interface ProofParts {
+	readonly header: Readonly<Record<string, unknown>>;
+	readonly claims: Readonly<Record<string, unknown>>;
+	readonly privateJwk: Readonly<Record<string, unknown>>;
+}
+
+/** A proof's header and claims rewritten before it is signed, for a test of a check of the proof itself. */
+export type ProofChange = (parts: ProofParts) => {
+	readonly header: object;
+	readonly claims: object;
+};
+
+/**
+ * A DPoP proof of a key: the method, the URL, the nonce the server gave if any, the access token it goes
+ * with; and a change, where a test asks a proof made wrong (still signed by the key).
+ */
+export type Proof = (
+	htm: string,
+	htu: string,
+	nonce?: string,
+	accessToken?: string,
+	change?: ProofChange,
+) => string;
 
 /** A DPoP key's thumbprint and its proofs (RFC 9449). */
 export function dpopKey(): { readonly jkt: string; readonly proof: Proof } {
 	const key = p256();
 	return {
 		jkt: thumbprint(key.jwk),
-		proof: (htm, htu, nonce, accessToken) =>
-			es256(
-				key.privateKey,
-				{ alg: "ES256", typ: typs.dpop, jwk: key.jwk },
-				{
+		proof: (htm, htu, nonce, accessToken, change) => {
+			const parts = {
+				header: { alg: "ES256", typ: typs.dpop, jwk: key.jwk },
+				claims: {
 					jti: randomUUID(),
 					htm,
 					htu,
@@ -60,7 +85,10 @@ export function dpopKey(): { readonly jkt: string; readonly proof: Proof } {
 					...(nonce !== undefined && { nonce }),
 					...(accessToken !== undefined && { ath: b64u(sha256(accessToken)) }),
 				},
-			),
+			};
+			const { header, claims } = change?.({ ...parts, privateJwk: key.privateJwk }) ?? parts;
+			return es256(key.privateKey, header, claims);
+		},
 	};
 }
 

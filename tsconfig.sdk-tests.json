@@ -1,6 +1,7 @@
 {
 	// The tests that read the login screen's SDK, whose code takes the DOM library's types (the SDK runs
-	// in a browser), beside Node's: the attack harness's, and the OIDF harness's screen.
+	// in a browser), beside Node's: the attack harness's, and the OIDF harness's (its tests reach the
+	// SDK through its screen role).
 	"extends": "./tsconfig.json",
 	"compilerOptions": {
 		"lib": ["es2024", "dom"]
@@ -8,7 +9,7 @@
 	"include": [
 		"modules/attacks/*/test/**/*.ts",
 		"modules/attacks/*/src/**/test/**/*.ts",
-		"modules/tooling/interop-oidf/src/screen/test/**/*.ts"
+		"modules/tooling/interop-oidf/src/*/test/**/*.ts"
 	],
 	"exclude": []
 }

@@ -6,6 +6,7 @@
 - The provider as the run meets it (internal module `scene`, for tests): the generated `nextgen-core` and `nextgen-front` run as operators run them behind an https front at the issuer's origin.
 - The harness's relying party (internal module `rp`, for tests): a conforming client of nextgen, its JARs, PAR, assertions and DPoP proofs.
 - The login screen as the suite's browser meets it (internal module `screen`, for tests): the real SDK with a software authenticator, server-side, behind its own https front.
+- The resource the run calls with its access tokens (internal module `resource`, for tests): the harness's, checking the provider's DPoP-bound token and its proof, as nextgen offers no resource server.
 - The OpenID Foundation's conformance suite at a pinned version, started and stopped on this machine: `suite` starts and stops it, `api` reaches its API trusting its certificate alone, `compose` composes its containers, `orphans` takes down a suite a killed run left, `commands` holds each program other than docker to its time, `lifecycle` holds what every plan run has (its directories, its stops).
 
 ## Not here

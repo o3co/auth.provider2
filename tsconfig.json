@@ -25,6 +25,6 @@
 	"exclude": [
 		"modules/attacks/*/test/**",
 		"modules/attacks/*/src/**/test/**",
-		"modules/tooling/interop-oidf/src/screen/test/**"
+		"modules/tooling/interop-oidf/src/*/test/**"
 	]
 }

@@ -12,7 +12,7 @@ Internal module of `interop-oidf`: the harness's relying party, for its tests al
 
 ## Offers
 - `relyingParty` (its client id, its redirect URI, the provider read when it signs) → `RelyingParty`: `registered` (its record), `authorization` (a `JarChange`: items replaced, claims dropped, the header's `typ`) → `Started` (its state, nonce, PKCE verifier, JAR, DPoP key), `par` (proved under a nonce where asked, or by another key), `start` (a login's start, by value, by `request_uri` or neither, with screen keys), `token`, `refresh`, `assertion`.
-- `send`: a request sent, once more under the DPoP nonce where the provider asks one, and whether it asked. `screenKeys`: a screen's two keys as a start carries them. `dpopKey`, `es256`, `thumbprint`.
+- `send`: a request sent, once more under the DPoP nonce where the provider asks one, and whether it asked. `screenKeys`: a screen's two keys as a start carries them. `dpopKey` (its proofs, each made wrong by a `ProofChange` where a test asks, still signed by the key), `es256`, `thumbprint`.
 - Its tests hold the word table (`words`) to the product: every word's request is sent to a scene (one taking a JAR by value for the words a login's start answers only then) and answered in the table's words, read as the table's row; a word added to the table with no request fails. `refresh-dpop-bound`'s word is held by a refresh token never issued; that it is the row's needs one issued.
 
 ## Invariants

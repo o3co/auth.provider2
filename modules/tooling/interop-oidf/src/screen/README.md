@@ -15,6 +15,7 @@ Internal module of `interop-oidf`: the login screen as the suite's browser meets
 - `loginScreen` (the pins, read at each step; a browser; the RP's name) → `startPushed`, `signUp`, `approve`, `deny`; `stopped`, `Stopped`, `Callback`, `Denied`, `Started`, `Pins`, `Post`.
 - `startPages` (the host and the address to listen on, a directory, the screen, how it reaches the issuer, how the answer is carried, read for each answer) → `Pages`: their origin, the certificate their front answers with, what they saw, their stop.
 - `browser` (an origin) → `Browser`: `navigator.credentials` over a software authenticator; `attestedKey`.
+- `signedIn` (a client id, a redirect URI) → `SignedIn`: a scene, its pages and an RP registered, a person signed up; a login through the screen role to the RP's tokens; the stop of all of it. What a later step's tests (the resource's, the run's) start from.
 
 ## Invariants
 - The screen's steps are the SDK's own, unchanged: T read against the client and the `request_uri` the URL names, the completion opened at L0 (the callback's proof is not made: A35, A38 are outside), the denial built by the SDK.
@@ -22,7 +23,7 @@ Internal module of `interop-oidf`: the login screen as the suite's browser meets
 - Only the `approve` button approves; a decision naming neither, or no start open, goes to `/refused`.
 - A passkey made by the software authenticator stands for no check of a real browser's origin rules, WebAuthn's UI, or what consent shows.
 - Taken from attack-harness's roles (the screen's steps and the browser), which G14 lets no package share: the plan's interim, until the SDK offers a screen for tests, which both harnesses then take.
-- Its files are tests' (`test/`), typed by the root's `tsconfig.sdk-tests.json` (the DOM's types the SDK reads).
+- Its files are tests' (`test/`), typed by the root's `tsconfig.sdk-tests.json` (the DOM's types the SDK reads), as every test file of the package is: any of them may reach the SDK through it.
 
 ## Depends on
-- `@sdk/login-screen`, `sdk-core-wire` (`hpke`), `webauthn` (`./testing`'s software authenticator), `conformance-front`; its tests: `scene`, `rp`.
+- `@sdk/login-screen`, `sdk-core-wire` (`hpke`), `webauthn` (`./testing`'s software authenticator), `conformance-front`; its tests: `scene`, `rp`, `lifecycle` (`stopAll`).
