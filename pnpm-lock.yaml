@@ -2830,6 +2830,9 @@ importers:
       '@mod/keys-kms':
         specifier: workspace:*
         version: link:../../key-holders/keys-kms
+      '@mod/ledger-fakes':
+        specifier: workspace:*
+        version: link:../../tooling/ledger-fakes
       '@mod/mail-smtp':
         specifier: workspace:*
         version: link:../../smtp/mail-smtp
@@ -2857,6 +2860,9 @@ importers:
       '@o3co/ts.hocon':
         specifier: 1.14.3
         version: 1.14.3(yaml@2.9.1)(zod@4.6.7)
+      '@sdk/login-screen':
+        specifier: link:../../../sdk/packages/login-screen
+        version: link:../../../sdk/packages/login-screen
       vitest:
         specifier: 5.0.5
         version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(vite@8.3.3(@types/node@26.6.5)(yaml@2.9.1))

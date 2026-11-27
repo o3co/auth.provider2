@@ -25,6 +25,7 @@
 	"exclude": [
 		"modules/attacks/*/test/**",
 		"modules/attacks/*/src/**/test/**",
-		"modules/tooling/interop-oidf/src/*/test/**"
+		"modules/tooling/interop-oidf/src/*/test/**",
+		"modules/scaffold/create-app/test/held-mail.process.test.ts"
 	]
 }

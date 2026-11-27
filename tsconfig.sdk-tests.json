@@ -1,7 +1,9 @@
 {
 	// The tests that read the login screen's SDK, whose code takes the DOM library's types (the SDK runs
-	// in a browser), beside Node's: the attack harness's, and the OIDF harness's (its tests reach the
-	// SDK through its screen role).
+	// in a browser), beside Node's: the attack harness's, the OIDF harness's (its tests reach the
+	// SDK through its screen role), and create-app's held mail test (a first key's start sealed by the
+	// SDK). That test is a file apart from create-app's other held tests, which stay the root's:
+	// Node's and the DOM's CryptoKey types collide in x509-path's testing helpers, which they read.
 	"extends": "./tsconfig.json",
 	"compilerOptions": {
 		"lib": ["es2024", "dom"]
@@ -9,7 +11,8 @@
 	"include": [
 		"modules/attacks/*/test/**/*.ts",
 		"modules/attacks/*/src/**/test/**/*.ts",
-		"modules/tooling/interop-oidf/src/*/test/**/*.ts"
+		"modules/tooling/interop-oidf/src/*/test/**/*.ts",
+		"modules/scaffold/create-app/test/held-mail.process.test.ts"
 	],
 	"exclude": []
 }
