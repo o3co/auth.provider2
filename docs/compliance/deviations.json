@@ -88,5 +88,32 @@
 		"behaviour": "PAR refuses a JAR whose `exp` is further than its own `jar-max-lifetime` (90 seconds by default) from the time it takes it; the login's start checks it again against `authorize`'s",
 		"why": "A short `exp` and the Core's own cap keep long-lived JARs from piling up reservations",
 		"decision": "A20"
+	},
+	{
+		"key": "state-required",
+		"kind": "strict",
+		"standard": "RFC 6749 §4.1.1; FAPI 2.0 Security Profile §5.3.2.2 Note 4, §5.5",
+		"text": "`state` is recommended, not required; in FAPI 2.0, PKCE gives the protection against CSRF that `state` gave",
+		"behaviour": "A JAR without `state` is refused",
+		"why": "The RP binds `state` to the browser session and redeems no response it did not begin; the login screen takes the redirect's `state` from the signed T, so a request without it leaves the RP nothing to hold the response to (login CSRF)",
+		"decision": "R3"
+	},
+	{
+		"key": "nonce-required",
+		"kind": "strict",
+		"standard": "OpenID Connect Core 1.0 §3.1.2.1",
+		"text": "`nonce` is optional in the authorization code flow",
+		"behaviour": "A JAR without `nonce` is refused, whether or not it asks `openid`",
+		"why": "The ID token's `nonce` ties it to the RP's own request: one of the checks that keep a login in the browser session that asked for it",
+		"decision": "C2"
+	},
+	{
+		"key": "request-uri-once",
+		"kind": "strict",
+		"standard": "FAPI 2.0 Security Profile §5.3.2.2 Note 3",
+		"text": "An AS that uses a `request_uri` once is recommended to spend it at the point of authorization, not when the authorization page is loaded",
+		"behaviour": "The same JAR with the same screen keys is answered the same T; a second start with other screen keys (a reloaded screen has new ones) is refused, even before the person authenticates",
+		"why": "The JAR's reservation binds it to one statement T and one screen's keys from its first start; a second T for the same JAR would let a compromised Front have an attacker approve it on another screen and swap that code into the victim's session (login CSRF)",
+		"decision": "A20"
 	}
 ]

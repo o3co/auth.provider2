@@ -9,7 +9,7 @@ import { hostForSuite, SuiteStopFailed, startSuite, suitePin } from "../suite.ts
 
 const pin = { tag: "release-v1.2.3", commit: "c0ffee", python: ["httpx==1"] };
 const host = { name: "host.docker.internal", listen: "127.0.0.1" };
-const tls = { cert: "-----BEGIN CERTIFICATE-----", key: "-----BEGIN PRIVATE KEY-----" };
+const tls = { cert: "PEM:cert", key: "PEM:key" };
 
 /** The programs other than docker: git answers the pinned commit unless `head` says another. */
 function programs(head = pin.commit) {
