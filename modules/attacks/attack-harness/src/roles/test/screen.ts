@@ -78,10 +78,19 @@ export interface Approved {
 /** A delete's answer: the change the Core made, or the keys kept and why it did not take. */
 export type Deleted = { readonly deleted: true } | { readonly kept: KeptDelete };
 
-/** What the page POSTs to the RP's redirect URI once T is approved: the code, and T's state. */
+/** What the page POSTs to the RP's redirect URI once T is approved: the code, and T's state and issuer. */
 export interface Callback {
 	readonly code: string;
 	readonly state: string;
+	readonly iss: string;
+	readonly redirectUri: string;
+}
+
+/** What the page POSTs to the RP's redirect URI when the person refuses: `access_denied`, and T's state and issuer. */
+export interface Denied {
+	readonly error: "access_denied";
+	readonly state: string;
+	readonly iss: string;
 	readonly redirectUri: string;
 }
 
@@ -300,7 +309,17 @@ export function loginScreen(
 		});
 		if ("error" in done) return sdkRefused("authorization.finish", done.error);
 		const { state, redirect_uri } = t.statement.approval;
-		return { code: done.code, state, redirectUri: redirect_uri };
+		return { code: done.code, state, iss: t.statement.iss, redirectUri: redirect_uri };
+	};
+
+	/**
+	 * ④ The person refuses T on the screen: the denial the page POSTs to the RP (form_post), not through
+	 * the Front, every value T's. It sends nothing to the Core.
+	 */
+	const deny = (started: Started): Denied | Stopped => {
+		const denied = authorization.denial(started.t);
+		if ("error" in denied) return sdkRefused("authorization.denial", denied.error);
+		return { ...denied.fields, redirectUri: denied.redirectUri };
 	};
 
 	/**
@@ -578,6 +597,7 @@ export function loginScreen(
 		startPushed,
 		signUp: signUpWith,
 		approve,
+		deny,
 		approveManagement,
 		addKey,
 		deleteKey,

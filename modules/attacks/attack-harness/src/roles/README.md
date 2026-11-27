@@ -3,7 +3,8 @@
 Internal module of `attack-harness`: the parties a step plays beside the Front, for its tests alone.
 
 ## Responsibilities
-- The login screen as a page runs it on the real SDK (a login, by value or under PAR by the client and `request_uri` alone, holding no JAR; a sign-up, a first key, a key added, deleted or renamed), its requests sent through the Front given; the browser holding its passkeys; a relying party making its JARs, DPoP proofs and token requests and checking what it is given; a machine client of a signed registry asking its own token.
+- The login screen as a page runs it on the real SDK (a login, by value or under PAR by the client and `request_uri` alone, holding no JAR, approved or denied by the person, the denial sent to the RP alone; a sign-up, a first key, a key added, deleted or renamed), its requests sent through the Front given.
+- The browser holding its passkeys; a relying party making its JARs, DPoP proofs and token requests and checking what it is given (a callback, a code's or a denial's, at R3 and R4); a machine client of a signed registry asking its own token.
 
 ## Not here
 - The Front a role sends through: any `Front` of the package's internal module `relay`, the honest one or another.

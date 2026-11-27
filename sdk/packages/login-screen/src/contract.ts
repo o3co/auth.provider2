@@ -7,6 +7,7 @@ export { type AnswerForm, type Answers, answers } from "./answers.ts";
 export {
 	type AuthorizationError,
 	authorization,
+	type Denial,
 	type FinishChecks,
 	type FinishError,
 	type PushedAuthorizationError,

@@ -1,6 +1,6 @@
 # front-steps
 
-Internal module of `attack-harness`: the compromised Front's steps, F-1 to F-21 of the design note's table, each its own test; the steps of a request pushed, its unit `pushed`.
+Internal module of `attack-harness`: the compromised Front's steps, F-1 to F-21 of the design note's table, each its own test; the person's denial on the screen (T's `access_denied`, by value and pushed, its values passing R3 and R4, the T approved by no later step); the steps of a request pushed, its unit `pushed`.
 
 ## Responsibilities
 - Holds each step: what the Front does (one rewrite or frame of its own, within what crossed it), and where it must be refused, by the Core, the SDK or the relying party's own checks, pinned to its word and cause, with a control where a refusal could have another.

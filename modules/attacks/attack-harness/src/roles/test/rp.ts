@@ -242,14 +242,18 @@ export function relyingParty(
 			];
 			return faults.filter((fault): fault is string => fault !== false);
 		},
-		/** R3: a callback taken only at its redirect URI, for the state this session started with; each failing check named. */
+		/**
+		 * R3 and R4: a callback, a code's or a denial's, taken only at its redirect URI, for the state this
+		 * session started with, from this provider's issuer (RFC 9207); each failing check named.
+		 */
 		callbackFaults: (
-			callback: { readonly state: string; readonly redirectUri: string },
+			callback: { readonly state: string; readonly redirectUri: string; readonly iss?: string },
 			started: Started,
 		) =>
 			[
 				callback.redirectUri !== redirectUri && "redirect_uri",
 				callback.state !== started.state && "state",
+				callback.iss !== provider.issuer && "iss",
 			].filter((fault): fault is string => fault !== false),
 	};
 }

@@ -37,9 +37,16 @@ export interface ReadT {
 	readonly compact: string;
 }
 const issued = new WeakSet<ReadT>();
+/** The T a denial was given for: none is approved or continued after. */
+const denied = new WeakSet<ReadT>();
+/** The T a completion was taken for: none is denied after. */
+const completed = new WeakSet<ReadT>();
 
 /** Whether `read` or `readPushed` gave this T. Not offered: for this package's sign-up path. */
 export const wasRead = (t: ReadT): boolean => issued.has(t);
+
+/** Whether this T was denied, so no step continues it. Not offered: for this package's sign-up path. */
+export const wasDenied = (t: ReadT): boolean => denied.has(t);
 
 /**
  * T read before it is shown (§3.4 ③): the statement, and its items exactly the items the JAR the
@@ -95,9 +102,10 @@ async function assertionOptions(
 	options: { readonly rpId: string; readonly credentials?: readonly string[] },
 ): Promise<
 	| { readonly options: PublicKeyCredentialRequestOptions }
-	| { readonly error: "statement" | "credentials" }
+	| { readonly error: "statement" | "credentials" | "denied" }
 > {
 	if (!issued.has(t)) return { error: "statement" };
+	if (denied.has(t)) return { error: "denied" };
 	let allowCredentials: PublicKeyCredentialDescriptor[] | undefined;
 	if (options.credentials !== undefined) {
 		const given = options.credentials;
@@ -138,8 +146,8 @@ export type FinishChecks =
 	| { readonly level: "log"; readonly receipt: string; readonly log: readonly Jwk[] };
 const finished = new WeakMap<Finished, ReadT>();
 
-/** Why a completion is not taken: T not `read`'s or `readPushed`'s, its own refusal, a level not named or its inputs (`checks`), ring and log keys shared, or ⑤'s receipt that does not bind it. */
-export type FinishError = CompletionError | "statement" | "keys" | "receipt" | "checks";
+/** Why a completion is not taken: T not `read`'s or `readPushed`'s, or denied, its own refusal, a level not named or its inputs (`checks`), ring and log keys shared, or ⑤'s receipt that does not bind it. */
+export type FinishError = CompletionError | "statement" | "denied" | "keys" | "receipt" | "checks";
 
 /**
  * The completion taken, at the level the caller names: at `L0`, read alone and bound to the T `read`
@@ -153,6 +161,7 @@ async function finish(
 	options: Omit<CompletionOptions, "statement"> & FinishChecks,
 ): Promise<Finished | { readonly error: FinishError }> {
 	if (!issued.has(t)) return { error: "statement" };
+	if (denied.has(t)) return { error: "denied" };
 	if (options.level !== "L0" && options.level !== "log") return { error: "checks" };
 	// The log's inputs, given whole, as keyChanges.read takes them: a receipt and a key list not empty.
 	if (
@@ -167,9 +176,12 @@ async function finish(
 	const read = await readCompletion(sealed, { ...options, statement: t.compact });
 	if ("error" in read) return read;
 	const { code } = read.completion;
+	// A denial given while the completion was being opened ends the attempt: no code is taken after it.
 	if (options.level === "L0") {
+		if (denied.has(t)) return { error: "denied" };
 		const done: Finished = deepFreeze({ code });
 		finished.set(done, t);
+		completed.add(t);
 		return done;
 	}
 	const bound = await readApprovalReceipt(options.receipt, options.log, {
@@ -178,8 +190,10 @@ async function finish(
 		code,
 	});
 	if (!bound) return { error: "receipt" };
+	if (denied.has(t)) return { error: "denied" };
 	const done: Finished = deepFreeze({ code, approval: { shard: bound.shard, n: bound.n } });
 	finished.set(done, t);
+	completed.add(t);
 	return done;
 }
 
@@ -197,9 +211,10 @@ async function callbackProof(
 	now: number,
 ): Promise<
 	| { readonly proof: string }
-	| { readonly error: "statement" | "finish" | "level" | "keys" | "proof" }
+	| { readonly error: "statement" | "denied" | "finish" | "level" | "keys" | "proof" }
 > {
 	if (!issued.has(t)) return { error: "statement" };
+	if (denied.has(t)) return { error: "denied" };
 	if (finished.get(done) !== t) return { error: "finish" };
 	// The proof names ⑤'s record, which only a receipt gives: none for a finish at L0.
 	if (!done.approval) return { error: "level" };
@@ -227,11 +242,44 @@ async function callbackProof(
 	return { proof: `${input}.${base64url(new Uint8Array(signature))}` };
 }
 
-/** An authorization's steps on the screen: read T against the JAR, or by the client and the `request_uri` under PAR, ask the passkey, take the completion, sign the callback's proof. */
+/**
+ * What the page POSTs, by `form_post`, to the relying party when the person refuses on the screen:
+ * `error=access_denied`, T's `state` and T's issuer (RFC 9207), to T's `redirect_uri`. Every value is
+ * T's, the Core's signed word, never the URL's.
+ */
+export interface Denial {
+	readonly redirectUri: string;
+	readonly fields: {
+		readonly error: "access_denied";
+		readonly state: string;
+		readonly iss: string;
+	};
+}
+
+/**
+ * The denial of T `read` or `readPushed` gave (RFC 6749 §4.1.2.1): it ends this attempt, so T is
+ * approved, proved or continued to a sign-up by no later step. It revokes nothing already sent: an
+ * approval in flight is still the Core's to judge until T's expiry. A T whose completion `finish`
+ * took is not denied (`finished`): its code is the page's to POST. No callback proof goes with a
+ * denial, as there is no code to bind. Asked again for the same T, it answers the same.
+ */
+function denial(t: ReadT): Denial | { readonly error: "statement" | "finished" } {
+	if (!issued.has(t)) return { error: "statement" };
+	if (completed.has(t)) return { error: "finished" };
+	denied.add(t);
+	const { approval, iss } = t.statement;
+	return deepFreeze({
+		redirectUri: approval.redirect_uri,
+		fields: { error: "access_denied", state: approval.state, iss },
+	});
+}
+
+/** An authorization's steps on the screen: read T against the JAR, or by the client and the `request_uri` under PAR, ask the passkey, take the completion, sign the callback's proof; or send the person's denial. */
 export const authorization = Object.freeze({
 	read,
 	readPushed,
 	assertionOptions,
 	finish,
 	callbackProof,
+	denial,
 });

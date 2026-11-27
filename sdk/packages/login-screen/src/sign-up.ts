@@ -1,5 +1,5 @@
 import { continuations } from "@mod/continuation-wire";
-import { type ReadT, wasRead } from "./authorization.ts";
+import { type ReadT, wasDenied, wasRead } from "./authorization.ts";
 import { base64url, digest, utf8 } from "./bytes.ts";
 import { creationOf, type ReadCreation } from "./first-key.ts";
 import type { Jwk } from "./jws.ts";
@@ -26,8 +26,9 @@ export interface SignUpContinuation {
 async function continuation(
 	t: ReadT,
 	keys: ScreenKeys,
-): Promise<SignUpContinuation | { readonly error: "statement" | "keys" }> {
+): Promise<SignUpContinuation | { readonly error: "statement" | "denied" | "keys" }> {
 	if (!wasRead(t)) return { error: "statement" };
+	if (wasDenied(t)) return { error: "denied" };
 	if (!namesKeys(keys, t.statement.e_enc, t.statement.e_sig)) return { error: "keys" };
 	const body = continuations.bodyText("sign-up", {}) ?? "{}";
 	const input = continuations.of("sign-up", await digest(t.compact), 1, await digest(body));
@@ -51,9 +52,10 @@ async function readCreation(
 	options: { readonly ring: readonly Jwk[]; readonly keys: ScreenKeys; readonly issuer: string },
 ): Promise<
 	| { readonly creation: ReadCreation }
-	| { readonly error: StatementError | "statement" | "keys" | "basis" | "evidence" }
+	| { readonly error: StatementError | "statement" | "denied" | "keys" | "basis" | "evidence" }
 > {
 	if (!wasRead(t)) return { error: "statement" };
+	if (wasDenied(t)) return { error: "denied" };
 	if (!namesKeys(options.keys, t.statement.e_enc, t.statement.e_sig)) return { error: "keys" };
 	const read = await readStatement(compact, { ...options, purpose: "creation" });
 	if ("error" in read) return read;

@@ -5,6 +5,7 @@ import { authorization } from "../src/authorization.ts";
 import { digest, utf8 } from "../src/bytes.ts";
 import { sealTo } from "../src/hpke.ts";
 import { screenKeys } from "../src/keys.ts";
+import { signUp } from "../src/sign-up.ts";
 import { signCompact, signingKey } from "./fixtures.ts";
 
 const issuer = "https://id.example";
@@ -544,6 +545,97 @@ describe("authorization.callbackProof (A38)", () => {
 		const other = await taken();
 		expect(await authorization.callbackProof(read, other.done, keys, 0)).toEqual({
 			error: "finish",
+		});
+	});
+});
+
+describe("authorization.denial", () => {
+	it("answers what the page POSTs when the person refuses, every value T's, for a T read and a T pushed", async () => {
+		for (const w of [await world(), await world("urn:ietf:params:oauth:request_uri:p1")]) {
+			const denied = authorization.denial(w.read);
+			expect(denied).toEqual({
+				redirectUri: "https://rp.example/cb",
+				fields: { error: "access_denied", state: "s", iss: issuer },
+			});
+			expect(Object.isFrozen(denied)).toBe(true);
+			if ("fields" in denied) expect(Object.isFrozen(denied.fields)).toBe(true);
+			// T's redirect_uri and state, the Core's signed word, are what the POST names.
+			expect(denied).toMatchObject({
+				redirectUri: w.t.approval.redirect_uri,
+				fields: { state: w.t.approval.state, iss: w.t.iss },
+			});
+		}
+	});
+
+	it("refuses a copy of a ReadT, as every step does", async () => {
+		const { read } = await world();
+		expect(authorization.denial({ ...read })).toEqual({ error: "statement" });
+	});
+
+	it("ends the T denied, read or pushed: no passkey is asked for it, no completion taken, no proof signed, no sign-up continued", async () => {
+		for (const pushed of [undefined, "urn:ietf:params:oauth:request_uri:p2"]) {
+			const { w, sealed, receipt, finish } = await answered({}, {}, {}, pushed);
+			const { log: _log, ...completionOnly } = finish;
+			const control = await answered({}, {}, {}, pushed);
+			const first = authorization.denial(w.read);
+			expect("fields" in first).toBe(true);
+			// Asked again, the same.
+			expect(authorization.denial(w.read)).toEqual(first);
+			expect(await authorization.assertionOptions(w.read, { rpId: "id.example" })).toEqual({
+				error: "denied",
+			});
+			expect(
+				await authorization.finish(w.read, sealed, { ...completionOnly, level: "L0" }),
+			).toEqual({
+				error: "denied",
+			});
+			expect(
+				await authorization.finish(w.read, sealed, { ...finish, level: "log", receipt }),
+			).toEqual({
+				error: "denied",
+			});
+			expect(await signUp.continuation(w.read, w.keys)).toEqual({ error: "denied" });
+			expect(await signUp.readCreation("x.y.z", w.read, w.options)).toEqual({ error: "denied" });
+			// Another T, not denied, is untouched.
+			const { log: _l, ...controlOnly } = control.finish;
+			expect(
+				await authorization.finish(control.w.read, control.sealed, { ...controlOnly, level: "L0" }),
+			).toEqual({ code: control.code });
+		}
+	});
+
+	it("takes no completion for a T denied while finish was opening it, at L0 and at log", async () => {
+		for (const level of ["L0", "log"] as const) {
+			const { w, sealed, receipt, finish } = await answered();
+			const { log: _log, ...completionOnly } = finish;
+			const finishing = authorization.finish(
+				w.read,
+				sealed,
+				level === "L0" ? { ...completionOnly, level } : { ...finish, level, receipt },
+			);
+			// The person refuses before the completion is opened: the denial is made, and wins.
+			expect("fields" in authorization.denial(w.read)).toBe(true);
+			expect(await finishing, level).toEqual({ error: "denied" });
+		}
+	});
+
+	it("is refused for a T whose completion finish took, and a T denied after its finish signs no proof", async () => {
+		const { w, sealed, receipt, finish, code } = await answered();
+		const done = await authorization.finish(w.read, sealed, { ...finish, level: "log", receipt });
+		expect(done).toMatchObject({ code });
+		if ("error" in done) throw new Error(done.error);
+		// Its code is the page's to POST: no denial is made beside it.
+		expect(authorization.denial(w.read)).toEqual({ error: "finished" });
+		expect(
+			"proof" in (await authorization.callbackProof(w.read, done, w.keys, 1_700_000_000_000)),
+		).toBe(true);
+		// The other order: a T denied first signs no proof, whatever Finished is given.
+		const other = await answered();
+		expect("fields" in authorization.denial(other.w.read)).toBe(true);
+		expect(
+			await authorization.callbackProof(other.w.read, done, other.w.keys, 1_700_000_000_000),
+		).toEqual({
+			error: "denied",
 		});
 	});
 });

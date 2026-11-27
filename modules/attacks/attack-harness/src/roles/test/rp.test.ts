@@ -49,13 +49,18 @@ describe("the relying party's checks on an ID token", () => {
 		]);
 	});
 
-	it("takes a callback only at its redirect URI, for the state it started with (R3)", () => {
+	it("takes a callback only at its redirect URI, for the state it started with (R3), from its provider's issuer (R4)", () => {
+		const iss = provider.issuer;
 		expect(
-			rp.callbackFaults({ state: started.state, redirectUri: rp.redirectUri }, started),
+			rp.callbackFaults({ state: started.state, redirectUri: rp.redirectUri, iss }, started),
 		).toEqual([]);
 		expect(
-			rp.callbackFaults({ state: "other", redirectUri: "https://evil.example/cb" }, started),
+			rp.callbackFaults({ state: "other", redirectUri: "https://evil.example/cb", iss }, started),
 		).toEqual(["redirect_uri", "state"]);
+		// Another issuer, and none: RFC 9207's mix-up defense refuses both.
+		const mine = { state: started.state, redirectUri: rp.redirectUri };
+		expect(rp.callbackFaults({ ...mine, iss: "https://other.example" }, started)).toEqual(["iss"]);
+		expect(rp.callbackFaults(mine, started)).toEqual(["iss"]);
 	});
 });
 
