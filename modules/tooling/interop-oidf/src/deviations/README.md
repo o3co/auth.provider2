@@ -8,7 +8,7 @@ Internal module of `interop-oidf`: the provider's intended deviations and strict
 
 ## Not here
 - How a conformance run is judged by the rows its expected failures name.
-- Choosing a row's words: review's, the ledger's being the one place they are written.
+- Choosing a row's text: review's, the ledger's being the one place it is written.
 
 ## Offers
 - `ledger` (the repository's) and `ledgerOf` (a text) → `Deviation` rows, refused where any may not be taken; `ledgerProblems` (a value) → why not; `pageOf` (rows) → the page; `ledgerPath`, `pagePath`.

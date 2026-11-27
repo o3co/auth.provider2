@@ -1,0 +1,214 @@
+/** Who answered a refusal a run saw: the Front (the wire's form), the Core, or a role of the harness. */
+export type Refuser = "front" | "core" | "harness";
+
+/** Where a refusal was answered. */
+export type Place = "par" | "start" | "token" | "resource";
+
+/** A refusal the provider answers for one of the ledger's rows, as it is written on the wire. */
+export interface Word {
+	/** The ledger row it answers for. */
+	readonly key: string;
+	readonly refuser: Refuser;
+	readonly place: Place;
+	/** The OAuth `error`. */
+	readonly error: string;
+	/** The `error_description`, exactly. */
+	readonly description: string;
+	/** Where the same words answer two rows, whether the request carried a DPoP header tells them apart. */
+	readonly dpopHeader?: boolean;
+	/** Where the same words answer another cause, whether this start's `request_uri` was started before tells them apart. */
+	readonly startedBefore?: boolean;
+	/** The same words answer other causes too: a refusal in them is never the row's alone. */
+	readonly shared?: true;
+}
+
+/** A refusal a run saw, as the front or a role recorded it. */
+export interface Seen {
+	readonly refuser: Refuser;
+	readonly place: Place;
+	readonly error: string;
+	readonly description: string;
+	readonly dpopHeader: boolean;
+	/**
+	 * A start whose `request_uri` an earlier start of the run named and was not refused: then the
+	 * reservation holds this JAR, and a refusal is of the screen's keys alone.
+	 */
+	readonly startedBefore: boolean;
+}
+
+/** What a refusal seen says of the ledger: one row, rows it cannot tell apart, or none. */
+export type Reading =
+	| { readonly kind: "observed"; readonly key: string }
+	| { readonly kind: "unconfirmed"; readonly keys: readonly string[] }
+	| { readonly kind: "none" };
+
+/**
+ * The provider's words for the ledger's rows, as its modules answer them today: a way a row shows with
+ * no refusal (`form-post-required` as the suite reads a callback's query) has none.
+ */
+export const words: readonly Word[] = [
+	{
+		key: "jar-typ-required",
+		refuser: "core",
+		place: "par",
+		error: "invalid_request_object",
+		description: "not of the typ asked",
+	},
+	{
+		key: "jar-jti-required",
+		refuser: "core",
+		place: "par",
+		error: "invalid_request_object",
+		description: "the request names no jti or exp",
+	},
+	{
+		key: "par-jar-lifetime",
+		refuser: "core",
+		place: "par",
+		error: "invalid_request_object",
+		description: "the request lives longer than is taken",
+	},
+	{
+		key: "jar-dpop-jkt-required",
+		refuser: "core",
+		place: "par",
+		error: "invalid_request_object",
+		description: "the request names no dpop_jkt",
+		dpopHeader: false,
+	},
+	{
+		key: "par-dpop-header-only",
+		refuser: "core",
+		place: "par",
+		error: "invalid_request_object",
+		description: "the request names no dpop_jkt",
+		dpopHeader: true,
+	},
+	{
+		key: "rar-refused",
+		refuser: "core",
+		place: "par",
+		error: "invalid_request",
+		description: "authorization_details are not taken",
+	},
+	{
+		key: "rar-refused",
+		refuser: "core",
+		place: "token",
+		error: "invalid_request",
+		description: "authorization_details are not taken",
+	},
+	{
+		key: "form-post-required",
+		refuser: "core",
+		place: "start",
+		error: "invalid_request_object",
+		description: "missing_item:response_mode",
+	},
+	{
+		key: "state-required",
+		refuser: "core",
+		place: "start",
+		error: "invalid_request_object",
+		description: "missing_item:state",
+	},
+	{
+		key: "nonce-required",
+		refuser: "core",
+		place: "start",
+		error: "invalid_request_object",
+		description: "missing_item:nonce",
+	},
+	{
+		key: "claims-null-nested",
+		refuser: "core",
+		place: "start",
+		error: "invalid_request_object",
+		description: "item:claims",
+		// Also a `claims` that is no JSON object, the standard's own refusal.
+		shared: true,
+	},
+	{
+		key: "request-uri-once",
+		refuser: "core",
+		place: "start",
+		error: "invalid_request",
+		description: "the request was used already",
+		// Also another JAR under the same `jti`: only a start of a `request_uri` started before is this row's.
+		startedBefore: true,
+	},
+	// No source answered the start: one carrying neither `request` nor `request_uri`, a `request_uri`
+	// where no `par` is composed, a JAR by value where only pushed ones are taken.
+	{
+		key: "jar-required",
+		refuser: "core",
+		place: "start",
+		error: "invalid_request",
+		description: "the request is sent by exactly one of its ways",
+		shared: true,
+	},
+	// The refresh grant answers every refused token alike, so it tells nothing about why.
+	{
+		key: "refresh-dpop-bound",
+		refuser: "core",
+		place: "token",
+		error: "invalid_grant",
+		description: "invalid refresh token",
+		shared: true,
+	},
+];
+
+const matches = (word: Word, seen: Seen) =>
+	word.refuser === seen.refuser &&
+	word.place === seen.place &&
+	word.error === seen.error &&
+	word.description === seen.description &&
+	(word.dpopHeader === undefined || word.dpopHeader === seen.dpopHeader) &&
+	(word.startedBefore === undefined || word.startedBefore === seen.startedBefore);
+
+/**
+ * What a refusal seen says: the one row whose words it is where only that row's words fit and they are
+ * no other cause's; unconfirmed where they are shared or more than one row's; none where no row's fit.
+ */
+export function readingOf(seen: Seen, table: readonly Word[] = words): Reading {
+	const fit = table.filter((word) => matches(word, seen));
+	const keys = [...new Set(fit.map((word) => word.key))];
+	const [only] = keys;
+	if (only === undefined) return { kind: "none" };
+	if (keys.length > 1 || fit.some((word) => word.shared)) return { kind: "unconfirmed", keys };
+	return { kind: "observed", key: only };
+}
+
+/**
+ * Why a table may not be taken, if anything: a word for no row of the ledger, a description left
+ * empty, or two rows' words that a request cannot tell apart unless both say they are shared.
+ */
+export function wordsProblems(table: readonly Word[], keys: readonly string[]): string[] {
+	const problems: string[] = [];
+	for (const word of table) {
+		if (!keys.includes(word.key)) problems.push(`${word.key}: no row of the ledger`);
+		if (word.description === "" || word.error === "")
+			problems.push(`${word.key}: its words are empty`);
+	}
+	for (const [i, one] of table.entries()) {
+		for (const other of table.slice(i + 1)) {
+			const overlap =
+				one.key !== other.key &&
+				one.refuser === other.refuser &&
+				one.place === other.place &&
+				one.error === other.error &&
+				one.description === other.description &&
+				(one.dpopHeader === undefined ||
+					other.dpopHeader === undefined ||
+					one.dpopHeader === other.dpopHeader) &&
+				(one.startedBefore === undefined ||
+					other.startedBefore === undefined ||
+					one.startedBefore === other.startedBefore);
+			if (overlap && !(one.shared && other.shared))
+				problems.push(
+					`${one.key} and ${other.key}: the same words, and not both say they are shared`,
+				);
+		}
+	}
+	return problems;
+}

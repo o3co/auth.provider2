@@ -2,6 +2,7 @@
 
 ## Responsibilities
 - The ledger of the provider's intended deviations and strict choices (L1), `docs/compliance/deviations.json`, which a conformance run's expected failures name by key, and the public page written from it (internal module `deviations`).
+- The provider's words for those rows, and what a refusal a run saw says of them (internal module `words`).
 - The OpenID Foundation's conformance suite at a pinned version, started and stopped on this machine: `suite` starts and stops it, `api` reaches its API trusting its certificate alone, `compose` composes its containers, `orphans` takes down a suite a killed run left, `commands` holds each program other than docker to its time, `lifecycle` holds what every plan run has (its directories, its stops).
 
 ## Not here
