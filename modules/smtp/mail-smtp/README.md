@@ -10,6 +10,7 @@
 ## Offers
 - Composition definition only (provides `mail`); it cannot be composed beside mail's logging-only sender.
 - Operator section: `host` (required), `port` (default 587), `security` (`starttls` by default, `tls` or `none`), `from` (one address `mail-address`'s `isAddress` takes, a display name allowed), `user` and `password` (both or neither), `deadline` (the whole send, 100ms–10m, default `40s`, written with its unit), `concurrent-sends` (sends at once on a host, 1–1000, default 20).
+- `./testing`: `fakeRelay`, a scripted SMTP relay on loopback, keeping each command line and message it is sent.
 
 ## Invariants
 - Connects to the relay itself, apart from `outbound`, which carries HTTP alone (`network`: `smtp`).

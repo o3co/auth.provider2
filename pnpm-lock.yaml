@@ -2667,6 +2667,16 @@ importers:
         specifier: 5.0.5
         version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(vite@8.3.3(@types/node@26.6.5)(yaml@2.9.1))
 
+  modules/publisher/publish-serve:
+    dependencies:
+      '@mod/url-setting':
+        specifier: workspace:*
+        version: link:../../foundation/url-setting
+    devDependencies:
+      vitest:
+        specifier: 5.0.5
+        version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(vite@8.3.3(@types/node@26.6.5)(yaml@2.9.1))
+
   modules/publisher/registry-sign:
     dependencies:
       '@mod/registry-wire':
@@ -2701,6 +2711,19 @@ importers:
         specifier: 5.0.5
         version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(vite@8.3.3(@types/node@26.6.5)(yaml@2.9.1))
 
+  modules/scaffold/app-output:
+    dependencies:
+      '@mod/app-entries':
+        specifier: workspace:*
+        version: link:../app-entries
+      '@o3co/ts.hocon':
+        specifier: 1.14.3
+        version: 1.14.3(yaml@2.9.1)(zod@4.6.7)
+    devDependencies:
+      vitest:
+        specifier: 5.0.5
+        version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(vite@8.3.3(@types/node@26.6.5)(yaml@2.9.1))
+
   modules/scaffold/combinations:
     dependencies:
       '@mod/kinds':
@@ -2710,6 +2733,88 @@ importers:
         specifier: workspace:*
         version: link:../workspace-packages
     devDependencies:
+      vitest:
+        specifier: 5.0.5
+        version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(vite@8.3.3(@types/node@26.6.5)(yaml@2.9.1))
+
+  modules/scaffold/create-app:
+    dependencies:
+      '@mod/app-output':
+        specifier: workspace:*
+        version: link:../app-output
+      '@mod/combinations':
+        specifier: workspace:*
+        version: link:../combinations
+      '@mod/workspace-packages':
+        specifier: workspace:*
+        version: link:../workspace-packages
+    devDependencies:
+      '@mod/audit':
+        specifier: workspace:*
+        version: link:../../foundation/audit
+      '@mod/audit-http':
+        specifier: workspace:*
+        version: link:../../audit-receivers/audit-http
+      '@mod/authorize':
+        specifier: workspace:*
+        version: link:../../oauth/authorize
+      '@mod/clients':
+        specifier: workspace:*
+        version: link:../../identity/clients
+      '@mod/clients-registry':
+        specifier: workspace:*
+        version: link:../../identity/clients-registry
+      '@mod/core-wire':
+        specifier: workspace:*
+        version: link:../../http-servers/core-wire
+      '@mod/dpop':
+        specifier: workspace:*
+        version: link:../../oauth/dpop
+      '@mod/first-key':
+        specifier: workspace:*
+        version: link:../../passkey/first-key
+      '@mod/front-relay':
+        specifier: workspace:*
+        version: link:../../http-servers/front-relay
+      '@mod/guard-imports':
+        specifier: workspace:*
+        version: link:../../tooling/guard-imports
+      '@mod/http':
+        specifier: workspace:*
+        version: link:../../foundation/http
+      '@mod/issuer':
+        specifier: workspace:*
+        version: link:../../oauth/issuer
+      '@mod/kernel':
+        specifier: workspace:*
+        version: link:../../foundation/kernel
+      '@mod/keys':
+        specifier: workspace:*
+        version: link:../../foundation/keys
+      '@mod/keys-kms':
+        specifier: workspace:*
+        version: link:../../key-holders/keys-kms
+      '@mod/mail-smtp':
+        specifier: workspace:*
+        version: link:../../smtp/mail-smtp
+      '@mod/promises':
+        specifier: workspace:*
+        version: link:../../foundation/promises
+      '@mod/redis':
+        specifier: workspace:*
+        version: link:../../store-redis/redis
+      '@mod/references':
+        specifier: workspace:*
+        version: link:../../tooling/references
+      '@mod/tokens':
+        specifier: workspace:*
+        version: link:../../oauth/tokens
+      '@mod/webauthn':
+        specifier: workspace:*
+        version: link:../../passkey/webauthn
+      '@o3co/ts.hocon':
+        specifier: 1.14.3
+        version: 1.14.3(yaml@2.9.1)(zod@4.6.7)
       vitest:
         specifier: 5.0.5
         version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(vite@8.3.3(@types/node@26.6.5)(yaml@2.9.1))

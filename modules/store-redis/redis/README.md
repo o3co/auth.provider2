@@ -11,7 +11,8 @@
 
 ## Offers
 - Composition definition only; with the store, `storeControl` and `storeUpkeep` (internal module `upkeep`).
-- The probe `redis` at `kernel`'s `probes` (internal module `probe`), given what boot checked of the server to check again.
+- The probe `redis` at `kernel`'s `probes` (internal module `probe`), checking again what boot checked.
+- `./testing`: `fakeRedis`, a loopback server enough to boot the module.
 - Operator section:
   - `url` (`redis` or `rediss`, with no query), `accept-plaintext` (false), `address-family` (`ipv4`, `ipv6`, or either unset), `prefix` (lower-case letters, digits and `-`; default `store`).
   - `connect-timeout` (default `2s`), `command-timeout` (default `1s`), `replication-timeout` (default `1s`); times written with their unit, a bare number refused.
@@ -26,7 +27,7 @@
 - Boot then runs once what a confirmation would and a store script does: with `replication`, the confirming connection reaching another server than the operations (their run ids differ, and the operations' did not change meanwhile, as in a failover), and a store script (`read`, `batchAcross`) the server cannot run, refuse boot, named. A replica missing or lagging is neither.
 - Boot reads the server's settings as internal module `settings` does: each it takes as declared, the server not showing it, is warned of at every boot as `redis.settings_declared`; one it cannot judge refuses boot.
 - `durability` `none` and `authentication` `none` are the operator's statements (`settings`); every boot under one warns `redis.durability_none` or `redis.authentication_none`, naming the spaces it touches.
-- A refusal or a warning never tells the URL, which may hold a password; a failure is told by its code alone, never its message: an error event as `redis.error` with `code`, and a refused connection in `redis.url`'s reason.
+- A refusal or a warning never tells the URL (it may hold a password); a failure is told by its code alone: an error event as `redis.error` with `code`, a refused connection in `redis.url`'s reason.
 - `replicas`: no replica seen is unavailable, a confirmed read at boot too, so a module reading at boot refuses a restart.
 - `none`: the operator states there is no failover, so even confirmed writes are lost by one; a replica seen at runtime is unavailable; every boot warns `redis.replication_none` naming the replicated spaces.
 - A timeout, too few replicas, or another server than the one that answered is unavailable, the answer then unknown.
@@ -40,7 +41,7 @@
 ## Deployment
 - With `rediss`, a certificate for the URL's host, trusted by the platform.
 - Redis 7.0 or later, answering as a primary: no cluster, and no proxy splitting keys across nodes (boot runs `batchAcross` over two partitions, and refuses, named, a server that answers it `CROSSSLOT`; a key answered `MOVED`, `ASK` or `CLUSTERDOWN` is refused as a cluster).
-- One primary holding every key, whatever is composed, with no setting to loosen it: a scan sees one server's keys, so on a server holding part of them a sweep or a reseal would silently miss records.
+- One primary holding every key, with no setting to loosen it: a scan sees one server's keys, so on a server holding part of them a sweep or a reseal would silently miss records.
 - `maxmemory-policy noeviction`, where a composed module keeps a space that must not be evicted.
 - `appendonly yes`, `appendfsync always` and `no-appendfsync-on-rewrite no`, where a composed module keeps a durable space, unless `durability` is `none`.
 - With `replication` `replicas`: `min-replicas-to-write` and `min-replicas-max-lag` of 1 or more. With `none`: no replica connected.

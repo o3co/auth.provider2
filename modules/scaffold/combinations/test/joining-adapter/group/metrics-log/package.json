@@ -1,0 +1,11 @@
+{
+	"name": "@j/metrics-log",
+	"kind": "adapter",
+	"adapts": "@j/metrics",
+	"exports": {
+		"./module": "./src/module.ts"
+	},
+	"dependencies": {
+		"@j/metrics": "workspace:*"
+	}
+}

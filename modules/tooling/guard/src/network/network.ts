@@ -7,6 +7,7 @@ import {
 	type Pkg,
 } from "@mod/guard-imports";
 import type ts from "typescript";
+import { networkKinds } from "../kinds.ts";
 import { budgetsAsTest, type Scope } from "../units.ts";
 import { forksOf, importsLookupAlone, isPlainHelper, launchRefusal } from "./forks.ts";
 
@@ -167,9 +168,9 @@ const covers = (allowed: readonly string[], reach: string) =>
 	allowed.includes(reach) ||
 	(reaching[reach]?.every((name) => allowed.includes(`${reach} ${name}`)) ?? false);
 
-/** G26: product code reaches the network only as the words its manifest declares let it, each stated on its card. G27: a word reaching a server the deployment provides asks a Deployment section. */
+/** G26: product and companion code reaches the network only as the words its manifest declares let it, each stated on its card. G27: a word reaching a server the deployment provides asks a Deployment section. */
 export function networkRules(s: Scope, p: Pkg) {
-	if (!s.budget.productKinds.includes(s.kindOf(p))) return;
+	if (!networkKinds.includes(s.kindOf(p))) return;
 	const rule = "G26 the network is reached through outbound, or as a package declares";
 	const declared = [p.manifest.network ?? []].flat().map(String);
 	const known = declared.filter((word) => {

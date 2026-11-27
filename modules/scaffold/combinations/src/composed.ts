@@ -1,6 +1,7 @@
 import { kinds } from "@mod/kinds";
 import { axesIn, axisOf } from "./axes/axes.ts";
-import { completedWith, type Declared } from "./declared.ts";
+import { completedWith } from "./completed.ts";
+import type { Declared } from "./declared.ts";
 
 /** What to compose: features in named groups, an adapter (or the owner itself) by axis owner, and anything added. */
 export interface Selection {
@@ -55,12 +56,18 @@ function refusals(declared: Declared, selection: Selection): string[] {
 /** A selection's modules, first reached first: what it names and needs, each composed axis's chosen
  * adapter or default (none where another adapter of it is there), wirings and bridges; replaced owners left out. */
 export function composedWith(declared: Declared, selection: Selection): string[] {
+	return reachedWith(declared, selection).filter((name) => declared.packages.get(name)?.module);
+}
+
+/** Every package a selection reaches, as `composedWith` reaches them, a module or not; replaced owners left out. */
+export function reachedWith(declared: Declared, selection: Selection): string[] {
 	const refused = refusals(declared, selection);
 	if (refused.length > 0) throw new Error(refused.join("; "));
 	return composing(
 		declared,
 		[...Object.values(selection.features).flat(), ...(selection.add ?? [])],
 		selection.axes ?? {},
+		{ defaults: true, modules: false },
 	);
 }
 
@@ -68,20 +75,30 @@ export function composedWith(declared: Declared, selection: Selection): string[]
 export function neededWith(declared: Declared, modules: readonly string[]): string[] {
 	const absent = absentFrom(declared, modules);
 	if (absent.length > 0) throw new Error(absent.join("; "));
-	return composing(declared, modules, {}, { defaults: false });
+	return composing(declared, modules, {}, { defaults: false, modules: true });
 }
 
 function composing(
 	declared: Declared,
 	start: readonly string[],
 	chosen: Readonly<Record<string, string>>,
-	{ defaults } = { defaults: true },
+	{ defaults, modules } = { defaults: true, modules: true },
 ): string[] {
 	const { adapters, defaultOf, replacingOf } = axesIn(declared);
 	const runs = (name: string) => {
 		const p = declared.packages.get(name);
 		return p?.kind === kinds.foundation || p?.kind === kinds.feature;
 	};
+	// An adapter comes as a bridge only as its axis's choice allows: never where the selection names
+	// anything else for the axis; where it names nothing and defaults come, only as the default.
+	const excluded = new Set(
+		[...adapters].flatMap(([owner, of]) => {
+			const pick = chosen[owner];
+			if (pick !== undefined) return of.filter((a) => a.name !== pick).map((a) => a.name);
+			return defaults ? of.filter((a) => a.name !== defaultOf(owner)).map((a) => a.name) : [];
+		}),
+	);
+	const picked = new Set(Object.values(chosen));
 	/** Every package reached, a module or not: an axis owner reached is composed. */
 	const reached: string[] = [];
 	const reach = (name: string) => {
@@ -108,10 +125,12 @@ function composing(
 		const joined = reached.filter(
 			(name) => declared.packages.get(name)?.module || adapters.has(name),
 		);
-		for (const name of completedWith(declared, joined)) reach(name);
+		for (const name of completedWith(declared, joined, excluded, picked)) reach(name);
 	}
 	const replaced = new Set(reached.flatMap((name) => declared.packages.get(name)?.replaces ?? []));
-	return reached.filter((name) => declared.packages.get(name)?.module && !replaced.has(name));
+	return reached.filter(
+		(name) => (!modules || declared.packages.get(name)?.module) && !replaced.has(name),
+	);
 }
 
 /** The modules given, owners a declared default replaces swapped for it (still counted for bridges), then wirings and bridges. */

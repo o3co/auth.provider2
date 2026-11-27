@@ -5,6 +5,9 @@
 	"type": "module",
 	"kind": "adapter",
 	"adapts": "@mod/http",
+	"asks": [
+		"`core-wire`: the Core entrance's certificate and key (`certificate-file`, `key-file`) and the authorities a Front instance's certificate chains to (`front-authority-file`), PEM files read at boot."
+	],
 	"default": true,
 	"network": "serves-wire",
 	"exports": {

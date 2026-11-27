@@ -69,6 +69,26 @@ describe("what is declared outside the workspace, composed with it", () => {
 		]);
 	});
 
+	it("brings an adapter chosen for its axis as a bridge, its owner reached through it alone, though the default joins too", () => {
+		const declared = declaredWith(fixture, [
+			feature("@x/own"),
+			{
+				name: "@x/own-d",
+				kind: "adapter",
+				adapts: "@x/own",
+				default: true,
+				joins: ["@c/app"],
+				needs: ["@x/own"],
+			},
+			{ name: "@x/own-p", kind: "adapter", adapts: "@x/own", joins: ["@c/app"], needs: ["@x/own"] },
+		]);
+		const login = { login: ["@c/app"] };
+		const chosen = composedWith(declared, { features: login, axes: { "@x/own": "@x/own-p" } });
+		expect(chosen.filter((n) => n.startsWith("@x/"))).toEqual(["@x/own-p", "@x/own"]);
+		const unnamed = composedWith(declared, { features: login });
+		expect(unnamed.filter((n) => n.startsWith("@x/"))).toEqual(["@x/own-d", "@x/own"]);
+	});
+
 	it("lets an outside adapter join what it bridges", () => {
 		const declared = declaredWith(fixture, [
 			{
@@ -80,6 +100,12 @@ describe("what is declared outside the workspace, composed with it", () => {
 			},
 		]);
 		expect(completedOf(declared, ["@c/audit", "@c/users"])).toContain("@x/audit-users");
+		// Where defaults come, it comes only where its axis names it.
+		const login = { login: ["@c/app"] };
+		expect(composedWith(declared, { features: login })).not.toContain("@x/audit-users");
+		expect(
+			composedWith(declared, { features: login, axes: { "@c/audit": "@x/audit-users" } }),
+		).toContain("@x/audit-users");
 	});
 
 	it("gives an outside axis the default its adapters declare", () => {

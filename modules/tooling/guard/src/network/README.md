@@ -3,7 +3,7 @@
 Internal module of `guard`: G26, how product code may reach the network, and G27, where a card states the server it needs.
 
 ## Responsibilities
-- Finds where a product package's shipped code reaches the network, and holds it to the words its manifest declares in `network`, each stated on its card as `` `network`: `<word>` ``.
+- Finds where a product package's or a companion's shipped code reaches the network, and holds it to the words its manifest declares in `network`, each stated on its card as `` `network`: `<word>` ``.
 
 ## Not here
 - Which packages reach the network: each package's own declaration, never a list here.
@@ -40,7 +40,7 @@ Internal module of `guard`: G26, how product code may reach the network, and G27
 - Every starter `forks` names is held to that form, whatever its scan finds it reaches: one starting nothing as written is refused all the same.
 - Every helper `forks` names is a plain `.mjs` file, else reported and never read. It imports `node:dns/promises`' `lookup` alone, by one import, and loads nothing else: no other import, no re-export, no `import()` or `require`. What it reaches counts toward the package's words.
 - `redis`, `smtp`, `kms` and `wire` reach a server the deployment provides: a package declaring one has a `## Deployment` section on its card, stating what that server must be (G27).
-- A place no declared word lets through is refused, as is a word guard does not know, a declared word the package reaches nothing with, and a word its card does not state. Only the product kinds' packages are read (common, protocol, verification and assembly are not), and in them neither tests, test tables nor test code as guard-imports reads it (`budgetsAsTest`: what only a package's `./testing` reaches).
+- A place no declared word lets through is refused, as is a word guard does not know, a declared word the package reaches nothing with, and a word its card does not state. Only the product kinds' packages and companions are read (common, protocol, verification and assembly are not), and in them neither tests, test tables nor test code as guard-imports reads it (`budgetsAsTest`: what only a package's `./testing` reaches).
 
 ## Depends on
 - `guard-imports`: each file's `facts`, and `lexicalAnalysis` for a file read alone.

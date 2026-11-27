@@ -1,3 +1,5 @@
 audit {
-	receivers = none
+	receivers = [
+		REPLACE-RECEIVER-NAME
+	]
 }

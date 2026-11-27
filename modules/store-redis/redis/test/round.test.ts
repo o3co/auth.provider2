@@ -12,7 +12,7 @@ import { spaces } from "@mod/store";
 import { tlsOptionsForTests } from "@mod/tls-options/testing";
 import { afterEach, describe, expect, it } from "vitest";
 import redisModule from "../src/module.ts";
-import { fakeRedis } from "./fake-redis.ts";
+import { fakeRedis } from "../src/testing.ts";
 
 let app: Assembly | undefined;
 afterEach(async () => {

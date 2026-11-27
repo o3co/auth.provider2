@@ -5,6 +5,9 @@
 	"type": "module",
 	"kind": "adapter",
 	"adapts": "@mod/http",
+	"asks": [
+		"The Front and the Core in one process, for development and trials: on loopback, `http.public-origin` may be a plain `http://` origin, booting only with `http.insecure-origin = true` and `kernel.environment = development`, as production refuses it."
+	],
 	"exports": {
 		"./module": "./src/module.ts"
 	},

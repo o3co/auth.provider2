@@ -7,6 +7,7 @@ import {
 	fullWith,
 	neededWith,
 	optInsOf,
+	reachedWith,
 } from "../src/composed.ts";
 import { declaredIn } from "../src/declared.ts";
 
@@ -176,4 +177,13 @@ it("never takes an adapter declaring itself never the default as its axis's defa
 		"@n/owner",
 		"@n/local",
 	]);
+});
+
+it("reaches, beside the modules it composes, the packages with none, and leaves out an owner its adapter replaces", () => {
+	const reached = reachedWith(owned, { features: { app: ["@o/app"] } });
+	expect(reached).toEqual(
+		expect.arrayContaining(composedWith(owned, { features: { app: ["@o/app"] } })),
+	);
+	expect(reached).toContain("@o/kernel");
+	expect(reached).not.toContain("@o/session");
 });

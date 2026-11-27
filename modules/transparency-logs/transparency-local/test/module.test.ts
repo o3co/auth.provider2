@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { BootRefused } from "@mod/kernel";
 import { promiseNames, promises } from "@mod/promises";
 import promisesModule from "@mod/promises/module";
@@ -24,6 +25,15 @@ describe("transparency-local's module", () => {
 				{ by: "transparency-local", reason: expect.stringMatching(/^not recommended: .*Core/) },
 			],
 		});
+	});
+
+	it("asks the operator to accept the promise its stance breaks, by the stance's name", () => {
+		const manifest = JSON.parse(
+			readFileSync(new URL("../package.json", import.meta.url), "utf8"),
+		) as { asks: readonly string[] };
+		expect(manifest.asks.join("\n")).toMatch(
+			new RegExp(`^Not recommended: \`${promiseNames.coreContained}\` does not hold`, "m"),
+		);
 	});
 
 	it("refuses boot where no origin is set to judge an assertion for", async () => {

@@ -7,6 +7,7 @@ import {
 	fullWith,
 	neededWith,
 	optInsOf,
+	reachedWith,
 	type Selection,
 } from "./composed.ts";
 import { type Declared, declaredIn, declaredInIndex } from "./declared.ts";
@@ -37,6 +38,9 @@ const declared = () => {
 /** What a selection composes (see `composedWith`); refuses, naming each, what cannot be selected. */
 export const composed = (selection: Selection): string[] => composedWith(declared(), selection);
 
+/** Every package a selection reaches, as `composed` reaches them, a module or not; owners a composed adapter replaces left out. */
+export const reached = (selection: Selection): string[] => reachedWith(declared(), selection);
+
 /** The full template: every foundation and feature that does not opt in, with each default, and what is added. */
 export const full = (add?: readonly string[]): string[] => fullWith(declared(), add);
 
@@ -57,6 +61,7 @@ export interface Combinations {
 	readonly optIns: typeof optIns;
 	readonly addable: typeof addable;
 	readonly needed: typeof needed;
+	readonly reached: typeof reached;
 }
 
 /**
@@ -72,6 +77,7 @@ export function combinationsWith(outside: readonly Declaration[]): Combinations 
 		optIns: () => optInsOf(merged),
 		addable: () => addableOf(merged),
 		needed: (modules) => neededWith(merged, modules),
+		reached: (selection) => reachedWith(merged, selection),
 	};
 }
 

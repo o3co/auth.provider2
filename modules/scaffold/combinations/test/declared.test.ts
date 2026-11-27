@@ -3,7 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { workspacePackages } from "@mod/workspace-packages";
 import { expect, it } from "vitest";
-import { completedWith, declaredIn, declaredInIndex } from "../src/declared.ts";
+import { completedWith } from "../src/completed.ts";
+import { declaredIn, declaredInIndex } from "../src/declared.ts";
 
 /** The fixture workspace, read once. */
 const declared = declaredIn(join(import.meta.dirname, "fixture"));

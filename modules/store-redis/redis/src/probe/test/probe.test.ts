@@ -12,8 +12,8 @@ import { spaces } from "@mod/store";
 import { tlsOptionsForTests } from "@mod/tls-options/testing";
 import type { Redis } from "ioredis";
 import { afterEach, describe, expect, it } from "vitest";
-import { fakeRedis } from "../../../test/fake-redis.ts";
 import redisModule from "../../module.ts";
+import { fakeRedis } from "../../testing.ts";
 import { goodReplicaProblems, redisProbe } from "../probe.ts";
 
 /** Waits until `holds`, checking every 10 ms, for 2 s at most: on the event, not on a guess of its time. */

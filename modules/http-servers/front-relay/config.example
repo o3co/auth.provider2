@@ -1,0 +1,7 @@
+front-relay {
+	core-host = core.example.invalid
+	core-port = 8443
+	certificate-file = /run/tls/front.pem
+	key-file = /run/tls/front-key.pem
+	core-authority-file = /run/tls/core-authorities.pem
+}

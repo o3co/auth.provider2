@@ -122,22 +122,3 @@ function declaredOf(manifests: readonly Manifest[]): Declared {
 	);
 	return { wirings, bridges, packages: new Map(packages.map((m) => [m.name, packageOf(m)])) };
 }
-
-/**
- * The modules given, then the wirings and bridges declared for them, each once and in the order
- * first named. What is brought in is completed in turn, until nothing more comes.
- */
-export function completedWith(declared: Declared, modules: readonly string[]): string[] {
-	const all = [...modules];
-	const add = (name: string) => {
-		if (!all.includes(name)) all.push(name);
-	};
-	for (let size = -1; size !== all.length; ) {
-		size = all.length;
-		for (const name of all) for (const wiring of declared.wirings.get(name) ?? []) add(wiring);
-		for (const { joins, bridge } of declared.bridges) {
-			if (joins.every((m) => all.includes(m))) add(bridge);
-		}
-	}
-	return all;
-}

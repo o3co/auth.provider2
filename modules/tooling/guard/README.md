@@ -13,7 +13,7 @@
   - G15: wiring neither branches nor loops; `&&`, `||`, `??` and calls that walk a collection with a function, such as `map` or `filter`, count too.
   - G17: a card holds only the current contract; plans, moves and removals in progress, by their phrases as written, go to the plan list outside the repo.
   - G21: no document copies a list of the configuration.
-  - G26: product code reaches the network through `outbound`, or as the words its manifest declares let it (the `network` internal module).
+  - G26: product and companion code reaches the network through `outbound`, or as the words its manifest declares let it (the `network` internal module).
   - G27: a package whose declared `network` word reaches a server the deployment provides (`redis`, `smtp`) states what that server must be in a `## Deployment` section of its card (the `network` internal module).
   - G33: a protocol package holds a wire's contract alone: it imports `zod` and its own files alone, reaches only the globals that hold no behaviour of the host, and keeps no state nor runs code as it loads (the `protocol` internal module).
 - Measures each package's public surface: its exported values, and the members of its exported interfaces and type aliases.

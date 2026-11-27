@@ -6,7 +6,7 @@
 	"kind": "foundation",
 	"forWiring": true,
 	"asks": [
-		"Store in memory: one instance only, the memory store accepted (`store.accept-volatile = true`)."
+		"Store in memory: one instance only, the memory store accepted (`store.accept-volatile = true`), and spaces needing authenticated writes kept unauthenticated (`store.accept-unauthenticated = true`), each warned of at every start."
 	],
 	"takenBy": {
 		"./subject-writer": [

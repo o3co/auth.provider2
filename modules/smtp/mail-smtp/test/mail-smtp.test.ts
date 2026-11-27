@@ -21,7 +21,7 @@ import {
 } from "@mod/tls-options/testing";
 import { afterAll, describe, expect, it } from "vitest";
 import smtp from "../src/module.ts";
-import { type FakeRelay, fakeRelay, type Script } from "./fake-relay.ts";
+import { type FakeRelay, fakeRelay, type Script } from "../src/testing.ts";
 import { authority, relay as relayCertificate, stranger } from "./fixtures/certificates.ts";
 
 // The relay's authority is trusted the way an operator adds one to the platform's store.

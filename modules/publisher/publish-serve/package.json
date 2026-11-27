@@ -1,0 +1,20 @@
+{
+	"name": "@mod/publish-serve",
+	"private": true,
+	"license": "Apache-2.0",
+	"type": "module",
+	"kind": "companion",
+	"network": "serves-http",
+	"bin": {
+		"publish-serve": "./src/main.ts"
+	},
+	"exports": {
+		".": "./src/serve.ts"
+	},
+	"dependencies": {
+		"@mod/url-setting": "workspace:*"
+	},
+	"devDependencies": {
+		"vitest": "5.0.5"
+	}
+}

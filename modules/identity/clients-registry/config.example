@@ -1,0 +1,5 @@
+clients-registry {
+	file = /run/registry/clients.jws
+	publisher-key = { kty = OKP, crv = Ed25519, kid = publisher-1, alg = EdDSA, x = "REPLACE-PUBLISHER-PUBLIC-KEY-X" }
+	min-version = 1
+}

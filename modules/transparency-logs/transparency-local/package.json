@@ -6,6 +6,9 @@
 	"kind": "adapter",
 	"adapts": "@mod/transparency",
 	"neverDefault": true,
+	"asks": [
+		"Not recommended: `core-compromise-contained` does not hold, as the log and the judgment of its records run in the Core. The way out is an adapter of the axis with its log and monitor outside the Core, the keys held now brought over once as first-trust records and every user logging in again."
+	],
 	"exports": {
 		".": "./src/contract.ts",
 		"./module": "./src/module.ts"

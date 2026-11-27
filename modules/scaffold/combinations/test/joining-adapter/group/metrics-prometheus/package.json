@@ -1,0 +1,17 @@
+{
+	"name": "@j/metrics-prometheus",
+	"kind": "adapter",
+	"adapts": "@j/metrics",
+	"default": true,
+	"joins": [
+		"@j/http",
+		"@j/metrics"
+	],
+	"exports": {
+		"./module": "./src/module.ts"
+	},
+	"dependencies": {
+		"@j/http": "workspace:*",
+		"@j/metrics": "workspace:*"
+	}
+}

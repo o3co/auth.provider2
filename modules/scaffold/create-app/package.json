@@ -1,0 +1,43 @@
+{
+	"name": "@mod/create-app",
+	"private": true,
+	"license": "Apache-2.0",
+	"type": "module",
+	"kind": "assembly",
+	"bin": {
+		"create-app": "./src/main.ts"
+	},
+	"exports": {
+		".": "./src/contract.ts"
+	},
+	"dependencies": {
+		"@mod/app-output": "workspace:*",
+		"@mod/combinations": "workspace:*",
+		"@mod/workspace-packages": "workspace:*"
+	},
+	"devDependencies": {
+		"@mod/audit": "workspace:*",
+		"@mod/audit-http": "workspace:*",
+		"@mod/authorize": "workspace:*",
+		"@mod/clients": "workspace:*",
+		"@mod/clients-registry": "workspace:*",
+		"@mod/core-wire": "workspace:*",
+		"@mod/dpop": "workspace:*",
+		"@mod/first-key": "workspace:*",
+		"@mod/front-relay": "workspace:*",
+		"@mod/guard-imports": "workspace:*",
+		"@mod/http": "workspace:*",
+		"@mod/issuer": "workspace:*",
+		"@mod/kernel": "workspace:*",
+		"@mod/keys": "workspace:*",
+		"@mod/keys-kms": "workspace:*",
+		"@mod/mail-smtp": "workspace:*",
+		"@mod/promises": "workspace:*",
+		"@mod/redis": "workspace:*",
+		"@mod/references": "workspace:*",
+		"@mod/tokens": "workspace:*",
+		"@mod/webauthn": "workspace:*",
+		"@o3co/ts.hocon": "1.14.3",
+		"vitest": "5.0.5"
+	}
+}

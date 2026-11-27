@@ -1,0 +1,3 @@
+authorize {
+	screen-url = "https://login.example.invalid/authorize"
+}

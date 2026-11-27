@@ -9,7 +9,7 @@ import { decodeProtectedHeader } from "jose";
 import { describe, expect, it } from "vitest";
 import { keysKms } from "../src/adapter.ts";
 import { section as kmsSection } from "../src/section.ts";
-import { type FakeKey, fakeKms, serviceError } from "./fake-kms.ts";
+import { type FakeKey, fakeKms, serviceError } from "../src/testing.ts";
 
 const runtime = quietRuntime();
 const p256 = () => generateKeyPairSync("ec", { namedCurve: "P-256" }).privateKey;

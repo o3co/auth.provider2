@@ -153,6 +153,20 @@ describe("G26 the network is reached through outbound, or as a package declares"
 		).toEqual(["src/a.ts node:http", "src/b.ts node:http", "src/c.ts node:http"]);
 	});
 
+	it("holds a companion's code to its words as a product package's, and reads no verification package", () => {
+		const served = {
+			"src/a.ts": 'import { createServer } from "node:http";\nexport const a = createServer;\n',
+		};
+		const manifest = { exports: { ".": "./src/contract.ts" } };
+		expect(said(pkg("@t/companion", served, manifest, "companion"))).toEqual([
+			"src/a.ts node:http createServer",
+		]);
+		const declared = { ...manifest, network: "serves-http" };
+		const card = "- Serves its files (`network`: `serves-http`).";
+		expect(said(declaring(pkg("@t/serving", served, declared, "companion"), card))).toEqual([]);
+		expect(said(pkg("@t/verifying", served, manifest, "verification"))).toEqual([]);
+	});
+
 	it("refuses a word it does not know, and takes several words in a list [guarantee-7-a]", () => {
 		const files = {
 			"src/a.ts":

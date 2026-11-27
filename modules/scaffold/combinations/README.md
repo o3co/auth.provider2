@@ -14,11 +14,12 @@
 - Checking that each feature declaring `storeWiring` has a wiring: `guard-imports`.
 
 ## Offers
-- `completed`: the modules given, each owner whose declared default replaces it swapped for that default and each adapter's owner counted for bridges, then the wirings and bridges they come with, including those of what is brought in, each once, in the order first named.
+- `completed`: the modules given, each owner whose declared default replaces it swapped for that default and each adapter's owner counted for bridges, then the wirings and bridges they come with, those of what is brought in too, each once, first named first.
 - `composed` (features in named groups, an adapter or the owner by axis owner, modules added): the selection, what it needs to run (a foundation or feature among its dependencies, in turn), each composed axis's chosen adapter or default, then `completed`.
 - `composed` refuses, naming each: a name the workspace lacks, a group value that is not a feature, an addition that is not a feature or adapter with a module, an axis key that owns no axis, an axis value that is neither its adapter nor its owner, and an owner chosen for its own axis that has no module.
-- `needed` (modules): the modules given, what they need to run, then `completed`, as `composed` reaches them but with no axis default other than one declared to replace its owner; owners a reached adapter replaces are left out. It refuses, naming each, a name the workspace lacks, as `composed` does.
-- `full` (modules added): every foundation and feature with a module that does not opt in, composed alike. `optIns()` → the names of the features that opt in: `distribution`'s scan calls it so from installed releases, at `<bundle>/combinations`; changing its call, answer or place changes every supported release's scan.
+- `needed` (modules): the modules given, what they need to run, then `completed`, as `composed` reaches them but with no axis default other than one declared to replace its owner; owners a reached adapter replaces left out. It refuses a name the workspace lacks, naming each.
+- `reached` (a selection): the foundations, features, axis owners, adapters, wirings and bridges `composed` reaches, a module or not, owners a composed adapter replaces left out.
+- `full` (modules added): every foundation and feature with a module that does not opt in, composed alike. `optIns()` → the names of the features that opt in: `distribution`'s scan calls it so from installed releases, at `<bundle>/combinations`: changing its call, answer or place changes every release's scan.
 - `addable`: the names a selection or the full template may add (a feature or an adapter, with a module), in code point order; `composed` and `full` refuse any other.
 - `published` (modules): built into a bundle, each name given as published, in the order given: `{ name, package, entry }`, the bundle to depend on and the path its entries import under (a module at `<entry>/module`), read from the index's entries. It refuses, naming each, a name no bundle publishes; in the workspace, where nothing is published, it refuses every name.
 - `combinationsWith` (declarations: name, kind, needs, and as its kind takes them optIn, replaces or adapts, default, wires, joins): the offers above but `published` (`Combinations`), over the workspace and those beside it.
@@ -27,14 +28,14 @@
 
 ## Invariants
 - A wiring names the feature it `wires`; it comes with the feature, whether given or brought in.
-- A bridge names the modules it `joins`, a non-empty list of names; it comes once every one of them is composed, whether given or brought in. An axis owner reached counts, with a module or not.
+- A bridge names the modules it `joins`, a non-empty list of names; it comes once every one of them is composed, given or brought in. An axis owner reached counts, with a module or not. An adapter as a bridge comes only with no other of its axis (where the default joins, it alone); in `composed` and `full` only if chosen, or the default if none is.
 - A `joins` that is not a non-empty list of names, or a `wires` that is not a name, is refused, naming each such package.
 - A dependency a manifest names in `helpers` (functions and types alone) or `optional` (contracts used only where something contributes, which brings it) is not needed to run; either, when not a non-empty list of its dependencies, is refused, naming each package.
 - Wirings of one feature, and bridges, come in code point order of name.
 - An axis and its default: internal module `axes`.
 - An axis's default comes only where its owner is composed (reached among what runs, with a module or not, as the kernel), and not where another adapter of that axis is already composed. A default declared to replace its owner comes wherever that owner would, whether the owner has a module or not, so the owner's module is never composed beside it.
 - A feature that opts in comes in `full` only where something composed needs it to run.
-- Every name it gives is a module of the workspace, as it reads them there, or one declared beside it through `combinationsWith`; `published` alone turns one into what an app outside the workspace depends on and imports.
+- Every name it gives but `reached`'s is a module of the workspace, or one declared beside it through `combinationsWith`; `published` alone turns one into what an app outside the workspace depends on and imports.
 
 ## Data
 - The workspace's declarations, and in a bundle the index's published names, each read once per process; nothing is written.

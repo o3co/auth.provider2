@@ -1,0 +1,13 @@
+{
+	"name": "@j/metrics",
+	"kind": "foundation",
+	"joins": [
+		"@j/http"
+	],
+	"exports": {
+		"./module": "./src/module.ts"
+	},
+	"dependencies": {
+		"@j/kernel": "workspace:*"
+	}
+}

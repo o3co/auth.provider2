@@ -5,10 +5,14 @@
 	"type": "module",
 	"kind": "adapter",
 	"adapts": "@mod/keys",
+	"asks": [
+		"Keys held in KMS (`keys-kms.region`, and each kid's key in `keys-kms.keys`: its ARN, id or alias): the keys' specs and usages, and the Core role's permissions, as its card's Deployment states them."
+	],
 	"default": true,
 	"network": "kms",
 	"exports": {
-		"./module": "./src/module.ts"
+		"./module": "./src/module.ts",
+		"./testing": "./src/testing.ts"
 	},
 	"dependencies": {
 		"@aws-sdk/client-kms": "3.1174.0",

@@ -1,0 +1,10 @@
+{
+	"name": "@j/http",
+	"kind": "foundation",
+	"exports": {
+		"./module": "./src/module.ts"
+	},
+	"dependencies": {
+		"@j/kernel": "workspace:*"
+	}
+}

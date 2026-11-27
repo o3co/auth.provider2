@@ -10,6 +10,7 @@
 ## Offers
 - `registry-sign <private-key.jwk> <version.json> <out.jws>`: reads a private JWK and a version as JSON, and writes the compact JWS of the version, with a newline.
 - The header is `alg`, `typ` (`registryWire.typ`) and `kid` (the key's); the payload is the version as `registryWire.version` read it.
+- The private JWK is the publisher's to make and keep: Node's `generateKeyPairSync("ed25519")` (or `"ec"` on P-256), its private key exported as `{ format: "jwk" }` with a `kid` and its `alg` (`EdDSA`, or `ES256`) added. Its public half, without `d`, is the Core's `clients-registry.publisher-key`.
 - It writes one line: on success to standard output, `signed version <n> (<count> clients) as <kid> under <alg>`, exit code 0; on a refusal to standard error, what is wrong, exit code 1; wrong arguments, its usage, exit code 64.
 
 ## Invariants

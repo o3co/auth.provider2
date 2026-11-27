@@ -1,0 +1,5 @@
+core-wire {
+	certificate-file = /run/tls/core.pem
+	key-file = /run/tls/core-key.pem
+	front-authority-file = /run/tls/front-authorities.pem
+}

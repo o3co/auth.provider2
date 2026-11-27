@@ -1,3 +1,4 @@
 store {
 	accept-volatile = true
+	accept-unauthenticated = true
 }

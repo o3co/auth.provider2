@@ -1,0 +1,13 @@
+{
+	"name": "@k/e",
+	"kind": "foundation",
+	"joins": [
+		"@k/m"
+	],
+	"exports": {
+		"./module": "./src/module.ts"
+	},
+	"dependencies": {
+		"@k/m": "workspace:*"
+	}
+}

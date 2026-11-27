@@ -4,6 +4,9 @@
 	"license": "Apache-2.0",
 	"type": "module",
 	"kind": "feature",
+	"asks": [
+		"`issuer.url`: the issuer, whose documents and key sets the publisher serves at its origin, never the Front's listener."
+	],
 	"exports": {
 		".": "./src/contract.ts",
 		"./testing": "./src/testing.ts",

@@ -1,0 +1,14 @@
+{
+	"name": "@x/a",
+	"kind": "adapter",
+	"adapts": "@x/m",
+	"joins": [
+		"@x/m"
+	],
+	"exports": {
+		"./module": "./src/module.ts"
+	},
+	"dependencies": {
+		"@x/m": "workspace:*"
+	}
+}

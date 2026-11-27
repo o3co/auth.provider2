@@ -7,10 +7,12 @@
 	"network": "redis",
 	"replaces": "@mod/store",
 	"asks": [
-		"Store in Redis (`redis.url`, `redis.replication`)."
+		"Store in Redis (`redis.url`, `redis.replication`).",
+		"`redis.authentication = none`: the operator's statement that the server tells no write made outside the provider apart, accepting that authenticated spaces boot unauthenticated; without it, they refuse boot."
 	],
 	"exports": {
-		"./module": "./src/module.ts"
+		"./module": "./src/module.ts",
+		"./testing": "./src/testing.ts"
 	},
 	"dependencies": {
 		"@mod/kernel": "workspace:*",

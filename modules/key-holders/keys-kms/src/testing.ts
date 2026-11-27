@@ -7,6 +7,8 @@ import {
 	privateEncrypt,
 	randomBytes,
 } from "node:crypto";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import type {
 	DeriveSharedSecretCommandInput,
 	DeriveSharedSecretCommandOutput,
@@ -15,7 +17,7 @@ import type {
 	SignCommandInput,
 	SignCommandOutput,
 } from "@aws-sdk/client-kms";
-import type { Kms } from "../src/kms.ts";
+import type { Kms } from "./kms.ts";
 
 /** A key the fake KMS holds, as KMS describes one. */
 export interface FakeKey {
@@ -207,5 +209,84 @@ export function fakeKms(
 			answering.clear();
 		},
 		destroyed: () => destroyed,
+	};
+}
+
+const wireBlob = (value: unknown) =>
+	typeof value === "string" ? new Uint8Array(Buffer.from(value, "base64")) : undefined;
+
+/**
+ * A KMS client's calls answered as KMS answers them on the wire (JSON 1.1 by `X-Amz-Target`, blobs
+ * in base64), on loopback: the SDK reaches it by its endpoint setting, such as
+ * `AWS_ENDPOINT_URL_KMS`, and no request's signature is checked. A call failing answers the error's
+ * name as its type.
+ */
+export async function kmsServer(
+	kms: Kms,
+): Promise<{ readonly url: string; close(): Promise<void> }> {
+	/** The call's answer from the fake; a body that does not read as JSON is refused as KMS refuses one. */
+	const answered = async (call: string, body: string) => {
+		const parsed = (() => {
+			try {
+				return { input: JSON.parse(body || "{}") };
+			} catch {
+				return undefined;
+			}
+		})();
+		if (!parsed) return { status: 400, body: { __type: "SerializationException" } };
+		const { input } = parsed;
+		try {
+			const answer =
+				call === "GetPublicKey"
+					? await kms.getPublicKey(input)
+					: call === "Sign"
+						? await kms.sign({ ...input, Message: wireBlob(input.Message) })
+						: call === "DeriveSharedSecret"
+							? await kms.deriveSharedSecret({ ...input, PublicKey: wireBlob(input.PublicKey) })
+							: undefined;
+			if (!answer) return { status: 400, body: { __type: "UnknownOperationException" } };
+			const { $metadata: _, ...members } = answer;
+			const wire = Object.entries(members).map(([name, value]) => [
+				name,
+				value instanceof Uint8Array ? Buffer.from(value).toString("base64") : value,
+			]);
+			return { status: 200, body: Object.fromEntries(wire) };
+		} catch (error) {
+			const failed = (error ?? {}) as { name?: string; message?: string; $fault?: string };
+			const status = failed.$fault === "server" ? 500 : 400;
+			return {
+				status,
+				body: { __type: failed.name ?? "InternalFailure", message: failed.message },
+			};
+		}
+	};
+	// Every failure is held here: a request cut off while read, or a response closed before written, is dropped.
+	const server = createServer((request, response) => {
+		const call = String(request.headers["x-amz-target"] ?? "").replace(/^TrentService\./, "");
+		const chunks: Buffer[] = [];
+		request.on("data", (chunk: Buffer) => chunks.push(chunk));
+		request.on("error", () => response.destroy());
+		response.on("error", () => undefined);
+		request.on("end", () => {
+			void answered(call, Buffer.concat(chunks).toString("utf8"))
+				.then(({ status, body }) => {
+					if (response.destroyed || response.writableEnded) return;
+					const text = JSON.stringify(body);
+					response.writeHead(status, { "content-type": "application/x-amz-json-1.1" });
+					response.end(text);
+				})
+				// An answer that does not serialize, or a write that fails, ends the connection, never the host.
+				.catch(() => response.destroy());
+		});
+	});
+	await new Promise<void>((listening) => server.listen(0, "127.0.0.1", listening));
+	const { port } = server.address() as AddressInfo;
+	return {
+		url: `http://127.0.0.1:${port}`,
+		close: () =>
+			new Promise<void>((closed) => {
+				server.closeAllConnections();
+				server.close(() => closed());
+			}),
 	};
 }

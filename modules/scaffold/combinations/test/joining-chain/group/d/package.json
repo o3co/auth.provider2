@@ -1,0 +1,17 @@
+{
+	"name": "@k/d",
+	"kind": "adapter",
+	"adapts": "@k/m",
+	"default": true,
+	"joins": [
+		"@k/m",
+		"@k/e"
+	],
+	"exports": {
+		"./module": "./src/module.ts"
+	},
+	"dependencies": {
+		"@k/m": "workspace:*",
+		"@k/e": "workspace:*"
+	}
+}

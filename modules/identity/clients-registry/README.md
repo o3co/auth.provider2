@@ -14,6 +14,7 @@
 - Composition definition only: a contribution to `clients`' `clientSources`, and a stance (`promises`' `stances`).
 - Operator section `clients-registry`: `file` (the path of the signed version), `publisher-key` (the publisher's public key as a JWK, with its `kid` and its `alg`) and `min-version` (the least version number taken), each required.
 - As the one adapter of `clients`, it is composed wherever `clients` is; a composition of the operator's registered clients alone chooses the owner for its axis (`axes: {"@mod/clients": "@mod/clients"}` in `combinations`' `composed`), and needs no registry.
+- `./testing`: `publisherKey`, a publisher's key pair made for a test, its public half as the section takes it, and `signedBy`, a version signed under it as the file holds one.
 - At start, the line `clients-registry.read` (`info`): the version number read and how many clients it holds.
 
 ## Invariants

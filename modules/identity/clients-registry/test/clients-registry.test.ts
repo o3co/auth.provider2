@@ -12,7 +12,7 @@ import promisesModule from "@mod/promises/module";
 import secretHashModule from "@mod/secret-hash/module";
 import { afterEach, describe, expect, it } from "vitest";
 import registryModule from "../src/module.ts";
-import { publisherKey, signedBy } from "./parts.ts";
+import { publisherKey, signedBy } from "../src/testing.ts";
 
 const publisher = publisherKey();
 const version = (number: number, ids: readonly string[] = ["rp-1"]) => ({
