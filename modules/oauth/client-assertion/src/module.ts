@@ -33,6 +33,7 @@ export default defineModule(
 				algorithms: c.section.algorithms,
 				skewMs: c.section["clock-skew"] * 1000,
 				maxLifetimeMs: c.section["max-lifetime"] * 1000,
+				log: c.log,
 			});
 		}),
 		m.contribute(authMethods).by(async (c) => {

@@ -9,7 +9,7 @@ import { testServer } from "@mod/http-server/testing";
 import issuerModule from "@mod/issuer/module";
 import { issuerConfig } from "@mod/issuer/testing";
 import { assemble, defineModule, kernelConfig } from "@mod/kernel";
-import { quietRuntime } from "@mod/kernel/testing";
+import { quietRuntime, recordingLog } from "@mod/kernel/testing";
 import { thumbprint } from "@mod/keys";
 import outboundModule from "@mod/outbound/module";
 import secretHashModule from "@mod/secret-hash/module";
@@ -23,7 +23,8 @@ import { clientKeysFor } from "../src/testing.ts";
 
 const issuer = "https://issuer.example";
 const now = 1_800_000_000_000;
-const runtime = quietRuntime({ clock: { now: () => now } });
+const recorded = recordingLog();
+const runtime = quietRuntime({ clock: { now: () => now }, log: recorded.log });
 const ec = generateKeyPairSync("ec", { namedCurve: "P-256" });
 const other = generateKeyPairSync("ec", { namedCurve: "P-256" });
 const rsa = generateKeyPairSync("rsa", { modulusLength: 2048 });
@@ -237,5 +238,38 @@ describe("the key a client's assertion was verified with", () => {
 		const app = await (await boot()).client("app");
 		for (const proof of [undefined, { ...forged, client: "app" }, "k"])
 			expect(checks.verifiedOf(proof, app)).toBeUndefined();
+	});
+
+	it("logs each refusal for the operator by client, typ and the detail the sender is not told", async () => {
+		const { checks, client } = await boot();
+		const app = await client("app");
+		const logged = () =>
+			recorded
+				.lines()
+				.filter((line) => line.event === "client-assertion.jwt_refused")
+				.map(({ level, fields }) => ({ level, fields }));
+		const before = logged().length;
+		const foreign = await signed(other.privateKey, "oauth-authz-req+jwt");
+		const unheld = await new SignJWT({ exp: Math.floor(now / 1000) + 60 })
+			.setProtectedHeader({ alg: "ES256", typ: "jwt", kid: "not-the-clients" })
+			.sign(ec.privateKey);
+		const unnamed = await new SignJWT({ exp: Math.floor(now / 1000) + 60 })
+			.setProtectedHeader({ alg: "ES256", typ: "jwt" })
+			.sign(ec.privateKey);
+		const answers = [
+			await checks.verifySignedBy(app, foreign, "oauth-authz-req+jwt"),
+			await checks.verifySignedBy(app, unheld, "jwt"),
+			await checks.verifySignedBy(await client("twin"), unnamed, "jwt"),
+		];
+		// The sender is told one word for all three.
+		expect(answers).toEqual(Array(3).fill({ kind: "refused", reason: "not signed by the client" }));
+		expect(logged().slice(before)).toEqual([
+			{ level: "warn", fields: { client: "app", typ: "oauth-authz-req+jwt", reason: "signature" } },
+			{ level: "warn", fields: { client: "app", typ: "jwt", reason: "no key fits" } },
+			{ level: "warn", fields: { client: "twin", typ: "jwt", reason: "more than one key fits" } },
+		]);
+		// A JWT taken logs nothing.
+		await checks.verifySignedBy(app, await signed(ec.privateKey, "jwt"), "jwt");
+		expect(logged()).toHaveLength(before + 3);
 	});
 });

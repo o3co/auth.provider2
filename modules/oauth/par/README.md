@@ -8,8 +8,8 @@
 - The login's start, its JAR's one use (A20) and T: `authorize` and `approvals`, which verify the JAR again where the login starts. The client's authentication: `clients`. A JWT's signature: `client-assertion`. A DPoP proof and its key: `sender-binding`'s kinds (`dpop`).
 
 ## Offers
-- `POST /oauth/par` (`front-core-wire`'s `par`: a form of the client's authentication and `request`, a `DPoP` header where sent) → `201` `{ request_uri, expires_in }`; or an OAuth error: `invalid_client` (`401`), `invalid_request`, `invalid_request_object`, `invalid_dpop_proof` and a binding kind's own words with its headers (`use_dpop_nonce` with `DPoP-Nonce`) (`400`), `rate_limited` (`429`). Pushes are counted per source (`requests` in `window`).
-- A contribution to `authorize`'s `requestSources` (`request_uri`: a start's `requestUri` → the JAR pushed under it, for the client that pushed it; `invalid_request_uri` for any other), the `only` one taken where `pushed-only` is on, so no JAR is taken by value.
+- `POST /oauth/par` (`front-core-wire`'s `par`: a form of the client's authentication and `request`, a `DPoP` header where sent) → `201` `{ request_uri, expires_in }`; or an OAuth error: `invalid_client` (`401`), `invalid_request`, `invalid_request_object`, the request check's words (`authorize`'s), `invalid_dpop_proof` and a binding kind's own words with its headers (`use_dpop_nonce` with `DPoP-Nonce`) (`400`), `rate_limited` (`429`). Pushes are counted per source (`requests` in `window`).
+- A contribution to `authorize`'s `requestSources` (`request_uri`: a start's `requestUri` → the JAR pushed under it, for the client that pushed it; `invalid_request_uri` for any other), saying it `readsRequestUri`, and the `only` one taken where `pushed-only` is on, so no JAR is taken by value.
 - A contribution to `issuer`'s metadata: `pushed_authorization_request_endpoint`, and `require_pushed_authorization_requests` (`pushed-only`).
 - `pushedRequests`, the store interface (create unless held, read), and `pushedRequestsNeeds`.
 - Operator section: `pushed-only` (default `true`, FAPI 2.0's: a request pushed alone; `false` takes a JAR by value too, outside a FAPI configuration), `jar-max-lifetime` (default 90 seconds; at most `authorize`'s, or a JAR pushed is refused where its login starts), `requests` and `window` (default 60 a minute per source), `clock-skew` (default 30 seconds).
@@ -18,7 +18,8 @@
 ## Invariants
 - A push carries no parameter twice (RFC 6749 §3.1, §3.2): one sent twice is `invalid_request` ("repeated parameter"), read before any other and before the client's authentication, so none passes as if left out. Through a Front, a name the wire's `par` does not carry is dropped there, never reaching the Core.
 - A push carries its JAR alone (no parameter but inside it): one sending `request_uri` or `authorization_details` is refused (RFC 9126 §2.1), and a `client_id` beside the authentication must be the client's.
-- The JAR is taken by `authorize`'s check (`jarVerified`) with `jar-max-lifetime`: the authenticated client's (`iss` and `client_id`), for this issuer, with a `jti` and an `exp` not past and at most `jar-max-lifetime` away; it names a `dpop_jkt` too.
+- The JAR is taken by `authorize`'s check (`jarVerified`) with `jar-max-lifetime`: the authenticated client's (`iss` and `client_id`), for this issuer, with a `jti`, an `nbf` and an `exp` in their windows, `exp` at most `jar-max-lifetime` away.
+- The request is then checked by `authorize`'s check (`authorizationRequests`), as the start checks it (RFC 9126 §2.1), before a proof is read or anything kept; its refusal is answered in its words. The binding compared with the proof is the checked items' `dpop_jkt`; where the binding kind reads none from it, the push is unavailable, never taken without the comparison (A44).
 - The header-only way of asking a DPoP binding (RFC 9449 §10.1) is not taken: the JAR names the key, a push with no proof is taken (its tokens are bound to the JAR's key), and a proof of the binding it asks is taken only where it is of that key; its expiry is checked again after the proof.
 - A `request_uri` is 256 random bits under `urn:ietf:params:oauth:request_uri:`; its record lives the JAR's life and the clock skew. Many pushes of one JAR meet at the one start `authorize` reserves by client and `jti`, so each JAR starts one login however often it is pushed.
 
@@ -26,7 +27,7 @@
 - Each pushed request, by its `request_uri`: the client and the JAR's bytes, until the JAR's expiry and the clock skew.
 
 ## Depends on
-- `kernel`, `http` (the route), `rate-limit` (its policy), `clients` (`authenticate`), `client-assertion` (`verifySignedBy`, given to `jarVerified`), `sender-binding` (the binding proved and asked), `issuer` (its URL, metadata), `authorize` (`requestSources`, `jarVerified`); `zod`.
+- `kernel`, `http` (the route), `rate-limit` (its policy), `clients` (`authenticate`), `client-assertion` (`verifySignedBy`, given to `jarVerified`), `sender-binding` (the binding proved and asked), `issuer` (its URL, metadata), `authorize` (`requestSources`, `jarVerified`, `authorizationRequests`); `zod`.
 
 ## Vocabulary
 - push: a pushed authorization request. `request_uri`: the name a push is kept under, which a login's start names.

@@ -6,17 +6,16 @@ Internal module of `authorize`: what a code needs of an authorization's request 
 - Tells whether a request meets what its code will need, so nothing a code needs fails once the person tapped: the client allowed the code grant, an S256 challenge's shape, a binding asked for ahead in its form, the resource within the client's audiences (at the start by the one rule for the audience asked), the scope within its allowance; an OpenID request only where an ID token is made.
 
 ## Not here
-- How each refusal is answered: the start's (`invalid_request`, `invalid_target`, `invalid_request_object`, `invalid_scope`) and the finish's own. Boot's refusal of two rules for the audience asked: the module.
+- How each refusal is answered: the start's (`request`'s check) and the finish's own. Boot's refusal of two rules for the audience asked: `request`.
 
 ## Offers
 - `codeNeedsOver` (`CodeNeedsParts`: the binding kinds, whether an ID token is made, the rule, the issuer) → `asksOpenid`, `openidUnmet`, `atStart` and `atFinish`, each unmet need answered by its word (`Unmet`).
-  - `atStart`: the code grant, the resource by the rule, the challenge, the binding asked for ahead; never the scope (`StartUnmet`).
+  - `atStart`: the code grant, the challenge, the scope allowed, the resource by the rule, the binding asked for ahead.
   - `atFinish`: the code grant, the challenge, the scope and audience allowed, the resource, the binding; else the scope, audience and binding. It reads no rule for the audience asked: the start read it.
 - `codeNeedsIn` and `codeNeedsTakes` over the composition; `targetsIn`, the rules for the audience asked themselves (`grants`' `targetRules`), not the token endpoint's `targets`, so no endpoint need be composed.
 
 ## Invariants
-- `atStart`, in order: the code grant, the resource, the challenge, the binding. `openidUnmet` is asked on its own, as the start orders it.
-- At the finish, in order: the code grant, the challenge, the scope allowed (`allowedIssuance`), the resource within the client's audiences, the binding.
+- At the start and the finish alike, in order: the code grant, the challenge, the scope allowed (`allowedIssuance`), the resource (at the start by the rule, at the finish within the client's audiences), the binding. `openidUnmet` is asked on its own, as the start orders it.
 - A JAR's `resource` at the start is read by the one rule (resource-indicators') within the client's audiences: unless it answers that resource alone, it is unmet, with the rule's description; none composed leaves any `resource` unmet.
 
 ## Depends on

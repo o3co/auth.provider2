@@ -13,7 +13,7 @@
 		"kind": "deviation",
 		"standard": "OIDC Core §5.5",
 		"text": "Members of a claims request that are not understood MUST be ignored",
-		"behaviour": "The direct members of `id_token` and `userinfo` written as null are read as `{}` (the same meaning). Any other null in `claims` is refused at /login/start with 400 `invalid_request_object`",
+		"behaviour": "The direct members of `id_token` and `userinfo` written as null are read as `{}` (the same meaning). Any other null in `claims` is refused with 400 `invalid_request_object`, at PAR for a pushed request and at /login/start for one by value",
 		"why": "The statement T the person approves is signed whole, and the signer writes no null (OIDC Core §13.3). A part of the request that cannot be signed as given is refused before the person is asked, never silently dropped from what they approve",
 		"decision": "V26"
 	},
@@ -115,5 +115,23 @@
 		"behaviour": "The same JAR with the same screen keys is answered the same T; a second start with other screen keys (a reloaded screen has new ones) is refused, even before the person authenticates",
 		"why": "The JAR's reservation binds it to one statement T and one screen's keys from its first start; a second T for the same JAR would let a compromised Front have an attacker approve it on another screen and swap that code into the victim's session (login CSRF)",
 		"decision": "A20"
+	},
+	{
+		"key": "prompt-none-at-par",
+		"kind": "strict",
+		"standard": "OpenID Connect Core 1.0 §3.1.2.6; RFC 9126 §2.3",
+		"text": "`login_required` for `prompt=none` is an authentication error response, returned to the client at its redirect URI",
+		"behaviour": "A pushed request asking `prompt=none` is refused at PAR with 400 `login_required`; a request by value is refused at /login/start the same way. No T is issued",
+		"why": "Every login asks the person's passkey, so `prompt=none` is never met; PAR may answer an error itself, which tells the RP at its own server, with no round trip through the browser and no redirect the Core does not authenticate",
+		"decision": "D6"
+	},
+	{
+		"key": "state-nonce-bound",
+		"kind": "strict",
+		"standard": "RFC 6749 §4.1.1; OpenID Connect Core 1.0 §3.1.2.1",
+		"text": "`state` and `nonce` have no length limit",
+		"behaviour": "A `state` or `nonce` longer than 512 bytes of UTF-8 is refused with 400 `invalid_request`, at PAR and at /login/start",
+		"why": "T, the statement the person approves, carries both and must fit its route to the screen (4096 characters); 512 each leaves room for a long client, redirect URI, scope and `claims`. The OIDF suite's 1000-character `state` is refused, which it marks a warning",
+		"decision": "V28"
 	}
 ]

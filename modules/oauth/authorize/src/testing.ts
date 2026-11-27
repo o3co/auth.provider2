@@ -1,6 +1,17 @@
+import type { AuthorizationItems } from "@mod/sdk-core-wire";
+import type { SenderBindings } from "@mod/sender-binding";
 import { describe, expect, it } from "vitest";
 import type { z } from "zod";
-import type { JarReservations, StoredReservation } from "./contract.ts";
+import { codeNeedsOver } from "./code-needs/code-needs.ts";
+import type {
+	AuthorizationRequests,
+	CheckedRequest,
+	JarReservations,
+	RequestClaims,
+	StoredReservation,
+	Verified,
+} from "./contract.ts";
+import { claimsUnread, requestsOver } from "./request/request.ts";
 import type { section } from "./section.ts";
 
 export type AuthorizeSettings = z.input<typeof section>;
@@ -9,6 +20,38 @@ export type AuthorizeSettings = z.input<typeof section>;
 export const authorizeConfig = (settings: Partial<AuthorizeSettings> = {}) => ({
 	authorize: { "screen-url": "https://login.example/authorize", ...settings },
 });
+
+/**
+ * A stand-in for `authorizationRequests`, for a module taking it in its tests: `answer`'s, else the
+ * JAR's claims taken as T's items, none of the real check's rules read.
+ */
+export const authorizationRequestsStandIn = (
+	answer?: (verified: Verified) => CheckedRequest,
+): AuthorizationRequests => ({
+	check: (_client, verified) =>
+		answer?.(verified) ?? { items: verified.claims as unknown as AuthorizationItems },
+});
+
+/**
+ * `authorize`'s own check, for a module's test composing it: over the binding kinds and the issuer
+ * given, an ID token made unless told, any `claims` refused unless a reader is given, no rule for the
+ * audience asked.
+ */
+export const authorizationRequestsOf = (p: {
+	readonly bindings: Pick<SenderBindings, "requestedOf">;
+	readonly issuer: string;
+	readonly idTokens?: boolean;
+	readonly claims?: Pick<RequestClaims, "refusal">;
+}): AuthorizationRequests =>
+	requestsOver({
+		needs: codeNeedsOver({
+			bindings: p.bindings,
+			idTokens: p.idTokens ?? true,
+			targets: undefined,
+			issuer: p.issuer,
+		}),
+		claims: p.claims ?? claimsUnread,
+	});
 
 /** A place that keeps JAR reservations, as one implementation of the store interface offers it. */
 export interface ReservationPlace {

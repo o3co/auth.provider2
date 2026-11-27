@@ -12,9 +12,9 @@ import { describe, expect, it } from "vitest";
 import { codeNeedsOver } from "../src/code-needs/code-needs.ts";
 import type { JarReservations, RequestSource, StoredReservation } from "../src/contract.ts";
 import { reserving } from "../src/jar/jar.ts";
+import { claimsUnread, type RequestParts, requestsOver } from "../src/request/request.ts";
 import {
 	byValue,
-	claimsUnread,
 	filledItems,
 	type StartParts,
 	starting,
@@ -37,7 +37,7 @@ const client: Client = {
 			? { "redirect-uris": ["https://rp.example/cb"] }
 			: {
 					grants: ["authorization_code"],
-					scopes: ["read"],
+					scopes: ["openid", "read"],
 					audiences: ["https://api.example"],
 				}) as T,
 };
@@ -46,6 +46,7 @@ const claims = (more: Record<string, unknown> = {}) => ({
 	iss: "c1",
 	aud: issuer,
 	jti: "j1",
+	nbf: now / 1000,
 	exp: now / 1000 + 300,
 	client_id: "c1",
 	redirect_uri: "https://rp.example/cb",
@@ -102,7 +103,7 @@ function harness(
 		/** The rule for the audience asked, as resource-indicators contributes it; none unless told. */
 		rule?: Pick<TargetRule, "target">;
 		/** The claims' reader; one that takes any unless told. */
-		claims?: StartParts["claims"];
+		claims?: RequestParts["claims"];
 		/** The longest T asked; the route contract's unless told. */
 		fits?: StartParts["fits"];
 	} = {},
@@ -163,23 +164,25 @@ function harness(
 		fits: p.fits ?? tFits,
 		withoutPasskey: p.allows === undefined ? undefined : { allows: async () => p.allows === true },
 		signUp: p.signUp ?? false,
-		claims: p.claims ?? { refusal: () => undefined },
-		needs: codeNeedsOver({
-			idTokens: p.idTokens ?? true,
-			targets: p.rule,
-			issuer,
-			bindings: {
-				requestedOf: (param) => {
-					const jkt = param("dpop_jkt");
-					if (jkt === "bad") return { kind: "malformed", parameter: "dpop_jkt" };
-					return jkt === undefined
-						? { kind: "none" }
-						: {
-								kind: "requested",
-								binding: { member: "jkt", confirmation: jkt, tokenType: "DPoP" },
-							};
+		requests: requestsOver({
+			claims: p.claims ?? { refusal: () => undefined },
+			needs: codeNeedsOver({
+				idTokens: p.idTokens ?? true,
+				targets: p.rule,
+				issuer,
+				bindings: {
+					requestedOf: (param) => {
+						const jkt = param("dpop_jkt");
+						if (jkt === "bad") return { kind: "malformed", parameter: "dpop_jkt" };
+						return jkt === undefined
+							? { kind: "none" }
+							: {
+									kind: "requested",
+									binding: { member: "jkt", confirmation: jkt, tokenType: "DPoP" },
+								};
+					},
 				},
-			},
+			}),
 		}),
 	});
 	const send = (fields: Record<string, unknown>) =>
@@ -556,6 +559,31 @@ describe("a login's start (②)", () => {
 		expect(h.asked).toHaveLength(0);
 	});
 
+	it("answers the request's check's refusal as given, before T: a missing item, plain, an over-long state", async () => {
+		const h = harness();
+		for (const [jti, more, description] of [
+			["m1", { state: undefined }, "missing_item:state"],
+			["m2", { code_challenge: undefined }, "missing_item:code_challenge"],
+			["m3", { code_challenge_method: "plain" }, "item:code_challenge_method"],
+			["m4", { state: "s".repeat(513) }, "state is longer than 512 bytes"],
+		] as const)
+			expect(await h.body(h.fields(jar(claims({ jti, ...more }))))).toEqual({
+				status: 400,
+				json: { error: "invalid_request", error_description: description },
+			});
+		expect(h.asked).toHaveLength(0);
+	});
+
+	it("refuses a scope outside the client's allowance before T (RFC 9126 §2.1), taking one within it", async () => {
+		const h = harness();
+		expect(await h.body(h.fields(jar(claims({ scope: "write" }))))).toMatchObject({
+			status: 400,
+			json: { error: "invalid_scope", error_description: "the scope is not allowed" },
+		});
+		expect(h.asked).toHaveLength(0);
+		expect(await h.body(h.fields(jar(claims({ jti: "s2" }))))).toMatchObject({ status: 200 });
+	});
+
 	it("takes an OpenID request's claims into T, refusing before T what their reader refuses", async () => {
 		const read: unknown[][] = [];
 		const h = harness({
@@ -623,10 +651,10 @@ describe("a login's start (②)", () => {
 	it("refuses, before T, a challenge not of S256's shape and a dpop_jkt out of its form", async () => {
 		const h = harness();
 		expect(await h.body(h.fields(jar(claims({ code_challenge: "cc" }))))).toMatchObject({
-			json: { error: "invalid_request_object" },
+			json: { error: "invalid_request", error_description: "code_challenge is malformed" },
 		});
 		expect(await h.body(h.fields(jar(claims({ jti: "j8", dpop_jkt: "bad" }))))).toMatchObject({
-			json: { error: "invalid_request_object" },
+			json: { error: "invalid_request", error_description: "dpop_jkt is out of its form" },
 		});
 		expect(h.asked).toHaveLength(0);
 	});
@@ -755,7 +783,7 @@ describe("a login's start (②)", () => {
 			(s.name === redirects.name ? allowance<T>(s as never) : plain.section<T>()) as T;
 		try {
 			expect(await h.body(h.fields(jar(claims())))).toMatchObject({
-				json: { error: "invalid_request" },
+				json: { error: "unauthorized_client" },
 			});
 			expect(h.asked).toHaveLength(0);
 		} finally {

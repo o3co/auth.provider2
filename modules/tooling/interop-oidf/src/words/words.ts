@@ -42,6 +42,10 @@ export type Reading =
 	| { readonly kind: "unconfirmed"; readonly keys: readonly string[] }
 	| { readonly kind: "none" };
 
+/** A word answered alike at PAR and at the start: `authorize`'s request check, which both call. */
+const atBoth = (word: Omit<Word, "place">): readonly Word[] =>
+	(["par", "start"] as const).map((place) => ({ ...word, place }));
+
 /**
  * The provider's words for the ledger's rows, as its modules answer them today: a way a row shows with
  * no refusal (`form-post-required` as the suite reads a callback's query) has none.
@@ -59,7 +63,7 @@ export const words: readonly Word[] = [
 		refuser: "core",
 		place: "par",
 		error: "invalid_request_object",
-		description: "the request names no jti or exp",
+		description: "the request names no jti",
 	},
 	{
 		key: "par-jar-lifetime",
@@ -68,21 +72,29 @@ export const words: readonly Word[] = [
 		error: "invalid_request_object",
 		description: "the request lives longer than is taken",
 	},
+	// The request check's word for a JAR naming no dpop_jkt, before any proof is read.
 	{
 		key: "jar-dpop-jkt-required",
 		refuser: "core",
 		place: "par",
-		error: "invalid_request_object",
-		description: "the request names no dpop_jkt",
+		error: "invalid_request",
+		description: "missing_item:dpop_jkt",
 		dpopHeader: false,
 	},
 	{
 		key: "par-dpop-header-only",
 		refuser: "core",
 		place: "par",
-		error: "invalid_request_object",
-		description: "the request names no dpop_jkt",
+		error: "invalid_request",
+		description: "missing_item:dpop_jkt",
 		dpopHeader: true,
+	},
+	{
+		key: "jar-dpop-jkt-required",
+		refuser: "core",
+		place: "start",
+		error: "invalid_request",
+		description: "missing_item:dpop_jkt",
 	},
 	{
 		key: "rar-refused",
@@ -98,36 +110,50 @@ export const words: readonly Word[] = [
 		error: "invalid_request",
 		description: "authorization_details are not taken",
 	},
-	{
+	...atBoth({
 		key: "form-post-required",
 		refuser: "core",
-		place: "start",
-		error: "invalid_request_object",
+		error: "invalid_request",
 		description: "missing_item:response_mode",
-	},
-	{
+	}),
+	...atBoth({
 		key: "state-required",
 		refuser: "core",
-		place: "start",
-		error: "invalid_request_object",
+		error: "invalid_request",
 		description: "missing_item:state",
-	},
-	{
+	}),
+	...atBoth({
 		key: "nonce-required",
 		refuser: "core",
-		place: "start",
-		error: "invalid_request_object",
+		error: "invalid_request",
 		description: "missing_item:nonce",
-	},
-	{
+	}),
+	...atBoth({
+		key: "state-nonce-bound",
+		refuser: "core",
+		error: "invalid_request",
+		description: "state is longer than 512 bytes",
+	}),
+	...atBoth({
+		key: "state-nonce-bound",
+		refuser: "core",
+		error: "invalid_request",
+		description: "nonce is longer than 512 bytes",
+	}),
+	...atBoth({
+		key: "prompt-none-at-par",
+		refuser: "core",
+		error: "login_required",
+		description: "every login asks the person's passkey",
+	}),
+	...atBoth({
 		key: "claims-null-nested",
 		refuser: "core",
-		place: "start",
 		error: "invalid_request_object",
 		description: "item:claims",
 		// Also a `claims` that is no JSON object, the standard's own refusal.
 		shared: true,
-	},
+	}),
 	{
 		key: "request-uri-once",
 		refuser: "core",
@@ -137,8 +163,8 @@ export const words: readonly Word[] = [
 		// Also another JAR under the same `jti`: only a start of a `request_uri` started before is this row's.
 		startedBefore: true,
 	},
-	// No source answered the start: one carrying neither `request` nor `request_uri`, a `request_uri`
-	// where no `par` is composed, a JAR by value where only pushed ones are taken.
+	// No source answered the start: one carrying neither `request` nor `request_uri`, or a `request_uri`
+	// where no `par` is composed.
 	{
 		key: "jar-required",
 		refuser: "core",
@@ -146,6 +172,14 @@ export const words: readonly Word[] = [
 		error: "invalid_request",
 		description: "the request is sent by exactly one of its ways",
 		shared: true,
+	},
+	// A JAR by value where only pushed ones are taken (par's pushed-only, F4).
+	{
+		key: "jar-required",
+		refuser: "core",
+		place: "start",
+		error: "invalid_request",
+		description: "a request by value is not taken",
 	},
 	// The refresh grant answers every refused token alike, so it tells nothing about why.
 	{

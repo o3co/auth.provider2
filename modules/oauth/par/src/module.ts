@@ -1,4 +1,4 @@
-import { requestSources } from "@mod/authorize";
+import { authorizationRequests, requestSources } from "@mod/authorize";
 import { clientAssertion } from "@mod/client-assertion";
 import { clients } from "@mod/clients";
 import { routes, use } from "@mod/http";
@@ -18,7 +18,7 @@ export default defineModule(
 		name: "par",
 		section,
 		replicaSafe: true,
-		takes: [clients, clientAssertion, senderBinding, issuer, pushedRequests],
+		takes: [clients, clientAssertion, senderBinding, issuer, pushedRequests, authorizationRequests],
 	},
 	(m) => [
 		m
@@ -48,6 +48,7 @@ export default defineModule(
 				"A client's server pushes it, authenticated by its own credential; it reads no cookie.",
 			handle: pushing({
 				clients: await c.get(clients),
+				requests: await c.get(authorizationRequests),
 				assertion: await c.get(clientAssertion),
 				bindings: await c.get(senderBinding),
 				pushed: await c.get(pushedRequests),

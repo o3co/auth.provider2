@@ -38,6 +38,7 @@
 	},
 	"devDependencies": {
 		"@mod/front-core-wire": "workspace:*",
+		"@mod/redirect-uris": "workspace:*",
 		"@mod/sdk-core-wire": "workspace:*",
 		"vitest": "5.0.5"
 	}

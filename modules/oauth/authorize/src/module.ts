@@ -7,10 +7,10 @@ import { issuer, metadata } from "@mod/issuer";
 import { type BuildContext, defineModule } from "@mod/kernel";
 import { promiseNames, stances } from "@mod/promises";
 import { redirects, redirectsCopy } from "@mod/redirect-uris";
-import { targetsIn } from "./code-needs/code-needs.ts";
-import { requestClaims, requestSources, signUpOffers, withoutPasskey } from "./contract.ts";
+import { authorizationRequests, requestSources, signUpOffers, withoutPasskey } from "./contract.ts";
 import { delegationSecondsIn, delegationTakes } from "./delegation/delegation.ts";
 import { finishRoute, finishTakes, passkeyAmr } from "./finish/finish.ts";
+import { requestsIn, requestsTakes } from "./request/request.ts";
 import { type Settings, section } from "./section.ts";
 import {
 	byValue,
@@ -34,6 +34,7 @@ export default defineModule(
 		takes: [
 			...new Set([
 				...startTakes,
+				...requestsTakes,
 				withoutPasskey,
 				signUpOffers,
 				statementItems,
@@ -44,6 +45,7 @@ export default defineModule(
 		],
 	},
 	(m) => [
+		m.provide(authorizationRequests).by((c: Context) => requestsIn(c)),
 		m.contribute(metadataSections).by(() => redirects),
 		m.contribute(documentCopies).by(() => redirectsCopy),
 		m.contribute(requestSources).by(() => byValue),
@@ -69,6 +71,11 @@ export default defineModule(
 			...issuerMetadata.requestParameter,
 			value: takenOf(await c.collect(requestSources)).includes(byValue),
 		})),
+		// Published either way: OpenID Connect Discovery's default for it is true.
+		m.contribute(metadata).by(async (c: Context) => ({
+			...issuerMetadata.requestUriParameter,
+			value: takenOf(await c.collect(requestSources)).some((s) => s.readsRequestUri === true),
+		})),
 		m.contribute(metadata).by(() => issuerMetadata.issParameter),
 		m.contribute(routes).by(async (c: Context) => {
 			const passkeyless = await c.collect(withoutPasskey);
@@ -79,8 +86,6 @@ export default defineModule(
 				);
 			if (onlyOf(await c.collect(requestSources)).length > 1)
 				return c.refuse("authorize", "more than one request source says it is the only one");
-			if ((await c.collect(requestClaims)).length > 1)
-				return c.refuse("authorize", "more than one module reads a request's claims");
 			const offers = await c.collect(signUpOffers);
 			if (offers.length > 1) return c.refuse("authorize", "more than one sign-up is offered");
 			// A sign-up offered with no answer to a person with no passkey would never be allowed.
@@ -93,10 +98,6 @@ export default defineModule(
 			const missing = unfilled(await c.collect(statementItems));
 			if (missing.length > 0)
 				return c.refuse("authorize", `no module fills the authorization's ${missing.join(", ")}`);
-			// At most one rule reads `resource`, as at the token endpoint, which may not be composed.
-			const rules = await targetsIn(c);
-			if (rules.length > 1)
-				return c.refuse("authorize", "more than one rule reads the audience asked (resource)");
 			return startRouteIn(c, { withoutPasskey: passkeyless[0], signUp: offers.length === 1 });
 		}),
 		m.contribute(routes).by(async (c: Context) =>

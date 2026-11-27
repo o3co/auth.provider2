@@ -48,7 +48,7 @@ const denied = (description: string) => refused(400, "access_denied", descriptio
 const unmetAnswer = (unmet: Unmet): HttpResponse => {
 	switch (unmet.need) {
 		case "grant":
-			return bad("the client may not use the code grant");
+			return refused(400, "unauthorized_client", "the client may not use the code grant");
 		case "challenge":
 			return bad("the code challenge is malformed");
 		case "scope":

@@ -27,10 +27,6 @@ export interface CodeNeedsParts {
 export type Unmet =
 	| { readonly need: "grant" | "challenge" | "binding" | "scope" }
 	| { readonly need: "resource"; readonly description?: string };
-/** A need the start finds unmet: never the scope, which the finish alone reads (`allowedIssuance`). */
-export type StartUnmet =
-	| { readonly need: "grant" | "challenge" | "binding" }
-	| { readonly need: "resource"; readonly description?: string };
 
 /**
  * What a code needs of an authorization's request and its client, checked at the start before T is
@@ -54,9 +50,15 @@ export function codeNeedsOver(p: CodeNeedsParts) {
 		/** Whether an OpenID request goes unmet: no ID token is made. */
 		openidUnmet: (items: AuthorizationItems) =>
 			items.scope.split(" ").includes(openid) && !p.idTokens,
-		/** At the start, before T: the code grant, the resource by the one rule, the challenge's shape, the binding asked for ahead. */
-		atStart(client: Client, items: AuthorizationItems): StartUnmet | undefined {
+		/**
+		 * At the start, before T, in the finish's order: the code grant, the challenge's shape, the scope
+		 * allowed, the resource by the one rule, the binding asked for ahead.
+		 */
+		atStart(client: Client, items: AuthorizationItems): Unmet | undefined {
 			if (!clientAllowance.allowsGrant(client, codeGrantType)) return { need: "grant" };
+			if (!challengeShape.test(items.code_challenge)) return { need: "challenge" };
+			if (clientAllowance.allowedIssuance(client, items.scope, p.issuer).kind === "error")
+				return { need: "scope" };
 			const resource = items.resource;
 			if (resource !== undefined) {
 				if (!p.targets)
@@ -70,7 +72,6 @@ export function codeNeedsOver(p: CodeNeedsParts) {
 				if (verdict.audience.length !== 1 || verdict.audience[0] !== resource)
 					return { need: "resource", description: "resource is not the audience asked" };
 			}
-			if (!challengeShape.test(items.code_challenge)) return { need: "challenge" };
 			if (!bound(items)) return { need: "binding" };
 			return undefined;
 		},

@@ -46,7 +46,7 @@ describe("the provider's words for the ledger's rows", () => {
 	});
 
 	it("tells two rows that share words apart by whether the request carried a DPoP header", () => {
-		const named = seen({ description: "the request names no dpop_jkt" });
+		const named = seen({ error: "invalid_request", description: "missing_item:dpop_jkt" });
 		expect(readingOf(named)).toEqual({ kind: "observed", key: "jar-dpop-jkt-required" });
 		expect(readingOf({ ...named, dpopHeader: true })).toEqual({
 			kind: "observed",

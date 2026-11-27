@@ -7,19 +7,12 @@ import { type HttpRequest, type HttpResponse, jsonAnswer, use } from "@mod/http"
 import { issuer } from "@mod/issuer";
 import type { BuildContext } from "@mod/kernel";
 import { requestsPerSource, sourceKey, type Window } from "@mod/rate-limit";
-import { matches, redirects } from "@mod/redirect-uris";
-import { itemsFromJar, jarClaims, type SigningKey } from "@mod/sdk-core-wire";
+import { jarClaims, type SigningKey } from "@mod/sdk-core-wire";
 import {
-	type CodeNeeds,
-	codeNeedsIn,
-	codeNeedsTakes,
-	type StartUnmet,
-} from "../code-needs/code-needs.ts";
-import {
+	type AuthorizationRequests,
+	authorizationRequests,
 	jarReservations,
-	type RequestClaims,
 	type RequestSource,
-	requestClaims,
 	requestSources,
 	type StartFields,
 	type WithoutPasskey,
@@ -31,7 +24,6 @@ import {
 	type Refusal,
 	reserving,
 	type StartAnswer,
-	sha256,
 	startDigest,
 } from "../jar/jar.ts";
 import type { Settings } from "../section.ts";
@@ -54,35 +46,9 @@ export interface StartParts {
 	 * T allows no sign-up.
 	 */
 	readonly signUp: boolean;
-	/** What a code needs, checked before T (internal module `code-needs`). */
-	readonly needs: CodeNeeds;
-	/** Why an OpenID request's `claims` is refused before T: the `requestClaims` contributed, else `claimsUnread`. */
-	readonly claims: Pick<RequestClaims, "refusal">;
+	/** The request's check before T (internal module `request`). */
+	readonly requests: AuthorizationRequests;
 }
-
-/** Where no module reads a request's `claims`, any is refused before T. */
-export const claimsUnread: StartParts["claims"] = {
-	refusal: (claims) => (claims === undefined ? undefined : "the claims parameter is not supported"),
-};
-
-/** A code's need unmet, as the start answers it before T. */
-const unmetRefusal = (unmet: StartUnmet): Refusal => {
-	switch (unmet.need) {
-		case "grant":
-			return { error: "invalid_request", description: "the client may not use the code grant" };
-		case "resource":
-			return {
-				error: "invalid_target",
-				description: unmet.description ?? "resource is not the audience asked",
-			};
-		case "challenge":
-			return { error: "invalid_request_object", description: "code_challenge is malformed" };
-		case "binding":
-			return { error: "invalid_request_object", description: "dpop_jkt is out of its form" };
-		default:
-			return unmet satisfies never;
-	}
-};
 
 /** The statuses `front-core-wire` answers these refusals with; any other is 400. */
 const statusOf: Readonly<Record<string, number>> = {
@@ -118,23 +84,6 @@ const answerOf = (status: number, r: Refusal): HttpResponse =>
 	jsonAnswer(status, { error: r.error, error_description: r.description });
 const bad = (description: string) => answerOf(400, { error: "invalid_request", description });
 
-/** The words `prompt` takes, each met by the person's tap at every login (D6); `none` is never met. */
-const promptWords = new Set(["login", "consent", "select_account"]);
-
-/** `prompt`, which is no item of T: refused where it asks no interaction, dropped where every tap meets it. */
-function withoutPrompt(claims: Readonly<Record<string, unknown>>) {
-	const { prompt, ...rest } = claims;
-	if (prompt === undefined) return { claims: rest };
-	const words = typeof prompt === "string" ? prompt.split(" ") : [];
-	if (words.includes("none"))
-		return {
-			refused: { error: "login_required", description: "every login asks the person's passkey" },
-		};
-	if (words.length === 0 || words.some((w) => !promptWords.has(w)))
-		return { refused: { error: "invalid_request", description: "prompt names a word not taken" } };
-	return { claims: rest };
-}
-
 /** ②: a login's start, from the screen's request and keys to the statement T it shows. */
 export function starting(p: StartParts) {
 	return async (request: HttpRequest): Promise<HttpResponse> => {
@@ -166,27 +115,9 @@ export function starting(p: StartParts) {
 		const read = await jarOf(p.jar, fields, client);
 		if ("refused" in read) return answerOf(statusOf[read.refused.error] ?? 400, read.refused);
 		const { jar } = read;
-		const redirectUri = jar.claims.redirect_uri;
-		const registered = client.section(redirects)["redirect-uris"];
-		if (typeof redirectUri !== "string" || !registered.some((r) => matches(r, redirectUri)))
-			return bad("the redirect URI is not one the client registered");
-		const prompted = withoutPrompt(jar.claims);
-		if ("refused" in prompted) return answerOf(400, prompted.refused as Refusal);
-		// Under PAR, T names the request_uri this start named, as it came, its source having resolved it.
-		const made = itemsFromJar(prompted.claims, sha256(jar.jar), fields.requestUri);
-		if ("error" in made)
-			return answerOf(400, { error: "invalid_request_object", description: made.error });
-		const asksOpenid = p.needs.asksOpenid(made.items.scope);
-		// Where no ID token is made, an OpenID request is refused before T, never once the person tapped.
-		if (p.needs.openidUnmet(made.items))
-			return answerOf(400, { error: "invalid_scope", description: "no ID token is issued" });
-		// Its claims, read before T is made: one asked malformed, or without openid, is refused.
-		const claimsRefused = p.claims.refusal(made.items.claims, asksOpenid);
-		if (claimsRefused)
-			return answerOf(400, { error: "invalid_request_object", description: claimsRefused });
-		// What a code needs is checked here, before T, so the finish fails on none of it once the person tapped.
-		const unmet = p.needs.atStart(client, made.items);
-		if (unmet) return answerOf(400, unmetRefusal(unmet));
+		// The request checked before anything is reserved or signed; under PAR, T names this start's request_uri.
+		const made = p.requests.check(client, jar, jar.jar, fields.requestUri);
+		if ("refused" in made) return answerOf(400, made.refused);
 		const answer = await p.reserve(client.id, jar, startDigest(jar.jar, eEnc, eSig), async () => {
 			// Decided before T is signed, and kept on its record: the answer's `create` is only its copy.
 			const create = (await p.withoutPasskey?.allows({ client, items: made.items })) ?? false;
@@ -254,6 +185,7 @@ export const issuerMetadata = Object.freeze({
 	challengeMethods: { name: "code_challenge_methods_supported", value: ["S256"] },
 	signedRequest: { name: "require_signed_request_object", value: true },
 	requestParameter: { name: "request_parameter_supported" },
+	requestUriParameter: { name: "request_uri_parameter_supported" },
 	issParameter: { name: "authorization_response_iss_parameter_supported", value: true },
 });
 
@@ -265,13 +197,12 @@ export const startTakes = [
 	issuer,
 	jarReservations,
 	requestSources,
-	requestClaims,
-	...codeNeedsTakes,
+	authorizationRequests,
 ] as const;
 
 /**
  * The route of ②, its parts taken from the composition, counted per source: the JAR's sources and
- * reservation, `approvals`, what a code needs. The answer to a person with no passkey and whether a
+ * reservation, `approvals`, the request's check. The answer to a person with no passkey and whether a
  * sign-up is offered come from the module, whose boot checks them.
  */
 export async function startRouteIn(
@@ -299,8 +230,7 @@ export async function startRouteIn(
 			fits: tFits,
 			withoutPasskey: p.withoutPasskey,
 			signUp: p.signUp,
-			needs: await codeNeedsIn(c, url),
-			claims: (await c.collect(requestClaims))[0] ?? claimsUnread,
+			requests: await c.get(authorizationRequests),
 		},
 		{ limit: c.section.requests, ms: c.section.window * 1000 },
 	);

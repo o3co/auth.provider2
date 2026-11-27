@@ -23,12 +23,7 @@ const refused = (error: string, description: string): { readonly refused: Refusa
 });
 
 /** A login's JAR as its source gave it: its bytes, with what `jarVerified` answered of them. */
-export interface Jar {
-	readonly jar: string;
-	readonly claims: Readonly<Record<string, unknown>>;
-	readonly jti: string;
-	readonly exp: number;
-}
+export type Jar = Verified & { readonly jar: string };
 
 /** What a JAR is verified with: its signature's check, this issuer, its longest life and the clock. */
 export interface JarVerifying {
@@ -48,10 +43,16 @@ export type VerifiedJar =
 			readonly exp: number;
 	  }
 	| { readonly kind: "refused"; readonly reason: string };
+/** `jarVerified`'s answer where the JAR is taken. */
+export type Verified = Extract<VerifiedJar, { readonly kind: "verified" }>;
+
+/** How far a request's nbf may lie in the past, and how long it may live from it, in seconds (FAPI 2.0 Message Signing §5.3.1). */
+const nbfWindowS = 60 * 60;
 
 /**
  * A JAR taken as its client's: signed by it with the JAR's `typ`, its `iss` and `client_id` the
- * client, its `aud` this issuer, with a `jti` and an `exp` not past and at most its longest life away.
+ * client, its `aud` this issuer, with a `jti`, an `nbf` at most 60 minutes past and an `exp` not
+ * past, at most its longest life away and at most 60 minutes from its `nbf`.
  */
 export async function jarVerified(
 	p: JarVerifying,
@@ -62,13 +63,20 @@ export async function jarVerified(
 	const signed = await p.assertion.verifySignedBy(client, jar, typs.jar);
 	if (signed.kind === "refused") return refused(signed.reason);
 	const { claims } = signed;
-	const { jti, exp } = claims;
+	const { jti, exp, nbf } = claims;
 	if (claims.iss !== client.id || claims.client_id !== client.id)
 		return refused("the request is not its client's");
 	if (claims.aud !== p.issuer && !(Array.isArray(claims.aud) && claims.aud.includes(p.issuer)))
 		return refused("the request is not for this issuer");
-	if (typeof jti !== "string" || jti === "" || typeof exp !== "number")
-		return refused("the request names no jti or exp");
+	if (typeof jti !== "string" || jti === "") return refused("the request names no jti");
+	if (typeof exp !== "number") return refused("the request names no exp");
+	// FAPI 2.0 Message Signing §5.3.1 items 3 and 4: nbf named, no more than 60 minutes past, and
+	// the request living no more than 60 minutes from it. An nbf past the clock skew ahead is the
+	// signature check's refusal.
+	if (typeof nbf !== "number") return refused("the request names no nbf");
+	if (nbf * 1000 < p.now() - nbfWindowS * 1000)
+		return refused("the request's nbf is more than 60 minutes past");
+	if (exp - nbf > nbfWindowS) return refused("the request lives more than 60 minutes from its nbf");
 	// Taken only before its expiry: whoever keeps it past then holds it the clock skew longer.
 	if (exp * 1000 <= p.now()) return refused("the request has expired");
 	if (exp * 1000 - p.now() > p.maxLifetimeS * 1000)
@@ -95,9 +103,7 @@ export async function jarOf(
 	if ("refused" in answer) return { refused: answer.refused };
 	const verified = await jarVerified(p, client, answer.jar);
 	if (verified.kind === "refused") return refused("invalid_request_object", verified.reason);
-	// Its reservation outlives its expiry by the clock skew, the margin between replicas' clocks.
-	const { claims, jti, exp } = verified;
-	return { jar: { jar: answer.jar, claims, jti, exp } };
+	return { jar: { ...verified, jar: answer.jar } };
 }
 
 /** A start's answer, kept on its JAR's reservation and given again to the same request alone. */

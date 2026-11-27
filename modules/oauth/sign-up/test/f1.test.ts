@@ -16,6 +16,7 @@ const jarOf = (now: number, over: Record<string, string> = {}) => {
 		iss: "c1",
 		aud: "https://issuer.example",
 		jti: "j1",
+		nbf: Math.floor(now / 1000),
 		exp: Math.floor(now / 1000) + 300,
 		client_id: "c1",
 		redirect_uri: "https://rp.example/cb",
@@ -167,13 +168,11 @@ describe("a person's sign-up (F1), from the login's start to its finish", () => 
 
 describe("a T the way back carries", () => {
 	it("is made up to its route's bound and crosses the wire to the finish and the sign-up's continue; one longer is refused before T", async () => {
-		const w = await f1World();
-		await w.app.start();
 		const s = await screen();
-		const start = (jti: string, state: string) =>
+		const starting = (w: Awaited<ReturnType<typeof f1World>>) => (jti: string, redirect: string) =>
 			w.post(overHttp.operations.loginStart.path, {
 				clientId: "c1",
-				request: jarOf(w.now(), { jti, state }),
+				request: jarOf(w.now(), { jti, redirect_uri: redirect }),
 				eEnc: s.eEnc,
 				eSigX: s.eSigX,
 				eSigY: s.eSigY,
@@ -182,12 +181,21 @@ describe("a T the way back carries", () => {
 		const signUp = requests.continue.fields.find((f) => f.name === "statement");
 		if (!finish || !signUp) throw new Error("no statement field");
 		const bound = Math.min(finish.max, signUp.max);
-		// The room left by a T of a short state, in its payload's bytes, each adds 4/3 of a character.
-		const small = (await start("j0", "st")).json.statement as string;
+		// The room left by a T of the short redirect URI, in its payload's bytes, each adds 4/3 of a character.
+		const short = "https://rp.example/cb";
+		const measured = await f1World();
+		await measured.app.start();
+		const small = (await starting(measured)("j0", short)).json.statement as string;
+		await measured.app.stop();
 		const payload = Buffer.from(small.split(".")[1] ?? "", "base64url").length;
 		const room =
 			Math.floor(((Math.ceil((payload * 4) / 3) + bound - small.length) * 3) / 4) - payload;
-		const fits = await start("j1", `st${"a".repeat(room)}`);
+		// T filled by a long redirect URI the client registered: state and nonce stay within their bounds.
+		const filled = (more: number) => `${short}/${"a".repeat(more - 1)}`;
+		const w = await f1World({ redirectUris: [filled(room), filled(room + 3)] });
+		await w.app.start();
+		const start = starting(w);
+		const fits = await start("j1", filled(room));
 		expect(fits).toMatchObject({ status: 200, json: { create: true } });
 		const t = fits.json.statement as string;
 		expect(t.length).toBeLessThanOrEqual(bound);
@@ -196,7 +204,7 @@ describe("a T the way back carries", () => {
 		expect(checkField(finish, bytes)).toBeUndefined();
 		expect(checkField(signUp, bytes)).toBeUndefined();
 		// A few bytes more: refused before T, as the request object's, and nothing shown.
-		expect(await start("j2", `st${"a".repeat(room + 3)}`)).toMatchObject({
+		expect(await start("j2", filled(room + 3))).toMatchObject({
 			status: 400,
 			json: { error: "invalid_request_object" },
 		});

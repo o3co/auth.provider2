@@ -159,4 +159,51 @@ describe("a PAR login through the real SDK", () => {
 		expect(typeof victimSub).toBe("string");
 		expect(claimsOf(id_token).sub).toBe(victimSub);
 	});
+
+	it("refuses at PAR, through the Front, a request its check refuses, with its code and no request_uri (RFC 9126 §2.1)", async () => {
+		const front = await w.front();
+		for (const [kind, items, error] of [
+			[
+				"PKCE missing",
+				{ code_challenge: undefined, code_challenge_method: undefined },
+				"invalid_request",
+			],
+			["plain", { code_challenge_method: "plain" }, "invalid_request"],
+			["no state", { state: undefined }, "invalid_request"],
+			["a state over its bound", { state: "s".repeat(513) }, "invalid_request"],
+			["a claim outside the set", { other: "x" }, "invalid_request_object"],
+			[
+				"a redirect URI not registered",
+				{ redirect_uri: "https://evil.example/cb" },
+				"invalid_request",
+			],
+			["prompt=none", { prompt: "none" }, "login_required"],
+			["a scope not allowed", { scope: "openid write" }, "invalid_scope"],
+			[
+				"a resource outside the client's audiences",
+				{ resource: "https://api.example" },
+				"invalid_target",
+			],
+		] as const) {
+			const answered = await front.post(rp().par(rp().authorization(items).jar));
+			expect(answered, kind).toMatchObject({ status: 400, body: { error } });
+			expect(answered.body, kind).not.toHaveProperty("request_uri");
+		}
+		// The control: the same Front's good push is taken.
+		expect((await front.post(rp().par(rp().authorization().jar))).status).toBe(201);
+	});
+
+	it("takes a JAR whose nbf is a few seconds ahead, within the clock skew, and refuses one beyond it, by the real signature check", async () => {
+		const front = await w.front();
+		const now = Math.floor(Date.now() / 1000);
+		// The suite's case: an nbf 8 seconds ahead of the provider's clock.
+		const ahead = await front.post(rp().par(rp().authorization({ nbf: now + 8 }).jar));
+		expect(ahead.status).toBe(201);
+		const beyond = await front.post(rp().par(rp().authorization({ nbf: now + 120 }).jar));
+		expect(beyond).toMatchObject({
+			status: 400,
+			body: { error: "invalid_request_object", error_description: "not yet valid" },
+		});
+		expect(beyond.body).not.toHaveProperty("request_uri");
+	});
 });

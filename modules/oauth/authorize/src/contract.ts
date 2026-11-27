@@ -2,7 +2,9 @@ import type { Client } from "@mod/clients";
 import { contract, extensionPoint } from "@mod/kernel";
 import type { AuthorizationItems } from "@mod/sdk-core-wire";
 
-export { type JarVerifying, jarVerified, type VerifiedJar } from "./jar/jar.ts";
+import type { Verified } from "./jar/jar.ts";
+
+export { type JarVerifying, jarVerified, type Verified, type VerifiedJar } from "./jar/jar.ts";
 
 /** A login's start as the screen sent it: each field's text, by its name in `front-core-wire`. */
 export type StartFields = Readonly<Record<string, string>>;
@@ -16,6 +18,8 @@ export interface RequestSource {
 	readonly name: string;
 	/** Whether this source is the only one taken: then no other is, the JAR by value among them. */
 	readonly only?: boolean;
+	/** Whether this source answers a start by its `requestUri`: then `request_uri_parameter_supported` is published true. */
+	readonly readsRequestUri?: boolean;
 	jarOf(
 		fields: StartFields,
 		client: Client,
@@ -126,3 +130,23 @@ export const jarReservationsNeeds = {
 	/** A reservation written outside the provider would hand one request's statement to another. */
 	authenticated: true,
 } as const;
+
+/** A login's request checked: T's items, or why it is refused, as OAuth names it. */
+export type CheckedRequest =
+	| { readonly items: AuthorizationItems }
+	| { readonly refused: { readonly error: string; readonly description: string } };
+
+/**
+ * A login's request checked as `authorize`'s start checks it, after its JAR is verified: the redirect
+ * URI its client registered, `prompt`, T's items from the JAR, an OpenID request where an ID token is
+ * made, its `claims`, what its code needs. `jar` is the JAR's bytes; `requestUri` is the start's under
+ * PAR, which T then names. A push gives none.
+ */
+export interface AuthorizationRequests {
+	check(client: Client, verified: Verified, jar: string, requestUri?: string): CheckedRequest;
+}
+
+/** `authorize`'s check of a login's request, for its start and a module taking a JAR elsewhere (`par`). */
+export const authorizationRequests = contract<AuthorizationRequests>(
+	"authorize.authorization-requests",
+);

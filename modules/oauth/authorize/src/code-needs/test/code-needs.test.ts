@@ -57,11 +57,19 @@ describe("what a code needs", () => {
 		});
 	});
 
-	it("tells the need unmet, by its word, in the order each side checks", () => {
+	it("tells the need unmet, by its word, in the one order both sides check", () => {
 		const n = needs();
 		const noGrant = clientOf(["client_credentials"]);
 		expect(n.atStart(noGrant, items({ code_challenge: "x" }))).toEqual({ need: "grant" });
-		expect(n.atStart(code, items({ code_challenge: "x" }))).toEqual({ need: "challenge" });
+		expect(n.atStart(code, items({ code_challenge: "x", scope: "write" }))).toEqual({
+			need: "challenge",
+		});
+		expect(n.atStart(code, items({ scope: "write", resource: "https://api" }))).toEqual({
+			need: "scope",
+		});
+		expect(n.atStart(code, items({ resource: "https://api", dpop_jkt: "other" }))).toMatchObject({
+			need: "resource",
+		});
 		expect(n.atStart(code, items({ dpop_jkt: "other" }))).toEqual({ need: "binding" });
 		expect(n.atFinish(noGrant, items())).toEqual({ need: "grant" });
 		expect(n.atFinish(code, items({ code_challenge: "x" }))).toEqual({ need: "challenge" });

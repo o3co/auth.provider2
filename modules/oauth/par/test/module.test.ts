@@ -1,4 +1,5 @@
-import { type RequestSource, requestSources } from "@mod/authorize";
+import { authorizationRequests, type RequestSource, requestSources } from "@mod/authorize";
+import { authorizationRequestsStandIn } from "@mod/authorize/testing";
 import { clientAssertion } from "@mod/client-assertion";
 import { clients } from "@mod/clients";
 import { overHttp } from "@mod/front-core-wire";
@@ -26,6 +27,7 @@ it("serves the wire's par path under a per-source policy, publishes it, and give
 			m.provide(clientAssertion).by(() => ({}) as never),
 			m.provide(senderBinding).by(() => ({}) as never),
 			m.provide(pushedRequests).by(() => ({}) as never),
+			m.provide(authorizationRequests).by(() => authorizationRequestsStandIn()),
 			m
 				.provide(issuer)
 				.by(() => ({ url: "https://issuer.example", endpointOrigin: "https://front.example" })),
@@ -54,7 +56,9 @@ it("serves the wire's par path under a per-source policy, publishes it, and give
 		{ name: "require_pushed_authorization_requests", value: true },
 		{ name: "pushed_authorization_request_endpoint", value: "https://front.example/oauth/par" },
 	]);
-	expect(sources.map((s) => [s.name, s.only])).toEqual([["request_uri", true]]);
+	expect(sources.map((s) => [s.name, s.only, s.readsRequestUri])).toEqual([
+		["request_uri", true, true],
+	]);
 	// Turned off, a JAR by value is taken too, and the metadata says so.
 	const byValueToo = await booted({ "pushed-only": false });
 	expect(byValueToo.metadata).toContainEqual({

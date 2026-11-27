@@ -169,6 +169,24 @@ describe("authorize, composed", () => {
 		);
 	});
 
+	it("publishes request_uri_parameter_supported where a source taken reads a request_uri, and false where none does", async () => {
+		const supported = async (more: readonly Module[]) =>
+			(await (await boot(more)).get(seen)).metadata.find(
+				(i) => i.name === "request_uri_parameter_supported",
+			)?.value;
+		const source = (p: { readonly readsRequestUri?: boolean; readonly only?: boolean }) =>
+			defineModule({ name: "pushed", replicaSafe: true, takes: [] }, (m) => [
+				m
+					.contribute(requestSources)
+					.by(() => ({ name: "pushed", ...p, jarOf: async () => undefined })),
+			]);
+		// By value alone: false, said, since OpenID Connect Discovery's default is true.
+		expect(await supported([])).toBe(false);
+		expect(await supported([source({})])).toBe(false);
+		expect(await supported([source({ readsRequestUri: true })])).toBe(true);
+		expect(await supported([source({ readsRequestUri: true, only: true })])).toBe(true);
+	});
+
 	it("refuses boot with two answers to a person with no passkey, or two sign-ups offered", async () => {
 		const refusedOf = (more: readonly Module[]) =>
 			boot(more).then(

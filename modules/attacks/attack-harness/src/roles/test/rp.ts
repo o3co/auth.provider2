@@ -143,6 +143,7 @@ export function relyingParty(
 					iss: clientId,
 					aud: provider.issuer,
 					iat: now(),
+					nbf: now(),
 					exp: now() + 60,
 					jti: randomUUID(),
 					client_id: clientId,

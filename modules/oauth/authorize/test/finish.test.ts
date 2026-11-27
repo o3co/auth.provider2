@@ -357,9 +357,12 @@ describe("a login's finish (⑤⑥)", () => {
 	});
 
 	it("opens no session for a client not allowed the code grant, or a malformed challenge", async () => {
-		for (const p of [{ grants: [] as string[] }, { code_challenge: "short" }]) {
+		for (const [p, error] of [
+			[{ grants: [] as string[] }, "unauthorized_client"],
+			[{ code_challenge: "short" }, "invalid_request"],
+		] as const) {
 			const h = harness(p);
-			expect(await h.send(), JSON.stringify(p)).toMatchObject({ status: 400 });
+			expect(await h.send(), JSON.stringify(p)).toMatchObject({ status: 400, json: { error } });
 			expect(h.log.some((l) => l.startsWith("open"))).toBe(false);
 			expect(h.issued).toHaveLength(0);
 		}

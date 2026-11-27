@@ -20,10 +20,11 @@ const rp = () => w.rps[0] as World["rps"][number];
 const notTaken = { error: "invalid_request", error_description: "a request by value is not taken" };
 
 describe("a Core taking pushed requests alone", () => {
-	it("publishes that it requires pushed requests and takes no request parameter", () => {
+	it("publishes that it requires pushed requests and takes no request parameter, but a request_uri", () => {
 		expect(w.core.metadata).toMatchObject({
 			require_pushed_authorization_requests: true,
 			request_parameter_supported: false,
+			request_uri_parameter_supported: true,
 		});
 	});
 

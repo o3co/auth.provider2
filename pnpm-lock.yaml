@@ -1819,6 +1819,9 @@ importers:
       '@mod/front-core-wire':
         specifier: workspace:*
         version: link:../../wire/front-core-wire
+      '@mod/redirect-uris':
+        specifier: workspace:*
+        version: link:../redirect-uris
       '@mod/sdk-core-wire':
         specifier: workspace:*
         version: link:../../wire/sdk-core-wire

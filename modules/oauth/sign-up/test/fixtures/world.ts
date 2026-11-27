@@ -103,25 +103,28 @@ export async function screen() {
 	};
 }
 
-const client: Client = {
+/** The world's client, registering the redirect URIs given. */
+const clientOf = (redirectUris: readonly string[]): Client => ({
 	id: "c1",
 	kind: "public",
 	method: "none",
 	registered: true,
 	section: <T>(s: { name: string }) =>
 		(s.name === redirects.name
-			? { "redirect-uris": ["https://rp.example/cb"] }
+			? { "redirect-uris": redirectUris }
 			: { grants: ["authorization_code"], scopes: ["read"], audiences: [] }) as T,
-};
+});
 
 const seen = contract<readonly Route[]>("f1-world.routes");
 
 /**
  * F1 whole: authorize, sign-up, approvals, passkey-management, passkeys, webauthn, keys and
  * transparency, each append judged took at once. The users' ledger makes identifierless subjects in
- * memory; what follows a login's approval (its session, its code) and the client stand in.
+ * memory; what follows a login's approval (its session, its code) and the client stand in, its
+ * redirect URIs `https://rp.example/cb` unless given.
  */
-export async function f1World() {
+export async function f1World(p: { readonly redirectUris?: readonly string[] } = {}) {
+	const client = clientOf(p.redirectUris ?? ["https://rp.example/cb"]);
 	const clock = 1_800_000_000_000;
 	const now = () => clock;
 	const core = generateKeyPairSync("ec", { namedCurve: "P-256" }).privateKey;
