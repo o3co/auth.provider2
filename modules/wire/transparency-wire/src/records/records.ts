@@ -6,7 +6,7 @@ import { flows, frames, recordKinds, speaks } from "../words/words.ts";
  * Why the log refuses an append; it refuses with one word and writes nothing. On an unconditional
  * flow: `abandoned`, a stage of an op whose abandonment it accepted (never placed, now or later);
  * `evidenceUsed`, a client's start naming an evidence element (`elements`) a start of that flow
- * named. Their order: the same id and content's original receipt, `sameIdOther`, `abandoned`,
+ * named. Their order: the same id and content's (`content`) original receipt, `sameIdOther`, `abandoned`,
  * `evidenceUsed`; every log keeps both marks without end.
  */
 export const appendRefusals = Object.freeze([
@@ -133,6 +133,15 @@ const named = {
 		.refine((list) => unique(list, (e) => e), { message: "an element is named twice" })
 		.optional(),
 };
+
+/**
+ * A stage as every log compares it when it is sent again under its op and stage: the canonical JSON
+ * text of the fields a writer names, the wire's version, the plaintext digest and a signed body among
+ * them, read from a request or a committed record alike. A sealed preimage (sealed again, it is other
+ * bytes: the plaintext digest stands for it), the previous position, the writer and what the log adds
+ * as it places are left out. A stage off these fields' forms has no content to compare.
+ */
+export const content = z.object(named).transform((stage) => canonical(stage));
 
 type Named = {
 	kind: string;

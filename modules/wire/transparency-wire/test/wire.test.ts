@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+	type AppendRequest,
 	appendRefusals,
 	flows,
 	judgments,
@@ -759,6 +760,180 @@ describe("the builders", () => {
 			expect("value" in read, text).toBe(true);
 		}
 		expect(tokens.parse('{"a":"x","a":"x"}')).toEqual({ error: "duplicate_key:a" });
+	});
+
+	describe("the content a log compares a stage sent again by", () => {
+		const request = (x: unknown): AppendRequest => schemas.appendRequest.parse(x);
+		const text = (x: unknown) => schemas.content.parse(x);
+		const committed = (x: unknown) => {
+			const r = schemas.record.parse(x);
+			if (r.kind === "tick") throw new TypeError("a tick names no stage");
+			return r;
+		};
+		const { tokens: _t, registryVersion: _r, configVersion: _c, ...plainFields } = bundleRequest;
+		const start = { ...plainFields, kind: "start", stage: 1, last: false };
+		const { prev: _prev, ...unconditional } = start;
+		const denial = {
+			v: 1,
+			kind: "denial",
+			flow: subject,
+			prev: 5,
+			op: "deny-1",
+			stage: 1,
+			last: true,
+			plaintextDigest: d("q"),
+			signed: jws,
+		};
+
+		it("is the same for a request, the record committed from it, and the request sealed again, after another position, its fields in another order", () => {
+			const one = text(request(bundleRequest));
+			const resealed = request({
+				...bundleRequest,
+				prev: 9,
+				preimage: [{ key: "mk-3", enc: "b3RoZXI", ciphertext: "b3RoZXI" }],
+			});
+			const reordered = request(Object.fromEntries(Object.entries(bundleRequest).reverse()));
+			const byAnother = committed({
+				...bundleRecord,
+				writer: { ...core, instance: "i-2", generation: 2 },
+				id: "r-9",
+				position: 9,
+				n: 30,
+				acceptedAt: 1,
+				shard: "s2",
+				sealedTo: [{ key: "mk-3", ciphertextHash: d("h") }],
+				keySetVersion: 3,
+			});
+			const unnamed = { ...bundleRequest, signed: undefined, approval: undefined };
+			for (const other of [resealed, reordered, committed(bundleRecord), byAnother, unnamed])
+				expect(text(other)).toBe(one);
+			// Canonical JSON, by which a log in any language builds the same text: keys sorted at every
+			// depth, absent members left out.
+			const tokenText = (frame: string, c: string) => `{"digest":"${d(c)}","frame":"${frame}"}`;
+			expect(one).toBe(
+				`{"configVersion":2,"flow":{"id":"sub-1","of":"subject"},"kind":"bundle","last":true,"op":"op-1","plaintextDigest":"${d("p")}","registryVersion":3,"stage":2,"tokens":[${tokenText("accessToken", "a")},${tokenText("idToken", "i")},${tokenText("family", "f")}],"v":1}`,
+			);
+			const { prev: _p, ...signedFields } = denial;
+			expect(text(request(denial))).toBe(text(committed({ ...denialRecord, ...signedFields })));
+		});
+
+		it("names every field a writer names, the wire's version, the plaintext digest and a signed body among them, and nothing the log adds", () => {
+			const named = Object.keys(schemas.appendRequest.shape).filter(
+				(k) => k in schemas.record.options[0].shape,
+			);
+			expect(Object.keys(JSON.parse(text(request(bundleRequest)))).sort()).toEqual(
+				Object.keys(bundleFields).sort(),
+			);
+			expect(JSON.parse(text(request(denial)))).toMatchObject({ v: 1, signed: jws });
+			// Each named field changed alone, on a request of the wire's form, is other content.
+			const changed: Record<string, readonly [unknown, unknown]> = {
+				kind: [start, { ...start, kind: "noEffect" }],
+				flow: [start, { ...start, flow: { of: "subject", id: "sub-2" } }],
+				op: [start, { ...start, op: "op-2" }],
+				stage: [start, { ...start, stage: 2 }],
+				last: [start, { ...start, last: true }],
+				registryVersion: [start, { ...start, registryVersion: 3 }],
+				configVersion: [bundleRequest, { ...bundleRequest, configVersion: 3 }],
+				plaintextDigest: [start, { ...start, plaintextDigest: d("o") }],
+				signed: [denial, { ...denial, signed: "aGVhZA.Ym9keQ.b3RoZXI" }],
+				tokens: [
+					bundleRequest,
+					{ ...bundleRequest, tokens: [{ frame: "accessToken", digest: d("a") }] },
+				],
+				approval: [
+					{
+						...start,
+						kind: "approval",
+						approval: { statement: d("t"), assertion: d("s"), code: d("c") },
+					},
+					{
+						...start,
+						kind: "approval",
+						approval: { statement: d("t"), assertion: d("s"), code: d("k") },
+					},
+				],
+				keyChange: [
+					{ ...start, kind: "keyChange", keyChange: { statement: d("t"), evidence: d("e") } },
+					{ ...start, kind: "keyChange", keyChange: { statement: d("t"), evidence: d("x") } },
+				],
+				abandons: [
+					{
+						...start,
+						kind: "abandonment",
+						op: opIds.abandonment("op-1", 1),
+						abandons: { op: "op-1", attempt: 1, digest: d("p") },
+					},
+					{
+						...start,
+						kind: "abandonment",
+						op: opIds.abandonment("op-1", 1),
+						abandons: { op: "op-1", attempt: 1, digest: d("o") },
+					},
+				],
+				elements: [
+					{
+						...unconditional,
+						flow: { of: "client", id: "c-1" },
+						elements: [d("x")],
+					},
+					{
+						...unconditional,
+						flow: { of: "client", id: "c-1" },
+						elements: [d("y")],
+					},
+				],
+			};
+			// The wire speaks one version, so `v` cannot change and stay on its form: it is in the text, above.
+			expect([...Object.keys(changed), "v"].sort()).toEqual([...named].sort());
+			// Inside a named field too, each member changed alone is other content.
+			const approval = { statement: d("t"), assertion: d("s"), code: d("c") };
+			const keyChange = { statement: d("t"), evidence: d("e") };
+			const inside: readonly (readonly [unknown, unknown])[] = [
+				...Object.keys(approval).map(
+					(k) =>
+						[
+							{ ...start, kind: "approval", approval },
+							{ ...start, kind: "approval", approval: { ...approval, [k]: d("z") } },
+						] as const,
+				),
+				...Object.keys(keyChange).map(
+					(k) =>
+						[
+							{ ...start, kind: "keyChange", keyChange },
+							{ ...start, kind: "keyChange", keyChange: { ...keyChange, [k]: d("z") } },
+						] as const,
+				),
+			];
+			for (const [base, other] of inside)
+				expect(text(request(other)), JSON.stringify(other)).not.toBe(text(request(base)));
+			// An abandonment's op id is derived from what it abandons, so on the wire's form the two move
+			// together; read as content alone, which holds no kind rules, each member counts by itself.
+			const abandoned = request({
+				...start,
+				kind: "abandonment",
+				op: opIds.abandonment("op-1", 1),
+				abandons: { op: "op-1", attempt: 1, digest: d("p") },
+			});
+			for (const abandons of [
+				{ ...abandoned.abandons, op: "op-2" },
+				{ ...abandoned.abandons, attempt: 2 },
+			])
+				expect(text({ ...abandoned, abandons }), JSON.stringify(abandons)).not.toBe(
+					text(abandoned),
+				);
+			for (const [field, [base, other]] of Object.entries(changed))
+				expect(text(request(other)), field).not.toBe(text(request(base)));
+		});
+
+		it("has no content for a stage off its fields' forms", () => {
+			for (const off of [
+				{ ...start, stage: 0 },
+				{ ...start, plaintextDigest: "short" },
+				{ ...start, flow: { ...subject, extra: 1 } },
+				{ ...start, kind: undefined },
+			])
+				expect(schemas.content.safeParse(off).success, JSON.stringify(off)).toBe(false);
+		});
 	});
 
 	it("binds a sealed preimage to its flow, op and stage", () => {

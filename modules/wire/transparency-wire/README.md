@@ -17,7 +17,7 @@
 - `tokens`: the receipt claim `txr`, the `frames` (internal module `words`), `parse` (the one JSON reading, internal module `text`), `digestInput` (what a token's digest covers), `ecThumbprintInput` (`esig`'s RFC 7638 input), `checks` (R16–R18's frames and faults) (internal module `receipt-gate`). `sealing`: the HPKE suite, `info` and `aad` of a preimage (internal module `records`).
 - `signers`: the counts of the generation flow's and the reset instruction's sets (internal module `signed-bodies`). `opIds`: `stop` (generation), `reset` (instruction id) and `abandonment` (op, attempt) (internal module `records`).
 - `schemas`:
-  - `appendRequest`, `appendAnswer`, `record`, `preimage`, `recordRef` (internal module `records`).
+  - `appendRequest`, `appendAnswer`, `content` (a stage read to the text every log compares it by when it is sent again), `record`, `preimage`, `recordRef` (internal module `records`).
   - `signerSet`, `bodies` (each body no Core writer writes), `signedRecord` (such a record with its verified body) (internal module `signed-bodies`).
   - `judgment`, `checkpoint`, `status`, `statusReasons`, `stateOf`, `setSigned` (JWS General JSON) (internal module `judging`).
   - `receipt`, `callbackHeader`, `callbackProof` (A38) and `idTokenEvidence` (`esig`, `apr`) (internal module `receipt-gate`).

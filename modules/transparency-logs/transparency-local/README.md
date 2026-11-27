@@ -21,7 +21,7 @@
 
 ## Invariants
 - A conditional flow's append places after its head alone (`prevMismatch` else); an unconditional one's names none and places at the head. A previous position given otherwise is the writer's TypeError.
-- An op's stage placed already is answered as first placed where the stage as named (each field, and its preimage's digest) is the same, `sameIdOther` where not, before the previous position is read.
+- An op's stage placed already is answered as first placed where its wire `content` is the same, `sameIdOther` where not, before the previous position is read.
 - A record is placed in one write with the flow's head, its judged prefix and its op's stages, held to all it read: two appends after one position place one. After 8 lost races an append is `temporary`.
 - On a client's flow, a stage of an op whose abandonment is placed is refused `abandoned`, and a client's start naming an evidence element a start of the flow named is refused `evidenceUsed`, each after the same id's answer, in one write with the head, kept without end.
 - A client's start names its evidence's elements and its client's registry version, judged with no window (no publisher's flow is here): the client's record is read at that version alone, so one the registry holds at another now is unchecked, held. Any other stage naming a version or elements is the writer's TypeError.
@@ -36,7 +36,7 @@
 - A stored record of another shape is unavailable, never none. It holds nothing in process, so it is safe on many instances.
 
 ## Data
-- Per flow, in its wiring's space, kept without end: the head, the judged prefix, each position's record with its finding, each op's stages (each with its digest as named) and abandonments, and each evidence element a client's start named.
+- Per flow, in its wiring's space, kept without end: the head, the judged prefix, each position's record with its finding, each op's stages (each with its content's digest, a reset's its payload's) and abandonments, and each evidence element a client's start named.
 
 ## Depends on
 - `kernel`, `transparency`, `transparency-wire`, `reset-wire`, `authority-rules`, `keys`, `webauthn`, `passkeys` (`publicKeyOf`), `promises`, `records`, `store`; `zod`. `passkeys` and `webauthn` must be composed beside it: it takes both.

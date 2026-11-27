@@ -27,6 +27,8 @@ Internal module of `transparency`: the frame's I/O around its pure core, the `tr
   - A call costs `log.of` and one append as a read; taking S records in, uncontended, 2(S+1) frame reads and S+1 `log.at`, the last its ending's; a moved write's re-read one round more.
 - `receiptOf` places nothing whatever order the log checks in, as no head is ever its previous position; a placed stage's receipt comes back only where the log checks the same id first, as transparency-wire's card promises, which every log's adapter keeps.
 - `tend` takes the flow in to its head (as the apply phase of an op it took over), then takes over an orphan its kind can resend and no one took over yet, marks any other, or sends the abandoning op's next abandonment.
+- An orphan is taken over at most once (KE-C10): one its taker could not end is marked (KE-C14) and then abandoned, never taken over again. The models let it be taken over after each lease's end; this narrowing is kernel-spec §5.1's note before KE-C01 (V27).
+- No round tends a subject's flow (`clientTending` is clients' alone): its orphan is tended when `tend` is next called on it, as a writer asking on it does (KP-05 (c) read as a request coming to that flow again; kernel-spec §5.1's note before KE-C01, V27). Left unasked, its intent stays pending; no safety property depends on that.
 - A registration naming a record of a part not its own, or writing another count of records than it read, is a TypeError.
 
 ## Depends on

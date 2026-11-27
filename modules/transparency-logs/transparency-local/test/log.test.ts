@@ -92,6 +92,29 @@ describe("transparency-local's log (t0)", () => {
 		expect(await log.head(flow)).toBe(2);
 	});
 
+	it("compares a stage sent again by the wire's content alone: a field it does not name is no other content, and a stage off its forms is the writer's TypeError", async () => {
+		const { log } = await boot();
+		const flow = subjectFlow();
+		const stage = abandonment(flow);
+		const first = accepted(await log.append(stage, 0));
+		expect(await log.append({ ...stage, unnamed: true } as Stage, 1)).toEqual(first);
+		await expect(log.append({ ...stage, last: "yes" } as never, 1)).rejects.toThrow(
+			expect.objectContaining({
+				name: "TypeError",
+				message: expect.stringMatching(/a stage of another form/),
+			}),
+		);
+		// Before the log is read: an op never placed, after another position, is no prevMismatch.
+		const unplaced = { ...abandonment(flow), op: "o-unplaced", last: "yes" };
+		await expect(log.append(unplaced as never, 7)).rejects.toThrow(
+			expect.objectContaining({
+				name: "TypeError",
+				message: expect.stringMatching(/a stage of another form/),
+			}),
+		);
+		expect(await log.head(flow)).toBe(1);
+	});
+
 	it("refuses an op's stage placed already with other content", async () => {
 		const { log } = await boot();
 		const flow = subjectFlow();

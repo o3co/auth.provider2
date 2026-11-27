@@ -25,6 +25,7 @@ import {
 	appendAnswer,
 	appendRefusals,
 	appendRequest,
+	content,
 	opIds,
 	preimage,
 	record,
@@ -77,6 +78,8 @@ export {
 export const schemas = Object.freeze({
 	appendRequest,
 	appendAnswer,
+	/** A stage, from a request or a committed record, read to the text every log compares it by when it is sent again. */
+	content,
 	record,
 	receipt,
 	judgment,

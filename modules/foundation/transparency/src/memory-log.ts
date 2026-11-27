@@ -38,7 +38,6 @@ const payloadOf = (jws: string): unknown => {
  */
 export function logBook(now: () => number) {
 	const flows = new Map<string, Placed[]>();
-	const digests = new Map<string, string>();
 	let n = 0;
 	let onAppend: Finding | undefined;
 	let onReset: Finding = { verdict: "verified", outcome: "took" };
@@ -94,10 +93,17 @@ export function logBook(now: () => number) {
 		async append(stage, prev) {
 			sent.push({ instance, stage, ...(prev === undefined ? {} : { prev }) });
 			const plaintextDigest = digest(JSON.stringify(stage.preimage));
+			const { preimage: _sealed, ...named } = stage;
 			const placed = onFlow(stage.flow);
 			const same = placed.find((p) => p.record.op === stage.op && p.record.stage === stage.stage);
 			if (same) {
-				return digests.get(same.record.id) === plaintextDigest
+				// The same content as every log reads it (transparency-wire's `content`), whoever sends it.
+				const content = schemas.content.safeParse({ v: 1, ...named, plaintextDigest });
+				if (!content.success) {
+					const at = issuePaths(content.error.issues).join(", ");
+					throw new TypeError(`memory log: a stage off the wire's form, at ${at}`);
+				}
+				return content.data === schemas.content.parse(same.record)
 					? accepted(same)
 					: { v: 1, result: "refused", refusal: "sameIdOther" };
 			}
@@ -107,7 +113,6 @@ export function logBook(now: () => number) {
 			if (!unconditional && prev !== placed.length) {
 				return { v: 1, result: "refused", refusal: "prevMismatch" };
 			}
-			const { preimage: _sealed, ...named } = stage;
 			const p = place(
 				stage.flow,
 				{
@@ -118,7 +123,6 @@ export function logBook(now: () => number) {
 				},
 				{ role: "core", instance, image: "i1", generation },
 			);
-			digests.set(p.record.id, plaintextDigest);
 			if (onAppend) placed[placed.length - 1] = { ...p, finding: onAppend };
 			return accepted(p);
 		},

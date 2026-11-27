@@ -302,8 +302,13 @@ export function localLog(p: {
 			const elements = (stage.elements ?? []).map((e) => keys.element(e));
 			const plaintextDigest = digest(stage.preimage);
 			const { preimage, ...named } = stage;
-			// The stage as named, its preimage by its digest: a resend differing in any field is another.
-			const asNamed = digest({ ...named, plaintextDigest });
+			// The stage as every log compares a resend (transparency-wire's `content`): its preimage by its digest.
+			const content = schemas.content.safeParse({ v: 1, ...named, plaintextDigest });
+			if (!content.success)
+				throw new TypeError(
+					`transparency-local: a stage of another form: ${content.error.message}`,
+				);
+			const asNamed = sha256(content.data);
 			for (let attempt = 0; attempt < attempts; attempt++) {
 				const head = await headOf(flow);
 				const abandoned = stage.abandons ? [keys.op(stage.abandons.op)] : [];
