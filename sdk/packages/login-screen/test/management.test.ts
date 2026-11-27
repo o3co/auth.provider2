@@ -1,12 +1,13 @@
 import { continuations } from "@mod/continuation-wire";
-import { canonicalText, hpke, purposes, typs } from "@mod/sdk-core-wire";
-import { describe, expect, it } from "vitest";
-import { digest, utf8 } from "../src/bytes.ts";
+import { canonicalText, hpke, payloads, purposes, typs } from "@mod/sdk-core-wire";
+import { describe, expect, it, vi } from "vitest";
+import { base64url, digest, utf8 } from "../src/bytes.ts";
+import { challengeOf } from "../src/challenge.ts";
 import { firstKey } from "../src/first-key/first-key.ts";
 import { openSealed, sealTo } from "../src/hpke.ts";
 import { screenKeys } from "../src/keys.ts";
 import { management } from "../src/management/management.ts";
-import { signCompact, signingKey } from "./fixtures.ts";
+import { passkeyAssertion, signCompact, signingKey } from "./fixtures.ts";
 
 const issuer = "https://id.example";
 
@@ -34,7 +35,9 @@ async function world(purpose: "passkey-add" | "passkey-manage" = "passkey-manage
 	);
 	const read = await management.read(statement, { ring: [ring.jwk], keys, issuer, purpose });
 	if ("error" in read) throw new Error(read.error);
-	const assertion = utf8("the assertion's bytes");
+	// The approving key's assertion over the statement, as the screen's get() answers it (V30).
+	const approving = await passkeyAssertion(base64url(await challengeOf(statement, "get")));
+	const assertion = approving.bytes;
 	const h = await digest(statement);
 	/**
 	 * The completion the Core seals to E_enc, under its purpose and this statement's hash unless told,
@@ -72,6 +75,7 @@ async function world(purpose: "passkey-add" | "passkey-manage" = "passkey-manage
 		sealed,
 		approved,
 		options,
+		approving,
 	};
 }
 
@@ -262,6 +266,10 @@ describe("management.finish", () => {
 					evidence: w.h,
 					subject: "sub-1",
 					kg: 0,
+					// The approving key (V30), the screen's own, where the creation is a passkey-add's.
+					...(over.basis === undefined || over.basis === "passkey-add"
+						? { approver_key: w.approving.jwk }
+						: {}),
 					options: {
 						user_id: "dXNlcg",
 						rp_id: "id.example",
@@ -307,6 +315,8 @@ describe("management.finish", () => {
 					evidence: w.h,
 					subject: "sub-1",
 					kg: 0,
+					// The right approving key, so another screen's keys are its one defect.
+					approver_key: w.approving.jwk,
 					options: {
 						user_id: "dXNlcg",
 						rp_id: "id.example",
@@ -339,6 +349,55 @@ describe("management.finish", () => {
 			const sealed = await w.sealed({ ...w.approved, purpose: purposes.passkeyAdd, creation });
 			expect(await management.finish(w.manage, sealed, w.options), error).toEqual({ error });
 		}
+	});
+
+	const finished = async (w: Awaited<ReturnType<typeof world>>, creation: string) =>
+		management.finish(
+			w.manage,
+			await w.sealed({ ...w.approved, purpose: purposes.passkeyAdd, creation }),
+			w.options,
+		);
+
+	it("refuses a creation naming another key than the one its own assertion verifies under, before create()", async () => {
+		const w = await world("passkey-add");
+		const other = await passkeyAssertion(base64url(await challengeOf(w.statement, "get")));
+		expect(await finished(w, await creationFor(w, { approver_key: other.jwk }))).toEqual({
+			error: "approver",
+		});
+		const ed = await passkeyAssertion("x", "EdDSA");
+		expect(await finished(w, await creationFor(w, { approver_key: ed.jwk }))).toEqual({
+			error: "approver",
+		});
+	});
+
+	it("refuses a creation naming no key: here while sdk-core-wire takes one, by its schema once it requires it", async () => {
+		const w = await world("passkey-add");
+		const keyed = await creationFor(w);
+		const without = await creationFor(w, { approver_key: undefined });
+		const payload = (jws: string) =>
+			JSON.parse(Buffer.from(jws.split(".")[1] ?? "", "base64url").toString());
+		// The probe holds the complete creation first, then the one without its key.
+		expect(payloads.creation.safeParse(payload(keyed)).success).toBe(true);
+		const taken = payloads.creation.safeParse(payload(without)).success;
+		expect(await finished(w, without)).toEqual({ error: taken ? "approver" : "creation" });
+	});
+
+	it("tells a key this browser cannot verify from another key", async () => {
+		const w = await world("passkey-add");
+		// Only the approving key's import is refused, as a browser without its key type refuses it.
+		const importKey = crypto.subtle.importKey.bind(crypto.subtle);
+		const spy = vi
+			.spyOn(crypto.subtle, "importKey")
+			.mockImplementation(((
+				format: never,
+				data: { x?: unknown },
+				...rest: [never, never, never]
+			) =>
+				data?.x === w.approving.jwk.x
+					? Promise.reject(new DOMException("no such key type", "NotSupportedError"))
+					: importKey(format, data as never, ...rest)) as never);
+		expect(await finished(w, await creationFor(w))).toEqual({ error: "unsupported" });
+		spy.mockRestore();
 	});
 });
 

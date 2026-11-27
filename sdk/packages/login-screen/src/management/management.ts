@@ -1,6 +1,8 @@
 import { continuations as continued } from "@mod/continuation-wire";
 import { hpke, type payloads, payloads as schemas } from "@mod/sdk-core-wire";
+import { verifiedUnder } from "../assertion/assertion.ts";
 import { base64url, deepFreeze, digest, utf8 } from "../bytes.ts";
+import { challengeOf } from "../challenge.ts";
 import { openCompletion } from "../completion.ts";
 import { creationOf, type ReadCreation } from "../first-key/first-key.ts";
 import { type Sealed, sealTo } from "../hpke.ts";
@@ -56,7 +58,9 @@ export type ManagementFinishError =
 	| "continued"
 	| "creation"
 	| "basis"
-	| "evidence";
+	| "evidence"
+	| "approver"
+	| "unsupported";
 
 /** A management statement's completion: opened under its purpose and hash, the ring's, of its purpose's schema, binding the statement and the assertion, the issuer's. */
 async function completionOf(
@@ -106,8 +110,9 @@ async function completionOf(
  * statement's purpose and hash, the Core's ring's, of that purpose's completion, binding the statement
  * and the assertion sent. A passkey-manage's is the keys' list, a listing's never a rename's
  * (`continued`). A passkey-add's carries the creation that goes on: read as a statement naming
- * this screen's keys, of passkey-add's path (`basis`), its evidence this statement's hash; the next
- * steps are the first key's (`createOptions`, `continuation`, `readPossession`).
+ * this screen's keys, of passkey-add's path (`basis`), its evidence this statement's hash, naming
+ * as its approving key the one this screen's own assertion verifies under (V30, `approver`); the
+ * next steps are the first key's (`createOptions`, `continuation`, `readPossession`).
  */
 async function finish(
 	manage: ReadManage,
@@ -130,6 +135,13 @@ async function finish(
 	if ("error" in creation) return { error: "creation" };
 	if (creation.statement.creation.basis !== "passkey-add") return { error: "basis" };
 	if (creation.statement.creation.evidence !== h) return { error: "evidence" };
+	// The key it goes on from (V30): the screen's own, as its own assertion verifies under the key named.
+	const approver = creation.statement.creation.approver_key;
+	if (approver === undefined) return { error: "approver" };
+	const challenge = base64url(await challengeOf(manage.compact, "get"));
+	const verified = await verifiedUnder(options.assertion, approver, challenge);
+	if (verified !== "verified")
+		return { error: verified === "unsupported" ? "unsupported" : "approver" };
 	return { creation: creationOf(creation.statement, creation.compact) };
 }
 
@@ -207,7 +219,14 @@ async function renamed(
 	options: ReadOptions & { readonly assertion: Uint8Array },
 ): Promise<
 	| { readonly keys: readonly KeyRow[]; readonly applied: boolean }
-	| { readonly error: "sent" | Exclude<ManagementFinishError, "creation" | "basis" | "evidence"> }
+	| {
+			readonly error:
+				| "sent"
+				| Exclude<
+						ManagementFinishError,
+						"creation" | "basis" | "evidence" | "approver" | "unsupported"
+				  >;
+	  }
 > {
 	if (!sent.has(rename) || rename.stage !== "rename") return { error: "sent" };
 	const taken = await completionOf(rename.manage, sealed, options);

@@ -2,14 +2,15 @@ import { passkeyThumbprintInput } from "@mod/passkey-key-wire";
 import { hpke, purposes, typs } from "@mod/sdk-core-wire";
 import { logTyps } from "@mod/transparency-wire";
 import { describe, expect, it, vi } from "vitest";
-import { digest, utf8 } from "../src/bytes.ts";
+import { base64url, digest, utf8 } from "../src/bytes.ts";
+import { challengeOf } from "../src/challenge.ts";
 import { firstKey } from "../src/first-key/first-key.ts";
 import { sealTo } from "../src/hpke.ts";
 import { type KeyChangeChecks, keyChanges } from "../src/key-changes/key-changes.ts";
 import { screenKeys } from "../src/keys.ts";
 import { management } from "../src/management/management.ts";
 import { signUp } from "../src/sign-up/sign-up.ts";
-import { readT, signCompact, signingKey } from "./fixtures.ts";
+import { passkeyAssertion, readT, signCompact, signingKey } from "./fixtures.ts";
 
 const issuer = "https://id.example";
 const now = 1_000_000_000;
@@ -725,7 +726,9 @@ describe("keyChanges.read: a key added", () => {
 		const options = { ring: [w.ring.jwk], keys: w.keys, issuer };
 		const read = await management.read(statement, { ...options, purpose: "passkey-add" });
 		if ("error" in read) throw new Error(read.error);
-		const approvalAssertion = utf8("the approving assertion");
+		// The approving key's own assertion over the statement, which the creation names (V30).
+		const approving = await passkeyAssertion(base64url(await challengeOf(statement, "get")));
+		const approvalAssertion = approving.bytes;
 		const ha = await digest(statement);
 		const creationCompact = await sign({
 			...common,
@@ -737,6 +740,7 @@ describe("keyChanges.read: a key added", () => {
 				evidence: ha,
 				subject: "sub-1",
 				kg: 0,
+				approver_key: approving.jwk,
 				options: {
 					user_id: "dXNlcg",
 					rp_id: "id.example",
@@ -801,6 +805,27 @@ describe("keyChanges.read: a key added", () => {
 			options,
 		);
 		if ("error" in possession) throw new Error(possession.error);
+		// A possession naming another creation than the passkey-add's goes no further: what keeps a key
+		// made for one flow from being proved for another (keyroot's NO_POSS_CHECK breaks both routes).
+		const another = await sign({
+			...common,
+			nonce: "pn",
+			purpose: purposes.possession,
+			possession: {
+				creation_hash: await digest("another creation"),
+				key_jkt: jkt,
+				credential_id: "BAUG",
+				reservation_id: "r-1",
+			},
+		});
+		const keyMade = {
+			id: "BAUG",
+			spki: new Uint8Array(await crypto.subtle.exportKey("spki", pair.publicKey)),
+			alg: -7,
+		} as const;
+		expect(await firstKey.readPossession(another, finished.creation, keyMade, options)).toEqual({
+			error: "creation",
+		});
 		const assertion = utf8("the new key's assertion");
 		const h = await digest(possessionCompact);
 		const change = { op: "add", credential_id: "BAUG", key_jkt: jkt };

@@ -111,7 +111,16 @@ describe("signUp.readCreation", () => {
 			algorithms: [-7],
 		};
 		for (const [over, error] of [
-			[{ basis: "passkey-add", account: "a***", options }, "basis"],
+			// A passkey-add's names its approving key (V30): of the schema's form, not a real key.
+			[
+				{
+					basis: "passkey-add",
+					account: "a***",
+					approver_key: { kty: "EC", crv: "P-256", x: "A".repeat(43), y: "A".repeat(43) },
+					options,
+				},
+				"basis",
+			],
 			[{ evidence: await digest("another T") }, "evidence"],
 			[{ account: "a***" }, "payload"],
 			[{ options }, "payload"],

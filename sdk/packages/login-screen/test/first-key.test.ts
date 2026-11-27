@@ -220,7 +220,12 @@ describe("firstKey.readCreation", () => {
 		const { ct_hash: _, ...withoutCiphertext } = creationPayload.creation;
 		const { account: _account, ...unnamed } = withoutCiphertext;
 		const others = {
-			"passkey-add": { ...withoutCiphertext, basis: "passkey-add" },
+			// A passkey-add's names its approving key (V30): of the schema's form, not a real key.
+			"passkey-add": {
+				...withoutCiphertext,
+				basis: "passkey-add",
+				approver_key: { kty: "EC", crv: "P-256", x: "A".repeat(43), y: "A".repeat(43) },
+			},
 			// F1's: no account, the passkey's name in user_name.
 			"sign-up": {
 				...unnamed,
