@@ -1,0 +1,35 @@
+{
+	"name": "@mod/attack-harness",
+	"private": true,
+	"license": "Apache-2.0",
+	"type": "module",
+	"kind": "verification",
+	"exports": {
+		".": "./src/contract.ts"
+	},
+	"dependencies": {
+		"@mod/front-core-codec": "workspace:*",
+		"@mod/front-core-wire": "workspace:*"
+	},
+	"devDependencies": {
+		"@mod/authority-rules": "workspace:*",
+		"@mod/continuation-wire": "workspace:*",
+		"@mod/core-wire": "workspace:*",
+		"@mod/front-relay": "workspace:*",
+		"@mod/guard-imports": "workspace:*",
+		"@mod/http": "workspace:*",
+		"@mod/kernel": "workspace:*",
+		"@mod/keys": "workspace:*",
+		"@mod/passkey-reset": "workspace:*",
+		"@mod/passkeys": "workspace:*",
+		"@mod/promises": "workspace:*",
+		"@mod/sdk-core-wire": "workspace:*",
+		"@mod/tls-options": "workspace:*",
+		"@mod/transparency": "workspace:*",
+		"@mod/transparency-wire": "workspace:*",
+		"@mod/webauthn": "workspace:*",
+		"@mod/workspace-packages": "workspace:*",
+		"@sdk/login-screen": "link:../../../sdk/packages/login-screen",
+		"vitest": "5.0.5"
+	}
+}

@@ -74,7 +74,7 @@ importers:
         specifier: 5.0.5
         version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(vite@8.3.3(@types/node@26.6.5)(yaml@2.9.1))
 
-  modules/attacks/attack-front:
+  modules/attacks/attack-harness:
     dependencies:
       '@mod/front-core-codec':
         specifier: workspace:*
@@ -83,6 +83,9 @@ importers:
         specifier: workspace:*
         version: link:../../wire/front-core-wire
     devDependencies:
+      '@mod/authority-rules':
+        specifier: workspace:*
+        version: link:../../foundation/authority-rules
       '@mod/continuation-wire':
         specifier: workspace:*
         version: link:../../wire/continuation-wire
@@ -92,6 +95,9 @@ importers:
       '@mod/front-relay':
         specifier: workspace:*
         version: link:../../http-servers/front-relay
+      '@mod/guard-imports':
+        specifier: workspace:*
+        version: link:../../tooling/guard-imports
       '@mod/http':
         specifier: workspace:*
         version: link:../../foundation/http
@@ -101,6 +107,12 @@ importers:
       '@mod/keys':
         specifier: workspace:*
         version: link:../../foundation/keys
+      '@mod/passkey-reset':
+        specifier: workspace:*
+        version: link:../../passkey/passkey-reset
+      '@mod/passkeys':
+        specifier: workspace:*
+        version: link:../../passkey/passkeys
       '@mod/promises':
         specifier: workspace:*
         version: link:../../foundation/promises
@@ -110,6 +122,12 @@ importers:
       '@mod/tls-options':
         specifier: workspace:*
         version: link:../../foundation/tls-options
+      '@mod/transparency':
+        specifier: workspace:*
+        version: link:../../foundation/transparency
+      '@mod/transparency-wire':
+        specifier: workspace:*
+        version: link:../../wire/transparency-wire
       '@mod/webauthn':
         specifier: workspace:*
         version: link:../../passkey/webauthn

@@ -5,7 +5,8 @@
 	"type": "module",
 	"kind": "foundation",
 	"exports": {
-		".": "./src/contract.ts"
+		".": "./src/contract.ts",
+		"./testing": "./src/testing.ts"
 	},
 	"dependencies": {
 		"@mod/continuation-wire": "workspace:*",

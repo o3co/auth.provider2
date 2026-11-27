@@ -21,6 +21,7 @@
   - `client` (internal module `client`): `start` (a client's start's evidence, a digest) → its op id (OpIdOf) and evidence elements (Elems), or why not, for the Core to derive them as the rules check them; `within`, whether its evidence's times hold an acceptance time, as TimeOK reads them; `lifetimeMs`, the longest a client's own token lives from its start: 15 minutes, a constant the Core narrows within..
   - `idToken` (internal module `id-token`): `cHash` (a code's SHA-256 digest) → an ID token's `c_hash`, its left half, for an ID token of an algorithm of SHA-256 (A21).
   - `bundle` (internal module `chain`): `effect` (a bundle's `via`, root and tokens' frames) → its changes, as `effectOf` gives them, for the Core's intent to take as is.
+- `./testing`: `coreRecords` (a digest) → a Core writer's records made from evidence given, unsigned here, laid out as the rules read them: a first key, a key added, a key deleted, an approval, a person's start and a bundle, an op's abandonment, and a client's start naming its registry version, its op and elements derived as `tokenRules.client.start` derives them (`CoreRecords`, `Written`, `Continued`, `Ceremony`, `Approved`), for a harness writing on the log as a Core writer would.
 - Types: `Ask`, `Named`, `Allowance`, `Checks`, `Context`, `RuleTimes`, `ClientAt`, `ClientEvidence`, `StartOf`, `Reading`, `Opening`, `Window`, `Ruling`, `Row`, `FlowRecord`, `FlowEntry`, `FlowState`, `Changes`, `Envelope`, `Finding`, `RecordKind`.
 
 ## Invariants
