@@ -230,7 +230,7 @@ describe("private_key_jwt", () => {
 		};
 		const other = ecPair();
 		expect(await reason("not.a.jwt")).toBe("not a JWT");
-		expect(await reason(await sign(claims({ exp: undefined })))).toBe("not a JWT");
+		expect(await reason(await sign(claims({ exp: undefined })))).toBe("no exp that is a time");
 		expect(await reason(await sign(claims({ jti: 7 })))).toBe("missing or malformed claims");
 		// RS256 is not taken by default: refused by its algorithm before any key is tried.
 		expect(await reason(await sign(claims(), rsa.privateKey, { alg: "RS256", kid: "ec" }))).toBe(
@@ -301,7 +301,11 @@ describe("private_key_jwt", () => {
 			nested: [nested, "not a JWT"],
 			"a list for claims": [listed, "not a JWT"],
 			"not yet valid": [await sign(claims({ nbf: seconds() + 31 })), "not yet valid"],
-			"exp no number": [await sign(claims({ exp: String(seconds() + 60) })), "not a JWT"],
+			"exp no number": [
+				await sign(claims({ exp: String(seconds() + 60) })),
+				"no exp that is a time",
+			],
+			"iat no number": [await sign(claims({ iat: "then" })), "nbf or iat is not a time"],
 		};
 		for (const [name, [assertion, reason]] of Object.entries(cases)) {
 			expect(await outcome(c, presenting(assertion, { client_id: "app" })), name).toBe(

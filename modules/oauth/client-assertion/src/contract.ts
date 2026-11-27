@@ -5,7 +5,10 @@ import type { Jwk } from "./keys/keys.ts";
 export { type ClientKeys, clientKeys, type Jwk } from "./keys/keys.ts";
 export * from "./store.ts";
 
-/** A JWT a client signed, as `verifySignedBy` reads it: its claims, or why not. */
+/**
+ * A JWT a client signed, as `verifySignedBy` reads it: its claims, or why not, in words a caller may
+ * tell the JWT's sender (they say nothing beyond the JWT and the policy asked).
+ */
 export type SignedBy =
 	| { readonly kind: "signed"; readonly claims: Readonly<Record<string, unknown>> }
 	| { readonly kind: "refused"; readonly reason: string };

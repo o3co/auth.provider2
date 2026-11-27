@@ -108,7 +108,9 @@ async function signedPayload(jwt: string, key: Candidate) {
 function claimsOf(payload: Uint8Array): Claims | undefined {
 	try {
 		const claims: unknown = JSON.parse(utf8.decode(payload));
-		return typeof claims === "object" && claims !== null ? (claims as Claims) : undefined;
+		return typeof claims === "object" && claims !== null && !Array.isArray(claims)
+			? (claims as Claims)
+			: undefined;
 	} catch {
 		return undefined;
 	}
@@ -117,9 +119,9 @@ function claimsOf(payload: Uint8Array): Claims | undefined {
 /** What is wrong with the claims under the policy at `now`, if anything. */
 function claimsFault(claims: Claims, policy: Policy, now: number): Reason | undefined {
 	const { exp, nbf, iat } = claims;
-	if (!isTime(exp) || (nbf !== undefined && !isTime(nbf)) || (iat !== undefined && !isTime(iat))) {
-		return "malformed";
-	}
+	if (!isTime(exp)) return "no-exp";
+	if ((nbf !== undefined && !isTime(nbf)) || (iat !== undefined && !isTime(iat)))
+		return "time-claim";
 	const [expMs, nbfMs, iatMs] = [
 		exp * 1000,
 		isTime(nbf) ? nbf * 1000 : undefined,
@@ -158,7 +160,7 @@ function verifierWith(choose: Choose, policy: Policy, clock: Clock): Verifier {
 			// A JWT is encoded, and no critical extension is taken.
 			if (header.b64 !== undefined || header.crit !== undefined) return invalid("malformed");
 			if (policy.typ !== undefined && typOf(header) !== typOf({ typ: policy.typ }))
-				return invalid("malformed");
+				return invalid("typ");
 			const kid = header.kid;
 			if (kid !== undefined && typeof kid !== "string") return invalid("malformed");
 			const alg = header.alg;

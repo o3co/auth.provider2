@@ -115,12 +115,17 @@ describe("a JWT a client signed", () => {
 		const typed = await signed(ec.privateKey, "jwt");
 		expect(await checks.verifySignedBy(app, typed, "oauth-authz-req+jwt")).toEqual({
 			kind: "refused",
-			reason: "not a JWT",
+			reason: "not of the typ asked",
 		});
 		const foreign = await signed(other.privateKey, "jwt");
 		expect(await checks.verifySignedBy(app, foreign, "jwt")).toEqual({
 			kind: "refused",
 			reason: "signature",
+		});
+		const lasting = await signed(ec.privateKey, "jwt", { exp: undefined });
+		expect(await checks.verifySignedBy(app, lasting, "jwt")).toEqual({
+			kind: "refused",
+			reason: "no exp that is a time",
 		});
 		const old = await signed(ec.privateKey, "jwt", { exp: Math.floor(now / 1000) - 3600 });
 		expect(await checks.verifySignedBy(app, old, "jwt")).toEqual({

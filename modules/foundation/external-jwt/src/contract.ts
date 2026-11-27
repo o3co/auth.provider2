@@ -48,8 +48,17 @@ export interface Policy {
 	};
 }
 
+/**
+ * Why a token is refused, one check each: `malformed` (not a JWS in its one form, an encoding or
+ * critical extension, a `kid` that is no string, claims that are no JSON object), `typ` (a `typ`
+ * other than the caller's), `no-exp` (no `exp` that is a time), `time-claim` (an `nbf` or `iat` that
+ * is no time), and the rest by their names.
+ */
 export type Reason =
 	| "malformed"
+	| "typ"
+	| "no-exp"
+	| "time-claim"
 	| "algorithm"
 	| "no-key"
 	| "ambiguous-key"

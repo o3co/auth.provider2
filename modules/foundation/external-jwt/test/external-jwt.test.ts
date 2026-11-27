@@ -134,12 +134,12 @@ describe("headers and keys", () => {
 	it("takes only the type the caller names, compared as RFC 7515 says", async () => {
 		const signer = await testSigner("ES256");
 		const verifier = verifierOf({ inline: [signer.jwk] }, { ...policy, typ: "JWT" });
-		expect(await verifier.verify(await signer.sign(fresh()))).toEqual(invalid("malformed"));
+		expect(await verifier.verify(await signer.sign(fresh()))).toEqual(invalid("typ"));
 		expect(await verifier.verify(await signer.sign(fresh(), { typ: "at+jwt" }))).toEqual(
-			invalid("malformed"),
+			invalid("typ"),
 		);
 		expect(await verifier.verify(await signer.sign(fresh(), { typ: ["JWT"] }))).toEqual(
-			invalid("malformed"),
+			invalid("typ"),
 		);
 		for (const typ of ["application/jwt", "jwt", "JWT"]) {
 			expect((await verifier.verify(await signer.sign(fresh(), { typ }))).kind, typ).toBe("valid");
@@ -331,12 +331,12 @@ describe("claims", () => {
 		expect(Object.isFrozen((answered.claims.extra as { deep: unknown }).deep)).toBe(true);
 	});
 
-	it("needs a JSON object with an expiry", async () => {
+	it("needs a JSON object with an expiry, each time a time, and says which it lacks", async () => {
 		const { exp: _, ...lasting } = fresh();
-		expect(await signed(lasting)).toEqual(signedInvalid("malformed"));
-		expect(await signed(fresh({ exp: "soon" }))).toEqual(signedInvalid("malformed"));
-		expect(await signed(fresh({ nbf: "now" }))).toEqual(signedInvalid("malformed"));
-		expect(await signed(fresh({ iat: "then" }))).toEqual(signedInvalid("malformed"));
+		expect(await signed(lasting)).toEqual(signedInvalid("no-exp"));
+		expect(await signed(fresh({ exp: "soon" }))).toEqual(signedInvalid("no-exp"));
+		expect(await signed(fresh({ nbf: "now" }))).toEqual(signedInvalid("time-claim"));
+		expect(await signed(fresh({ iat: "then" }))).toEqual(signedInvalid("time-claim"));
 		for (const payload of [null, "x", [fresh()]]) {
 			expect(await signed(payload as never), JSON.stringify(payload)).toEqual(
 				signedInvalid("malformed"),
@@ -347,10 +347,14 @@ describe("claims", () => {
 	it("needs finite times", async () => {
 		const signer = await testSigner("ES256");
 		const verifier = verifierOf({ inline: [signer.jwk] }, policy);
-		for (const claim of ["exp", "nbf", "iat"]) {
+		for (const [claim, reason] of [
+			["exp", "no-exp"],
+			["nbf", "time-claim"],
+			["iat", "time-claim"],
+		] as const) {
 			const text = JSON.stringify(fresh()).replace("}", `,"${claim}":1e400}`);
 			expect(await verifier.verify(await signer.signBytes(Buffer.from(text))), claim).toEqual(
-				signedInvalid("malformed"),
+				signedInvalid(reason),
 			);
 		}
 	});
