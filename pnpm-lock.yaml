@@ -3493,9 +3493,15 @@ importers:
       '@mod/dpop':
         specifier: workspace:*
         version: link:../../oauth/dpop
+      '@mod/external-jwt':
+        specifier: workspace:*
+        version: link:../../foundation/external-jwt
       '@mod/first-key':
         specifier: workspace:*
         version: link:../../passkey/first-key
+      '@mod/front-core-wire':
+        specifier: workspace:*
+        version: link:../../wire/front-core-wire
       '@mod/front-relay':
         specifier: workspace:*
         version: link:../../http-servers/front-relay

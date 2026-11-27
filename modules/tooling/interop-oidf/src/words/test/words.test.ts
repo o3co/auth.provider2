@@ -1,6 +1,15 @@
+import { overHttp, type RequestKind, requests, wireErrors } from "@mod/front-core-wire";
 import { describe, expect, it } from "vitest";
 import { ledger } from "../../deviations/deviations.ts";
-import { readingOf, type Seen, type Word, words, wordsProblems } from "../words.ts";
+import {
+	manyCauses,
+	readingOf,
+	refuserOf,
+	type Seen,
+	type Word,
+	words,
+	wordsProblems,
+} from "../words.ts";
 
 const seen = (over: Partial<Seen> = {}): Seen => ({
 	refuser: "core",
@@ -169,5 +178,17 @@ describe("the provider's words for the ledger's rows", () => {
 			"jar-typ-required: its words are empty",
 			"jar-typ-required: its words are empty",
 		]);
+	});
+
+	it("tells the Front's words from the Core's by their shape alone: every Core word of the table fails it, every Front word meets it", () => {
+		for (const word of [...words, ...manyCauses])
+			expect(refuserOf(word.description), word.description).toBe("core");
+		const fields = new Set(["body"]);
+		for (const kind of Object.keys(requests) as RequestKind[])
+			for (const field of requests[kind].fields)
+				if (field.name !== overHttp.declaredSource) fields.add(field.name);
+		for (const field of fields)
+			for (const code of Object.keys(wireErrors))
+				expect(refuserOf(`${field}: ${code}`), `${field}: ${code}`).toBe("front");
 	});
 });

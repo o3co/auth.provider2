@@ -8,7 +8,7 @@ import { randomBytes } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { type Answered, ask, atIssuer } from "../../scene/test/ask.ts";
 import { type Scene, startScene } from "../../scene/test/scene.ts";
-import { readingOf, type Word, words } from "../../words/words.ts";
+import { readingOf, refuserOf, type Word, words } from "../../words/words.ts";
 import { type JarChange, type Provider, relyingParty, screenKeys, send } from "./rp.ts";
 
 const screen = "https://login.example.invalid";
@@ -204,4 +204,44 @@ describe("the word table, held to the provider's answers", () => {
 			);
 		});
 	}
+});
+
+describe("who answered a refusal, by its words, held to the apps' output", () => {
+	/** The Core's output so far, as the scene kept it. */
+	const coreOut = () =>
+		started(pushedOnly)
+			.outputs()
+			.find(({ name }) => name === "nextgen-core")?.out ?? "";
+	const typLine = '"reason":"not of the typ asked"';
+	/** The Core's output past `from`, once a line holding `marker` has come (its pipe is behind the answers). */
+	const until = async (from: number, marker: string) => {
+		for (const end = Date.now() + 10_000; Date.now() < end; ) {
+			const past = coreOut().slice(from);
+			if (past.includes(marker)) return past;
+			await new Promise((r) => setTimeout(r, 50));
+		}
+		throw new Error(`the Core never logged ${marker}`);
+	};
+
+	it("reads a Front's refusal as the Front's: the Core logs nothing of it before what it logs next", async () => {
+		const from = coreOut().length;
+		const { answer } = await send(at(pushedOnly), "/oauth/par", () => {
+			const built = rpPushed.par(rpPushed.authorization());
+			return { ...built, form: { ...built.form, request: "not-a-jws" } };
+		});
+		expect([answer.status, answer.json.error_description]).toEqual([400, "request: fieldSyntax"]);
+		expect(refuserOf(String(answer.json.error_description))).toBe("front");
+		// A request the Core logs, sent after: anything of the first would come before its line.
+		await driven["jar-typ-required/par"]?.();
+		const past = await until(from, typLine);
+		expect(past.slice(0, past.indexOf(typLine)).split("\n").slice(0, -1)).toEqual([]);
+	});
+
+	it("reads a Core's refusal as the Core's: the Core logs it", async () => {
+		const from = coreOut().length;
+		const { answer } = (await driven["jar-typ-required/par"]?.()) ?? { answer: undefined };
+		expect(answer?.json.error_description).toBe("not of the typ asked");
+		expect(refuserOf(String(answer?.json.error_description))).toBe("core");
+		expect(await until(from, typLine)).toContain(typLine);
+	});
 });

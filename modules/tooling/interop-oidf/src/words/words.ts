@@ -3,7 +3,7 @@ export const refusers = ["front", "core", "harness"] as const;
 export type Refuser = (typeof refusers)[number];
 
 /** Where a refusal is answered. */
-export const places = ["par", "start", "token", "resource"] as const;
+export const places = ["par", "start", "finish", "token", "resource"] as const;
 export type Place = (typeof places)[number];
 
 /** A refusal the provider answers for one of the ledger's rows, as it is written on the wire. */
@@ -211,6 +211,12 @@ const matches = (word: Word, seen: Seen) =>
 
 /** Words the provider answers for many causes, none a ledger row: a refusal in them is unconfirmed, of no row. */
 export type ManyCauses = Pick<Word, "refuser" | "place" | "error" | "description">;
+
+const frontShape = /^[a-z][A-Za-z]*: [a-z][A-Za-z]*$/;
+
+/** Who refused, by the words alone (one origin): the Front's are front-relay's `<field>: <code>`, a shape no Core word has. */
+export const refuserOf = (description: string): "front" | "core" =>
+	frontShape.test(description) ? "front" : "core";
 
 /** Words answering many causes no row names: the client's authentication, one for every fault of an assertion. */
 export const manyCauses: readonly ManyCauses[] = (["par", "token"] as const).map((place) => ({
