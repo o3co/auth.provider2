@@ -2,9 +2,9 @@
  * The login screen's pages as the suite's browser meets them: an https front at the screen's origin
  * (the deployment's edge for the screen's distribution) before a server running the screen role. Its
  * authorization page starts the login under PAR and offers two buttons, approve and deny; a start
- * refused, and a decision that does not go through, are sent to a page of their own (`/refused`), so
- * the suite's browser tells them apart by URL. The answer goes to the RP's redirect URI by
- * `form_post` (nextgen's), or by a query (the adaptation's).
+ * refused, and a decision that does not go through, are sent to a page of their own (`/refused`), but
+ * the Core's refusal of the finish, which goes to the RP as a denial does (kept `carried`). The answer
+ * goes to the RP's redirect URI by `form_post` (nextgen's), or by a query (the adaptation's).
  */
 import { randomUUID } from "node:crypto";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
@@ -28,6 +28,8 @@ export interface Refusal {
 	readonly description?: string;
 	/** The SDK's, the browser's or the page's own word, where one of them stopped. */
 	readonly stop?: string;
+	/** Set where the provider's refusal of the finish was carried to the RP (its word, T's state and issuer). */
+	readonly carried?: true;
 }
 
 /** What the page saw of each start, by the URL's `request_uri` and `state`: taken, or refused (at the start or after T). */
@@ -181,8 +183,22 @@ export async function startPages(options: {
 					choice === "deny"
 						? options.screen().deny(held.started)
 						: await options.screen().approve(options.post(), held.started);
-				if (stopped(answered))
-					return refused(res, held.requestUri, held.state, refusalOf(answered));
+				if (stopped(answered)) {
+					// The Core's refusal of the finish goes to the RP, as a denial does; any other stop ends here.
+					const toRp =
+						choice === "approve" ? options.screen().carry(held.started, answered) : answered;
+					if (stopped(toRp)) return refused(res, held.requestUri, held.state, refusalOf(answered));
+					const refusal = { ...refusalOf(answered), carried: true } as const;
+					seen.push({
+						kind: "refused",
+						requestUri: held.requestUri,
+						state: held.state,
+						...refusal,
+					});
+					const { redirectUri, ...fields } = toRp;
+					carried(res, options.carrying(), redirectUri, fields);
+					return;
+				}
 				const { redirectUri, ...fields } = answered;
 				carried(res, options.carrying(), redirectUri, fields);
 				return;

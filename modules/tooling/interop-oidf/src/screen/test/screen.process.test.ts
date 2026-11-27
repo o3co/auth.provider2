@@ -30,7 +30,10 @@ const provider = (): Provider => {
 };
 const rp = relyingParty("rp-screen", redirectUri, provider);
 const at = (path: string, init: Parameters<typeof ask>[2]) => ask(atIssuer(issuer()), path, init);
+/** The Core's answer to the next finish, where a test makes it refuse (the JSON a refused start answers); the scene's otherwise. */
+let finishAnswer: { readonly status: number; readonly body: unknown } | undefined;
 const post: Post = async (path, body) => {
+	if (path === "/login/finish" && finishAnswer !== undefined) return finishAnswer;
 	const answer = await ask(atIssuer(issuer()), path, { method: "POST", json: body });
 	return { status: answer.status, body: answer.json };
 };
@@ -193,6 +196,42 @@ describe("the login screen, its pages before the scene", () => {
 			state: session.state,
 			iss: issuer().issuer,
 		});
+	});
+
+	it("carries the Core's refusal of the finish to the RP, as a denial: its word, T's state and issuer (OIDC Core §3.1.2.6)", async () => {
+		carrying = "form_post";
+		const { session, requestUri } = await pushed();
+		finishAnswer = {
+			status: 400,
+			body: { error: "login_required", error_description: "another subject" },
+		};
+		try {
+			const callback = callbackOf(await press(await shown(requestUri), "approve"));
+			expect(callback.action).toBe(redirectUri);
+			expect(callback.hidden).toEqual({
+				error: "login_required",
+				state: session.state,
+				iss: issuer().issuer,
+			});
+			expect(lastSeen()).toMatchObject({
+				kind: "refused",
+				refuser: "provider",
+				at: "/login/finish",
+				status: 400,
+				error: "login_required",
+				description: "another subject",
+				carried: true,
+			});
+			// The moment's word is no answer of the authorization's: the screen's own page, nothing carried.
+			const { requestUri: again } = await pushed();
+			finishAnswer = { status: 503, body: { error: "temporarily_unavailable" } };
+			const ended = await press(await shown(again), "approve");
+			expect(ended.headers.location).toBe("/refused");
+			expect(lastSeen()).toMatchObject({ refuser: "provider", error: "temporarily_unavailable" });
+			expect(lastSeen()).not.toHaveProperty("carried");
+		} finally {
+			finishAnswer = undefined;
+		}
 	});
 
 	it("carries the answer in a query where the run says so, the redirect URI's own query kept", async () => {

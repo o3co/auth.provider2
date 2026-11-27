@@ -82,6 +82,14 @@ export interface Denied {
 	readonly redirectUri: string;
 }
 
+/** What the page sends the RP when the Core refused the finish: the Core's word, and T's state, issuer and redirect URI. */
+export interface Refused {
+	readonly error: string;
+	readonly state: string;
+	readonly iss: string;
+	readonly redirectUri: string;
+}
+
 /** An authorization the screen started: T as the SDK read it, the keys T names, and whether a sign-up is offered. */
 export interface Started {
 	readonly t: ReadT;
@@ -229,7 +237,21 @@ export function loginScreen(pins: () => Pins, browser: Browser, rpName = "The RP
 		return { ...denied.fields, redirectUri: denied.redirectUri };
 	};
 
-	return { startPushed, signUp: signUpWith, approve, deny };
+	/**
+	 * The Core's refusal of the finish (`approve` stopped at it), carried to the RP as a denial is (OIDC
+	 * Core §3.1.2.6): the word read from the Core's answer, every other value T's; a stop where none is carried.
+	 */
+	const carry = (started: Started, stop: Stopped): Refused | Stopped => {
+		const body = stop.stopped === "provider" && stop.at === "/login/finish" ? stop.body : undefined;
+		const word = (body as { readonly error?: unknown } | undefined)?.error;
+		if (typeof word !== "string")
+			return sdkRefused("authorization.refusal", "no refusal of the Core");
+		const carried = authorization.refusal(started.t, word);
+		if ("error" in carried) return sdkRefused("authorization.refusal", carried.error);
+		return { ...carried.fields, redirectUri: carried.redirectUri };
+	};
+
+	return { startPushed, signUp: signUpWith, approve, deny, carry };
 }
 
 export type LoginScreen = ReturnType<typeof loginScreen>;
