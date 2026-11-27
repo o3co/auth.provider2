@@ -7,7 +7,7 @@ import {
 	jsonAnswer,
 	type RequestEndObserver,
 } from "@mod/http";
-import { fieldsOf, readOnly, valuesOf } from "@mod/http/server";
+import { fieldsOf, readOnly, valuesOf, writtenJson } from "@mod/http/server";
 import { type Clock, deepFreeze, isUnavailable, type Log } from "@mod/kernel";
 import { type Source, sourceOf, type TrustedProxies } from "@mod/request-source";
 
@@ -50,11 +50,18 @@ function detailOf(value: unknown): string {
 }
 
 /**
- * The route's answer as a reply: the operation's success status with JSON is `ok`; a JSON `error` the
- * wire names is that refusal, with its `Retry-After`; `503` is `temporarily_unavailable`; anything else
- * is `server_error`, warned of by the route and status alone.
+ * The route's answer as a reply, and the status its end is told: the operation's success status with
+ * JSON is `ok`, written as http writes a JSON answer, and one holding a null is `server_error` told as
+ * 500, as http's servers answer it; a JSON `error` the wire names is that refusal, with its
+ * `Retry-After`; `503` is `temporarily_unavailable`; anything else is `server_error`, warned of by the
+ * route and status alone.
  */
-function replyOf(kind: WireRequest["kind"], response: HttpResponse, log: Log): Reply {
+function replyOf(
+	kind: WireRequest["kind"],
+	response: HttpResponse,
+	log: Log,
+): { readonly reply: Reply; readonly status: number } {
+	const told = (reply: Reply, status = response.status) => ({ reply, status });
 	const { path, successStatus } = overHttp.operations[kind];
 	const sent = response.headers?.["dpop-nonce"] ?? "";
 	const dpopNonce = carriesNonce(sent) ? sent : "";
@@ -63,21 +70,41 @@ function replyOf(kind: WireRequest["kind"], response: HttpResponse, log: Log): R
 	const json =
 		typeof response.body === "object" && "json" in response.body ? response.body.json : undefined;
 	if (response.status === (successStatus ?? 200) && json !== undefined) {
-		const body = encoder.encode(JSON.stringify(json));
-		if (body.length <= okBodyMax) return { outcome: "ok", message: { body, dpopNonce } } as Reply;
+		let written: ReturnType<typeof writtenJson>;
+		try {
+			written = writtenJson(json);
+		} catch (error) {
+			// A value JSON cannot write: answered as http's servers answer an unwritable answer.
+			log.error("http.unwritable", { kind: error instanceof Error ? error.name : typeof error });
+			return told(refused("server_error"), 500);
+		}
+		if ("nulls" in written) {
+			log.error("http.failed", {
+				kind: "null_member",
+				route: path,
+				members: written.nulls.join(" "),
+			});
+			return told(refused("server_error"), 500);
+		}
+		const body = encoder.encode(written.text ?? "");
+		if (body.length <= okBodyMax)
+			return told({ outcome: "ok", message: { body, dpopNonce } } as Reply);
 	}
 	const error = (json as { error?: unknown } | undefined)?.error;
 	if (response.status >= 400 && refusals.includes(error as Word)) {
-		return refused(
-			error as Word,
-			detailOf((json as { error_description?: unknown }).error_description),
-			dpopNonce,
-			retryAfter,
+		return told(
+			refused(
+				error as Word,
+				detailOf((json as { error_description?: unknown }).error_description),
+				dpopNonce,
+				retryAfter,
+			),
 		);
 	}
-	if (response.status === 503) return refused("temporarily_unavailable", "", dpopNonce, retryAfter);
+	if (response.status === 503)
+		return told(refused("temporarily_unavailable", "", dpopNonce, retryAfter));
 	log.warn("core-wire.unrelayable", { route: path, status: String(response.status) });
-	return refused("server_error");
+	return told(refused("server_error"));
 }
 
 /** The request the operation's route reads, rebuilt from the frame: a form or a JSON object of strings, from the source given. */
@@ -170,8 +197,7 @@ export function dispatcher(
 			reply = refused("server_error");
 		} else {
 			const response = await answered(route, requestOf(request, source), log);
-			status = response.status;
-			reply = replyOf(request.kind, response, log);
+			({ reply, status } = replyOf(request.kind, response, log));
 		}
 		const end = Object.freeze({
 			method: "POST",

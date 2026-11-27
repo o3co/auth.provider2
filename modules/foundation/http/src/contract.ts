@@ -17,6 +17,7 @@ export {
 	use,
 } from "./policies/policies.ts";
 export type { Values } from "./values/values.ts";
+export type { WrittenJson } from "./written/written.ts";
 
 export type Method = "GET" | "POST" | "PUT" | "DELETE";
 
@@ -211,7 +212,7 @@ export interface RunningServer {
 	drain(signal: AbortSignal): Promise<void>;
 }
 
-/** What serves a deployment's routes: http calls `serve` at start and the drain at stop; reading requests, guarding the routes by `guardedRoutes` (refusing boot on what it finds) and applying the guards is the server's own. */
+/** What serves a deployment's routes: http calls `serve` at start and the drain at stop; reading requests, guarding the routes by `guardedRoutes` (refusing boot on what it finds), applying the guards, and writing a JSON answer by `writtenJson`, refusing one holding a null, is the server's own. */
 export interface HttpServer {
 	serve(input: ServerInput): Promise<RunningServer>;
 }

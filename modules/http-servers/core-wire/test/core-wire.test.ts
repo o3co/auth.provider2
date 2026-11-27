@@ -176,6 +176,86 @@ describe("core-wire", () => {
 		expect(app.lines().filter((l) => l.event === "core-wire.unrelayable")).toHaveLength(2);
 	});
 
+	it("replies server_error for an answer whose written JSON holds a null, as http's servers refuse one, naming the paths and never the values, the end told 500 [oidc-core-13.3-a]", async () => {
+		const answers: HttpResponse[] = [
+			jsonAnswer(200, { access_token: "secret-value", scope: null, list: [1, null] }),
+			// What JSON writes as null is one: a number that is none, undefined in a list.
+			jsonAnswer(200, { expires_in: Math.ceil(Number.NaN), list: [undefined] }),
+			jsonAnswer(200, { access_token: "t" }),
+			// A refusal is rebuilt from its strings, so a null beside its error is not relayed.
+			jsonAnswer(400, { error: "invalid_grant", x: null }),
+			// A value JSON writes as nothing is relayed as it always was: an empty body.
+			jsonAnswer(200, { toJSON: () => undefined }),
+		];
+		const app = await started([token(() => answers.shift() ?? { status: 500 })]);
+		const front = await client(app.port);
+		const replies = [];
+		for (const id of [1, 2, 3, 4, 5]) replies.push(await front.send("token", id, tokenMessage()));
+		const refusal = { error: word("server_error"), detail: "", dpopNonce: "", retryAfter: "" };
+		expect(replies.map((r) => [r.outcome, r.message])).toEqual([
+			["refused", refusal],
+			["refused", refusal],
+			["ok", { body: new TextEncoder().encode('{"access_token":"t"}'), dpopNonce: "" }],
+			["refused", { ...refusal, error: word("invalid_grant") }],
+			["ok", { body: new Uint8Array(), dpopNonce: "" }],
+		]);
+		expect(app.lines().filter((l) => l.level === "error")).toEqual([
+			{
+				level: "error",
+				event: "http.failed",
+				fields: { kind: "null_member", route: "/oauth/token", members: "scope list[1]" },
+			},
+			{
+				level: "error",
+				event: "http.failed",
+				fields: { kind: "null_member", route: "/oauth/token", members: "expires_in list[0]" },
+			},
+		]);
+		expect(JSON.stringify(app.lines())).not.toContain("secret-value");
+		expect(app.lines().some((l) => l.event === "core-wire.unrelayable")).toBe(false);
+		await new Promise((resolve) => setTimeout(resolve, 10));
+		expect(ended.map((e) => e.status)).toEqual([500, 500, 200, 400, 200]);
+	});
+
+	it("replies server_error for an answer JSON cannot write, as http's servers answer one, its end told 500", async () => {
+		const app = await started([token(() => jsonAnswer(200, { n: 1n }))]);
+		const front = await client(app.port);
+		expect((await front.send("token", 1, tokenMessage())).message).toEqual({
+			error: word("server_error"),
+			detail: "",
+			dpopNonce: "",
+			retryAfter: "",
+		});
+		expect(app.lines().filter((l) => l.level === "error")).toEqual([
+			{ level: "error", event: "http.unwritable", fields: { kind: "TypeError" } },
+		]);
+		await new Promise((resolve) => setTimeout(resolve, 10));
+		expect(ended.map((e) => e.status)).toEqual([500]);
+	});
+
+	it("holds an answer nested deep, within the reply's size, to the same rule: relayed clean, refused with a null at its bottom", async () => {
+		const deep = (leaf: unknown) => {
+			let value: unknown = leaf;
+			for (let i = 0; i < 4000; i++) value = { a: value };
+			return value;
+		};
+		const answers = [jsonAnswer(200, deep("x")), jsonAnswer(200, deep(null))];
+		const app = await started([token(() => answers.shift() ?? { status: 500 })]);
+		const front = await client(app.port);
+		expect((await front.send("token", 1, tokenMessage())).outcome).toBe("ok");
+		expect((await front.send("token", 2, tokenMessage())).message).toMatchObject({
+			error: word("server_error"),
+		});
+		expect(app.lines().filter((l) => l.level === "error")).toEqual([
+			expect.objectContaining({
+				event: "http.failed",
+				fields: expect.objectContaining({ kind: "null_member" }),
+			}),
+		]);
+		await new Promise((resolve) => setTimeout(resolve, 10));
+		expect(ended.map((e) => e.status)).toEqual([200, 500]);
+	});
+
 	it("applies the route's policies first, and refuses boot where a route uses a policy no module applies", async () => {
 		const gate = policy("test.gate");
 		const rule = defineModule({ name: "gate", replicaSafe: true, takes: [] }, (m) => [

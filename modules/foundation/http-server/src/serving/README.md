@@ -28,7 +28,7 @@ Internal module of `http-server`: the server that answers each request with the 
 - Any other failure is answered `500` and logged as a warning, `http.unexpected_failure`, by the route reached (when known) and its kind only, never its message.
 - A request target not read as an origin-form path, or whose query is not well-formed UTF-8, gets `400` before any route.
 - An answer whose headers cannot be written gets `500`, with none of its own headers.
-- A JSON answer (`{ json }`) whose written JSON holds a null inside it at any depth, as an object's member or an array's element, gets `500`, with none of its own headers; `http.failed` names their paths (`null_member`), never their values.
+- A JSON answer (`{ json }`) whose written JSON holds a null inside it, as `http`'s `writtenJson` finds one, gets `500`, with none of its own headers; `http.failed` names their paths (`null_member`), never their values.
 - An answer's length is stated in bytes, so a HEAD answer carries the length its GET would.
 - A request's headers must arrive within `headers-timeout` and the whole request within `request-timeout`, else it is answered `408` and its connection closed; a connection past `max-connections` is closed as it arrives.
 - Stop refuses new connections and closes idle ones.
@@ -36,4 +36,4 @@ Internal module of `http-server`: the server that answers each request with the 
 - Requests in flight finish (`Connection: close`) until stop's deadline cuts them.
 
 ## Depends on
-- `http` (its contract, and `readOnly` on `./server`), `kernel`, `request-source`, `client-certificate`; `bodies`, `cors`, `security-headers`, `ending`.
+- `http` (its contract, and `readOnly` and `writtenJson` on `./server`), `kernel`, `request-source`, `client-certificate`; `bodies`, `cors`, `security-headers`, `ending`.

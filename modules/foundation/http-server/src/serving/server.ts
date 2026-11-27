@@ -8,7 +8,7 @@ import {
 } from "node:http";
 import type { Socket } from "node:net";
 import { ignoredCertificates } from "@mod/client-certificate";
-import { readOnly } from "@mod/http/server";
+import { readOnly, writtenJson } from "@mod/http/server";
 import { type Clock, isUnavailable, type Log, type Unavailable } from "@mod/kernel";
 import { ignoredForwarding, sourceOf, type TrustedProxies } from "@mod/request-source";
 import { bodyOf } from "../bodies/body.ts";
@@ -84,24 +84,6 @@ class NullMembers extends Error {
 	}
 }
 
-/** The paths of the nulls inside a value at any depth: an object's member or an array's element. */
-function nullMembers(value: unknown, at = "", found: string[] = []): string[] {
-	if (Array.isArray(value)) {
-		for (const [i, item] of value.entries()) {
-			// An element that is null is refused as an object's member is (keys' null claims alike).
-			if (item === null) found.push(`${at}[${i}]`);
-			else nullMembers(item, `${at}[${i}]`, found);
-		}
-	} else if (typeof value === "object" && value !== null) {
-		for (const [key, member] of Object.entries(value)) {
-			const path = at ? `${at}.${key}` : key;
-			if (member === null) found.push(path);
-			else nullMembers(member, path, found);
-		}
-	}
-	return found;
-}
-
 /** Makes an answer readable across origins as the request's settled rule says; as it is where none is. */
 type Readable = (response: HttpResponse) => HttpResponse;
 
@@ -135,13 +117,11 @@ function serialized(response: HttpResponse) {
 	if (response.cookies?.length) headers["set-cookie"] = [...response.cookies];
 	const body = response.body;
 	const isJson = typeof body === "object" && "json" in body;
-	const payload = isJson ? JSON.stringify(body.json) : body;
-	if (isJson) {
-		// Read back from what is written: NaN, Infinity, undefined in a list and a toJSON's null are null there too.
-		const nulls = typeof payload === "string" ? nullMembers(JSON.parse(payload)) : [];
-		if (nulls.length > 0) throw new NullMembers(nulls);
-		headers["content-type"] ??= "application/json";
-	}
+	// A JSON answer as http writes it: one holding a null inside it is refused (http's rule).
+	const written = isJson ? writtenJson(body.json) : undefined;
+	if (written && "nulls" in written) throw new NullMembers(written.nulls);
+	const payload = written ? written.text : (body as string | Uint8Array | undefined);
+	if (isJson) headers["content-type"] ??= "application/json";
 	// Stated, not chunked, so a HEAD answer carries the length its GET would.
 	if (payload !== undefined) headers["content-length"] = String(Buffer.byteLength(payload));
 	return { headers, payload };
