@@ -49,7 +49,7 @@ describe("the compromised Front on PAR and the tokens", () => {
 		const [one, two] = [first, second].map((p) => (p.body as { request_uri: string }).request_uri);
 		expect([typeof one, typeof two]).toEqual(["string", "string"]);
 		expect(one).not.toBe(two);
-		const s = await victim.screen.start(front, rp().clientId, session.jar, one);
+		const s = await victim.screen.startPushed(front, rp().clientId, one ?? "");
 		if (stopped(s)) throw new Error(JSON.stringify(s));
 		// The victim's ② sent again by the second request_uri, under the same screen keys: the same T.
 		const victims = front.seen().findLast((r) => r.kind === "loginStart");
@@ -59,6 +59,8 @@ describe("the compromised Front on PAR and the tokens", () => {
 			requestUri: two ?? "",
 		});
 		expect(resent.outcome === "ok" && statementOf(resent)).toBe(s.t.compact);
+		// The convergence: the T kept for the reservation names the request_uri of the start it was issued for.
+		expect(s.t.statement.approval.request_uri).toBe(one);
 		const own = await screenKeys();
 		const theirs = await front.send("loginStart", {
 			source: w.fresh(),

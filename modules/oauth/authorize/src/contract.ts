@@ -9,7 +9,8 @@ export type StartFields = Readonly<Record<string, string>>;
 
 /**
  * Where a login's request comes from: the JAR's compact bytes it names, a refusal, or none where its
- * fields are not this source's. Exactly one source answers each start.
+ * fields are not this source's. Exactly one source answers each start; one that answers a start
+ * naming a `requestUri` has resolved that `request_uri`, which T then names.
  */
 export interface RequestSource {
 	readonly name: string;

@@ -18,7 +18,7 @@ export interface SignUpContinuation {
 
 /**
  * F1's continuation of T (sign-up, the credential first; §3.13): asked where ②'s answer let a
- * passkey be made first, for the T `authorization.read` gave, signed with the keys T names over
+ * passkey be made first, for the T `authorization.read` or `readPushed` gave, signed with the keys T names over
  * continuation-wire's `of("sign-up", T's hash, 1, the body's hash)`. One per T (sequence 1 alone):
  * a resend, signed again or not, is answered with what the Core kept (the creation, or a final
  * refusal, after which the screen starts the authorization again; `pending` while the first runs).

@@ -1,6 +1,6 @@
 # front-steps
 
-Internal module of `attack-harness`: the compromised Front's steps, F-1 to F-21 of the design note's table, each its own test.
+Internal module of `attack-harness`: the compromised Front's steps, F-1 to F-21 of the design note's table, each its own test; and a PAR login through the real SDK, with the Front's swaps of the request inside ② (the screen refuses) and at the URL (the relying party's R3 refuses).
 
 ## Responsibilities
 - Holds each step: what the Front does (one rewrite or frame of its own, within what crossed it), and where it must be refused, by the Core, the SDK or the relying party's own checks, pinned to its word and cause, with a control where a refusal could have another.

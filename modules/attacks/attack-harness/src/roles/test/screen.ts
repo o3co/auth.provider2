@@ -107,34 +107,54 @@ export function loginScreen(
 	const rpId = page.rpId ?? new URL(browser.origin).hostname;
 	const sdk = { ring: pins.ring, issuer: pins.issuer };
 
-	/**
-	 * ② The login's start, for the JAR the RP gave, sent as it is or by the request_uri PAR gave for it:
-	 * T read against the JAR the screen holds.
-	 */
-	const start = async (
+	/** ② sent, and T read by `readT`: a refusal, or T, the screen's keys and the creation it asks. */
+	const started = async (
 		front: Front,
-		clientId: string,
-		jar: string,
-		requestUri?: string,
+		body: Record<string, unknown>,
+		readT: (
+			statement: string,
+			keys: ScreenKeys,
+		) => Promise<{ readonly t: ReadT } | { readonly error: string }>,
+		at: string,
 	): Promise<Started | Stopped> => {
 		const keys = await screenKeys();
 		const answered = await front.post({
 			path: "/login/start",
-			body: {
-				clientId,
-				...(requestUri === undefined ? { request: jar } : { requestUri }),
-				eEnc: keys.eEnc,
-				eSigX: keys.eSig.x,
-				eSigY: keys.eSig.y,
-			},
+			body: { ...body, eEnc: keys.eEnc, eSigX: keys.eSig.x, eSigY: keys.eSig.y },
 		});
 		if (answered.status !== 200) return refusedAt("/login/start", answered);
 		const read = answers.read("authorization", answered.body);
 		if (!read) return sdkRefused("answers.read", "answer");
-		const t = await authorization.read(read.statement, jar, { ...sdk, keys });
-		if ("error" in t) return sdkRefused("authorization.read", t.error);
+		const t = await readT(read.statement, keys);
+		if ("error" in t) return sdkRefused(at, t.error);
 		return { t: t.t, keys, create: read.create };
 	};
+
+	/** ② The login's start, for the JAR the RP gave, sent as it is: T read against the JAR the screen holds. */
+	const start = (front: Front, clientId: string, jar: string): Promise<Started | Stopped> =>
+		started(
+			front,
+			{ clientId, request: jar },
+			(statement, keys) => authorization.read(statement, jar, { ...sdk, keys }),
+			"authorization.read",
+		);
+
+	/**
+	 * ② The login's start under PAR, the screen holding no JAR, as a real screen reached by `client_id`
+	 * and `request_uri` alone: T held to the client and the `request_uri` the URL names.
+	 */
+	const startPushed = (
+		front: Front,
+		clientId: string,
+		requestUri: string,
+	): Promise<Started | Stopped> =>
+		started(
+			front,
+			{ clientId, requestUri },
+			(statement, keys) =>
+				authorization.readPushed(statement, { clientId, requestUri }, { ...sdk, keys }),
+			"authorization.readPushed",
+		);
 
 	/**
 	 * A creation's key made, registered and possessed (the first key's steps, on any path): `create()`,
@@ -545,6 +565,7 @@ export function loginScreen(
 
 	return {
 		start,
+		startPushed,
 		signUp: signUpWith,
 		approve,
 		approveManagement,

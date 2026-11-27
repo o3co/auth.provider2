@@ -28,13 +28,18 @@ const jarPayload = {
 const b64 = (value: unknown) => Buffer.from(JSON.stringify(value)).toString("base64url");
 const jarOf = (payload: unknown) => `${b64({ alg: "ES256", typ: typs.jar })}.${b64(payload)}.sig`;
 
-async function world() {
+async function world(pushed?: string) {
 	const ring = await signingKey("ES256", "core-1");
 	const log = await signingKey("ES256", "log-1");
 	const keys = await screenKeys();
 	const jar = jarOf(jarPayload);
 	const { iss: _i, aud: _a, iat: _t, exp: _e, jti: _j, ...items } = jarPayload;
-	const approval = { ...items, jar_hash: await digest(jar) };
+	// Under PAR, the request_uri the start named among T's items.
+	const approval = {
+		...items,
+		jar_hash: await digest(jar),
+		...(pushed === undefined ? {} : { request_uri: pushed }),
+	};
 	const t = {
 		v: 1,
 		iss: issuer,
@@ -48,7 +53,10 @@ async function world() {
 	};
 	const tCompact = await signCompact(ring, t, { typ: typs.statement });
 	const options = { ring: [ring.jwk], log: [log.jwk], keys, issuer };
-	const read = await authorization.read(tCompact, jar, options);
+	const read =
+		pushed === undefined
+			? await authorization.read(tCompact, jar, options)
+			: await authorization.readPushed(tCompact, { clientId: "c1", requestUri: pushed }, options);
 	if ("error" in read) throw new Error(read.error);
 	return { ring, log, keys, jar, t, tCompact, options, read: read.t };
 }
@@ -112,6 +120,86 @@ describe("authorization.read", () => {
 	});
 });
 
+describe("authorization.readPushed (PAR)", () => {
+	const uri = "urn:ietf:params:oauth:request_uri:abc";
+	/** T as the Core makes it under PAR: its items carry the request_uri the start named. */
+	const pushedWorld = async (approvalChange: Record<string, unknown> = { request_uri: uri }) => {
+		const w = await world();
+		const t = { ...w.t, approval: { ...w.t.approval, ...approvalChange } };
+		return { ...w, t, tCompact: await signCompact(w.ring, t, { typ: typs.statement }) };
+	};
+	const url = { clientId: "c1", requestUri: uri };
+
+	it("reads T, holding no JAR, where its client and request_uri are the URL's", async () => {
+		const { tCompact, options } = await pushedWorld();
+		const read = await authorization.readPushed(tCompact, url, options);
+		if ("error" in read) throw new Error(read.error);
+		expect(read.t.statement.approval).toMatchObject({ client_id: "c1", request_uri: uri });
+		expect(Object.isFrozen(read.t)).toBe(true);
+		expect(
+			"options" in (await authorization.assertionOptions(read.t, { rpId: "id.example" })),
+		).toBe(true);
+	});
+
+	it("refuses T for another client or another request_uri than the URL names, or naming none", async () => {
+		const { tCompact, options } = await pushedWorld();
+		expect(await authorization.readPushed(tCompact, { ...url, clientId: "c2" }, options)).toEqual({
+			error: "client",
+		});
+		expect(
+			await authorization.readPushed(tCompact, { ...url, requestUri: `${uri}x` }, options),
+		).toEqual({ error: "request_uri" });
+		// A by-value T, as a Front would make one by rewriting the pushed start: it names no request_uri.
+		const byValue = await world();
+		expect(await authorization.readPushed(byValue.tCompact, url, byValue.options)).toEqual({
+			error: "request_uri",
+		});
+		// And a pushed T given to the by-value reading is refused at its items.
+		const w = await pushedWorld();
+		expect(await authorization.read(w.tCompact, w.jar, w.options)).toEqual({ error: "items" });
+		for (const bad of [
+			{ ...url, clientId: 1 },
+			{ ...url, requestUri: 1 },
+		])
+			expect(await authorization.readPushed(tCompact, bad as never, options)).toMatchObject({
+				error: typeof bad.clientId === "string" ? "request_uri" : "client",
+			});
+	});
+
+	it("makes a ReadT every later step takes as read's: finish at L0 and at log, the callback's proof", async () => {
+		const { w, sealed, receipt, finish, code } = await answered({}, {}, {}, uri);
+		const pushedT = w.read;
+		expect(pushedT.statement.approval.request_uri).toBe(uri);
+		const { log: _log, ...completionOnly } = finish;
+		expect(await authorization.finish(pushedT, sealed, { ...completionOnly, level: "L0" })).toEqual(
+			{
+				code,
+			},
+		);
+		const done = await authorization.finish(pushedT, sealed, { ...finish, level: "log", receipt });
+		expect(done).toEqual({ code, approval: { shard: "s1", n: 7 } });
+		if ("error" in done) throw new Error(done.error);
+		expect(
+			"proof" in (await authorization.callbackProof(pushedT, done, w.keys, 1_700_000_000_000)),
+		).toBe(true);
+		// A copy is no T read: every step refuses it, as it refuses a copy of read's.
+		expect(
+			await authorization.finish({ ...pushedT }, sealed, { ...completionOnly, level: "L0" }),
+		).toEqual({ error: "statement" });
+	});
+
+	it("passes a statement's refusal through, each by its name", async () => {
+		const { t, tCompact, options } = await pushedWorld();
+		const other = await signingKey("ES256", "core-1");
+		const forged = await signCompact(other, t, { typ: typs.statement });
+		expect(await authorization.readPushed(forged, url, options)).toEqual({ error: "signature" });
+		const elsewhere = { ...options, issuer: "https://other.example" };
+		expect(await authorization.readPushed(tCompact, url, elsewhere)).toEqual({ error: "issuer" });
+		const strange = { ...options, keys: await screenKeys() };
+		expect(await authorization.readPushed(tCompact, url, strange)).toEqual({ error: "keys" });
+	});
+});
+
 describe("authorization.assertionOptions", () => {
 	it("asks the authenticator for the read T's get challenge, with user verification", async () => {
 		const { read, tCompact } = await world();
@@ -164,8 +252,9 @@ async function answered(
 	receiptChange: Record<string, unknown> = {},
 	receiptHeader = {},
 	approvalChange: Record<string, string> = {},
+	pushed?: string,
 ) {
-	const w = await world();
+	const w = await world(pushed);
 	const assertion = utf8('{"a":1}');
 	const code = "code-1";
 	const completion = {

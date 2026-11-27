@@ -40,6 +40,20 @@ describe("the items T approves, from a JAR", () => {
 		});
 	});
 
+	it("writes the request_uri a start under PAR named as T's item, and none by value; a JAR carrying one yields none", () => {
+		const pushed = itemsFromJar(jar, "h", "urn:ietf:params:oauth:request_uri:abc");
+		expect(pushed).toMatchObject({
+			items: { request_uri: "urn:ietf:params:oauth:request_uri:abc" },
+		});
+		const byValue = itemsFromJar(jar, "h");
+		if (!("items" in byValue)) throw new Error(byValue.error);
+		expect("request_uri" in byValue.items).toBe(false);
+		expect(itemsFromJar({ ...jar, request_uri: "urn:x" }, "h")).toEqual({
+			error: "unknown_item:request_uri",
+		});
+		expect(itemsFromJar(jar, "h", "")).toMatchObject({ error: "item:request_uri" });
+	});
+
 	it("takes prompt as the envelope's, never an item: the Core reads it before T is made", () => {
 		const read = itemsFromJar({ ...jar, prompt: "login" }, "h");
 		expect(read).toEqual(itemsFromJar(jar, "h"));

@@ -150,6 +150,9 @@ export function starting(p: StartParts) {
 		const fields: StartFields = Object.fromEntries(
 			[...carriedOf("loginStart", message).values].map(([name, [text]]) => [name, text ?? ""]),
 		);
+		// A request and a request_uri both sent: one form or the other, never both, whichever sources answer.
+		if (fields.request !== undefined && fields.requestUri !== undefined)
+			return bad("the start names a request or a request_uri, not both");
 		// The spec holds the keys' lengths; an uncompressed P-256 point's first byte is this route's.
 		if (message.eEnc[0] !== 4) return bad("the start names a client and the screen's two keys");
 		// The keys as texts, each its bytes' one base64url spelling.
@@ -169,7 +172,8 @@ export function starting(p: StartParts) {
 			return bad("the redirect URI is not one the client registered");
 		const prompted = withoutPrompt(jar.claims);
 		if ("refused" in prompted) return answerOf(400, prompted.refused as Refusal);
-		const made = itemsFromJar(prompted.claims, sha256(jar.jar));
+		// Under PAR, T names the request_uri this start named, as it came, its source having resolved it.
+		const made = itemsFromJar(prompted.claims, sha256(jar.jar), fields.requestUri);
 		if ("error" in made)
 			return answerOf(400, { error: "invalid_request_object", description: made.error });
 		const asksOpenid = p.needs.asksOpenid(made.items.scope);
@@ -218,10 +222,10 @@ export const byValue: RequestSource = {
 	jarOf: async (fields) => (fields.request === undefined ? undefined : { jar: fields.request }),
 };
 
-/** The authorization's items `authorize` fills: every one but `dpop_jkt`, which the sender binding's bridge fills. */
+/** The authorization's items `authorize` fills: every one but `dpop_jkt`, which the sender binding's bridge fills; `request_uri` under PAR. */
 export const filledItems = {
 	purpose: "authorization",
-	names: [...jarClaims.items.filter((name) => name !== "dpop_jkt"), "jar_hash"],
+	names: [...jarClaims.items.filter((name) => name !== "dpop_jkt"), "jar_hash", "request_uri"],
 	by: "authorize",
 } as const;
 

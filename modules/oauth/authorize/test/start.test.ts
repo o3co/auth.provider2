@@ -12,7 +12,14 @@ import { describe, expect, it } from "vitest";
 import { codeNeedsOver } from "../src/code-needs/code-needs.ts";
 import type { JarReservations, RequestSource, StoredReservation } from "../src/contract.ts";
 import { reserving } from "../src/jar/jar.ts";
-import { byValue, claimsUnread, type StartParts, starting, tFits } from "../src/start/start.ts";
+import {
+	byValue,
+	claimsUnread,
+	filledItems,
+	type StartParts,
+	starting,
+	tFits,
+} from "../src/start/start.ts";
 
 const now = 1_800_000_000_000;
 const issuer = "https://issuer.example";
@@ -337,6 +344,32 @@ describe("a login's start (②)", () => {
 		});
 		// A member the wire does not name reaches no source.
 		expect(await h.body({ ...sent, request_uri: "urn:x" })).toMatchObject({ status: 200 });
+	});
+
+	it("refuses a start naming both a request and a request_uri, whichever sources answer, and writes the request_uri a start by PAR named into T alone", async () => {
+		const pushed: RequestSource = {
+			name: "pushed",
+			jarOf: async (fields) =>
+				fields.requestUri === undefined ? undefined : { jar: jar(claims({ jti: "p2" })) },
+		};
+		// No source of request_uris composed: both sent is still refused, never read as by value.
+		const alone = harness();
+		expect(
+			await alone.body({
+				...alone.fields(jar(claims())),
+				requestUri: "urn:ietf:params:oauth:request_uri:x",
+			}),
+		).toMatchObject({ status: 400, json: { error: "invalid_request" } });
+		expect(alone.asked).toHaveLength(0);
+		const h = harness({ sources: [byValue, pushed] });
+		const { request: _none, ...keys } = h.fields(jar(claims()));
+		const uri = "urn:ietf:params:oauth:request_uri:p2";
+		expect(await h.body({ ...keys, requestUri: uri })).toMatchObject({ status: 200 });
+		expect(h.asked.at(-1)?.items).toMatchObject({ request_uri: uri });
+		expect(await h.body(h.fields(jar(claims({ jti: "v1" }))))).toMatchObject({ status: 200 });
+		expect("request_uri" in (h.asked.at(-1)?.items ?? {})).toBe(false);
+		// It is declared among the items authorize fills, or approvals would refuse every T naming it.
+		expect(filledItems.names).toContain("request_uri");
 	});
 
 	it("answers prompt=none with login_required, takes the words every tap meets, and refuses others", async () => {

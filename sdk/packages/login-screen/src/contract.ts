@@ -9,6 +9,7 @@ export {
 	authorization,
 	type FinishChecks,
 	type FinishError,
+	type PushedAuthorizationError,
 	type ReadT,
 } from "./authorization.ts";
 export { challengeOf } from "./challenge.ts";

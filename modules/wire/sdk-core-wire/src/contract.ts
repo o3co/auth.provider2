@@ -127,6 +127,8 @@ const approval = z
 		dpop_jkt: z.string().min(1),
 		/** The JAR's compact bytes' SHA-256, base64url. */
 		jar_hash: z.string().min(1),
+		/** Under PAR, the `request_uri` the login's start named (RFC 9126): no claim of the JAR, absent by value. */
+		request_uri: z.string().min(1).optional(),
 	})
 	.strict();
 
@@ -370,10 +372,13 @@ function askedInDefault(claims: unknown): unknown {
 /**
  * The items T approves, from a JAR's payload and its hash, by the one rule both sides run and compare
  * exactly: an error names the claim that is unknown or missing, or the value that is not allowed.
+ * Under PAR, `requestUri` is the `request_uri` the start named, an item beside the JAR's; by value
+ * none is given, and T holds none.
  */
 export function itemsFromJar(
 	payload: Readonly<Record<string, unknown>>,
 	jarHash: string,
+	requestUri?: string,
 ): { readonly items: AuthorizationItems } | { readonly error: string } {
 	const allowed: readonly string[] = [...authorizationItems, ...jarEnvelope];
 	for (const key of Object.keys(payload))
@@ -385,6 +390,7 @@ export function itemsFromJar(
 	const items: Record<string, unknown> = { jar_hash: jarHash };
 	for (const key of authorizationItems) if (payload[key] !== undefined) items[key] = payload[key];
 	if (payload.claims !== undefined) items.claims = askedInDefault(payload.claims);
+	if (requestUri !== undefined) items.request_uri = requestUri;
 	const read = approval.safeParse(items);
 	return read.success
 		? { items: read.data }

@@ -1,7 +1,7 @@
 # authorize
 
 ## Responsibilities
-- Starts and finishes a person's login at the Core (② and ⑤⑥, internal modules `start` and `finish`): reads the login's request from its source, verifies the JAR as its client's, checks its redirect URI and `prompt`, reserves the JAR's one use (A20), and has `approvals` sign the statement T over the JAR's items and the screen's keys.
+- Starts and finishes a person's login at the Core (② and ⑤⑥, internal modules `start` and `finish`): reads the login's request from its source, verifies the JAR as its client's, checks its redirect URI and `prompt`, reserves the JAR's one use (A20), and has `approvals` sign the statement T over the JAR's items (under PAR, its `request_uri` too) and the screen's keys.
 - At the finish, uses the person's assertion over T, judges the issuance, opens the session and has `code-grant` make a code, rooted in the approval's record before its completion is answered.
 - Owns the JAR reservations' store interface and its needs, and the extension points where a request comes from and how a person with no passkey is answered.
 

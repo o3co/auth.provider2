@@ -5,15 +5,15 @@ import { digest, utf8 } from "../src/bytes.ts";
 import { firstKey } from "../src/first-key.ts";
 import { screenKeys } from "../src/keys.ts";
 import { signUp } from "../src/sign-up.ts";
-import { readT, signCompact, signingKey } from "./fixtures.ts";
+import { readPushedT, readT, signCompact, signingKey } from "./fixtures.ts";
 
 const issuer = "https://id.example";
 
-/** A T the screen read, and the sign-up creation the Core would answer its continuation with. */
-async function world() {
+/** A T the screen read (by value, or under PAR), and the sign-up creation the Core would answer its continuation with. */
+async function world(reading: typeof readT = readT) {
 	const ring = await signingKey("ES256", "core-1");
 	const keys = await screenKeys();
-	const { tCompact, t } = await readT(ring, keys);
+	const { tCompact, t } = await reading(ring, keys);
 	const options = { ring: [ring.jwk], keys, issuer };
 	const sign = (payload: unknown) => signCompact(ring, payload, { typ: typs.statement });
 	const common = {
@@ -47,6 +47,17 @@ async function world() {
 		});
 	return { ring, keys, tCompact, options, t, creation, sign };
 }
+
+describe("sign-up from a T read under PAR", () => {
+	it("takes a T readPushed gave as one read gave: its continuation, and its creation read", async () => {
+		const w = await world(readPushedT);
+		expect(await signUp.continuation(w.t, w.keys)).toMatchObject({ stage: "sign-up", seq: 1 });
+		expect("creation" in (await signUp.readCreation(await w.creation(), w.t, w.options))).toBe(
+			true,
+		);
+		expect(await signUp.continuation({ ...w.t }, w.keys)).toEqual({ error: "statement" });
+	});
+});
 
 describe("signUp.continuation", () => {
 	it("signs T's sign-up stage with E_sig, sequence 1, its body {}", async () => {

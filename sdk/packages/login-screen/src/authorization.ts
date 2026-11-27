@@ -28,14 +28,17 @@ function jarClaims(jar: string): Record<string, unknown> | undefined {
 /** Why T is not shown: a statement's refusal, the JAR the screen holds, or items that differ from it. */
 export type AuthorizationError = StatementError | "jar" | "items";
 
-/** T as `read` gave it: the statement and its compact bytes. Only `read` makes one. */
+/** Why a pushed T is not shown: a statement's refusal, or a client or `request_uri` other than the URL names. */
+export type PushedAuthorizationError = StatementError | "client" | "request_uri";
+
+/** T as `read` or `readPushed` gave it: the statement and its compact bytes. Only those two make one. */
 export interface ReadT {
 	readonly statement: StatementPayload;
 	readonly compact: string;
 }
 const issued = new WeakSet<ReadT>();
 
-/** Whether `read` gave this T. Not offered: for this package's sign-up path. */
+/** Whether `read` or `readPushed` gave this T. Not offered: for this package's sign-up path. */
 export const wasRead = (t: ReadT): boolean => issued.has(t);
 
 /**
@@ -60,7 +63,30 @@ async function read(
 }
 
 /**
- * What a `navigator.credentials.get` is asked for T `read` gave: its get challenge, user
+ * T read before it is shown under PAR (§3.3), where the screen holds no JAR: the statement, signed by
+ * the Core over the items and the hash of the JAR it was pushed, and its client and `request_uri` the
+ * ones the URL names. The JAR's hash is not checked, as the screen holds no JAR; another request of
+ * the same client given at the URL is the relying party's to refuse, by its state (R3).
+ */
+async function readPushed(
+	statement: string,
+	url: { readonly clientId: string; readonly requestUri: string },
+	options: Omit<StatementOptions<"authorization">, "purpose">,
+): Promise<{ readonly t: ReadT } | { readonly error: PushedAuthorizationError }> {
+	const read = await readStatement(statement, { ...options, purpose: "authorization" });
+	if ("error" in read) return read;
+	const { approval } = read.statement;
+	if (typeof url.clientId !== "string" || approval.client_id !== url.clientId)
+		return { error: "client" };
+	if (typeof url.requestUri !== "string" || approval.request_uri !== url.requestUri)
+		return { error: "request_uri" };
+	const t: ReadT = deepFreeze({ statement: read.statement, compact: read.compact });
+	issued.add(t);
+	return { t };
+}
+
+/**
+ * What a `navigator.credentials.get` is asked for T `read` or `readPushed` gave: its get challenge, user
  * verification required, and the credentials where the caller names some. Credentials given empty,
  * or any one not a credential id, are refused: dropping them would ask for any credential.
  */
@@ -112,12 +138,12 @@ export type FinishChecks =
 	| { readonly level: "log"; readonly receipt: string; readonly log: readonly Jwk[] };
 const finished = new WeakMap<Finished, ReadT>();
 
-/** Why a completion is not taken: T not `read`'s, its own refusal, a level not named or its inputs (`checks`), ring and log keys shared, or ⑤'s receipt that does not bind it. */
+/** Why a completion is not taken: T not `read`'s or `readPushed`'s, its own refusal, a level not named or its inputs (`checks`), ring and log keys shared, or ⑤'s receipt that does not bind it. */
 export type FinishError = CompletionError | "statement" | "keys" | "receipt" | "checks";
 
 /**
  * The completion taken, at the level the caller names: at `L0`, read alone and bound to the T `read`
- * gave and the assertion sent, answering the code to POST to the RP; at `log` (A35), only with ⑤'s
+ * or `readPushed` gave and the assertion sent, answering the code to POST to the RP; at `log` (A35), only with ⑤'s
  * receipt, signed by the log, binding them and the code, and only where no key of the log's is one of
  * the Core ring's (a Core holding both would sign its own receipt), answering ⑤'s record too.
  */
@@ -201,5 +227,11 @@ async function callbackProof(
 	return { proof: `${input}.${base64url(new Uint8Array(signature))}` };
 }
 
-/** An authorization's steps on the screen: read T against the JAR, ask the passkey, take the completion, sign the callback's proof. */
-export const authorization = Object.freeze({ read, assertionOptions, finish, callbackProof });
+/** An authorization's steps on the screen: read T against the JAR, or by the client and the `request_uri` under PAR, ask the passkey, take the completion, sign the callback's proof. */
+export const authorization = Object.freeze({
+	read,
+	readPushed,
+	assertionOptions,
+	finish,
+	callbackProof,
+});

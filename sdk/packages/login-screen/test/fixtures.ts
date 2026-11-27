@@ -141,3 +141,33 @@ export async function readT(ring: Awaited<ReturnType<typeof signingKey>>, keys: 
 	if ("error" in read) throw new Error(read.error);
 	return { tCompact, t: read.t };
 }
+
+/** A T the Core made under PAR (its items naming the request_uri the start named), as `readPushed` reads it with no JAR. */
+export async function readPushedT(ring: Awaited<ReturnType<typeof signingKey>>, keys: ScreenKeys) {
+	const requestUri = "urn:ietf:params:oauth:request_uri:fixture";
+	const b64 = (value: unknown) => Buffer.from(JSON.stringify(value)).toString("base64url");
+	const jar = `${b64({ alg: "ES256", typ: typs.jar })}.${b64(jarPayload)}.sig`;
+	const { iss: _i, aud: _a, iat: _t, exp: _e, jti: _j, ...items } = jarPayload;
+	const tCompact = await signCompact(
+		ring,
+		{
+			v: 1,
+			iss: jarPayload.aud,
+			sid: "st-1",
+			iat: 1,
+			exp: 2,
+			e_enc: keys.eEnc,
+			e_sig: keys.eSig,
+			purpose: purposes.authorization,
+			approval: { ...items, jar_hash: await digest(jar), request_uri: requestUri },
+		},
+		{ typ: typs.statement },
+	);
+	const read = await authorization.readPushed(
+		tCompact,
+		{ clientId: jarPayload.client_id, requestUri },
+		{ ring: [ring.jwk], keys, issuer: jarPayload.aud },
+	);
+	if ("error" in read) throw new Error(read.error);
+	return { tCompact, t: read.t };
+}
