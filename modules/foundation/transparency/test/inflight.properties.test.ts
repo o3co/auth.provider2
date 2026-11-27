@@ -513,8 +513,8 @@ const weights = [2, 4, 3, 3, 4, 3, 1, 1];
 const kind = fc.oneof(...weights.map((weight, k) => ({ arbitrary: fc.constant(k), weight })));
 const event = fc.tuple(kind, fc.nat(2), fc.nat(11), fc.nat(5), fc.nat(16), fc.nat(6));
 
-/** Runs the property over `runs` runs, counting the paths they reached. */
-async function runs(params: { readonly numRuns: number; readonly seed?: number }) {
+/** Runs the property over `numRuns` runs from `seed`, counting the paths they reached. */
+async function runs(params: { readonly numRuns: number; readonly seed: number }) {
 	const reached = none();
 	await fc.assert(
 		fc.asyncProperty(
@@ -536,12 +536,13 @@ async function runs(params: { readonly numRuns: number; readonly seed?: number }
 	return reached;
 }
 
-it("keeps the models' invariants with records in flight, answers lost and calls overlapping, and ends every intent on a fair run", async () => {
-	await runs({ numRuns: 2000 });
-}, 60_000);
-
-it("reaches every path it is there for, on a fixed seed", async () => {
-	// Fixed, so this fails only where the code changed what the runs reach, never by chance.
-	const reached = await runs({ numRuns: 2000, seed: 23 });
-	for (const path of paths) expect(reached[path], path).toBeGreaterThan(0);
-}, 60_000);
+// 2000 runs in four of 500, each on its own fixed seed: each a few seconds, and each deterministic, so a
+// path one stops reaching fails only where the code changed what its runs reach, never by chance.
+it.each([23, 1, 2, 3])(
+	"keeps the models' invariants with records in flight, answers lost and calls overlapping, ends every intent on a fair run, and reaches every path it is there for (seed %i)",
+	async (seed) => {
+		const reached = await runs({ numRuns: 500, seed });
+		for (const path of paths) expect(reached[path], path).toBeGreaterThan(0);
+	},
+	60_000,
+);
