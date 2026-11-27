@@ -2839,6 +2839,9 @@ importers:
       '@mod/par':
         specifier: workspace:*
         version: link:../../oauth/par
+      '@mod/passkey-witness-http':
+        specifier: workspace:*
+        version: link:../../user-ledger-http/passkey-witness-http
       '@mod/promises':
         specifier: workspace:*
         version: link:../../foundation/promises
@@ -2851,6 +2854,9 @@ importers:
       '@mod/tokens':
         specifier: workspace:*
         version: link:../../oauth/tokens
+      '@mod/users-http':
+        specifier: workspace:*
+        version: link:../../user-ledger-http/users-http
       '@mod/webauthn':
         specifier: workspace:*
         version: link:../../passkey/webauthn

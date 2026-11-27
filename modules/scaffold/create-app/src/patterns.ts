@@ -68,7 +68,7 @@ export const patterns: readonly Pattern[] = [
 		card: [
 			"It requires the two promises a compromised Front must not break; boot is refused where one does not hold, so changing `http` (`--axis http=in-process`) gives an app that never boots.",
 			"Setup, in order: the KMS keys and the Core's role (`keys-kms`); the wire's certificates (`core-wire`); the signed client registry (`clients-registry`, signed with `registry-sign`); the mail relay (`mail-smtp`); Redis and its statement (`redis`); then publish the discovery document and the key sets for the publisher (`discovery-publish`, `keys-publish`).",
-			"Not composed unless added: `client-credentials` (`--add client-credentials`; then requiring `no-client-subject-token` is recommended only where no machine client is registered), `sign-up` (`--add sign-up`: a user with no passkey is then created, not refused), `userinfo`. An outside ledger: `--axis users=users-http`.",
+			"Not composed unless added: `client-credentials` (`--add client-credentials`; then requiring `no-client-subject-token` is recommended only where no machine client is registered), `sign-up` (`--add sign-up`: a user with no passkey is then created, not refused), `userinfo`. An outside ledger: `--axis users=users-http --add passkey-witness-http` (its passkey witness beside it), each with its own section and the ledger's host in `outbound.allow`.",
 			"`transparency-local` is not recommended: see its line under the setup below.",
 		].join("\n\n"),
 	},

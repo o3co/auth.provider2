@@ -14,6 +14,7 @@
 - `patterns`, `patternNamed`, `patternOf`, `Pattern` (name, use, features, axes, add, required, companions, card); `selectionOf` (a pattern, what a plan adds and chooses) → its `combinations` selection, for a test composing a pattern as an app does; `noticesOf` (a selection) → its notices.
 - `./testing`, for a test running a generated app as an operator runs it; its configuration is the test's, from each module's `./testing`:
   - `generated` (a `Plan`) → the app in a temporary directory, each dependency linked to the workspace, its manifest (a companion's entry in its `scripts`), its notices, and its removal.
+  - `generatedBy` (the command's arguments after the target, as an operator types them) → the same, written by the command; where it writes no app, it throws with what it wrote, leaving nothing.
   - `running` (its directory, a file, a configuration, an environment, arguments) → `Running` (its output, its exit, its stop: SIGTERM, SIGKILL past 10 seconds): the configuration in its local layer first (`APP_CONFIG`), one configuration in a directory at a time. `listening`, `freePort`.
   - `scripted` (its directory, a script, as `running`) → a run of the script by its own command line in the manifest (`node`, its flags, its file).
   - `asOperator`: a configuration split into the environment `.env.example` names and the local layer.

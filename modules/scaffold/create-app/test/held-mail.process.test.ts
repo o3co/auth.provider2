@@ -5,6 +5,8 @@ import { connect, createServer as createTcpServer, type Socket } from "node:net"
 import { join } from "node:path";
 import { type FakeLedger, passkeyWitnessLedger, usersLedger } from "@mod/ledger-fakes";
 import { fakeRelay } from "@mod/mail-smtp/testing";
+import { passkeyWitnessHttpConfig } from "@mod/passkey-witness-http/testing";
+import { usersHttpConfig } from "@mod/users-http/testing";
 import { firstKey, screenKeys } from "@sdk/login-screen";
 import { describe, expect, it } from "vitest";
 import { freePort, type Running } from "../src/testing.ts";
@@ -125,18 +127,18 @@ function ledgerCore(
 	return {
 		...base,
 		"mail-smtp": { ...(base["mail-smtp"] as object), host: "::1", port: relayPort },
-		"users-http": {
+		...usersHttpConfig({
 			"verify-url": `http://${at}/verify`,
 			"subject-url": `http://${at}/subject`,
 			"identifier-url": `http://${at}/identifier`,
 			credential: ledgers.users.credential,
-		},
-		"passkey-witness-http": {
+		}),
+		...passkeyWitnessHttpConfig({
 			"read-url": `http://${at}/passkey-witness/read`,
 			"enroll-url": `http://${at}/passkey-witness/enroll`,
 			"withdraw-url": `http://${at}/passkey-witness/withdraw`,
 			credential: ledgers.witness.credential,
-		},
+		}),
 		outbound: {
 			...(base.outbound as { allow: string[] }),
 			allow: [...(base.outbound as { allow: string[] }).allow, "127.0.0.1"],

@@ -10,6 +10,7 @@ import { sectionsIn } from "@mod/references";
 import { parse } from "@o3co/ts.hocon";
 import { describe, expect, it, vi } from "vitest";
 import { noticesOf, patternNamed, patterns, run, selectionOf } from "../src/contract.ts";
+import { generatedBy } from "../src/testing.ts";
 
 // Reading the workspace's sections imports every module: slow on a loaded machine.
 vi.setConfig({ testTimeout: 60_000 });
@@ -232,6 +233,21 @@ describe("create-app", () => {
 			expect(told.said.err).toContain("@mod/no-such-module");
 		} finally {
 			await rm(parent, { recursive: true, force: true });
+		}
+	});
+});
+
+describe("generatedBy", () => {
+	it("leaves nothing behind where the command writes no app, a usage error or --help, and says what it wrote", async () => {
+		for (const args of [["--pattern", "no-such-pattern"], ["--help"]]) {
+			const failed = await generatedBy(args).then(
+				() => undefined,
+				(error: Error) => error.message,
+			);
+			expect(failed, args.join(" ")).toMatch(/usage: create-app/);
+			const dir = /^create-app (\S+) /.exec(failed ?? "")?.[1] ?? "";
+			expect(dir, failed).not.toBe("");
+			expect(existsSync(join(dir, "..")), dir).toBe(false);
 		}
 	});
 });

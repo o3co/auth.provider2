@@ -7,6 +7,7 @@ export {
 	asOperator,
 	freePort,
 	generated,
+	generatedBy,
 	listening,
 	type Running,
 	running,

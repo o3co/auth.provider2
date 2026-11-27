@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promis
 import { connect, createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { generate, type Plan } from "./contract.ts";
+import { generate, type Plan, run } from "./contract.ts";
 
 /** A port free now, for an app to listen on. */
 export const freePort = () =>
@@ -20,6 +20,36 @@ export async function generated(plan: Plan) {
 	const parent = await mkdtemp(join(tmpdir(), "create-app-"));
 	const dir = join(parent, "app");
 	const notices = await generate(dir, plan);
+	return linked(parent, dir, notices);
+}
+
+/**
+ * An app the command writes from `args` (its arguments after the target, as an operator types them)
+ * in a temporary directory, linked as `generated` links one; its notices are the lines the command
+ * wrote to err. Where the command writes no app, it throws with what the command wrote, and leaves
+ * nothing behind.
+ */
+export async function generatedBy(args: readonly string[]) {
+	const parent = await mkdtemp(join(tmpdir(), "create-app-"));
+	const dir = join(parent, "app");
+	const out: string[] = [];
+	const err: string[] = [];
+	const told = () => `${out.join("")}${err.join("")}`;
+	try {
+		const code = await run([dir, ...args], { out: (t) => out.push(t), err: (t) => err.push(t) });
+		if (code !== 0) throw new Error(`exit ${code}`);
+		return await linked(parent, dir, err.join("").split("\n").filter(Boolean));
+	} catch (error) {
+		// One the command wrote no app for (a usage error, `--help`) too: nothing is left behind.
+		await rm(parent, { recursive: true, force: true });
+		throw new Error(`create-app ${dir} ${args.join(" ")}: ${(error as Error).message}\n${told()}`, {
+			cause: error,
+		});
+	}
+}
+
+/** The app written at `dir`, under `parent`, each dependency linked as the manifest's `link:` names it. */
+async function linked(parent: string, dir: string, notices: readonly string[]) {
 	const manifest = JSON.parse(await readFile(join(dir, "package.json"), "utf8"));
 	for (const [name, spec] of Object.entries(manifest.dependencies as Record<string, string>)) {
 		const link = join(dir, "node_modules", name);

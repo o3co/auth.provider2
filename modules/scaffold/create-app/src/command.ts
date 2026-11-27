@@ -11,7 +11,7 @@ export interface Io {
 const usageText =
 	"usage: create-app <target> --pattern <name> [--add <name>]... [--axis <owner>=<adapter>]...\n" +
 	"       create-app --list   (each pattern, and what it is for)\n" +
-	"       a name without a scope is @mod/'s: --add sign-up, --axis users=users-http\n";
+	"       a name without a scope is @mod/'s: --add sign-up, --axis store=redis\n";
 
 /** A name without a scope is the workspace's own. */
 const scopedName = (name: string) => (name.startsWith("@") ? name : `@mod/${name}`);
