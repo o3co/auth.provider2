@@ -6,7 +6,7 @@ Internal module of `authority-rules`: Verdict(r) by the judgment table (kernel-s
 - Judges one placed record on its flow's judged prefix by the first row it meets, J0 to J13, and gives its outcome and the entry the fold and the later records read.
 
 ## Not here
-- The chain rules (J7's content) and the time rules: `chain`. Waiting, retrying, the checkpoint, the deny list and the hold limit's count: the monitor's.
+- The chain rules (J7's content), J2's second start of one approval (`codeStartedBefore`) and the time rules: `chain`. Waiting, retrying, the checkpoint, the deny list and the hold limit's count: the monitor's.
 
 ## Offers
 - `judge` (`Reading`) → `Ruling`: the entry, the row, whether counted, the rule broken; or `wait` (`temporary`, `version`). A reset boundary is found by the package's `reset` (row J0r), its outcome the rule's. `outcomeOf` (`Reading`, verdict), the package's alone.

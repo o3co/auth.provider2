@@ -8,6 +8,7 @@ import {
 import {
 	type Ask,
 	clientOf,
+	codeStartedBefore,
 	effectOf,
 	refusalOf,
 	rootOf,
@@ -150,10 +151,7 @@ function coreRows(reading: Reading, bounds: Bounds): Found {
 	if (read && !("error" in read) && record.kind === "start") {
 		const parent = read.preimage.parent;
 		const content = read.content as { via: string };
-		if (
-			content.via === "code" &&
-			prior.some((e) => e.envelope.kind === "start" && e.via === "code" && e.parent === parent)
-		)
+		if (content.via === "code" && codeStartedBefore(prior, parent))
 			return forged("J2", "an approval's code is exchanged once");
 	}
 	const sealed = (record.sealedTo ?? []).map((s) => s.key);

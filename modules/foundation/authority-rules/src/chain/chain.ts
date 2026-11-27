@@ -383,6 +383,15 @@ function clientStartRefusal(read: Read<"start">): Refusal {
 	return "refused" in evidence ? evidence.refused : undefined;
 }
 
+/**
+ * J2's second start: a code's start of this approval already on the flow, whatever its verdict
+ * (every start accepted counts; a refresh's and a client's are not a code's). The judgment's row J2
+ * and the Core's local check (`allowed`) both read it here. No approval named matches a code's start
+ * that named none, as the judgment always read it (`allowed` refuses such a start first).
+ */
+export const codeStartedBefore = (prior: readonly FlowEntry[], approval: string | undefined) =>
+	prior.some((e) => e.envelope.kind === "start" && e.via === "code" && e.parent === approval);
+
 function startRefusal(read: Read<"start">): Refusal {
 	const { ask, preimage, content } = read;
 	if (ask.record.stage !== 1 || ask.record.last)
@@ -397,11 +406,8 @@ function startRefusal(read: Read<"start">): Refusal {
 		if (content.code !== approval.code || content.client !== approval.client)
 			return "the start names another code or client than its approval";
 		if (used(ask.state, marks.code(parent))) return "the approval's code is exchanged";
-		// J2 counts the code exchanges' starts alone, whatever their verdict; a refresh's is not one.
-		const before = ask.prior.some(
-			(e) => e.envelope.kind === "start" && e.via === "code" && e.parent === parent,
-		);
-		if (before) return "an approval's code is exchanged once";
+		// J2's, for the Core's local check before its append; the judgment meets it first at J2.
+		if (codeStartedBefore(ask.prior, parent)) return "an approval's code is exchanged once";
 		return undefined;
 	}
 	const family = own(ask.state.families, parent);

@@ -11,6 +11,7 @@ Internal module of `authority-rules`: Allowed(r, S), the time rules and the chan
 
 ## Offers
 - `allowed` (`Ask`) → `Allowance`; `refusalOf` (`Ask`), the first rule broken; `uncheckedOf` (`Ask`), why a client's record is unchecked; `clientOf` (`Ask`), a client's start's entry fields. `timely` (`Ask`, time). `effectOf` (`Ask`) → `Changes`. `rootOf` (`Ask`): the root's registration, or a first-trust key itself, the two told apart by shape so no registration id is taken for the other.
+- `codeStartedBefore` (a prefix, an approval): J2's second start, read by the row J2 and `allowed`.
 
 ## Invariants
 - An approval, a key change, and a start and a bundle rooted in a code or a refresh are a person's ops, on a subject flow; a start and a bundle rooted in a client (`client`) are on that client's flow alone.
