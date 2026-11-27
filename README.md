@@ -19,6 +19,7 @@ Under construction. Nothing is published yet: the first release, 0.1.0, is publi
 ## Layout
 
 - `modules/<group>/<name>`: the provider's packages, one concern each. Each module's README is its contract.
+- `docs/compliance/`: the public compliance page, `deviations.md`, written from its ledger `deviations.json` (the intended deviations and strict choices a conformance run's expected failures name).
 - `sdk/` (to come): the packages that run in a receiver (the login screen SDK and the relying party's verification kit). They depend only on the protocol packages, and are released with the provider at the same version.
 
 ## License

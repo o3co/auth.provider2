@@ -1,0 +1,13 @@
+{
+	"name": "@mod/interop-oidf",
+	"private": true,
+	"license": "Apache-2.0",
+	"type": "module",
+	"kind": "verification",
+	"scripts": {
+		"deviations": "node src/deviations/main.ts"
+	},
+	"devDependencies": {
+		"vitest": "5.0.5"
+	}
+}
