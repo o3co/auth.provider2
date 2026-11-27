@@ -28,9 +28,18 @@ import { type Credential, ceremonies, freshHandle } from "@mod/webauthn";
 import webauthnModule from "@mod/webauthn/module";
 import { softwareAuthenticator, testOrigin, webauthnConfig } from "@mod/webauthn/testing";
 import { keyChangePart } from "../../contract.ts";
-import { creationItems } from "../../creation/creation.ts";
+import { type ApproverKey, creationItems } from "../../creation/creation.ts";
 import { keyChangeKind, keyChangesOver } from "../../key-change/key-change.ts";
+
 import { possessionItems, registrationOver } from "../registration.ts";
+
+/** A passkey-add's approving key no test registered: of the schema's form, not a real key (no point on P-256). */
+const unnamedApprover: ApproverKey = {
+	kty: "EC",
+	crv: "P-256",
+	x: "A".repeat(43),
+	y: "A".repeat(43),
+};
 
 export const sha256 = (text: string) => createHash("sha256").update(text).digest("base64url");
 
@@ -193,7 +202,12 @@ export async function stack(
 	const created = async (
 		subject = "s1",
 		basis: "first-key" | "passkey-add" | "sign-up" = "first-key",
-		given: { readonly evidence?: string; readonly shown?: ReturnType<typeof screen> } = {},
+		given: {
+			readonly evidence?: string;
+			readonly shown?: ReturnType<typeof screen>;
+			/** A passkey-add's approving key as its creation names it (V30); a P-256 key of none's by default. */
+			readonly approverKey?: ApproverKey;
+		} = {},
 	) => {
 		const shown = given.shown ?? screen();
 		const handle = freshHandle(randomBytes);
@@ -205,6 +219,7 @@ export async function stack(
 				basis,
 				evidence: given.evidence ?? sha256("token"),
 				...(basis === "first-key" ? { ct_hash: sha256("ct") } : {}),
+				...(basis === "passkey-add" ? { approver_key: given.approverKey ?? unnamedApprover } : {}),
 				subject,
 				kg: 0,
 				options: {

@@ -1,4 +1,4 @@
-import { randomBytes } from "node:crypto";
+import { createHash, createPublicKey, generateKeyPairSync, randomBytes, verify } from "node:crypto";
 import { passkeyGenerations } from "@mod/passkeys";
 import { challengeInput } from "@mod/sdk-core-wire";
 import type { Contact } from "@mod/users";
@@ -8,6 +8,17 @@ import { describe, expect, it } from "vitest";
 import { type CreationAsk, creationOver } from "../../creation/creation.ts";
 import { screen, sha256, stack } from "../../registration/test/stack.ts";
 import { approvalOver } from "../approval.ts";
+
+/** An RS256 key's COSE_Key, base64url, as a passkey of one holds it: CTAP2's canonical form (kty 3, alg -257, n, e). */
+const rs256 = (() => {
+	const jwk = generateKeyPairSync("rsa", { modulusLength: 2048 }).publicKey.export({
+		format: "jwk",
+	});
+	const n = Buffer.from(jwk.n ?? "", "base64url");
+	const e = Buffer.from(jwk.e ?? "", "base64url");
+	const head = Buffer.from("a401030339010020590100", "hex");
+	return Buffer.concat([head, n, Buffer.from([0x21, 0x40 + e.length]), e]).toString("base64url");
+})();
 
 const payloadOf = (jws: string) =>
 	JSON.parse(Buffer.from(jws.split(".")[1] ?? "", "base64url").toString("utf8"));
@@ -52,10 +63,23 @@ async function world(
 		random: (n) => randomBytes(n),
 	});
 	let publicKeyOf = w.parts.passkeys.publicKeyOf;
+	/** Each passkey-add's record and contacts asked for, as an RS256 refusal must ask neither. */
+	const reads = { passkeyAddOf: 0, contactsOf: 0 };
 	const approval = approvalOver({
-		approvals: w.parts.approvals,
+		approvals: {
+			...w.parts.approvals,
+			passkeyAddOf: (hash) => {
+				reads.passkeyAddOf += 1;
+				return w.parts.approvals.passkeyAddOf(hash);
+			},
+		},
 		passkeys: { publicKeyOf: (id) => publicKeyOf(id) },
-		users: { contactsOf: async () => contacts },
+		users: {
+			contactsOf: async () => {
+				reads.contactsOf += 1;
+				return contacts;
+			},
+		},
 		create: async (ask) => {
 			asked.push(ask);
 			return create(ask);
@@ -80,6 +104,7 @@ async function world(
 		key,
 		approval,
 		asked,
+		reads,
 		approve,
 		started,
 		replaceKeyLookup: (f: typeof publicKeyOf) => {
@@ -140,11 +165,29 @@ describe("a passkey-add's or a passkey-manage's approval", () => {
 		const finished = await approval.finish({ statement, assertion });
 		expect(finished).toMatchObject({ kind: "completed", enc: expect.any(String) });
 		const hash = sha256(statement);
+		const ask = asked[0];
+		if (ask?.basis !== "passkey-add") throw new Error("no passkey-add's creation asked");
+		const approving = ask.approverKey;
+		// The key named is the one the approval's assertion verifies under, checked apart from how the
+		// Core reads it: its signature over the authenticator data and the client data's SHA-256.
+		const { response } = JSON.parse(assertion);
+		const signed = Buffer.concat([
+			Buffer.from(response.authenticatorData, "base64url"),
+			createHash("sha256").update(Buffer.from(response.clientDataJSON, "base64url")).digest(),
+		]);
+		const jwk: Record<string, string> = { kty: approving.kty, crv: approving.crv, x: approving.x };
+		if (approving.y !== undefined) jwk.y = approving.y;
+		const named = createPublicKey({ key: jwk, format: "jwk" });
+		expect(verify("sha256", signed, named, Buffer.from(response.signature, "base64url"))).toBe(
+			true,
+		);
 		expect(asked).toEqual([
 			expect.objectContaining({
 				subject: "s1",
 				account: "a***@example.com",
 				basis: "passkey-add",
+				// The approving key, as its JWK (V30): the record's parent, the screen's own key.
+				approverKey: approving,
 				evidence: hash,
 				screen: expect.objectContaining({ eEnc: payloadOf(statement).e_enc }),
 			}),
@@ -153,6 +196,29 @@ describe("a passkey-add's or a passkey-manage's approval", () => {
 		w.advance(5 * 60_000 + 1000);
 		expect(await approval.finish({ statement, assertion })).toEqual(finished);
 		expect(asked).toHaveLength(1);
+	});
+
+	it("bases no creation on an RS256 approving key, or one that does not read (V30)", async () => {
+		const { approval, asked, reads, approve, started, w, key, replaceKeyLookup } = await world();
+		const as = (publicKey: string) => async (id: string) => {
+			const held = await w.parts.passkeys.publicKeyOf(id);
+			return held && id === key.id ? { ...held, publicKey } : held;
+		};
+		replaceKeyLookup(as(rs256));
+		const one = await started();
+		expect(await approval.finish({ statement: one, assertion: approve(one) })).toEqual({
+			kind: "refused",
+			reason: "approver-algorithm",
+		});
+		// Refused before the passkey-add's record or the subject's contacts are read.
+		expect(reads).toEqual({ passkeyAddOf: 0, contactsOf: 0 });
+		replaceKeyLookup(as("AAAA"));
+		const two = await started();
+		expect(await approval.finish({ statement: two, assertion: approve(two) })).toEqual({
+			kind: "refused",
+			reason: "approver",
+		});
+		expect(asked).toEqual([]);
 	});
 
 	it("checks the approving key before every list made: a finish sent again, or after one that fell, is refused alike", async () => {

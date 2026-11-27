@@ -16,5 +16,7 @@ Internal module of `passkey-management`: a passkey-add's approval (§3.13's regi
 - A finish answers the completion `approvals` keeps first, whatever has lapsed since, and goes no further for a statement of another purpose: an authorization's statement and assertion sent here are neither used nor base a creation.
 - A subject holding the most keys passkeys lets it gets no creation (`full`), before one is asked of the person.
 - A creation is made only for the subject of the key that approved, while that key is active under the registration it approved by: one removed since, or its credential registered again, bases none.
+- The creation names the approving key (`approver_key`, V30), as webauthn's `passkeyJwk` reads it from that key as passkeys holds it: the key change's parent, the screen's own key. One that does not read bases none (`approver`).
+- An RS256 key approves no passkey-add in 0.1.0 (`approver-algorithm`): no binding against duplicate-signature key selection is shown for it, so the screen could not tell it is its own. The screen sees the generic refusal after the person's tap; taking one later is a wire change first.
 - The account it shows is `accountOf` the subject's contacts: the address verified last masked, else none, the creation naming it.
 - A store or ring that cannot answer now, a count reached or a signing busy, is unavailable: nothing is kept, and the same finish is asked again.

@@ -1,5 +1,6 @@
 import { continuations } from "@mod/continuation-wire";
 import { describe, expect, it } from "vitest";
+import { approverKey } from "../../../test/fixtures/statements.ts";
 import { screenKeys, sha256, world } from "../../../test/fixtures/world.ts";
 
 type World = Awaited<ReturnType<typeof world>>;
@@ -117,7 +118,13 @@ describe("a used possession's key change, as kept", () => {
 		const assertion = w.assert(add.challenge);
 		await w.approvals.use({ statement: add.statement, assertion });
 		const { ct_hash: _, account: __, ...rest } = creationItems;
-		const items = { ...rest, account: "a***@example", basis: "passkey-add", evidence: add.hash };
+		const items = {
+			...rest,
+			account: "a***@example",
+			basis: "passkey-add",
+			approver_key: approverKey,
+			evidence: add.hash,
+		};
 		const { register } = await made(w, items);
 		const p = await register(1, "b1");
 		await w.approvals.use({ statement: p.possession, verification: "v1" });
@@ -145,7 +152,13 @@ describe("a used possession's key change, as kept", () => {
 		await w.approvals.use({ statement: add.statement, assertion: w.assert(add.challenge) });
 		w.advance(4 * 60_000);
 		const { ct_hash: _, account: __, ...rest } = creationItems;
-		const items = { ...rest, account: "a***@example", basis: "passkey-add", evidence: add.hash };
+		const items = {
+			...rest,
+			account: "a***@example",
+			basis: "passkey-add",
+			approver_key: approverKey,
+			evidence: add.hash,
+		};
 		const { register } = await made(w, items);
 		const p = await register(1, "b1");
 		await w.approvals.use({ statement: p.possession, verification: "v1" });
@@ -203,6 +216,7 @@ describe("a used possession's key change, as kept", () => {
 			subject: "s2",
 			account: "a***@example",
 			basis: "passkey-add",
+			approver_key: approverKey,
 			evidence: add.hash,
 		};
 		const two = await made(w, other);

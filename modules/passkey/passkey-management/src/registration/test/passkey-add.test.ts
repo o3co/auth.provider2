@@ -1,6 +1,6 @@
 import { Unavailable } from "@mod/kernel";
 import { challengeInput } from "@mod/sdk-core-wire";
-import type { Credential } from "@mod/webauthn";
+import { type Credential, passkeyJwk } from "@mod/webauthn";
 import { softwareAuthenticator, testOrigin } from "@mod/webauthn/testing";
 import { describe, expect, it } from "vitest";
 import { type Registered, registrationOver } from "../registration.ts";
@@ -57,7 +57,14 @@ async function added() {
 		const approval = JSON.stringify(auth.get(request as never, client, {}, approver.id));
 		const used = await w.parts.approvals.use({ statement: a.statement, assertion: approval });
 		if (used.kind !== "approved") throw new Error(used.reason);
-		const creation = await w.created("s1", "passkey-add", { evidence: a.hash, shown });
+		// The approving key as the Core names it (V30): the first key, the record's parent.
+		const approverKey = passkeyJwk(approver.publicKey)?.jwk;
+		if (!approverKey || approverKey.kty === "RSA") throw new Error("no approving key");
+		const creation = await w.created("s1", "passkey-add", {
+			evidence: a.hash,
+			shown,
+			approverKey,
+		});
 		return { a, approval, creation };
 	};
 	const { a, approval, creation } = await approved();

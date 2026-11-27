@@ -1,5 +1,6 @@
 import type { Approvals, Issued, Screen } from "@mod/approvals";
 import type { Held, PasskeyGenerations } from "@mod/passkeys";
+import type { CreationPayload } from "@mod/sdk-core-wire";
 import type { SubjectRevocation } from "@mod/subject-revocation";
 import { type Ceremonies, freshHandle } from "@mod/webauthn";
 import { z } from "zod";
@@ -21,9 +22,16 @@ export type CreationAsk = {
 			/** The sealed request's digest, as the Core opened it: the first key's path's alone. */
 			readonly ctHash: string;
 	  }
-	| { readonly basis: "passkey-add" }
+	| {
+			readonly basis: "passkey-add";
+			/** The key whose approval the passkey-add's creation goes on from, as its JWK (V30). */
+			readonly approverKey: ApproverKey;
+	  }
 	| { readonly basis: "sign-up" }
 );
+
+/** The approving key as a creation names it: sdk-core-wire's form, a P-256 or Ed25519 key's JWK where webauthn's `passkeyJwk` gives it. */
+export type ApproverKey = NonNullable<CreationPayload["creation"]["approver_key"]>;
 
 export type Created = Issued | { readonly kind: "refused"; readonly reason: "revoked" | "full" };
 
@@ -91,6 +99,7 @@ export function creationOver(p: {
 				basis: ask.basis,
 				evidence: ask.evidence,
 				...(ask.basis === "first-key" ? { ct_hash: ask.ctHash } : {}),
+				...(ask.basis === "passkey-add" ? { approver_key: ask.approverKey } : {}),
 				subject: ask.subject,
 				kg: generation,
 				options: {
@@ -110,6 +119,6 @@ export function creationOver(p: {
 /** The creation's items this package fills, every one its schema names. */
 export const creationItems = {
 	purpose: "creation",
-	names: ["account", "basis", "evidence", "ct_hash", "subject", "kg", "options"],
+	names: ["account", "basis", "evidence", "ct_hash", "subject", "kg", "approver_key", "options"],
 	by: "passkey-management",
 } as const;

@@ -3,6 +3,7 @@ import type { Approvals, Screen } from "@mod/approvals";
 import { Unavailable } from "@mod/kernel";
 import type { Passkeys } from "@mod/passkeys";
 import type { Users } from "@mod/users";
+import { passkeyJwk } from "@mod/webauthn";
 import { accountOf } from "../account.ts";
 import type { Created, CreationAsk } from "../creation/creation.ts";
 
@@ -120,8 +121,13 @@ export function approvalOver(p: ApprovalParts) {
 		const { subject, credential, registration } = approval;
 		if (!subject || !credential || !registration) return refused("unknown");
 		// The approving key, as it was when it approved: one removed since, or registered again, bases none.
-		if ((await p.passkeys.publicKeyOf(credential))?.registration !== registration)
-			return refused("approver");
+		const approving = await p.passkeys.publicKeyOf(credential);
+		if (approving?.registration !== registration) return refused("approver");
+		// Named in the creation (V30): the key change's parent, the screen's own key. An RS256 key approves
+		// no passkey-add in 0.1.0: no binding against duplicate-signature key selection is shown for it.
+		const approverKey = passkeyJwk(approving.publicKey)?.jwk;
+		if (!approverKey) return refused("approver");
+		if (approverKey.kty === "RSA") return refused("approver-algorithm");
 		const added = await p.approvals.passkeyAddOf(hash);
 		if (!added) return refused("expired");
 		const shown = accountOf(await p.users.contactsOf(subject));
@@ -129,6 +135,7 @@ export function approvalOver(p: ApprovalParts) {
 			subject,
 			...shown,
 			basis: "passkey-add",
+			approverKey,
 			evidence: hash,
 			screen: added.screen,
 			since: approval.issuedAt,

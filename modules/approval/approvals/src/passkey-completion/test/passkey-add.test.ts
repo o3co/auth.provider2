@@ -1,6 +1,11 @@
 import { hpke, payloads, typs } from "@mod/sdk-core-wire";
 import { describe, expect, it } from "vitest";
-import { creationItems, issued, payloadOf } from "../../../test/fixtures/statements.ts";
+import {
+	approverKey,
+	creationItems,
+	issued,
+	payloadOf,
+} from "../../../test/fixtures/statements.ts";
 import { openSealed, screenKeys, sha256, world } from "../../../test/fixtures/world.ts";
 import { passkeyAddCompletionsOver } from "../passkey-add.ts";
 
@@ -24,7 +29,13 @@ describe("a passkey-add's completion", () => {
 				purpose: "creation",
 				// A member given as undefined is none: a sign-up's names no account.
 				items: JSON.parse(
-					JSON.stringify({ ...rest, basis: "passkey-add", evidence: a.hash, ...items }),
+					JSON.stringify({
+						...rest,
+						basis: "passkey-add",
+						approver_key: approverKey,
+						evidence: a.hash,
+						...items,
+					}),
 				) as never,
 				screen,
 				by: "s1",
@@ -172,11 +183,12 @@ describe("a passkey-add's completion", () => {
 			});
 		// For another statement's evidence, another basis, or another screen's keys; or bytes not issued here.
 		await refuses(await creationFor({ evidence: sha256("other") }));
-		// A sign-up's creation names no account, its name in `user_name` alone.
+		// A sign-up's creation names no account, its name in `user_name` alone, and no approving key.
 		await refuses(
 			await creationFor({
 				basis: "sign-up",
 				account: undefined,
+				approver_key: undefined,
 				options: { ...creationItems.options, user_name: "Example 3fa9c1" },
 			}),
 		);

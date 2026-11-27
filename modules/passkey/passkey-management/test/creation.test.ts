@@ -6,6 +6,8 @@ import { nameOf } from "../src/account.ts";
 import { creationItems, creationOver } from "../src/creation/creation.ts";
 
 const screen = { eEnc: "E", eSig: { kty: "EC", crv: "P-256", x: "x", y: "y" } } as const;
+/** The approving key a passkey-add's creation names (V30): a P-256 key, in passkey-key-wire's form. */
+const approverKey = { kty: "EC", crv: "P-256", x: "A".repeat(43), y: "A".repeat(43) } as const;
 const ask = {
 	subject: "s-alice",
 	account: "a***@example.com",
@@ -106,29 +108,30 @@ it("signs none where webauthn's options come of another shape", async () => {
 	await expect(creation(false, true).create(ask)).rejects.toThrow(TypeError);
 });
 
-it("declares only creation items sdk-core-wire's schema names, and every item each path emits", async () => {
-	const named = new Set(Object.keys(payloads.creation.shape.creation.shape));
-	expect(creationItems.names.filter((name) => !named.has(name))).toEqual([]);
-	// Each path as it is asked: the first key's with its account and ciphertext's hash; passkey-add's
-	// and sign-up's with and without a shown account. What it emits is what approvals takes as declared.
+it("fills every creation item sdk-core-wire's schema names", () => {
+	const named = Object.keys(payloads.creation.shape.creation.shape);
+	expect([...creationItems.names].sort()).toEqual(named.sort());
+});
+
+it("names the approving key on a passkey-add's creation alone (V30)", async () => {
 	const c = creation();
-	const { ctHash: _first, account: _shown, ...plain } = ask;
+	const { ctHash: _first, ...rest } = ask;
+	await c.create({ ...rest, basis: "passkey-add", approverKey });
 	await c.create(ask);
-	for (const basis of ["passkey-add", "sign-up"] as const) {
-		await c.create({ ...plain, basis, account: ask.account });
-		await c.create({ ...plain, basis });
-	}
-	const emitted = new Set(c.asked.flatMap((a) => Object.keys(a.items)));
-	expect(
-		[...emitted].filter((name) => !(creationItems.names as readonly string[]).includes(name)),
-	).toEqual([]);
-	expect(c.asked).toHaveLength(5);
+	await c.create({ ...rest, basis: "sign-up" });
+	expect(c.asked).toHaveLength(3);
+	const [added, first, signUp] = c.asked;
+	expect(added?.items).toMatchObject({ basis: "passkey-add", approver_key: approverKey });
+	expect([first?.items, signUp?.items]).not.toContainEqual(
+		expect.objectContaining({ approver_key: expect.anything() }),
+	);
+	expect(payloads.creation.shape.creation.safeParse(added?.items).success).toBe(true);
 });
 
 it("signs a passkey-add's creation with no ciphertext's hash, its account masked, as sdk-core-wire takes it", async () => {
 	const c = creation();
 	const { ctHash: _first, ...rest } = ask;
-	await c.create({ ...rest, basis: "passkey-add" });
+	await c.create({ ...rest, basis: "passkey-add", approverKey });
 	const [asked] = c.asked;
 	expect(asked?.items).toMatchObject({ basis: "passkey-add", account: "a***@example.com" });
 	expect(asked?.items).not.toHaveProperty("ct_hash");
@@ -139,7 +142,7 @@ it("signs a passkey-add's creation with no ciphertext's hash, its account masked
 it("names a passkey-add's account no address names in `user_name`, by the RP ID and a mark of its subject", async () => {
 	const c = creation();
 	const { ctHash: _first, account: _masked, ...rest } = ask;
-	await c.create({ ...rest, basis: "passkey-add" });
+	await c.create({ ...rest, basis: "passkey-add", approverKey });
 	const [asked] = c.asked;
 	expect(asked?.items).not.toHaveProperty("account");
 	expect(asked?.items).toMatchObject({
@@ -167,7 +170,7 @@ it("signs a sign-up's creation for its T, its account named in `user_name` alone
 
 it("refuses a creation of any basis for a subject full, asking nothing", async () => {
 	const c = creation(false, false, true);
-	expect(await c.create({ ...ask, basis: "passkey-add" })).toEqual({
+	expect(await c.create({ ...ask, basis: "passkey-add", approverKey })).toEqual({
 		kind: "refused",
 		reason: "full",
 	});

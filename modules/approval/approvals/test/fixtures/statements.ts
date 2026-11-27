@@ -29,6 +29,13 @@ export const creationItems = {
 		algorithms: [-7 as const],
 	},
 };
+/** The approving key a passkey-add's creation names (V30): of the schema's form, not a real key (no point on P-256). */
+export const approverKey = {
+	kty: "EC",
+	crv: "P-256",
+	x: "A".repeat(43),
+	y: "A".repeat(43),
+} as const;
 export const possessionItems = {
 	creation_hash: "ch",
 	key_jkt: "kZ8n9mX3tQ2vB7cY4wR1sE6uA0pL5dH9jF2gK8hN3oM",

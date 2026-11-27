@@ -1,6 +1,7 @@
 import { generateKeyPairSync } from "node:crypto";
 import { requests } from "@mod/front-core-wire";
 import { rsaModulusCeiling } from "@mod/keys/testing";
+import { hpke, typs } from "@mod/sdk-core-wire";
 import { expect, it } from "vitest";
 import { masked } from "../../account.ts";
 import { screen, sha256, stack } from "./stack.ts";
@@ -26,8 +27,14 @@ const worstSubject = '"'.repeat(255);
 const worstAccount = masked(`"@${'"'.repeat(253)}`);
 const worstRpId = `${"a".repeat(63)}.${"b".repeat(63)}.${"c".repeat(63)}.${"d".repeat(58)}.rp`;
 
-const worst = () =>
-	stack({ core: { kid: "k".repeat(128), key: rsa }, issuer: `https://${"i".repeat(248)}` });
+// The issuer at the boot's limit, each character after the scheme a quote, which JSON writes in two,
+// by `http://` as development allows, one quote more than `https://` (sdk-core-wire's fixture's).
+const worstIssuer = `http://${'"'.repeat(249)}`;
+const worst = () => stack({ core: { kid: "k".repeat(128), key: rsa }, issuer: worstIssuer });
+const b64 = (text: string) => Buffer.from(text).toString("base64url");
+/** A statement's signature's part grown to the largest key keys takes, as `largest` counts it. */
+const atCeiling = (jws: string) =>
+	`${jws.slice(0, jws.lastIndexOf(".") + 1)}${"s".repeat(chars(rsaModulusCeiling / 8))}`;
 
 it("fits a creation excluding fifteen credentials of 1023 bytes under the largest Core key within the continue's statement", async () => {
 	const s = await worst();
@@ -58,6 +65,57 @@ it("fits a creation excluding fifteen credentials of 1023 bytes under the larges
 	// Past the 8192 it had, within the operation's statement now.
 	expect(length).toBeGreaterThan(8192);
 	expect(length).toBeLessThanOrEqual(maxOf("continue"));
+});
+
+it("fits a passkey-add's creation naming its approving key, excluding fifteen credentials of 1023 bytes, under the largest Core key within the continue's statement", async () => {
+	const s = await worst();
+	const shown = screen();
+	const issued = await s.parts.approvals.issue({
+		purpose: "creation",
+		items: {
+			account: worstAccount,
+			basis: "passkey-add",
+			evidence: sha256("passkey-add"),
+			subject: worstSubject,
+			kg: Number.MAX_SAFE_INTEGER,
+			// The largest approving key the Core names (V30): P-256's, both coordinates.
+			approver_key: { kty: "EC", crv: "P-256", x: "A".repeat(43), y: "A".repeat(43) },
+			options: {
+				user_id: "u".repeat(43),
+				rp_id: worstRpId,
+				exclude_credentials: Array.from({ length: 15 }, (_, n) => longId(n)),
+				algorithms: [-7, -8, -257],
+			},
+		},
+		screen: shown.keys,
+		by: worstSubject,
+	});
+	if (issued.kind !== "issued") throw new Error(issued.reason);
+	expect(largest(issued.statement)).toBeLessThanOrEqual(maxOf("continue"));
+	// And a completion that carries it, built here in approvals' form (its header the Core's, its typ the
+	// completion's), at the same signature's largest: padded to the bucket its 1023-byte ids choose.
+	const header = JSON.parse(
+		Buffer.from(issued.statement.split(".")[0] ?? "", "base64url").toString(),
+	);
+	const completion = atCeiling(
+		[
+			b64(JSON.stringify({ ...header, typ: typs.completion })),
+			b64(
+				JSON.stringify({
+					v: 1,
+					iss: worstIssuer,
+					t_hash: sha256("t"),
+					assertion_hash: sha256("assertion"),
+					purpose: "passkey-add",
+					creation: atCeiling(issued.statement),
+					iat: 9_999_999_999,
+					exp: 9_999_999_999,
+				}),
+			),
+			"s",
+		].join("."),
+	);
+	expect(hpke.paddedCompletion(completion, 1023)?.length).toBe(hpke.completionBuckets[1]);
 });
 
 it("fits a possession of a 1023-byte credential under the largest Core key within the key's finish's statement", async () => {
