@@ -8,7 +8,8 @@ type Refusal = string | undefined;
  * Why the creation's approving key is not the record's parent (V30, FIX_ADD_PARENT): the screen's own
  * key, as it checks its assertion verifies under it, and the parent, by thumbprint. An RS256 parent
  * approves no passkey-add in 0.1.0: no binding against duplicate-signature key selection is shown for
- * it. A creation naming no key of a passkey's form (none at all, while the wire takes it) is refused.
+ * it. A creation naming no key of a passkey's form is refused: the wire holds the key to its members'
+ * spellings alone (a curve not its key type's passes it), not to passkey-key-wire's whole form.
  */
 export function approverRefusal(checks: Checks, parentKey: string, named: unknown): Refusal {
 	const approving = checks.keyThumbprint(parentKey);

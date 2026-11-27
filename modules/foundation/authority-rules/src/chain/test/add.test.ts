@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { continuations } from "@mod/continuation-wire";
-import { canonicalText, payloads } from "@mod/sdk-core-wire";
+import { canonicalText } from "@mod/sdk-core-wire";
 import { describe, expect, it } from "vitest";
 import {
 	type AddParts,
@@ -89,18 +89,10 @@ describe("a key a live key's approval adds (passkey-add; Rules023e Allowed `add`
 		expect(verdictOn(addWith({ creation: naming(odd) }), keyed())).toEqual(
 			refused(/names no approving key a passkey's/),
 		);
-		// None named: refused here while sdk-core-wire takes such a creation, by its schema once it
-		// requires the key (the step after this one). The probe holds the complete creation first.
-		const keyedCreation = creation(subject.id, T0, 0, undefined, basis(parts.statement));
-		const { approver_key: _named, ...without } = keyedCreation.creation as Record<string, unknown>;
-		expect(payloads.creation.safeParse(keyedCreation).success).toBe(true);
-		const taken = payloads.creation.safeParse({ ...keyedCreation, creation: without }).success;
+		// None named: sdk-core-wire's schema takes no passkey-add's creation without its key, so the
+		// creation does not read as the ring's statement.
 		expect(verdictOn(addWith({ creation: naming(undefined) }), keyed())).toEqual(
-			refused(
-				taken
-					? /names no approving key a passkey's/
-					: /a statement is not signed by the writer generation's ring/,
-			),
+			refused(/a statement is not signed by the writer generation's ring/),
 		);
 		expect(verdictOn(addWith({ creation: naming(jwkOf(newKey.publicKey)) }), keyed())).toEqual(ok);
 	});
@@ -161,7 +153,7 @@ describe("a key a live key's approval adds (passkey-add; Rules023e Allowed `add`
 			...base,
 			state: { ...base.state, keys: { "r-1": { ...live, publicKey: "AAAA" } } },
 		};
-		// The creation names a key of a passkey's form, so the schema takes it whatever it requires.
+		// The creation names a readable key of a passkey's form: only the parent's own key does not read.
 		const parts = addParts("add-1", addedKey, unread);
 		const named = sign(
 			creation(subject.id, T0, 0, undefined, addBasis(parts.statement, newKey)),

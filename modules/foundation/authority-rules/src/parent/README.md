@@ -13,7 +13,7 @@ Internal module of `authority-rules`: a passkey-add's approving key, as its crea
 
 ## Invariants
 - The key named is the parent by thumbprint: passkey-key-wire's `passkeyThumbprintInput` of the JWK named, digested, against `keyThumbprint` of the parent's key. A credential id binds nothing here, being the registering side's to choose.
-- A parent whose key does not read approves none; a creation naming no key of a passkey's form (none at all, while sdk-core-wire takes one with none) is refused.
+- A parent whose key does not read approves none; a creation naming no key of a passkey's form is refused (sdk-core-wire takes no passkey-add's creation with none, but holds the key to its members' spellings alone, not to passkey-key-wire's whole form).
 - An RS256 parent approves no passkey-add in 0.1.0: no binding against duplicate-signature key selection is shown for RSA, so the screen could not tell its own key from another, and refusing it closes that case by itself. Once e = 65537's binding is shown, taking one is a wire change first (sdk-core-wire holds `approver_key` to P-256 and Ed25519).
 - Checking the screen's own assertion under the named key is the model's equality check because a key goes live only with its own possession proof; for ECDSA another key verifies the same signature, but no one holds its private key.
 
