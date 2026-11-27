@@ -116,9 +116,11 @@ const approval = z
 		state: z.string().min(1),
 		scope: z.string().min(1),
 		resource: z.string().min(1).optional(),
-		// No null anywhere: T is signed whole, and its signer writes no null (a claim asked by null is read as {}).
+		// A JSON object (OIDC Core §5.5), no null anywhere: T is signed whole, and its signer writes none.
 		claims: z
 			.unknown()
+			// isObject's test, inline: as a guard it would narrow the exported type, which readers narrow themselves.
+			.refine((claims) => typeof claims === "object" && claims !== null && !Array.isArray(claims))
 			.refine((claims) => !holdsNull(claims))
 			.optional(),
 		nonce: z.string().min(1),

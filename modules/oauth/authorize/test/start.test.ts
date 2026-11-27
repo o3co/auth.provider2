@@ -564,6 +564,24 @@ describe("a login's start (②)", () => {
 		expect(h.asked).toHaveLength(1);
 	});
 
+	it("refuses claims that are no JSON object before T, item:claims first, ahead of the OpenID and claims checks", async () => {
+		// Each later check would refuse too (no ID token made, no module reading the claims): item:claims wins.
+		const h = harness({ idTokens: false, claims: claimsUnread });
+		for (const [i, asking] of [5, "x", true, [], [{ id_token: {} }]].entries()) {
+			// Without openid too: the form is refused before an OpenID request's checks are reached.
+			for (const scope of ["openid read", "read"]) {
+				const refused = await h.body(
+					h.fields(jar(claims({ jti: `j-${i}-${scope}`, scope, claims: asking }))),
+				);
+				expect(refused, `${JSON.stringify(asking)} ${scope}`).toMatchObject({
+					status: 400,
+					json: { error: "invalid_request_object", error_description: "item:claims" },
+				});
+			}
+		}
+		expect(h.asked).toHaveLength(0);
+	});
+
 	it("refuses before T any claims where no module reads them", async () => {
 		const h = harness({ claims: claimsUnread });
 		const asking = { id_token: { email: null } };

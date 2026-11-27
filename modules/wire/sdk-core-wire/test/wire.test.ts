@@ -111,6 +111,25 @@ describe("the items T approves, from a JAR", () => {
 		expect(payloads.statement.shape.approval.safeParse(made.items).success).toBe(true);
 	});
 
+	it("refuses claims that are no JSON object, as OpenID Connect Core §5.5 writes the parameter, at the JAR and in T alike", () => {
+		for (const claims of [5, "x", true, [], [{ id_token: {} }]]) {
+			expect(itemsFromJar({ ...jar, claims }, "h"), JSON.stringify(claims)).toEqual({
+				error: "item:claims",
+			});
+		}
+		const made = itemsFromJar({ ...jar, claims: {} }, "h");
+		if (!("items" in made)) throw new Error(made.error);
+		expect(made.items.claims).toEqual({});
+		// An object of no prototype is an object too.
+		const bare = Object.assign(Object.create(null), { id_token: {} });
+		expect("items" in itemsFromJar({ ...jar, claims: bare }, "h")).toBe(true);
+		// T's own schema refuses a statement whose claims are no object, as the screen reads it.
+		for (const claims of [5, [], "x", true])
+			expect(payloads.statement.shape.approval.safeParse({ ...made.items, claims }).success).toBe(
+				false,
+			);
+	});
+
 	it("refuses a claim outside the closed set, authorization_details among them", () => {
 		expect(itemsFromJar({ ...jar, authorization_details: [] }, "h")).toEqual({
 			error: "unknown_item:authorization_details",
