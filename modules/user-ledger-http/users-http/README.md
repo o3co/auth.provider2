@@ -10,6 +10,7 @@
 
 ## Offers
 - Composition definition only (a contribution to `users`' `ledgers`). It is not the users axis's default, `users-local` is: a composition using an outside ledger names it to compose it.
+- `./testing`: `usersHttpConfig`, the section of a test's configuration, and `testCredential`, the credential it names.
 - Operator section, each URL whole (https or a plain-http pair outbound names, no fragment; optional, at least one):
   - `verify-url`: the password call; without it, no password matches and nothing is asked.
   - `subject-url`: the lookup by subject, posting `{"subject"}`; a `404` or `410` saying so is none, `401` and `403` unavailable.

@@ -28,6 +28,7 @@ import usersModule from "@mod/users/module";
 import { ledgerContract, memoryUsersStores, testUser, usersContract } from "@mod/users/testing";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import usersHttp from "../src/module.ts";
+import { testCredential, usersHttpConfig } from "../src/testing.ts";
 
 const credential = randomBytes(32).toString("hex");
 /** Alice as the ledger answers her. */
@@ -197,6 +198,27 @@ const boot = (
 		},
 		runtime,
 	});
+
+describe("./testing", () => {
+	it("gives a section the module takes and boots on, its credential the one named, a setting given replacing its own", async () => {
+		const section = usersHttpConfig()["users-http"];
+		expect(section.credential).toBe(testCredential);
+		await expect(boot(section, [], ["ledger.example.invalid"])).resolves.toBeDefined();
+		const given = usersHttpConfig({ "subject-url": undefined, timeout: "2s" })["users-http"];
+		expect(given).toMatchObject({
+			"verify-url": section["verify-url"],
+			"subject-url": undefined,
+			timeout: "2s",
+		});
+		await expect(boot(given, [], ["ledger.example.invalid"])).resolves.toBeDefined();
+		// Typed as the section takes it: a value of another type, or a key it lacks, is a type error.
+		// @ts-expect-error a URL is a string
+		usersHttpConfig({ "subject-url": 123 });
+		// @ts-expect-error no such key
+		usersHttpConfig({ typo: "anything" });
+	});
+});
+
 /** The contributed ledger itself, and users answering from it. */
 async function open(extra?: Record<string, unknown>, allow?: string[]) {
 	const app = await boot(settings(extra), [], allow);

@@ -67,6 +67,9 @@ const section = z
 		}
 	});
 
+/** The section as a test's configuration writes it (`./testing`). */
+export type UsersHttpSettings = z.input<typeof section>;
+
 const unanswerable = deepFreeze({ kind: "unanswerable" } as const);
 const none = deepFreeze({ kind: "none" } as const);
 
