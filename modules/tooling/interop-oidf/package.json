@@ -7,7 +7,11 @@
 	"scripts": {
 		"deviations": "node src/deviations/main.ts"
 	},
+	"dependencies": {
+		"@mod/docker-client": "workspace:*"
+	},
 	"devDependencies": {
+		"@mod/conformance-front": "workspace:*",
 		"vitest": "5.0.5"
 	}
 }

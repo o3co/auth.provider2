@@ -3440,7 +3440,14 @@ importers:
         version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(vite@8.3.3(@types/node@26.6.5)(yaml@2.9.1))
 
   modules/tooling/interop-oidf:
+    dependencies:
+      '@mod/docker-client':
+        specifier: workspace:*
+        version: link:../docker-client
     devDependencies:
+      '@mod/conformance-front':
+        specifier: workspace:*
+        version: link:../conformance-front
       vitest:
         specifier: 5.0.5
         version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(vite@8.3.3(@types/node@26.6.5)(yaml@2.9.1))

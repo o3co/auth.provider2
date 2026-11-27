@@ -52,5 +52,41 @@
 		"behaviour": "Every authorization request is a signed JAR (PAR in a FAPI configuration, F4)",
 		"why": "Without a signed request, a compromised Front rewrites the request the person approves (claim 1's code-grant hole). Applies only if the Security Profile plan is run",
 		"decision": "F4, 0.8"
+	},
+	{
+		"key": "form-post-required",
+		"kind": "strict",
+		"standard": "RFC 6749 §4.1.2; OAuth 2.0 Multiple Response Type Encoding Practices §2.1; RFC 9207; FAPI 2.0 Security Profile",
+		"text": "An AS may return the authorization response in the redirect URI's query, made safe by `iss` (RFC 9207); the client may leave `response_mode` out",
+		"behaviour": "A JAR must carry `response_mode=form_post`; the response is a POST to the redirect URI, never its query",
+		"why": "Against login CSRF: the RP's callback takes the response by `form_post` alone and checks that its `Origin` is exactly the login screen's, its `state` cookie `SameSite=None; Secure`, so a response another site sends the victim's browser is refused",
+		"decision": "R12"
+	},
+	{
+		"key": "jar-jti-required",
+		"kind": "strict",
+		"standard": "RFC 9101; RFC 7519 §4.1.7",
+		"text": "A request object may leave `jti` out",
+		"behaviour": "A JAR without `jti` is refused; one JAR starts one login, held by its client and `jti` until its expiry and the clock skew",
+		"why": "The Core uses one JAR, and its `request_uri`, for one statement T alone, which needs the JAR named",
+		"decision": "A20"
+	},
+	{
+		"key": "jar-typ-required",
+		"kind": "strict",
+		"standard": "FAPI 2.0 Message Signing §5.3.2; RFC 9101 §10.8; RFC 8725 §3.11",
+		"text": "A client should send `typ` `oauth-authz-req+jwt` (FAPI 2.0 Message Signing); the AS need not require it",
+		"behaviour": "A JAR without `typ` `oauth-authz-req+jwt` is refused; the type is compared as a media type, without case",
+		"why": "Explicit typing keeps a JWT made for another purpose with the same client key from being passed off as a request object",
+		"decision": "S3"
+	},
+	{
+		"key": "par-jar-lifetime",
+		"kind": "strict",
+		"standard": "FAPI 2.0 Message Signing §5.3.1",
+		"text": "An AS refuses a request object whose `exp` is more than 60 minutes after its `nbf`",
+		"behaviour": "PAR refuses a JAR whose `exp` is further than its own `jar-max-lifetime` (90 seconds by default) from the time it takes it; the login's start checks it again against `authorize`'s",
+		"why": "A short `exp` and the Core's own cap keep long-lived JARs from piling up reservations",
+		"decision": "A20"
 	}
 ]
