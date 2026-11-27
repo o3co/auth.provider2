@@ -1,11 +1,11 @@
 import { join } from "node:path";
+import { dependencyRules } from "./dependencies/dependencies.ts";
 import { ownedPropertyRules } from "./owned-property/owned-property.ts";
 import { declaredRecordRules } from "./recorded/recorded.ts";
 import {
 	axisRules,
 	bridgeRules,
 	cycles,
-	dependencyRules,
 	fileImportRules,
 	helperRules,
 	ownFileRules,

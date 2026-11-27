@@ -199,6 +199,30 @@ describe("guard-imports", () => {
 		);
 	});
 
+	it("G36 holds every kind but verification from a verification package at run time, never in tests", () => {
+		const fakes = pkg(
+			"@v/fakes",
+			{ "src/contract.ts": "export const f = 1;\n" },
+			{},
+			"verification",
+		);
+		const named = (field: string) => ({ [field]: { "@v/fakes": "workspace:*" } });
+		const of = (name: string, kind: string, field: string) =>
+			pkg(name, { "src/contract.ts": "export const u = 1;\n" }, named(field), kind);
+		const g36 = (packages: Pkg[]) => rules(packages).filter((r) => r === "G36");
+		// A companion sits above verification: G10 lets it, and G36 alone holds it.
+		for (const kind of ["feature", "wiring", "assembly", "companion"]) {
+			expect(g36([fakes, of(`@v/${kind}`, kind, "dependencies")]), kind).toEqual(["G36"]);
+			expect(g36([fakes, of(`@v/${kind}-peer`, kind, "peerDependencies")]), kind).toEqual(["G36"]);
+			expect(g36([fakes, of(`@v/${kind}-tests`, kind, "devDependencies")]), kind).toEqual([]);
+		}
+		expect(g36([fakes, of("@v/harness", "verification", "dependencies")])).toEqual([]);
+		// The companion's own kind direction lets it: G10 says nothing of it.
+		expect(rules([fakes, of("@v/companion-g10", "companion", "dependencies")])).not.toContain(
+			"G10",
+		);
+	});
+
 	it("reads a workspace peer as a dependency, as G8 takes it at run time", () => {
 		const feature = pkg("@q/feature", { "src/contract.ts": "export const f = 1;\n" }, {});
 		const base = pkg(

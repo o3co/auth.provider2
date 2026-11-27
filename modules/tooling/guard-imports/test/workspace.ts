@@ -17,6 +17,7 @@ export const budget: Rules = {
 		["feature"],
 		["adapter"],
 		["assembly", "wiring", "verification"],
+		["companion"],
 	],
 	verificationKind: "verification",
 	productKinds: ["foundation", "capability", "feature", "adapter", "wiring"],

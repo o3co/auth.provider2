@@ -8,9 +8,7 @@
   - G4: contract tests (`./testing`) are used only from test code, read as the budgets read it (`budgetsAsTest`): a file named as a test, or one only its package's `./testing` reaches.
   - G8: shipped code imports at run time only what the manifest declares.
   - G34: each file a source names, tests' too, by an import, a re-export, a dynamic import, an import type, `import … = require(…)` or `require`, is a file of its own package, as `facts` resolve it (links followed) and as the scope's owner of the path tells; one reaching another package is a dependency no manifest states. A relative specifier named at run time (a template with a substitution) is refused, being unknowable; a resolve names a file and takes no dependency.
-  - G10: kind direction: a lower kind never depends on a higher one, by each manifest's kind; a test dependency may point up to the wiring kind only. No kind, or one `kinds` does not know, is refused.
-  - G14: a verification base depends on no product module.
-  - G16: a feature depends on no capability, nor on a package declaring `forWiring` (a feature's storage is its wiring's to build on it); its tests may use their `./testing` stand-in. `forWiring` is `true` only.
+  - G2, G10, G14, G16, G36: what a package may depend on, by its kind and its manifest's: internal module `dependencies`.
   - G22: only a wiring-kind package wires (`wires` in its manifest), and a feature that declares `storeWiring` has one.
   - G24: a wiring that declares spaces keys their guarantees by the needs its feature declares: shipped code takes `keyof typeof` a name imported from the feature.
   - G25: an adapter declares exactly one of `replaces` and `adapts`, naming a workspace package; an axis has at most one `default`, and one when it has several adapters, `neverDefault` aside; `default`, `neverDefault` (not both) and `optIn` are `true` only, on an adapter, an adapter and a feature; a wording adapter never `joins` its owner.
@@ -44,7 +42,7 @@
 - A package depends on what its manifest names in `dependencies` and `peerDependencies`, and in `devDependencies` where a rule counts tests (G1, G2, G10, G14, G16 do).
 - G29 reads a test file's imports: a `./module` (its own package's by path) is composed, a `./testing` value named `…StandIn` composes its package, and an adapter composes its owner; a stand-in named otherwise, or a composition built elsewhere or at run time, is missed, not reported. A package contributes to a bridge when its shipped code takes one of the bridge's `extensionPoint` values.
 - G29 counts feature bridges only: a foundation bridge's points collect operational counts that decide no answer a test reads.
-- Internal modules `recorded` (G30), `taken` (G31), `owned-property` (G32), `facts`, `surface` and `scope`.
+- Internal modules `dependencies` (G2, G10, G14, G16, G36), `recorded` (G30), `taken` (G31), `owned-property` (G32), `facts`, `surface` and `scope`.
 
 ## Depends on
 - `typescript`, `workspace-packages` (the workspace's packages).
