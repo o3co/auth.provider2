@@ -45,7 +45,8 @@ const fakes = defineModule(
 			.contribute(statementItems)
 			.by(() => ({ purpose: "authorization", names: ["dpop_jkt"], by: "fakes" })),
 		m.provide(clients).by(() => ({}) as never),
-		m.provide(clientAssertion).by(() => ({}) as never),
+		// A narrowed list: what is published is read through the contract, never a copy of the default.
+		m.provide(clientAssertion).by(() => ({ algorithms: ["ES256", "EdDSA"] }) as never),
 		m.provide(approvals).by(() => ({}) as never),
 		m.provide(jarReservations).by(() => ({}) as never),
 		m.provide(accessTokenIssuance).by(() => ({}) as never),
@@ -96,7 +97,8 @@ describe("authorize, composed", () => {
 	it("refuses boot where no module fills dpop_jkt", async () => {
 		const bare = defineModule({ name: "bare", replicaSafe: true, takes: [routes] }, (m) => [
 			m.provide(clients).by(() => ({}) as never),
-			m.provide(clientAssertion).by(() => ({}) as never),
+			// authorize reads the request object algorithms at boot, whatever else is left out.
+			m.provide(clientAssertion).by(() => ({ algorithms: ["ES256", "EdDSA"] }) as never),
 			m.provide(approvals).by(() => ({}) as never),
 			m.provide(jarReservations).by(() => ({}) as never),
 			m.provide(accessTokenIssuance).by(() => ({}) as never),
@@ -141,6 +143,13 @@ describe("authorize, composed", () => {
 				BootRefused.is(error) ? error.refusals.map((r) => r.reason) : [String(error)],
 		);
 		expect(refused).toEqual(["more than one rule reads the audience asked (resource)"]);
+	});
+
+	it("publishes the request object algorithms a JAR is verified under, client-assertion's exactly", async () => {
+		const published = (await (await boot()).get(seen)).metadata.find(
+			(i) => i.name === "request_object_signing_alg_values_supported",
+		);
+		expect(published?.value).toEqual(["ES256", "EdDSA"]);
 	});
 
 	it("takes the JAR by value, and says so, unless a request source is the only one taken; two such refuse boot", async () => {

@@ -4,6 +4,7 @@ import { testRequest } from "@mod/http/testing";
 import { takesUnused } from "@mod/kernel/testing";
 import { pkcs1v15Deprecated } from "@mod/keys";
 import { describe, expect, it } from "vitest";
+import { clientAssertion } from "../src/contract.ts";
 import { assertionType } from "../src/method/method.ts";
 import { section } from "../src/section.ts";
 import { composed, type Header } from "./composed.ts";
@@ -37,6 +38,9 @@ describe("private_key_jwt", () => {
 			settings: { algorithms: ["RS256", "PS256", "RS256"] },
 		});
 		expect(named.c.signingAlgorithms()).toEqual(["RS256", "PS256"]);
+		// The contract names the same ones, for a request object verified by it too.
+		expect((await boot()).app.get(clientAssertion).algorithms).toEqual(["ES256", "PS256", "EdDSA"]);
+		expect(named.app.get(clientAssertion).algorithms).toEqual(["RS256", "PS256"]);
 		for (const algorithms of [[], ["HS256"], ["none"]]) {
 			expect(section.safeParse({ algorithms }).success, String(algorithms)).toBe(false);
 		}

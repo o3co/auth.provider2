@@ -186,8 +186,17 @@ export const issuerMetadata = Object.freeze({
 	signedRequest: { name: "require_signed_request_object", value: true },
 	requestParameter: { name: "request_parameter_supported" },
 	requestUriParameter: { name: "request_uri_parameter_supported" },
+	requestObjectAlgorithms: { name: "request_object_signing_alg_values_supported" },
 	issParameter: { name: "authorization_response_iss_parameter_supported", value: true },
 });
+
+/** The request object algorithms published: exactly the ones a JAR is verified under, at the push and at the start (client-assertion's). */
+export async function requestObjectAlgorithmsIn(c: BuildContext<Settings>) {
+	return {
+		...issuerMetadata.requestObjectAlgorithms,
+		value: [...(await c.get(clientAssertion)).algorithms],
+	};
+}
 
 /** What the start takes from the composition. */
 export const startTakes = [

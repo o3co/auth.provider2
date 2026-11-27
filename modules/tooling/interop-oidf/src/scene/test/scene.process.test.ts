@@ -33,6 +33,10 @@ describe("the provider as the OIDF run meets it", () => {
 			require_pushed_authorization_requests: true,
 			authorization_response_iss_parameter_supported: true,
 		});
+		// The JAR is verified under the client assertion's own algorithms: one list, under two names.
+		const assertion = answer.json.token_endpoint_auth_signing_alg_values_supported;
+		expect(answer.json.request_object_signing_alg_values_supported).toEqual(assertion);
+		expect(assertion).toEqual(["ES256", "PS256", "EdDSA"]);
 	});
 
 	it("publishes RFC 8414's document too, the same issuer", async () => {

@@ -17,6 +17,7 @@ import {
 	filledItems,
 	issuerMetadata,
 	onlyOf,
+	requestObjectAlgorithmsIn,
 	startRouteIn,
 	startTakes,
 	takenOf,
@@ -77,6 +78,7 @@ export default defineModule(
 			value: takenOf(await c.collect(requestSources)).some((s) => s.readsRequestUri === true),
 		})),
 		m.contribute(metadata).by(() => issuerMetadata.issParameter),
+		m.contribute(metadata).by((c: Context) => requestObjectAlgorithmsIn(c)),
 		m.contribute(routes).by(async (c: Context) => {
 			const passkeyless = await c.collect(withoutPasskey);
 			if (passkeyless.length > 1)

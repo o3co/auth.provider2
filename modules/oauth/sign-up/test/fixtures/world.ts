@@ -187,6 +187,8 @@ export async function f1World(p: { readonly redirectUris?: readonly string[] } =
 		m.provide(clientAssertion).by(
 			() =>
 				({
+					// What authorize publishes as the request object algorithms (it reads them at boot).
+					algorithms: ["ES256"],
 					verifySignedBy: async (c: Client, jwt: string, typ: string) => {
 						const [, payload, by] = jwt.split(".");
 						if (typ !== typs.jar || by !== c.id) return { kind: "refused", reason: "signature" };

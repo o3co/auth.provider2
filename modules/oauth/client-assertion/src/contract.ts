@@ -39,6 +39,11 @@ export interface ClientAssertion {
 	 * Unavailable while a registered client's key set cannot be had.
 	 */
 	verifySignedBy(client: Client, jwt: string, typ: string): Promise<SignedBy>;
+	/**
+	 * The algorithms `verifySignedBy` takes a JWT signed under: the operator's, each once, in the order
+	 * named; for a request object as for an assertion, so a module publishing what it verifies reads them here.
+	 */
+	readonly algorithms: readonly string[];
 }
 
 export const clientAssertion = contract<ClientAssertion>("client-assertion");

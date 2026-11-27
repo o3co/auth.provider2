@@ -18,6 +18,7 @@ export function signedBy(p: {
 }): ClientAssertion {
 	return {
 		verifiedOf,
+		algorithms: p.algorithms,
 		verifySignedBy: async (client, jwt, typ) => {
 			const { algorithms, skewMs, maxLifetimeMs } = p;
 			const verifier = p.jwt.verifierOf(keysFor(client), {
