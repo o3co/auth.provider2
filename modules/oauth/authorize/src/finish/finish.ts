@@ -54,7 +54,8 @@ const unmetAnswer = (unmet: Unmet): HttpResponse => {
 		case "scope":
 			return refused(400, "invalid_scope", "the scope is not allowed");
 		case "resource":
-			return bad("the resource is not one the client may be issued for");
+			// RFC 8707 §2, as the start answers it: the client's allowance changed since ②, the authorization's own answer.
+			return refused(400, "invalid_target", "the resource is not one the client may be issued for");
 		case "binding":
 			return bad("the statement names no binding asked for ahead");
 		default:

@@ -689,3 +689,83 @@ describe("authorization.denial", () => {
 		});
 	});
 });
+
+describe("authorization.refusal (the Core's refusal of the finish)", () => {
+	it("answers what the page POSTs for the Core's refusal that is the authorization's own answer, every value T's (OIDC Core §3.1.2.6)", async () => {
+		for (const error of [
+			"login_required",
+			"access_denied",
+			"unauthorized_client",
+			"invalid_scope",
+			"invalid_target",
+		]) {
+			const w = await world();
+			const carried = authorization.refusal(w.read, error);
+			expect(carried, error).toEqual({
+				redirectUri: w.t.approval.redirect_uri,
+				fields: { error, state: w.t.approval.state, iss: w.t.iss },
+			});
+			expect(Object.isFrozen(carried)).toBe(true);
+			if ("fields" in carried) expect(Object.isFrozen(carried.fields), error).toBe(true);
+		}
+		const pushed = await world("urn:ietf:params:oauth:request_uri:p3");
+		expect(authorization.refusal(pushed.read, "login_required")).toMatchObject({
+			fields: { error: "login_required" },
+		});
+	});
+
+	it("carries no refusal that is the screen's or the moment's, nor one RFC 6749 sends nowhere: the screen shows its own page", async () => {
+		for (const error of [
+			"invalid_request",
+			"temporarily_unavailable",
+			"rate_limited",
+			"server_error",
+			"invalid_client",
+			"",
+			"login_required ",
+			"__proto__",
+		]) {
+			const w = await world();
+			expect(authorization.refusal(w.read, error), error).toEqual({ error: "refusal" });
+			// The T is not ended by a refusal not carried: the page may ask again.
+			expect(await authorization.assertionOptions(w.read, { rpId: "id.example" })).not.toEqual({
+				error: "denied",
+			});
+		}
+	});
+
+	it("ends the T as a denial does, answers the same asked again, and is refused for a copy or a T whose completion finish took", async () => {
+		const { w, sealed, finish } = await answered();
+		const { log: _log, ...completionOnly } = finish;
+		const first = authorization.refusal(w.read, "login_required");
+		expect(authorization.refusal(w.read, "login_required")).toEqual(first);
+		expect(await authorization.assertionOptions(w.read, { rpId: "id.example" })).toEqual({
+			error: "denied",
+		});
+		expect(await authorization.finish(w.read, sealed, { ...completionOnly, level: "L0" })).toEqual({
+			error: "denied",
+		});
+		// Once ended, the person's own denial makes no second POST, and the refusal answers the same end.
+		expect(authorization.denial(w.read)).toEqual({ error: "ended" });
+		expect(authorization.refusal(w.read, "access_denied")).toEqual(first);
+		// A T the person denied first: the Core's refusal after it answers that denial.
+		const person = await world();
+		const denied = authorization.denial(person.read);
+		expect(authorization.refusal(person.read, "login_required")).toEqual(denied);
+		// The Core's access_denied carried first: the person's denial after it is no second POST either.
+		const core = await world();
+		expect(authorization.refusal(core.read, "access_denied")).toHaveProperty("fields");
+		expect(authorization.denial(core.read)).toEqual({ error: "ended" });
+		expect(authorization.refusal({ ...w.read }, "login_required")).toEqual({ error: "statement" });
+		// The T is held first, whatever the word.
+		expect(authorization.refusal({ ...w.read }, "invalid_request")).toEqual({ error: "statement" });
+		const done = await answered();
+		const { log: _l, ...doneOnly } = done.finish;
+		expect(
+			await authorization.finish(done.w.read, done.sealed, { ...doneOnly, level: "L0" }),
+		).toEqual({
+			code: done.code,
+		});
+		expect(authorization.refusal(done.w.read, "access_denied")).toEqual({ error: "finished" });
+	});
+});

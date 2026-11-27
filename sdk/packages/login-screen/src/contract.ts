@@ -7,11 +7,13 @@ export { type AnswerForm, type Answers, answers } from "./answers.ts";
 export {
 	type AuthorizationError,
 	authorization,
+	type CarriedRefusal,
 	type Denial,
 	type FinishChecks,
 	type FinishError,
 	type PushedAuthorizationError,
 	type ReadT,
+	type Refused,
 } from "./authorization.ts";
 export { challengeOf } from "./challenge.ts";
 export type { CompletionError, CompletionOptions } from "./completion.ts";

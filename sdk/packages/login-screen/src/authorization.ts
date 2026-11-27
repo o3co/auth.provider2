@@ -37,8 +37,10 @@ export interface ReadT {
 	readonly compact: string;
 }
 const issued = new WeakSet<ReadT>();
-/** The T a denial was given for: none is approved or continued after. */
+/** The T ended with no code, by the person's denial or the Core's refusal carried: none is approved or continued after. */
 const denied = new WeakSet<ReadT>();
+/** Each ended T's end, and who ended it: one end per T. */
+const ends = new WeakMap<ReadT, { readonly end: Refused; readonly by: "person" | "core" }>();
 /** The T a completion was taken for: none is denied after. */
 const completed = new WeakSet<ReadT>();
 
@@ -256,25 +258,89 @@ export interface Denial {
 	};
 }
 
+/** What the page POSTs, as a denial, when the Core refused the finish: `error` the Core's word. */
+export interface Refused {
+	readonly redirectUri: string;
+	readonly fields: {
+		readonly error: CarriedRefusal;
+		readonly state: string;
+		readonly iss: string;
+	};
+}
+
+/**
+ * The Core's refusals of the finish that are the authorization's own answer (RFC 6749 §4.1.2.1, OIDC
+ * Core §3.1.2.6), carried to the relying party: the login not approved or not of the subject or acr
+ * asked, another subject than the hint's, the code grant, the scope or the resource no longer the
+ * client's (`invalid_target`, RFC 8707 §2). Not the
+ * screen's own request's (`invalid_request`), the moment's (`temporarily_unavailable`, `rate_limited`,
+ * `server_error`), nor an unknown client's (RFC 6749 §4.1.2.1 sends that nowhere).
+ */
+const carried = [
+	"access_denied",
+	"login_required",
+	"unauthorized_client",
+	"invalid_scope",
+	"invalid_target",
+] as const;
+export type CarriedRefusal = (typeof carried)[number];
+
+/** The end of T with `error`: denied, the same end answered for it however asked again. */
+function ended(
+	t: ReadT,
+	error: CarriedRefusal,
+	by: "person" | "core",
+): { readonly end: Refused; readonly by: "person" | "core" } | { readonly error: "finished" } {
+	if (completed.has(t)) return { error: "finished" };
+	const kept = ends.get(t);
+	if (kept) return kept;
+	denied.add(t);
+	const { approval, iss } = t.statement;
+	const end: Refused = deepFreeze({
+		redirectUri: approval.redirect_uri,
+		fields: { error, state: approval.state, iss },
+	});
+	const made = { end, by };
+	ends.set(t, made);
+	return made;
+}
+
 /**
  * The denial of T `read` or `readPushed` gave (RFC 6749 §4.1.2.1): it ends this attempt, so T is
  * approved, proved or continued to a sign-up by no later step. It revokes nothing already sent: an
  * approval in flight is still the Core's to judge until T's expiry. A T whose completion `finish`
  * took is not denied (`finished`): its code is the page's to POST. No callback proof goes with a
- * denial, as there is no code to bind. Asked again for the same T, it answers the same.
+ * denial, as there is no code to bind. Asked again for the same T, it answers the same; for a T the
+ * Core's refusal ended (`refusal`), `ended`: its POST was made, none goes beside it.
  */
-function denial(t: ReadT): Denial | { readonly error: "statement" | "finished" } {
+function denial(t: ReadT): Denial | { readonly error: "statement" | "finished" | "ended" } {
 	if (!issued.has(t)) return { error: "statement" };
-	if (completed.has(t)) return { error: "finished" };
-	denied.add(t);
-	const { approval, iss } = t.statement;
-	return deepFreeze({
-		redirectUri: approval.redirect_uri,
-		fields: { error: "access_denied", state: approval.state, iss },
-	});
+	const made = ended(t, "access_denied", "person");
+	if ("error" in made) return made;
+	// The person's own end is access_denied's alone; one the Core's refusal made is no denial to POST again.
+	return made.by === "person" ? (made.end as Denial) : { error: "ended" };
 }
 
-/** An authorization's steps on the screen: read T against the JAR, or by the client and the `request_uri` under PAR, ask the passkey, take the completion, sign the callback's proof; or send the person's denial. */
+/**
+ * The Core's refusal of the finish, by its `error` as the page read it (front-core-wire's `refusals`),
+ * carried to the relying party as a denial is, and ending T alike: one of `CarriedRefusal`. Any other
+ * is `refusal`, T not ended: the screen shows its own page. The page asks it once it gives the attempt
+ * up: a refused approval the person may try again (another key) is not yet the attempt's end. The word
+ * is unauthenticated: a Front may make one up, even in place of a completion it holds, ending T (no
+ * code then); the relying party fails the attempt on it and acts on it no further.
+ */
+function refusal(
+	t: ReadT,
+	error: string,
+): Refused | { readonly error: "statement" | "finished" | "refusal" } {
+	if (!issued.has(t)) return { error: "statement" };
+	const word = carried.find((one) => one === error);
+	if (word === undefined) return { error: "refusal" };
+	const made = ended(t, word, "core");
+	return "error" in made ? made : made.end;
+}
+
+/** An authorization's steps on the screen: read T against the JAR, or by the client and the `request_uri` under PAR, ask the passkey, take the completion, sign the callback's proof; or end it with no code, by the person's denial or the Core's refusal carried. */
 export const authorization = Object.freeze({
 	read,
 	readPushed,
@@ -282,4 +348,5 @@ export const authorization = Object.freeze({
 	finish,
 	callbackProof,
 	denial,
+	refusal,
 });

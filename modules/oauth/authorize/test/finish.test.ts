@@ -59,6 +59,8 @@ function harness(
 			| { kind: "acrUnmet" };
 		/** The acr a passkey's login meets. */
 		acr?: string;
+		/** T's resource, where it names one. */
+		resource?: string;
 		/** The subject T's id_token_hint was verified for (its hint_sub). */
 		hintSub?: string;
 	} = {},
@@ -87,6 +89,7 @@ function harness(
 			scope: p.scope ?? items.scope,
 			...(p.claims === undefined ? {} : { claims: p.claims }),
 			...(p.hintSub === undefined ? {} : { hint_sub: p.hintSub }),
+			...(p.resource === undefined ? {} : { resource: p.resource }),
 		},
 	};
 	const scopes = p.scopes ?? ["read"];
@@ -334,6 +337,19 @@ describe("a login's finish (⑤⑥)", () => {
 		});
 		expect(await both.send()).toMatchObject({ status: 400, json: { error: "login_required" } });
 		expect(both.log.some((line) => line.startsWith("select"))).toBe(false);
+	});
+
+	it("answers a resource the client may no longer be issued for as invalid_target (RFC 8707 §2), as the start does, no session opened", async () => {
+		const gone = harness({ resource: "https://elsewhere" });
+		expect(await gone.send()).toMatchObject({
+			status: 400,
+			json: {
+				error: "invalid_target",
+				error_description: "the resource is not one the client may be issued for",
+			},
+		});
+		expect(gone.log.some((line) => line.startsWith("open"))).toBe(false);
+		expect(await harness({ resource: "https://api" }).send()).toMatchObject({ status: 200 });
 	});
 
 	it("gives the code the acr a passkey's login meets, and opens no session where an essential acr asked is not met", async () => {

@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { refusals } from "@mod/front-core-wire";
 import { hpke } from "@mod/sdk-core-wire";
 import {
 	answers,
@@ -89,6 +90,14 @@ export interface Callback {
 /** What the page POSTs to the RP's redirect URI when the person refuses: `access_denied`, and T's state and issuer. */
 export interface Denied {
 	readonly error: "access_denied";
+	readonly state: string;
+	readonly iss: string;
+	readonly redirectUri: string;
+}
+
+/** What the page POSTs to the RP's redirect URI when the Core refused the finish: the Core's word, and T's state and issuer. */
+export interface Refused {
+	readonly error: string;
 	readonly state: string;
 	readonly iss: string;
 	readonly redirectUri: string;
@@ -320,6 +329,20 @@ export function loginScreen(
 		const denied = authorization.denial(started.t);
 		if ("error" in denied) return sdkRefused("authorization.denial", denied.error);
 		return { ...denied.fields, redirectUri: denied.redirectUri };
+	};
+
+	/**
+	 * ④ after a finish the Core refused (`approve` stopped at the Core): the refusal the page POSTs to the
+	 * RP (form_post), the word read from the wire's refusal, every other value T's.
+	 */
+	const carry = (started: Started, stop: Stopped): Refused | Stopped => {
+		// A finish's refusal alone: a start's is no refusal the page carries.
+		const wire = "answered" in stop && stop.at === "/login/finish" ? stop.answered.wire : undefined;
+		const word = wire?.outcome === "refused" ? refusals[wire.message.error - 1] : undefined;
+		if (word === undefined) return sdkRefused("authorization.refusal", "no refusal of the Core");
+		const carried = authorization.refusal(started.t, word);
+		if ("error" in carried) return sdkRefused("authorization.refusal", carried.error);
+		return { ...carried.fields, redirectUri: carried.redirectUri };
 	};
 
 	/**
@@ -598,6 +621,7 @@ export function loginScreen(
 		signUp: signUpWith,
 		approve,
 		deny,
+		carry,
 		approveManagement,
 		addKey,
 		deleteKey,
