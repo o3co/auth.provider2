@@ -13,6 +13,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { stopAll } from "../../lifecycle/lifecycle.ts";
 import { dpopKey, type ProofChange } from "../../rp/test/rp.ts";
 import { type Answered, type At, ask } from "../../scene/test/ask.ts";
+import { heldUnderAudit } from "../../scene/test/held.ts";
 import { type SignedIn, signedIn } from "../../screen/test/signed-in.ts";
 import { type Resource, startResource, thumbprintOf } from "./resource.ts";
 
@@ -516,17 +517,12 @@ describe("the provider's apps, through a login to a signed token, every Core cal
 		const { scene } = started().signedUp;
 		// Stopped first, so each server's drain is in what it wrote; the scene's stop is once, its later calls nothing.
 		await scene.stop();
-		const servers = scene
-			.outputs()
-			.filter(({ name }) => name === "nextgen-core" || name === "nextgen-front");
-		expect(servers.map(({ name }) => name)).toEqual(["nextgen-core", "nextgen-front"]);
-		for (const { name, out } of servers)
-			expect(out, name).toContain('{"event":"app-permissions.held","mode":"audit"}');
-		// Anywhere in a line: stdout and stderr arrive in one text, an event line may follow a log line's part.
-		const events = scene
-			.outputs()
-			.flatMap(({ out }) => out.split("\n"))
-			.filter((line) => line.includes('"event":"app-permissions.event"'));
-		expect(events, scene.output()).toEqual([]);
-	});
+		const audit = heldUnderAudit(scene.outputs());
+		expect(audit.servers).toEqual(["nextgen-core", "nextgen-front"]);
+		expect(audit.held, scene.output()).toEqual(["nextgen-core", "nextgen-front"]);
+		expect(audit.events, scene.output()).toEqual([]);
+		// Its time bounds the scene's stop it awaits: two servers, each stopped within create-app's
+		// `stopWithinMs` (10 s, `apps.ts`) before SIGKILL, so 20 s, inside the 30 s of the afterAll the stop
+		// came from. Should `stopWithinMs` change, this changes with it.
+	}, 30_000);
 });

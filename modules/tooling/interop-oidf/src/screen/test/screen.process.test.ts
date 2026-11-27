@@ -5,6 +5,7 @@ import type { Jwk } from "@sdk/login-screen";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { dpopKey, type Provider, relyingParty, send } from "../../rp/test/rp.ts";
 import { type Answered, type At, ask, atIssuer } from "../../scene/test/ask.ts";
+import { heldUnderAudit } from "../../scene/test/held.ts";
 import { type Scene, startScene } from "../../scene/test/scene.ts";
 import { words } from "../../words/words.ts";
 import { browser } from "./browser.ts";
@@ -332,4 +333,19 @@ describe("the login screen, its pages before the scene", () => {
 			role = held;
 		}
 	});
+});
+
+describe("the provider's apps, through logins, a token and its refresh, every Core call relayed by the Front", () => {
+	it("ran held by the permission model in audit, reaching nothing its grants do not cover, to its stop", async () => {
+		const ran = issuer();
+		// Stopped first, so each server's drain is in what it wrote; the scene's stop is once, its later calls nothing.
+		await ran.stop();
+		const audit = heldUnderAudit(ran.outputs());
+		expect(audit.servers).toEqual(["nextgen-core", "nextgen-front"]);
+		expect(audit.held, ran.output()).toEqual(["nextgen-core", "nextgen-front"]);
+		expect(audit.events, ran.output()).toEqual([]);
+		// Its time bounds the scene's stop it awaits: two servers, each stopped within create-app's
+		// `stopWithinMs` (10 s, `apps.ts`) before SIGKILL, so 20 s, inside the 30 s of the afterAll the stop
+		// came from. Should `stopWithinMs` change, this changes with it.
+	}, 30_000);
 });

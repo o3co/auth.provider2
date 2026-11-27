@@ -14,6 +14,7 @@ Internal module of `interop-oidf`: the provider as the OIDF run meets it, for it
 ## Offers
 - `startScene` (`SceneSpec`: the host the front is named by and the address it listens on, as `hostForSuite` gives them; the screen's origin; the registry's clients; PAR's `jar-max-lifetime` where a run sets one; `byValue`, a login's start taking a JAR by value too, for a test of the words only that start answers; `redis`, the server the harness runs) → `Scene`: the issuer's origin, the certificate its front answers with, every app's output so far, and its stop.
   - Its output: `output`, every app's as one text, for a failure to show; `outputs`, each app's by its name, kept past the stop.
+- `heldUnderAudit` (a scene's outputs, once stopped) → its two servers, those held by the permission model under audit, and every audit event line.
 - `differencesOf` (a spec) → the pattern's differences in it, each a line of a run's report; `storeOf` → the store's axis and section.
 - `sender`: the one address the apps are told of for every request. `ask` (an `At`: an origin, the one certificate trusted there, and the address its host is reached at where this machine has no name for it), failed past its whole time or where its answer is cut off → a request's answer (a form or JSON); `atIssuer`, a scene's issuer as an `At`.
 
