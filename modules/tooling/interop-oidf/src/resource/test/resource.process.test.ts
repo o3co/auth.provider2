@@ -510,3 +510,23 @@ describe("the resource refuses a proof that does not prove this call by the toke
 		refusedAs(answer, 401, "invalid_dpop_proof", "more than one proof");
 	});
 });
+
+describe("the provider's apps, through a login to a signed token, every Core call relayed by the Front", () => {
+	it("ran held by the permission model in audit, reaching nothing its grants do not cover, to its stop", async () => {
+		const { scene } = started().signedUp;
+		// Stopped first, so each server's drain is in what it wrote; the scene's stop is once, its later calls nothing.
+		await scene.stop();
+		const servers = scene
+			.outputs()
+			.filter(({ name }) => name === "nextgen-core" || name === "nextgen-front");
+		expect(servers.map(({ name }) => name)).toEqual(["nextgen-core", "nextgen-front"]);
+		for (const { name, out } of servers)
+			expect(out, name).toContain('{"event":"app-permissions.held","mode":"audit"}');
+		// Anywhere in a line: stdout and stderr arrive in one text, an event line may follow a log line's part.
+		const events = scene
+			.outputs()
+			.flatMap(({ out }) => out.split("\n"))
+			.filter((line) => line.includes('"event":"app-permissions.event"'));
+		expect(events, scene.output()).toEqual([]);
+	});
+});

@@ -23,6 +23,7 @@ import {
 	listening,
 	type Running,
 	running,
+	scripted,
 } from "@mod/create-app/testing";
 import { dpopConfig } from "@mod/dpop/testing";
 import { firstKeyConfig } from "@mod/first-key/testing";
@@ -66,6 +67,8 @@ export interface Scene {
 	readonly certificate: string;
 	/** What each app wrote so far, for a failure to show. */
 	readonly output: () => string;
+	/** Each app's output so far, by its name (`nextgen-core`, `nextgen-front`, each publish entry's file), in the order started; kept after the stop. */
+	readonly outputs: () => readonly { readonly name: string; readonly out: string }[];
 	stop(): Promise<void>;
 }
 
@@ -105,22 +108,31 @@ export async function startScene(spec: SceneSpec): Promise<Scene> {
 	const stops: (() => Promise<unknown>)[] = [];
 	const runs: { readonly name: string; readonly run: Running }[] = [];
 	const output = () => runs.map(({ name, run }) => `--- ${name}\n${run.out()}`).join("\n");
+	const outputs = () => runs.map(({ name, run }) => ({ name, out: run.out() }));
 	/** Every stop, the last first, each tried though one before it failed; their failures told together. */
 	const stop = async () => {
 		const problems = await stopAll(stops.splice(0));
 		if (problems.length > 0) throw new AggregateError(problems, "the scene did not stop whole");
 	};
+	/**
+	 * An app's entry run as the operator runs it: a server by its manifest's `start` (`{ script }`), held
+	 * by the permission model as `APP_PERMISSION` says (unset: audit); a publish run by its file, unheld.
+	 */
 	const run = async (
 		name: string,
 		dir: string,
-		file: string,
+		entry: { readonly script: string } | { readonly file: string },
 		config: unknown,
 		env: Readonly<Record<string, string>>,
 		args: readonly string[] = [],
 	) => {
 		// Split as an operator writes it: each variable `.env.example` names in the environment, the rest in the local layer.
 		const { env: variables, local } = await asOperator(dir, config as Record<string, unknown>);
-		const started = await running(dir, file, local, { ...variables, ...env }, args);
+		const environment = { ...variables, ...env };
+		const started =
+			"script" in entry
+				? await scripted(dir, entry.script, local, environment, args)
+				: await running(dir, entry.file, local, environment, args);
 		runs.push({ name, run: started });
 		stops.push(async () => started.stop());
 		return started;
@@ -248,13 +260,13 @@ export async function startScene(spec: SceneSpec): Promise<Scene> {
 			axes: { "@mod/store": "@mod/store" },
 		});
 		stops.push(async () => coreApp.remove());
-		const coreRun = await run("nextgen-core", coreApp.dir, "src/main.ts", core, aws);
+		const coreRun = await run("nextgen-core", coreApp.dir, { script: "start" }, core, aws);
 		if (!(await listening(corePort, coreRun, bootMs)))
 			throw new Error(`nextgen-core did not listen on ${corePort}:\n${output()}`);
 
 		// What the operator publishes, written by the Core app's own entries.
 		for (const entry of ["src/discovery-publish.ts", "src/keys-publish.ts"]) {
-			const wrote = await run(entry, coreApp.dir, entry, core, aws, [docs]);
+			const wrote = await run(entry, coreApp.dir, { file: entry }, core, aws, [docs]);
 			if ((await wrote.exited) !== 0) throw new Error(`${entry} failed:\n${output()}`);
 		}
 
@@ -269,11 +281,11 @@ export async function startScene(spec: SceneSpec): Promise<Scene> {
 			}),
 			...frontRelayConfig(certificates, { "core-port": corePort }),
 		};
-		const frontRun = await run("nextgen-front", frontApp.dir, "src/main.ts", front, {});
+		const frontRun = await run("nextgen-front", frontApp.dir, { script: "start" }, front, {});
 		if (!(await listening(frontPort, frontRun, bootMs)))
 			throw new Error(`nextgen-front did not listen on ${frontPort}:\n${output()}`);
 
-		return { issuer, certificate: tls.cert, output, stop };
+		return { issuer, certificate: tls.cert, output, outputs, stop };
 	} catch (error) {
 		// The start's own failure first; any stop that failed after it, beside it.
 		const problems = await stopAll(stops.splice(0));
