@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+	addBasis,
 	addedKey,
 	approval,
 	askOf,
@@ -184,7 +185,7 @@ describe("a sign-up's key (F1; P 358: first trust where the subject first appear
 		};
 		expect(verdictOn(signUpWith(mixed))).toEqual(refused(/T is a sign-up's alone/));
 		// A passkey-add's creation is no first key's, by either order (Fable, the first-key path's `basis`).
-		const add = forT(parts.t, { basis: "passkey-add", evidence: digest(parts.t) });
+		const add = forT(parts.t, addBasis(parts.t));
 		expect(verdictOn(signedUp(1, { ...parts, ...add }))).toEqual(refused(/not for a first key/));
 		const addBare = firstOver(
 			1,

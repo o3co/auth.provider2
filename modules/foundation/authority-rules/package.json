@@ -10,6 +10,7 @@
 	},
 	"dependencies": {
 		"@mod/continuation-wire": "workspace:*",
+		"@mod/passkey-key-wire": "workspace:*",
 		"@mod/reset-wire": "workspace:*",
 		"@mod/sdk-core-wire": "workspace:*",
 		"@mod/transparency-wire": "workspace:*",

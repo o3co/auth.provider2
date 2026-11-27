@@ -275,6 +275,9 @@ importers:
       '@mod/continuation-wire':
         specifier: workspace:*
         version: link:../../wire/continuation-wire
+      '@mod/passkey-key-wire':
+        specifier: workspace:*
+        version: link:../../wire/passkey-key-wire
       '@mod/reset-wire':
         specifier: workspace:*
         version: link:../../wire/reset-wire

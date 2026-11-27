@@ -20,6 +20,7 @@ import {
 	digest,
 	esig,
 	type FlowRecord,
+	jwkOf,
 	passkeyAdd,
 	passkeyManage,
 	possession,
@@ -75,10 +76,17 @@ export const continued = (creationJws: string, body: string, seq = 1, key = scre
 	return canonicalText({ seq, body, signature: esig(key, input) });
 };
 
+/** A passkey-add creation's basis over its statement, naming its approving key (V30): the parent's own, as an honest Core names it. */
+export const addBasis = (statement: string, approver: Key = newKey) => ({
+	basis: "passkey-add",
+	evidence: digest(statement),
+	approver_key: jwkOf(approver.publicKey),
+});
+
 /** A passkey-add's evidence as an honest Core and screen make it: `approver` approves, `key` is added. */
 export function addParts(sid = "add-1", key: Key = addedKey, approver: Key = newKey) {
 	const statement = sign(passkeyAdd(sid), "ring-1");
-	const basis = { basis: "passkey-add", evidence: digest(statement) };
+	const basis = addBasis(statement, approver);
 	const creationJws = sign(creation(subject.id, undefined, 0, undefined, basis), "ring-1");
 	const reserved = `res-${sid}`;
 	const possessionJws = sign(possession(creationJws, key, undefined, reserved), "ring-1");

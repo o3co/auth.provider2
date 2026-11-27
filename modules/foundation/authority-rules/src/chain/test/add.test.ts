@@ -1,9 +1,10 @@
 import { createHash } from "node:crypto";
 import { continuations } from "@mod/continuation-wire";
-import { canonicalText } from "@mod/sdk-core-wire";
+import { canonicalText, payloads } from "@mod/sdk-core-wire";
 import { describe, expect, it } from "vitest";
 import {
 	type AddParts,
+	addBasis,
 	added,
 	addedKey,
 	addParts,
@@ -22,6 +23,7 @@ import {
 	coseKey,
 	creation,
 	digest,
+	jwkOf,
 	passkeyAdd,
 	possession,
 	screen,
@@ -43,7 +45,7 @@ const ok = { allowed: true };
 const refused = (reason: RegExp) => ({ allowed: false, reason: expect.stringMatching(reason) });
 const keyed = () => on([firstKey(1)]);
 const addWith = (over: Partial<AddParts>) => added(2, "r-1", { ...addParts(), ...over });
-const basis = (statement: string) => ({ basis: "passkey-add", evidence: digest(statement) });
+const basis = (statement: string) => addBasis(statement);
 
 describe("a key a live key's approval adds (passkey-add; Rules023e Allowed `add`)", () => {
 	it("is allowed for a live key's approval and the screen's ceremony, and adds the key under it", () => {
@@ -66,6 +68,108 @@ describe("a key a live key's approval adds (passkey-add; Rules023e Allowed `add`
 		expect(verdictOn(added(2, "r-9"), keyed())).toEqual(refused(/approving key is not live/));
 		const forged = on([{ ...firstKey(1), judgment: { verdict: "forged", outcome: "didNotTake" } }]);
 		expect(verdictOn(added(2, "r-1"), forged)).toEqual(refused(/approving key is not live/));
+	});
+
+	it("is refused unless the creation names the record's parent as its approving key (V30, FIX_ADD_PARENT: add_key_under_own_parent)", () => {
+		const parts = addParts();
+		const naming = (approver_key: unknown) =>
+			sign(
+				creation(subject.id, T0, 0, undefined, { ...basis(parts.statement), approver_key }),
+				"ring-1",
+			);
+		// Another key than the parent's: another key altogether, or the parent's credential with another
+		// key (a credential id is the registering side's to choose: the key alone binds).
+		for (const key of [addedKey, { credential: newKey.credential, publicKey: coseKey(7) }])
+			expect(
+				verdictOn(addWith({ creation: naming(jwkOf(key.publicKey)) }), keyed()),
+				key.publicKey,
+			).toEqual(refused(/another approving key than the record's parent/));
+		// A value of no passkey's form: a curve not its key type's.
+		const odd = { kty: "EC", crv: "Ed25519", x: "A".repeat(43), y: "A".repeat(43) };
+		expect(verdictOn(addWith({ creation: naming(odd) }), keyed())).toEqual(
+			refused(/names no approving key a passkey's/),
+		);
+		// None named: refused here while sdk-core-wire takes such a creation, by its schema once it
+		// requires the key (the step after this one). The probe holds the complete creation first.
+		const keyedCreation = creation(subject.id, T0, 0, undefined, basis(parts.statement));
+		const { approver_key: _named, ...without } = keyedCreation.creation as Record<string, unknown>;
+		expect(payloads.creation.safeParse(keyedCreation).success).toBe(true);
+		const taken = payloads.creation.safeParse({ ...keyedCreation, creation: without }).success;
+		expect(verdictOn(addWith({ creation: naming(undefined) }), keyed())).toEqual(
+			refused(
+				taken
+					? /names no approving key a passkey's/
+					: /a statement is not signed by the writer generation's ring/,
+			),
+		);
+		expect(verdictOn(addWith({ creation: naming(jwkOf(newKey.publicKey)) }), keyed())).toEqual(ok);
+	});
+
+	it("is refused where two keys are live and the creation names the other one (V30)", () => {
+		const two = on([firstKey(1), added(2, "r-1")]);
+		const third = { credential: "cred-3A", publicKey: coseKey(3) };
+		// Approved by the added key (r-2), the creation naming the first one: and the reverse.
+		const byAdded = addParts("add-2", third, addedKey);
+		const namesFirst = sign(
+			creation(subject.id, T0, 0, undefined, addBasis(byAdded.statement, newKey)),
+			"ring-1",
+		);
+		expect(verdictOn(added(3, "r-2", { ...byAdded, creation: namesFirst }), two)).toEqual(
+			refused(/another approving key than the record's parent/),
+		);
+		const byFirst = addParts("add-3", third, newKey);
+		const namesAdded = sign(
+			creation(subject.id, T0, 0, undefined, addBasis(byFirst.statement, addedKey)),
+			"ring-1",
+		);
+		expect(verdictOn(added(3, "r-1", { ...byFirst, creation: namesAdded }), two)).toEqual(
+			refused(/another approving key than the record's parent/),
+		);
+	});
+
+	it("takes no RS256 key as an approver of a passkey-add, but an RS256 key added (V30)", () => {
+		const rsa = { credential: "cred-RS", publicKey: coseKey(5, -257) };
+		// An ES256 approver adds an RS256 key: allowed.
+		const addRsa = added(2, "r-1", addParts("add-1", rsa, newKey));
+		expect(verdictOn(addRsa, keyed())).toEqual(ok);
+		// That key approves none: no binding against duplicate-signature key selection is shown for it.
+		const withRsa = on([firstKey(1), addRsa]);
+		// The wire takes no RSA key as `approver_key`, so the creation names an EC one: the parent's
+		// algorithm is what is refused, before the key named is compared.
+		const rsaParts = addParts("add-2", { credential: "cred-3A", publicKey: coseKey(3) }, rsa);
+		const namesEc = sign(
+			creation(subject.id, T0, 0, undefined, addBasis(rsaParts.statement, newKey)),
+			"ring-1",
+		);
+		const byRsa = added(3, "r-2", { ...rsaParts, creation: namesEc });
+		expect(verdictOn(byRsa, withRsa)).toEqual(refused(/an RSA key approves no passkey-add/));
+	});
+
+	it("takes an Ed25519 key as an approver, adding an RS256 key (V30)", () => {
+		const ed = { credential: "cred-ED", publicKey: coseKey(6, -8) };
+		const withEd = on([firstKey(1), added(2, "r-1", addParts("add-1", ed, newKey))]);
+		const rsa = { credential: "cred-RS", publicKey: coseKey(5, -257) };
+		expect(verdictOn(added(3, "r-2", addParts("add-2", rsa, ed)), withEd)).toEqual(ok);
+	});
+
+	it("is refused where the parent's key does not read (V30)", () => {
+		const unread = { credential: newKey.credential, publicKey: "AAAA" };
+		const base = keyed();
+		const live = base.state.keys["r-1"];
+		if (!live) throw new Error("no first key");
+		const p = {
+			...base,
+			state: { ...base.state, keys: { "r-1": { ...live, publicKey: "AAAA" } } },
+		};
+		// The creation names a key of a passkey's form, so the schema takes it whatever it requires.
+		const parts = addParts("add-1", addedKey, unread);
+		const named = sign(
+			creation(subject.id, T0, 0, undefined, addBasis(parts.statement, newKey)),
+			"ring-1",
+		);
+		expect(verdictOn(added(2, "r-1", { ...parts, creation: named }), p)).toEqual(
+			refused(/the approving key does not read/),
+		);
 	});
 
 	it("is refused unless the approving key asserts the passkey-add", () => {

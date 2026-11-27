@@ -31,6 +31,7 @@ import {
 	type FlowState,
 	own,
 } from "../fold/fold.ts";
+import { approverRefusal } from "../parent/parent.ts";
 
 /** The fields a Core writer names, in its request and its record alike. */
 export type Named = Pick<
@@ -287,6 +288,8 @@ function addRefusal(read: Read<"keyChange">): Refusal {
 	const { creation: made } = of.c;
 	if (made.basis !== "passkey-add" || made.evidence !== checks.digest(of.statement))
 		return "the creation is not for its passkey-add";
+	const parentRefusal = approverRefusal(checks, parent.publicKey, made.approver_key);
+	if (parentRefusal) return parentRefusal;
 	if (made.subject !== ask.record.flow.id) return "the creation is another subject's";
 	if (made.kg !== ask.state.keyGeneration)
 		return "the creation is signed for another key generation than the flow's";

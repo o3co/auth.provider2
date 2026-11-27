@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { passkeyThumbprintInput } from "@mod/passkey-key-wire";
 import { challengeInput, typs } from "@mod/sdk-core-wire";
 import type { LogRecord } from "@mod/transparency-wire";
 import type { Checks, Context } from "../../src/evidence/evidence.ts";
@@ -6,7 +7,8 @@ import type { Checks, Context } from "../../src/evidence/evidence.ts";
 /**
  * A test world for the rules: a JWS is `header.payload.kid`, verified where its kid is one of the
  * keys'; an assertion is base64url JSON of what it was made with; digests are SHA-256; a `create()`
- * response is the JSON of its credential and key; an E_sig signature is the digest of its key and input.
+ * response is the JSON of its credential and key; an E_sig signature is the digest of its key and input;
+ * a key's thumbprint is passkey-key-wire's, of the JWK its COSE_Key stands for (`jwkOf`), as webauthn's.
  */
 
 const b64 = (value: unknown) => Buffer.from(JSON.stringify(value)).toString("base64url");
@@ -19,6 +21,22 @@ const algorithms = [-7, -8, -257];
 /** A passkey's COSE_Key as this world reads it: a map's head, its algorithm's index, then `seed`'s bytes. */
 export const coseKey = (seed: number, alg = -7) =>
 	Buffer.from([0xa5, algorithms.indexOf(alg), ...Buffer.alloc(32, seed)]).toString("base64url");
+
+/** The JWK a COSE_Key of this world stands for, in passkey-key-wire's form: its seed's bytes as each coordinate; none for another value. */
+export function jwkOf(publicKey: string): Record<string, string> | undefined {
+	const bytes = Buffer.from(publicKey, "base64url");
+	const alg = bytes[0] === 0xa5 ? algorithms[bytes[1] ?? -1] : undefined;
+	const seed = bytes.subarray(2);
+	if (alg === undefined || seed.length !== 32) return undefined;
+	const at = seed.toString("base64url");
+	if (alg === -7) return { kty: "EC", crv: "P-256", x: at, y: at };
+	if (alg === -8) return { kty: "OKP", crv: "Ed25519", x: at };
+	// RSA's modulus: 2048 bits from the seed, its top bit and its lowest set, as passkey-key-wire's form holds it.
+	const n = Buffer.concat(Array.from({ length: 8 }, () => seed));
+	n[0] = (n[0] ?? 0) | 0x80;
+	n[255] = (n[255] ?? 0) | 1;
+	return { kty: "RSA", e: "AQAB", n: n.toString("base64url") };
+}
 
 export const checks: Checks = {
 	verifyJws(jws, keys) {
@@ -48,7 +66,8 @@ export const checks: Checks = {
 	keyThumbprint(publicKey) {
 		const bytes = Buffer.from(publicKey, "base64url");
 		const alg = bytes[0] === 0xa5 ? algorithms[bytes[1] ?? -1] : undefined;
-		return alg === undefined ? undefined : { jkt: digest(`jkt:${publicKey}`), alg };
+		const input = passkeyThumbprintInput(jwkOf(publicKey));
+		return alg === undefined || input === undefined ? undefined : { jkt: digest(input), alg };
 	},
 };
 
@@ -139,7 +158,7 @@ export const creation = (
 	iat = T0,
 	kg = 0,
 	offered = algorithms,
-	basis?: { basis: string; evidence: string },
+	basis?: { basis: string; evidence: string; approver_key?: unknown },
 ) => ({
 	iss: "https://core.example",
 	sid: "creation-1",

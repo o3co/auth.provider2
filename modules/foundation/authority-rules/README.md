@@ -11,7 +11,7 @@
 - Whether a receiver takes a record (`Acceptable`, read off a status, not a judgment): the receivers' parts.
 
 ## Offers
-- `allowed` (an `Ask`: the record's named fields, its opened preimage, its flow's state and judged prefix, the `Checks`, the `Context`) → `Allowance`, the first rule broken (internal module `chain`; a key's deletion read by `deletion`).
+- `allowed` (an `Ask`: the record's named fields, its opened preimage, its flow's state and judged prefix, the `Checks`, the `Context`) → `Allowance`, the first rule broken (internal module `chain`; a key's deletion read by `deletion`; a passkey-add's approving key, the record's parent, by `parent`, V30: an RS256 one approves none in 0.1.0).
 - `timely` (an `Ask`, the acceptance time): TimeOK. `effectOf` (an `Ask`): Eff(r), the changes a Core record makes, the same in the Core's intent and the monitor's fold.
 - `judge` (a `Reading`: the placed record, what opening its preimage gave or another writer's verified body, the key sets, the versions' windows, the prefix) → `Ruling`: the flow entry with its verdict and outcome, the row J0–J13 or J0r, whether counted; or a wait (internal module `judgment`).
 - `resetFinding` (a reset boundary's body, its flow's state before it, the `Checks`, the `Context` with its `reset`: `ResetContext`, the acceptance time) → `ResetFinding`: verdict, outcome and `reset-wire`'s fault (internal module `reset`), which the monitor runs before placing a reset and `judge` again.
@@ -34,7 +34,7 @@
 - A check a client's record needs that the caller does not give (the client's record at its version, the evidence window, the self ceiling) leaves it unchecked: held, never verified nor forged.
 
 ## Depends on
-- `transparency-wire`, `sdk-core-wire`, `continuation-wire`, `reset-wire` (the protocols); `zod`.
+- `transparency-wire`, `sdk-core-wire`, `continuation-wire`, `reset-wire`, `passkey-key-wire` (the protocols); `zod`.
 
 ## Vocabulary
 - state (S, M): a flow's live keys, approvals and families by the record that made each, its key generation and use-once marks.

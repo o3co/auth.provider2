@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
 	type AddParts,
+	addBasis,
 	added,
 	addedKey,
 	addParts,
@@ -71,7 +72,7 @@ const signUpFor = (t: string): SignUpParts => {
 
 /** A passkey-add's parts for the statement given, its creation and possession made for it. */
 const addFor = (statement: string): AddParts => {
-	const basis = { basis: "passkey-add", evidence: digest(statement) };
+	const basis = addBasis(statement);
 	const made = sign(creation(subject.id, undefined, 0, undefined, basis), "ring-1");
 	const held = sign(possession(made, addedKey), "ring-1");
 	return {
