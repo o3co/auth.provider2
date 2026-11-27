@@ -139,9 +139,9 @@
 		"kind": "deviation",
 		"standard": "OpenID Connect Core 1.0 §15.1; OpenID Connect Discovery 1.0 §3 (`id_token_signing_alg_values_supported`)",
 		"text": "OPs MUST support signing ID tokens with RS256, unless they return ID tokens from the token endpoint alone and let clients register only `none`; `id_token_signing_alg_values_supported` MUST include RS256",
-		"behaviour": "The ID token is signed by the authority ring's one algorithm, and the metadata names that algorithm alone. nextgen's configuration signs ES256, so RS256 is neither offered nor listed. A ring under RS256 boots, warned of at every start as deprecated",
-		"why": "FAPI 2.0 Security Profile §5.4.1 allows PS256, ES256 and EdDSA alone, and nextgen takes FAPI 2.0 with ES256 signing. Serving both would need a key per algorithm and a choice of algorithm per client (Q42)",
-		"decision": "F4, Q42"
+		"behaviour": "The recommended configuration signs ID tokens with ES256 alone, and the metadata names that algorithm alone. An operator may set the authority ring to RS256 (warned of at every start as deprecated), which then meets the RS256 requirements of §15.1 and Discovery §3, and no longer FAPI 2.0 §5.4.1. The standards conflict here: FAPI 2.0 leaves RS256 out",
+		"why": "FAPI 2.0 Security Profile §5.4.1 allows PS256, ES256 and EdDSA alone, and nextgen takes FAPI 2.0 with ES256 signing. Serving both would need a key per algorithm and a choice of algorithm per client (not held: V29)",
+		"decision": "F4, Q42, V29"
 	},
 	{
 		"key": "rs256-not-accepted",
@@ -150,6 +150,15 @@
 		"text": "Servers SHOULD support RS256 for client assertions at the token endpoint, and SHOULD support `none` and RS256 for request objects",
 		"behaviour": "Client assertions and request objects are taken under ES256, PS256 and EdDSA by default; RS256 only where the operator names it, warned of at every start. `none` is never taken, and an unsigned request is refused (`jar-required`)",
 		"why": "FAPI 2.0 Security Profile §5.4.1 allows PS256, ES256 and EdDSA alone",
+		"decision": "F4"
+	},
+	{
+		"key": "assertion-aud-issuer-only",
+		"kind": "strict",
+		"standard": "OpenID Connect Core 1.0 §9",
+		"text": "A client assertion's audience SHOULD be the URL of the authorization server's token endpoint",
+		"behaviour": "A client assertion's `aud` is taken as the issuer identifier, a string, alone: the token endpoint's URL, or a list, is refused. A registered client may be set to take a loose audience (`accept-loose-audience`), a weakening choice warned of at every start: claim 2 is judged not to hold",
+		"why": "FAPI 2.0 Security Profile §5.3.2.1 asks the issuer alone, as a string: an assertion made for another server cannot be taken here (claim 2)",
 		"decision": "F4"
 	},
 	{
@@ -205,6 +214,15 @@
 		"behaviour": "A JAR naming any item outside the login's closed set is refused (`unknown_item`, `invalid_request_object`): `max_age`, `display`, `ui_locales`, `claims_locales`, `acr_values`, `login_hint` and `id_token_hint` among them, until a decision adds one",
 		"why": "The statement T the person approves is signed whole and compared exactly, its items one closed set; an item the screen neither checks nor shows could be added or changed by a compromised Front, so none is carried that is not named",
 		"decision": "A26"
+	},
+	{
+		"key": "scope-not-understood-refused",
+		"kind": "strict",
+		"standard": "OpenID Connect Core 1.0 §3.1.2.1; RFC 6749 §3.3, §4.1.2.1",
+		"text": "Scope values used that are not understood by an implementation SHOULD be ignored; the authorization server may fully or partially ignore the scope requested, by its policy",
+		"behaviour": "A login's `scope` naming a value outside the client's allowed scopes, an unknown one among them, is refused `invalid_scope` (RFC 6749 §4.1.2.1: the scope requested is invalid, unknown or malformed) at the push and at the start; no value is dropped",
+		"why": "T is written from the RP's signed request as given, and the person approves its scope exactly (O14); a value the Core will not carry is therefore refused before the person is asked, never dropped, so the RP is not issued less than it signed for without being told (this row's consequence of O14)",
+		"decision": "O14"
 	},
 	{
 		"key": "start-errors-on-screen",
