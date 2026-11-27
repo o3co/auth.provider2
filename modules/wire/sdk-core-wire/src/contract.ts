@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { completions, padding } from "./completions/completions.ts";
-import { bytes32, compactJws, keyJkt, label, purposes, v } from "./primitives.ts";
+import { items as creationItems } from "./creation/creation.ts";
+import { bytes32, compactJws, keyJkt, purposes, v } from "./primitives.ts";
 
 export { purposes, versions } from "./primitives.ts";
 
@@ -110,9 +111,6 @@ const signingKey = z
 	.object({ kty: z.literal("EC"), crv: z.literal("P-256"), x: z.string(), y: z.string() })
 	.strict();
 
-/** The algorithms a passkey may be of, as COSE numbers them: ES256, EdDSA (Ed25519) and RS256. */
-const passkeyAlgorithm = z.union([z.literal(-7), z.literal(-8), z.literal(-257)]);
-
 const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 
 const sextet = (text: string, at: number) => alphabet.indexOf(text.charAt(at));
@@ -198,57 +196,13 @@ const completion = z
 	})
 	.strict();
 
-const userName = label.refine((name) => name.trim() !== "");
 /** A statement of the first key's registration: what a `create()` is for. The identifier stays out, but masked. */
 const creation = z
 	.object({
 		...common,
 		nonce: z.string().min(1),
 		purpose: z.literal(purposes.creation),
-		creation: z
-			.object({
-				/** The identifier, masked, for display alone; a subject with none (F1's) is named by `user_name`. */
-				account: z.string().optional(),
-				/** What the evidence is: the first key's mail, an approved `passkey-add`, or a T read before signing up. */
-				basis: z.enum(["first-key", "passkey-add", "sign-up"]).optional(),
-				/** The evidence's value the screen computes for itself, by its basis. */
-				evidence: z.string().min(1),
-				/** The sealed mail request's ciphertext hash, as the Core opened it: the first key's path's alone. */
-				ct_hash: z.string().min(1).optional(),
-				subject: z.string().min(1),
-				/** The key generation of the subject this creation is signed for (reset and erasure boundaries count it), bound in the signed bytes. */
-				kg: z.number().int().nonnegative(),
-				options: z
-					.object({
-						user_id: z.string().min(1),
-						user_name: userName.optional(),
-						rp_id: z.string().min(1),
-						exclude_credentials: z.array(z.string()).max(15),
-						/** The algorithms the ceremony offered, as COSE numbers them: those the new key may be of. */
-						algorithms: z
-							.array(passkeyAlgorithm)
-							.min(1)
-							.refine((list) => list.every((alg, at) => list.indexOf(alg) === at)),
-					})
-					.strict(),
-			})
-			.strict()
-			.refine(
-				(c) => (c.basis === undefined || c.basis === "first-key") === (c.ct_hash !== undefined),
-				{
-					message: "a ciphertext hash is the first key's path's alone",
-				},
-			)
-			.refine(
-				(c) =>
-					(c.account === undefined) !== (c.options.user_name === undefined) &&
-					(c.basis === "sign-up" ? c.options.user_name !== undefined : true) &&
-					(c.basis === undefined || c.basis === "first-key" ? c.account !== undefined : true),
-				{
-					message:
-						"a creation names its account by one of account or user_name: the first key's path by account, sign-up's by user_name, passkey-add's by either",
-				},
-			),
+		creation: creationItems,
 	})
 	.strict();
 

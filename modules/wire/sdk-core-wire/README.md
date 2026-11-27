@@ -17,7 +17,7 @@
 - `payloads`: the schemas of T, the completion's answer, the `creation`, `possession`, `passkeyAdd` and `passkeyManage` statements, and what the first key's start, mail and answer seal. Types: `StatementPayload`, `CompletionPayload`, `CreationPayload`, `PossessionPayload`, `AuthorizationAnswer`, `AuthorizationItems`, `SigningKey`, `FirstKeyStage`.
 - `payloads.answers`: the answers' forms the Front carries unread, whose names `front-core-wire` gives each operation: `authorization` (②'s), `statement`, `sealed` and `nonce`.
 - `payloads.completions`: `passkeyAdd`, `passkeyManage` and `keyChange` (internal module `completions`). `payloads.completion` is the authorization's, its `purpose` and ⑤'s `receipt` optional.
-- `versions`: the wire versions a reader speaks (1); every statement and completion names its own as `v`. A creation's `options` name the `algorithms` the ceremony offered, as COSE numbers them, each once, and may name `user_name`, the account's name a passkey shows for a subject with no identifier: a label's text, not blank.
+- `versions`: the wire versions a reader speaks (1); every statement and completion names its own as `v`.
 - `canonicalText` and `challengeInput`: what a challenge covers. `firstKey`: `stages` (`start`, `mail`), `evidenceInput`, `aad` and `recoverInput`: what the evidence's value, a sealed request's additional data and a recovery's signature (the mail's nonce, the request's digest) cover.
 
 ## Invariants
@@ -26,19 +26,17 @@
 - Every reader parses T strictly, so a member added after a release raises `v` or waits for every reader to take it (V22); the schema does not tell T's two forms apart, the Core writing `request_uri` on every start by it and the screen holding T to its URL's.
 - Every payload refuses a field it does not know; T's items are a closed set. A claim no rule names, or a top-level null (a required item's: missing), is taken unread (RFC 6749 §3.1); `request`, `request_uri` (RFC 9101 §4) and `authorization_details` (A25) are known and refused, null too. `id_token_hint` gives `hint_sub`, unverified.
 - T's `claims` is a JSON object (OIDC Core §5.5), any other `item:claims`, and holds no null: T is signed whole, and its signer writes none. A claim an ID token's or userinfo's request asks by `null` is written `{}`, as both ask it in the default manner (OIDC Core §5.5.1), on both sides alike; any other null in `claims` is `item:claims`, though §5.5 has a member not understood ignored: that null rule alone is a stricter reading, kept as a deviation.
-- The identifier goes in a statement masked alone, for display; a creation names its account by `account` or `user_name`, one alone: the first key's path by `account`, F1's by `user_name` (its subject has none), passkey-add's by either.
-- A creation's `basis` fixes what its evidence hashes: the mail token (`first-key`), the approved `passkey-add` statement, or the T read before signing up (`sign-up`); `ct_hash` is `first-key`'s alone, a creation with no basis read as such.
+- The identifier goes in a statement masked alone, for display. A creation's items, their naming, basis, bounds and approving key: internal module `creation`.
 - ②'s answer: T, its get challenge (SHA-256 of `challengeInput(T, "get")`, the screen's to recompute and use) and `create`, an unsigned hint for F1.
 - A sealed value is `{ enc, ct }`: a 65-byte uncompressed point and the ciphertext with its 16-byte tag, base64url in one spelling; a nonce is 32 bytes.
 - An approval's completion binds the statement's and assertion's SHA-256, sealed under `completionAad` of the statement answered (a key change's: the `possession` for an add, the `passkey-manage` statement for a delete). A reader parses the form its request expects.
 - A label is 1 to 64 code points, no control, format, surrogate or line separator.
-- A creation excludes 15 credentials at most.
 - `basis` and the completion's `purpose` are optional until their writers name them, then required. `prompt` is the Core's to check, before T.
-- A creation names the key generation it is signed for (`kg`): one signed before a reset registers no key after it. A possession names the new key by `key_jkt`, its thumbprint, the base64url SHA-256 of passkey-key-wire's `passkeyThumbprintInput`.
+- A possession names the new key by `key_jkt`, its thumbprint, the base64url SHA-256 of passkey-key-wire's `passkeyThumbprintInput`.
 - A challenge's input names its use, the evidence's its purpose, each apart from the value by a NUL.
 
 ## Depends on
-- Nothing in the workspace; `zod` (a peer). Its internal module `completions`, over the building blocks in `primitives`.
+- Nothing in the workspace; `zod` (a peer). Its internal modules `completions` and `creation`, over the building blocks in `primitives`.
 
 ## Vocabulary
 - statement: what a person approves with a passkey, signed by the Core's ring; T is an authorization's.

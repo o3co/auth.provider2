@@ -13,7 +13,7 @@ import {
 } from "../primitives.ts";
 
 /** A padded completion's lengths, smallest first. */
-const buckets = Object.freeze([16_384, 45_056] as const);
+const buckets = Object.freeze([16_384, 46_080] as const);
 /** The longest credential ID, in bytes, whose completion goes in the smaller bucket. */
 const usualIdBytes = 128;
 

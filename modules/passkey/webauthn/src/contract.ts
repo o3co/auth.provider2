@@ -102,5 +102,5 @@ export interface Ceremonies {
 
 export const ceremonies = contract<Ceremonies>("webauthn.ceremonies");
 
-export { keyThumbprint } from "./keys.ts";
+export { keyThumbprint, passkeyJwk } from "./keys.ts";
 export { credentialLimits, credentialOf, freshHandle, isCanonical } from "./records.ts";

@@ -1,10 +1,16 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { keyThumbprint } from "../src/contract.ts";
+import { keyThumbprint, passkeyJwk } from "../src/contract.ts";
 
 /** passkey-key-wire's shared vectors of the key form, which every reader of it runs. */
 const vectors: {
-	readonly accepted: readonly { name: string; alg: number; cose: string; jkt: string }[];
+	readonly accepted: readonly {
+		name: string;
+		alg: number;
+		cose: string;
+		jkt: string;
+		jwk: unknown;
+	}[];
 	readonly coseRefusals: readonly { why: string; cose: string }[];
 } = JSON.parse(
 	readFileSync(
@@ -26,6 +32,16 @@ describe("a passkey's thumbprint, from its COSE_Key", () => {
 	it("has none for a key in another spelling of its bytes, or no key at all", () => {
 		const key = b64(vectors.accepted[0]?.cose ?? "");
 		for (const value of [`${key}=`, Buffer.from(key, "base64url").toString("base64"), "", "!"])
-			expect(keyThumbprint(value), value).toBeUndefined();
+			expect([keyThumbprint(value), passkeyJwk(value)], value).toEqual([undefined, undefined]);
+	});
+});
+
+describe("a passkey's JWK, from its COSE_Key", () => {
+	it.each(vectors.accepted)("reads $name's key to its JWK and algorithm", (v) => {
+		expect(passkeyJwk(b64(v.cose))).toEqual({ jwk: v.jwk, alg: v.alg });
+	});
+
+	it.each(vectors.coseRefusals)("has none for $why", ({ cose }) => {
+		expect(passkeyJwk(b64(cose))).toBeUndefined();
 	});
 });

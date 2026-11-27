@@ -752,6 +752,33 @@ describe("the first key's statements", () => {
 		expect(with_({ basis: "other" })).toBe(false);
 	});
 
+	it("names the key that approved a passkey-add, P-256's or Ed25519's, on passkey-add's creation alone (V30)", () => {
+		const { ct_hash: _, ...bare } = creation.creation;
+		const p256 = { kty: "EC", crv: "P-256", x: "A".repeat(43), y: "B".repeat(42).concat("A") };
+		const ed25519 = { kty: "OKP", crv: "Ed25519", x: "A".repeat(43) };
+		const added = (approver_key: unknown, from: object = { ...bare, basis: "passkey-add" }) =>
+			payloads.creation.safeParse({ ...creation, creation: { ...from, approver_key } }).success;
+		expect([added(p256), added(ed25519), added(undefined)]).toEqual([true, true, true]);
+		// Another path's creation names none: its key comes from no approval.
+		expect(added(p256, { ...creation.creation, basis: "first-key" })).toBe(false);
+		expect(added(p256, creation.creation)).toBe(false);
+		expect(signUp(undefined, { approver_key: p256 })).toBe(false);
+		// Its members and their spellings alone: no RSA key, no other member, a coordinate 32 bytes in
+		// its one base64url form (no other length, alphabet or last character), a curve of the two.
+		for (const key of [
+			{ kty: "RSA", n: "n".repeat(342), e: "AQAB" },
+			{ ...p256, alg: "ES256" },
+			{ ...p256, x: "A".repeat(44) },
+			{ ...p256, x: "B".repeat(43) },
+			{ ...p256, x: "\u0000".repeat(43) },
+			{ ...ed25519, crv: "Ed448" },
+			{ ...p256, y: "" },
+			{ kty: "EC", crv: "P-256", y: "A".repeat(43) },
+			"A".repeat(43),
+		])
+			expect(added(key), JSON.stringify(key).slice(0, 40)).toBe(false);
+	});
+
 	it("reads a passkey-add and a passkey-manage statement as the common fields, a nonce and their purpose alone", () => {
 		for (const [schema, purpose] of [
 			[payloads.passkeyAdd, purposes.passkeyAdd],
@@ -803,7 +830,10 @@ describe("the inputs a hash or a signature covers", () => {
 	it("pads a passkey-add's or passkey-manage's completion to the bucket its longest credential ID chooses, so its length tells no count or label", () => {
 		const b64 = (text: string) => Buffer.from(text).toString("base64url");
 		const label = "\u{1F600}".repeat(64);
-		const iss = `https://${"x".repeat(hpke.completionLimits.issuerChars - 8)}`;
+		// An issuer at the boot's limit, each character a quote, which JSON writes in two, by `http://` as
+		// development allows, one quote more than `https://` (V30: it pushed a passkey-add's completion
+		// past 45,056 once the creation named its approving key).
+		const iss = `http://${'"'.repeat(hpke.completionLimits.issuerChars - 7)}`;
 		const times = { iat: 9_999_999_999, exp: 9_999_999_999 };
 		const approvedOf = { v: 1, iss, t_hash: "h".repeat(43), assertion_hash: "a".repeat(43) };
 		/** A compact JWS of the payload, its kid 128 characters and its signature an RSA key's of 8192 bits. */
@@ -822,37 +852,47 @@ describe("the inputs a hash or a signature covers", () => {
 				continued: { stage: "rename", seq: 16, body_hash: "b".repeat(43) },
 				...times,
 			});
-		const added = (idBytes: number) =>
+		// A passkey-add's creation at or past its longest once JSON escapes it, an upper bound of what an
+		// honest Core emits, as the schema takes it: named by account alone (255 quotes, each written in
+		// two by JSON, past a masked contact address's 257 plain bytes) or by user_name alone (a label of
+		// 64 four-byte code points); a subject of 255 quotes; an RP id of a domain's longest name; the
+		// fresh handle's 32 bytes; the key generation at its longest; the approving key P-256's, the
+		// largest an honest Core names (the schema's largest, an OKP key with a y, is 3 bytes longer) (V30).
+		const made = (idBytes: number, naming: "account" | "user_name") => ({
+			v: 1,
+			iss,
+			sid: "s".repeat(43),
+			...times,
+			e_enc: `B${"A".repeat(86)}`,
+			e_sig: { kty: "EC", crv: "P-256", x: "x".repeat(43), y: "y".repeat(43) },
+			nonce: "n".repeat(43),
+			purpose: "creation",
+			creation: {
+				...(naming === "account" ? { account: '"'.repeat(255) } : {}),
+				basis: "passkey-add",
+				evidence: "e".repeat(43),
+				subject: '"'.repeat(255),
+				kg: Number.MAX_SAFE_INTEGER,
+				approver_key: { kty: "EC", crv: "P-256", x: "A".repeat(43), y: "A".repeat(43) },
+				options: {
+					user_id: "u".repeat(43),
+					...(naming === "user_name" ? { user_name: label } : {}),
+					rp_id: `${"a".repeat(63)}.${"b".repeat(63)}.${"c".repeat(63)}.${"d".repeat(58)}.rp`,
+					exclude_credentials: Array.from({ length: 15 }, () => id(idBytes)),
+					algorithms: [-7, -8, -257],
+				},
+			},
+		});
+		for (const naming of ["account", "user_name"] as const)
+			expect(payloads.creation.safeParse(made(1023, naming)).success, naming).toBe(true);
+		const added = (idBytes: number, naming: "account" | "user_name" = "account") =>
 			jws(typs.completion, {
 				...approvedOf,
 				purpose: "passkey-add",
-				creation: jws(typs.statement, {
-					v: 1,
-					iss,
-					sid: "s".repeat(43),
-					...times,
-					e_enc: `B${"A".repeat(86)}`,
-					e_sig: { kty: "EC", crv: "P-256", x: "x".repeat(43), y: "y".repeat(43) },
-					nonce: "n".repeat(43),
-					purpose: "creation",
-					creation: {
-						account: "a".repeat(320),
-						basis: "passkey-add",
-						evidence: "e".repeat(43),
-						subject: "s".repeat(255),
-						kg: 99,
-						options: {
-							user_id: "u".repeat(86),
-							user_name: label,
-							rp_id: "r".repeat(253),
-							exclude_credentials: Array.from({ length: 15 }, () => id(idBytes)),
-							algorithms: [-7, -8, -257, -37],
-						},
-					},
-				}),
+				creation: jws(typs.statement, made(idBytes, naming)),
 				...times,
 			});
-		expect(hpke.completionBuckets).toEqual([16_384, 45_056]);
+		expect(hpke.completionBuckets).toEqual([16_384, 46_080]);
 		expect(hpke.completionLimits).toEqual({ issuerChars: 256, kidChars: 128, rsaBits: 8192 });
 		expect(Object.isFrozen(hpke.completionLimits)).toBe(true);
 		// The longest ID alone chooses: 128 bytes or less the smaller, whatever the count or labels.
@@ -860,23 +900,25 @@ describe("the inputs a hash or a signature covers", () => {
 			[list(16, 128), 128, 16_384],
 			[list(1, 128), 128, 16_384],
 			[added(128), 128, 16_384],
-			[list(1, 129), 129, 45_056],
-			[list(16, 1023), 1023, 45_056],
-			[added(1023), 1023, 45_056],
+			[added(128, "user_name"), 128, 16_384],
+			[list(1, 129), 129, 46_080],
+			[list(16, 1023), 1023, 46_080],
+			[added(1023), 1023, 46_080],
+			[added(1023, "user_name"), 1023, 46_080],
 		] as const)
 			expect(hpke.paddedCompletion(plain, longest)?.length, `${longest} ${plain.length}`).toBe(
 				bucket,
 			);
 		// One that does not fit its bucket is none, so the sealing side does not sign it.
 		expect(hpke.paddedCompletion(list(16, 1023), 128)).toBeUndefined();
-		expect(hpke.paddedCompletion("a.b.c".padEnd(45_057, "c"), 1023)).toBeUndefined();
+		expect(hpke.paddedCompletion("a.b.c".padEnd(46_081, "c"), 1023)).toBeUndefined();
 		expect(hpke.paddedCompletion("not a jws", 0)).toBeUndefined();
 		// A miscount never falls into the smaller bucket: an ID length is a whole number of bytes.
 		for (const miscount of [Number.NaN, -1, 1.5, Number.POSITIVE_INFINITY])
 			expect(hpke.paddedCompletion("a.b.c", miscount), String(miscount)).toBeUndefined();
 		for (const [longest, bucket] of [
 			[0, 16_384],
-			[1023, 45_056],
+			[1023, 46_080],
 		] as const) {
 			const padded = hpke.paddedCompletion("a.b.c", longest) ?? "";
 			expect([padded.length, hpke.unpaddedCompletion(padded)]).toEqual([bucket, "a.b.c"]);

@@ -1,13 +1,14 @@
 import { createHash, createPublicKey, type KeyObject } from "node:crypto";
-import { passkeyThumbprintInput } from "@mod/passkey-key-wire";
+import { type PasskeyPublicJwk, passkeyThumbprintInput } from "@mod/passkey-key-wire";
 
 /** The signature algorithms a credential may use, by the names `keys` gives them. */
 export const algorithmNames = ["EdDSA", "ES256", "RS256"] as const;
 export type Algorithm = (typeof algorithmNames)[number];
 
-/** A passkey's key read from its COSE_Key: its algorithm as COSE numbers it, its thumbprint, the key. */
+/** A passkey's key read from its COSE_Key: its algorithm as COSE numbers it, its JWK, its thumbprint, the key. */
 export interface PasskeyKey {
 	readonly alg: number;
+	readonly jwk: PasskeyPublicJwk;
 	readonly jkt: string;
 	readonly key: KeyObject;
 }
@@ -41,9 +42,7 @@ function bytesAt(
 function coseKeyAt(
 	cose: Buffer,
 	at: number,
-):
-	| { readonly alg: number; readonly jwk: Readonly<Record<string, string>>; readonly end: number }
-	| undefined {
+): { readonly alg: number; readonly jwk: PasskeyPublicJwk; readonly end: number } | undefined {
 	const opens = (hex: string) => cose.subarray(at, at + hex.length / 2).toString("hex") === hex;
 	const text = (span: { start: number; end: number }) =>
 		cose.subarray(span.start, span.end).toString("base64url");
@@ -57,8 +56,9 @@ function coseKeyAt(
 	if (!y) return undefined;
 	if (opens("a501020326200121") && next === 0x22)
 		return { alg: -7, jwk: { crv: "P-256", kty: "EC", x: text(x), y: text(y) }, end: y.end };
-	if (opens("a401030339010020") && next === 0x21)
-		return { alg: -257, jwk: { e: text(y), kty: "RSA", n: text(x) }, end: y.end };
+	// RSA's exponent is 65537 alone, as passkey-key-wire's form has it.
+	if (opens("a401030339010020") && next === 0x21 && text(y) === "AQAB")
+		return { alg: -257, jwk: { e: "AQAB", kty: "RSA", n: text(x) }, end: y.end };
 	return undefined;
 }
 
@@ -76,7 +76,12 @@ export function passkeyKey(publicKey: string): PasskeyKey | undefined {
 	try {
 		// Node refuses a P-256 point off its curve.
 		const key = createPublicKey({ key: read.jwk, format: "jwk" });
-		return { alg: read.alg, jkt: createHash("sha256").update(input).digest("base64url"), key };
+		return {
+			alg: read.alg,
+			jwk: read.jwk,
+			jkt: createHash("sha256").update(input).digest("base64url"),
+			key,
+		};
 	} catch {
 		return undefined;
 	}
@@ -88,6 +93,14 @@ export function keyThumbprint(
 ): { readonly jkt: string; readonly alg: number } | undefined {
 	const read = passkeyKey(publicKey);
 	return read && { jkt: read.jkt, alg: read.alg };
+}
+
+/** A passkey's key as its JWK (passkey-key-wire's form) and its algorithm, from its COSE_Key; none for any other value. */
+export function passkeyJwk(
+	publicKey: string,
+): { readonly jwk: PasskeyPublicJwk; readonly alg: number } | undefined {
+	const read = passkeyKey(publicKey);
+	return read && { jwk: read.jwk, alg: read.alg };
 }
 
 /** The key an assertion is verified by, a passkey's COSE_Key, and the hash its signature is over (none for EdDSA); throws for any other value. */

@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-/** The building blocks the package's schemas and its internal module `completions` share. */
+/** The building blocks the package's schemas and its internal modules `completions` and `creation` share. */
 
 /** The wire versions a reader of this protocol speaks; a statement and a completion name one as `v`. */
 export const versions = Object.freeze([1] as const);
