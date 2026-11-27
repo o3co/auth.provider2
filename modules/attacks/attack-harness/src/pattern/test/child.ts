@@ -1,5 +1,5 @@
 /**
- * The default pattern's process (M4's seed): reads its spec from the file its argument names, starts
+ * The harness's Core's process: reads its spec from the file its argument names, starts
  * the Core, imports its seeds, and signals on its own descriptor (3), one JSON object a line: `ready` (the wire's port and
  * the key sets and the discovery document the operator publishes), each `mail` the Core sends, each `log` line, or `failed`.
  * Standard output is the modules' own (audit-stdout's records). SIGTERM, or its parent gone (standard

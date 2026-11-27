@@ -13,7 +13,7 @@ export interface Assembled {
 	stop(withinMs: number): Promise<void>;
 }
 
-/** The default pattern started in this process: the Core, its wire's port, and what the operator publishes. */
+/** The harness's Core started in this process: the Core, its wire's port, and what the operator publishes. */
 export interface Here {
 	readonly app: Assembled;
 	readonly port: number;
@@ -26,7 +26,7 @@ export interface Here {
 }
 
 /**
- * Starts the default pattern in this process, on the runtime parts given (a log, a clock): the Core
+ * Starts the harness's Core in this process, on the runtime parts given (a log, a clock): the Core
  * assembled and started, its seeds imported as an operator's import run brings them, its key sets
  * and discovery document published. `sent` receives each mail. Stopped where a step after the start fails.
  */

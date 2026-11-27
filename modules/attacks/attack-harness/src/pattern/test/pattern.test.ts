@@ -26,7 +26,7 @@ const spec = (change: readonly string[] = [], required: readonly string[] = []) 
 
 // The whole Core composed: a hole that shows only when every real module is composed (a dependency
 // cycle, a state part no module owns) fails here, in the checks, before any harness step.
-it("boots the default pattern, every module its own, claims 1 and 2 held, and stops it", async () => {
+it("boots the harness's Core, every module its own, claims 1 and 2 held, and stops it", async () => {
 	const { names, modules, config } = await pattern(spec(), () => {});
 	expect(names).toEqual(
 		expect.arrayContaining([...features, "@mod/core-wire", "@mod/refresh", "@mod/refresh-store"]),
@@ -126,7 +126,7 @@ it("boots with a ring of two generations, the reset's installation and signers, 
 	} finally {
 		await app.stop(2000);
 	}
-	// None given: one generation, no installation, the default pattern's features.
+	// None given: one generation, no installation, the harness's Core's features.
 	const plain = await pattern(spec(), () => {});
 	expect(plain.config).toMatchObject({ keys: { core: { generation: 1 } } });
 	expect(plain.config["transparency-local"]).not.toHaveProperty("installation");

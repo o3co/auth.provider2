@@ -1,8 +1,7 @@
 /**
- * The default pattern's seed (M4): a whole Core of the workspace's modules, composed by `combinations`,
- * configured by each module's `./testing`, in one process with no outside system. It moves to the
- * pattern's package once its shape settles (the coordinator, 2026-11-26); the operator's HOCON sections
- * come in there.
+ * The harness's Core: `nextgen-core`'s selection, as create-app composes the pattern, with what the
+ * harness attacks beside it, configured by each module's `./testing`, in one process with no outside
+ * system.
  *
  * The store is the memory one, which takes neither durability nor authentication, so it is told to
  * accept both: the store-write promise is outside the harness's claims.
@@ -11,6 +10,7 @@ import { generateKeyPairSync } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { patternNamed, selectionOf } from "@mod/create-app";
 import { workspacePackages } from "@mod/workspace-packages";
 
 const root = fileURLToPath(new URL("../../../../../../", import.meta.url));
@@ -39,41 +39,36 @@ export async function entry(name: string, sub = "."): Promise<any> {
 
 const scoped = (names: readonly string[]) => names.map((name) => `@mod/${name}`);
 
-/** The features the default pattern composes, beside those they need. */
-export const features = scoped([
-	"authorize",
-	"par",
-	"dpop",
-	"approvals",
-	"passkeys",
-	"passkey-management",
-	"first-key",
-	"sign-up",
-	"client-credentials",
-	"authorize-claims",
-	"resource-indicators",
-	"discovery",
-	"oidc",
-]);
+const core = patternNamed("nextgen-core");
+if (core === undefined) throw new Error("create-app has no nextgen-core");
 
 /**
- * Each axis's choice: the wire for http, and in-process places for the rest, an owner chosen for its
- * own axis where its adapters reach an outside system (store: redis; mail: SMTP; clients: a signed
- * registry file; keys: KMS).
+ * `nextgen-core`'s selection, with sign-up and client-credentials beside it, which the harness
+ * attacks and the pattern leaves to the operator; and in-process places for the five axes whose
+ * pattern adapters reach an outside system: keys-local for KMS, audit-stdout for the audit receiver,
+ * and the owner itself for store (Redis), mail (SMTP) and clients (a signed registry file).
  */
-export const axes = Object.fromEntries(
-	Object.entries({
-		http: "core-wire",
-		keys: "keys-local",
-		users: "users-local",
-		transparency: "transparency-local",
-		audit: "audit-stdout",
-		metrics: "metrics-log",
-		store: "store",
-		mail: "mail",
-		clients: "clients",
-	}).map(([axis, choice]) => [`@mod/${axis}`, `@mod/${choice}`]),
-);
+const selection = selectionOf(core, {
+	add: scoped(["sign-up", "client-credentials"]),
+	axes: Object.fromEntries(
+		Object.entries({
+			keys: "keys-local",
+			audit: "audit-stdout",
+			store: "store",
+			mail: "mail",
+			clients: "clients",
+		}).map(([axis, choice]) => [`@mod/${axis}`, `@mod/${choice}`]),
+	),
+});
+
+/** The features the harness's Core composes, beside those they need. */
+export const features: readonly string[] = [
+	...(selection.features[core.name] as readonly string[]),
+	...(selection.add as readonly string[]),
+];
+
+/** Each axis's choice. */
+export const axes = selection.axes as Readonly<Record<string, string>>;
 
 /** Where the Core is reached and what it is: the wire's certificate files, its public origin and issuer. */
 export interface PatternSpec {
@@ -135,7 +130,7 @@ export interface PatternSpec {
 /** A mail the Core sent, as `mail`'s preparer made it. */
 export type SentMail = Record<string, unknown>;
 
-/** The default pattern's modules and configuration; `sent` receives each mail the Core sends. */
+/** The harness's Core's modules and configuration; `sent` receives each mail the Core sends. */
 export async function pattern(spec: PatternSpec, sent: (mail: SentMail) => void) {
 	const { composed } = await entry("@mod/combinations");
 	const { defineModule, kernelConfig } = await entry("@mod/kernel");

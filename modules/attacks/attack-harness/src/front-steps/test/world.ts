@@ -14,7 +14,7 @@ import {
 export { origin, type Person, provider, screenOrigin };
 
 /**
- * A step file's world: one Core of the default pattern started in a process of its own with the
+ * A step file's world: the harness's Core started in a process of its own with the
  * relying parties of `clientIds` and the spec's changes, its Fronts dishonest ones, and the Core as
  * started (its log, its published keys) beside it.
  */

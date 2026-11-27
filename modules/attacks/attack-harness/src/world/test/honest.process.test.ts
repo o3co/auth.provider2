@@ -7,7 +7,7 @@ import { claimsOf, type RelyingParty } from "../../roles/test/rp.ts";
 import { stopped } from "../../roles/test/screen.ts";
 import { origin, relyingParties, screenOrigin, type World, world } from "./world.ts";
 
-// The world on a Core of the default pattern started in a process of its own, its Fronts honest.
+// The world on the harness's Core started in a process of its own, its Fronts honest.
 let held: Held;
 let core: StartedCore;
 let rp: RelyingParty;

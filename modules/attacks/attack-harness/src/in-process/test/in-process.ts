@@ -14,7 +14,7 @@ import type { Clock } from "../../roles/test/rp.ts";
 import { origin, relyingParties, screenOrigin, world } from "../../world/test/world.ts";
 
 /**
- * A Core of the default pattern assembled in the test's own process, for a harness playing a
+ * The harness's Core assembled in the test's own process, for a harness playing a
  * compromised Core: it is handed the Core's powers as ports (writing on its log, opening what was
  * sealed to it), reads of the keys' owner, and an honest operator's reset, never the Core assembled.
  */
@@ -101,7 +101,7 @@ export interface Setup {
 	reset(instruction: string): Promise<"placed" | { readonly refused: string }>;
 }
 
-/** What a harness's in-process Core is started with: the seed's spec but its wire and origins, the relying parties' ids, its clock. */
+/** What a harness's in-process Core is started with: the Core's spec but its wire and origins, the relying parties' ids, its clock. */
 export type InProcessSpec = Omit<PatternSpec, "certificates" | "origin" | "screen" | "clients"> & {
 	readonly clientIds?: readonly string[];
 	/** More clients the operator registers, beside the relying parties'. */
@@ -121,7 +121,7 @@ const resetWord = (answer: {
 		: { refused: answer.refusal ?? answer.fault ?? answer.result };
 
 /**
- * Starts the default pattern in this process on `clock`, with the relying parties of `clientIds`: the
+ * Starts the harness's Core in this process on `clock`, with the relying parties of `clientIds`: the
  * world on it, its Fronts made by `make`, and the ports. `setup` is there where passkey-reset is
  * composed. `stop` stops it and lets the wire's certificates go.
  */

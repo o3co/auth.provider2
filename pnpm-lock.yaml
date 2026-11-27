@@ -92,6 +92,9 @@ importers:
       '@mod/core-wire':
         specifier: workspace:*
         version: link:../../http-servers/core-wire
+      '@mod/create-app':
+        specifier: workspace:*
+        version: link:../../scaffold/create-app
       '@mod/front-relay':
         specifier: workspace:*
         version: link:../../http-servers/front-relay

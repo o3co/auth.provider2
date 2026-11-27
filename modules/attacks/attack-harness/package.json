@@ -15,6 +15,7 @@
 		"@mod/authority-rules": "workspace:*",
 		"@mod/continuation-wire": "workspace:*",
 		"@mod/core-wire": "workspace:*",
+		"@mod/create-app": "workspace:*",
 		"@mod/front-relay": "workspace:*",
 		"@mod/guard-imports": "workspace:*",
 		"@mod/http": "workspace:*",

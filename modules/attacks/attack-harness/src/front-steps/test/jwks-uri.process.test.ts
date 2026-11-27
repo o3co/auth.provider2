@@ -15,7 +15,7 @@ import { provider, type World, world } from "./world.ts";
 
 // F-11's other half: a client whose keys are at a key set's URL. The Front has no way to answer that
 // fetch (the Core makes it itself: F-11 in client-credentials.process.test.ts); this is what the Core
-// does with such a client. A registered one breaks claim 2, so the default pattern is refused at boot;
+// does with such a client. A registered one breaks claim 2, so the harness's Core is refused at boot;
 // behind that, in a composition not holding claim 2, client-credentials issues nothing on a key so had
 // (R8); and a source's client naming one has no key, nothing fetched.
 

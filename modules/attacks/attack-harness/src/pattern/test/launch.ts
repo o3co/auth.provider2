@@ -19,7 +19,7 @@ export interface CoreLine {
 /** What a test waits for in what the Core wrote: the first item `matches` takes, within `withinMs`. */
 export type Waiting<T> = (matches: (item: T) => boolean, withinMs?: number) => Promise<T>;
 
-/** A Core the default pattern started in a process of its own: what a test may know of it. */
+/** The harness's Core started in a process of its own: what a test may know of it. */
 export interface StartedCore {
 	/** The wire's port on localhost, for a Front's `wireClient`. */
 	readonly port: number;
@@ -83,7 +83,7 @@ export function waitingOver<T>(items: readonly T[], what: string): Waiting<T> {
 		});
 }
 
-/** Starts the default pattern in a child process, ready once it has published its keys. */
+/** Starts the harness's Core in a child process, ready once it has published its keys. */
 export async function startCore(spec: PatternSpec): Promise<StartedCore> {
 	const dir = await mkdtemp(join(tmpdir(), "pattern-spec-"));
 	const specFile = join(dir, "spec.json");

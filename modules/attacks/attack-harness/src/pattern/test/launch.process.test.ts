@@ -21,7 +21,7 @@ afterAll(async () => {
 	await certificates?.remove();
 });
 
-it("starts the default pattern in a process of its own, reached over the wire alone", async () => {
+it("starts the harness's Core in a process of its own, reached over the wire alone", async () => {
 	if (core === undefined) throw new Error("no Core");
 	expect(core.ring.length).toBeGreaterThan(0);
 	expect(core.sealingKey).toMatchObject({ kty: "EC", crv: "P-256", use: "enc" });
