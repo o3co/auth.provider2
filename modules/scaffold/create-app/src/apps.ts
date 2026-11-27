@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promis
 import { connect, createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { generate, type Plan } from "../src/contract.ts";
+import { generate, type Plan } from "./contract.ts";
 
 /** A port free now, for an app to listen on. */
 export const freePort = () =>
@@ -36,9 +36,14 @@ export interface Running {
 	stop(): Promise<number | null>;
 }
 
+/** How long a run told to stop may take before it is killed. */
+const stopWithinMs = 10_000;
+
 /**
  * Runs a file of the app with the configuration given in its local layer, first, over its own
- * `application.conf`, and an environment of `PATH` and what is given alone: nothing inherited.
+ * `application.conf` (`APP_CONFIG`, which `env` cannot change), and an environment of the run's
+ * `PATH` and what `env` gives alone: no other variable of the run is inherited. The local layer is a
+ * file of the app's directory, so one configuration is run in a directory at a time.
  */
 export async function running(
 	dir: string,
@@ -52,8 +57,8 @@ export async function running(
 		cwd: dir,
 		env: {
 			PATH: process.env.PATH ?? "",
-			APP_CONFIG: "config/local.conf,config/application.conf",
 			...env,
+			APP_CONFIG: "config/local.conf,config/application.conf",
 		},
 		stdio: ["ignore", "pipe", "pipe"],
 	});
@@ -64,13 +69,24 @@ export async function running(
 	child.stderr?.on("data", (c) => {
 		out += c;
 	});
-	const exited = new Promise<number | null>((done) => child.on("exit", (code) => done(code)));
+	// A process that cannot start ends the run, its error in the output, never an unhandled event.
+	const exited = new Promise<number | null>((done) => {
+		child.on("exit", (code) => done(code));
+		child.on("error", (error) => {
+			out += `${String(error)}\n`;
+			done(null);
+		});
+	});
 	return {
 		out: () => out,
 		exited,
+		/** SIGTERM, its own drain; SIGKILL past `stopWithinMs`. */
 		stop: async () => {
 			child.kill("SIGTERM");
-			return exited;
+			const late = setTimeout(() => child.kill("SIGKILL"), stopWithinMs);
+			const code = await exited;
+			clearTimeout(late);
+			return code;
 		},
 	};
 }

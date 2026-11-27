@@ -11,7 +11,14 @@ import { fakeRelay } from "@mod/mail-smtp/testing";
 import { promiseNames } from "@mod/promises";
 import { fakeRedis } from "@mod/redis/testing";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { asOperator, freePort, generated, listening, type Running, running } from "./apps.ts";
+import {
+	asOperator,
+	freePort,
+	generated,
+	listening,
+	type Running,
+	running,
+} from "../src/testing.ts";
 import { coreConfig, devConfig, registryOf } from "./configs.ts";
 
 const bootMs = 20_000;
@@ -37,7 +44,7 @@ beforeAll(async () => {
 	kms = await kmsServer(fake.kms);
 	const empty = join(dir, "empty");
 	await writeFile(empty, "");
-	// The child's environment is built whole (apps.ts): no AWS_ variable of the run reaches it.
+	// The child's environment is built whole (`running`): no AWS_ variable of the run reaches it.
 	awsEnv = {
 		AWS_ENDPOINT_URL_KMS: kms.url,
 		AWS_ACCESS_KEY_ID: "AKIDTESTONLY",
