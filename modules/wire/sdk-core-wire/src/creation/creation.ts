@@ -36,7 +36,10 @@ export const items = z
 		subject: z.string().min(1),
 		/** The key generation of the subject this creation is signed for (reset and erasure boundaries count it), bound in the signed bytes. */
 		kg: z.number().int().nonnegative(),
-		/** The key whose approval of the passkey-add this creation goes on from (V30): the record's parent, the screen's own key. */
+		/**
+		 * The key whose approval of the passkey-add this creation goes on from (V30): the record's parent,
+		 * the screen's own key. Required for a passkey-add, absent for any other basis (the refine below).
+		 */
 		approver_key: approverKey.optional(),
 		options: z
 			.object({
@@ -66,6 +69,6 @@ export const items = z
 				"a creation names its account by one of account or user_name: the first key's path by account, sign-up's by user_name, passkey-add's by either",
 		},
 	)
-	.refine((c) => c.approver_key === undefined || c.basis === "passkey-add", {
-		message: "an approving key is passkey-add's alone",
+	.refine((c) => (c.approver_key !== undefined) === (c.basis === "passkey-add"), {
+		message: "an approving key is passkey-add's alone, and every passkey-add's names one",
 	});

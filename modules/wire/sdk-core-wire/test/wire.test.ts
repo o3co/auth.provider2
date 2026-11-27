@@ -733,6 +733,10 @@ describe("the first key's statements", () => {
 						...(basis === "" ? {} : { basis }),
 						...(basis === "" || basis === "first-key" ? { ct_hash: "ct" } : {}),
 						...(account ? { account: "a***" } : {}),
+						// A passkey-add's names its approving key (V30): naming is told apart from it here.
+						...(basis === "passkey-add"
+							? { approver_key: { kty: "OKP", crv: "Ed25519", x: "A".repeat(43) } }
+							: {}),
 						options: { ...neither.options, ...(user_name ? { user_name: "N" } : {}) },
 					};
 					const one = account !== user_name && names.includes(account ? "account" : "user_name");
@@ -752,8 +756,9 @@ describe("the first key's statements", () => {
 		expect(with_({}, bare)).toBe(false);
 		expect(signUp()).toBe(true);
 		expect(signUp(undefined, { ct_hash: "ct" })).toBe(false);
-		expect(with_({ basis: "passkey-add" }, bare)).toBe(true);
-		expect(with_({ basis: "passkey-add" })).toBe(false);
+		const named = { kty: "OKP", crv: "Ed25519", x: "A".repeat(43) };
+		expect(with_({ basis: "passkey-add", approver_key: named }, bare)).toBe(true);
+		expect(with_({ basis: "passkey-add", approver_key: named })).toBe(false);
 		expect(with_({ basis: "other" })).toBe(false);
 	});
 
@@ -763,7 +768,8 @@ describe("the first key's statements", () => {
 		const ed25519 = { kty: "OKP", crv: "Ed25519", x: "A".repeat(43) };
 		const added = (approver_key: unknown, from: object = { ...bare, basis: "passkey-add" }) =>
 			payloads.creation.safeParse({ ...creation, creation: { ...from, approver_key } }).success;
-		expect([added(p256), added(ed25519), added(undefined)]).toEqual([true, true, true]);
+		// Every passkey-add's creation names one (V30): one naming none is refused.
+		expect([added(p256), added(ed25519), added(undefined)]).toEqual([true, true, false]);
 		// Another path's creation names none: its key comes from no approval.
 		expect(added(p256, { ...creation.creation, basis: "first-key" })).toBe(false);
 		expect(added(p256, creation.creation)).toBe(false);
