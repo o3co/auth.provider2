@@ -16,7 +16,7 @@ Internal module of `attack-harness`: the parties a step plays beside the Front, 
 ## Invariants
 - A role holds its own keys alone, and reads a Front only through `post`: it tells the Core's refusal from the Front's by the wire's reply the answer carries.
 - A relying party and a machine client date what they sign (a JAR, a client assertion, a DPoP proof) and read an ID token's `exp` by the clock given, the real time unless given, so they reach a Core on a test clock.
-- Its files are tests' (`test/`): they read the SDK, typed by the root's `tsconfig.attacks.json`.
+- Its files are tests' (`test/`): they read the SDK, typed by the root's `tsconfig.sdk-tests.json`.
 
 ## Depends on
 - The package's `relay`; the login screen's SDK, `sdk-core-wire`, `webauthn`'s software authenticator.

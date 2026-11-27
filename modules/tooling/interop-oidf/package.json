@@ -34,6 +34,7 @@
 		"@mod/sdk-core-wire": "workspace:*",
 		"@mod/tokens": "workspace:*",
 		"@mod/webauthn": "workspace:*",
+		"@sdk/login-screen": "link:../../../sdk/packages/login-screen",
 		"vitest": "5.0.5"
 	}
 }

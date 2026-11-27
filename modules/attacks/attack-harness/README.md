@@ -15,7 +15,7 @@
 
 ## Invariants
 - The Front holds no screen's or relying party's key: it reads only the wire's words.
-- The tests reading the SDK are typed by the root's `tsconfig.attacks.json` (the DOM's types), apart from the root's.
+- The tests reading the SDK are typed by the root's `tsconfig.sdk-tests.json` (the DOM's types), apart from the root's.
 - No verification package depends on this one, in its devDependencies either: guard's G14 would then hold it to no product module, and its tests read the whole Core. So the harnesses that share its Core, roles and world are its internal modules.
 - Its internal modules read one another one way, as its own test of directions holds them, every edge counted; none of them reads the package's entry. That test stands until guard holds a package's internal modules to a direction.
 

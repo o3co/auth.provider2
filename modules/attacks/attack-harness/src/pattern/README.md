@@ -25,7 +25,7 @@ Internal module of `attack-harness`: the harness's Core, `nextgen-core` as creat
 - The promises it requires are the harness's own, the claims it attacks (1 and 2, but those a spec releases, and more a spec adds), not the pattern's.
 - What a spec leaves out is the harness's Core's: one Core generation, no installation, its features alone.
 - A hold is taken before the certificates are awaited, and let go once: where getting them fails, or by its holder.
-- Its files are tests' (`test/`), typed by the root's `tsconfig.attacks.json`.
+- Its files are tests' (`test/`), typed by the root's `tsconfig.sdk-tests.json`.
 
 ## Depends on
 - The package's `relay` (its start's test) and `roles` (a relying party's type); `create-app` (`patternNamed`, `selectionOf`), `workspace-packages`, `front-relay`'s and core-wire's `./testing`, and each composed module by its entry.

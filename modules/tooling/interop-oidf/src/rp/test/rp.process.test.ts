@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { ask } from "../../scene/test/ask.ts";
+import { ask, atIssuer } from "../../scene/test/ask.ts";
 import { type Scene, startScene } from "../../scene/test/scene.ts";
 import { dpopKey, type Provider, type RelyingParty, relyingParty, send } from "./rp.ts";
 
@@ -8,7 +8,7 @@ const screen = "https://login.example.invalid";
 let scene: Scene;
 let provider: Provider;
 const rp: RelyingParty = relyingParty("rp-oidf", "https://rp.example.invalid/cb", () => provider);
-const at = (path: string, init: Parameters<typeof ask>[2]) => ask(scene, path, init);
+const at = (path: string, init: Parameters<typeof ask>[2]) => ask(atIssuer(scene), path, init);
 
 beforeAll(async () => {
 	scene = await startScene({

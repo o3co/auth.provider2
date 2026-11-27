@@ -1,5 +1,15 @@
 import { request } from "node:https";
-import type { Scene } from "./scene.ts";
+/** Where a request goes: an origin and the one certificate trusted there (a scene's issuer, or the screen's pages). */
+export interface At {
+	readonly origin: string;
+	readonly certificate: string;
+}
+
+/** A scene's issuer, as a request reaches it. */
+export const atIssuer = (scene: { readonly issuer: string; readonly certificate: string }): At => ({
+	origin: scene.issuer,
+	certificate: scene.certificate,
+});
 
 /** What the scene answered: its status, content type, headers, text, and the text read as JSON where it is. */
 export interface Answered {
@@ -19,8 +29,8 @@ export interface Asking {
 	readonly headers?: Readonly<Record<string, string>>;
 }
 
-/** A request at the scene's issuer, trusting its front's certificate alone. */
-export function ask(scene: Scene, path: string, init: Asking = {}): Promise<Answered> {
+/** A request at an origin, trusting its front's certificate alone. */
+export function ask(at: At, path: string, init: Asking = {}): Promise<Answered> {
 	const body =
 		init.form !== undefined
 			? new URLSearchParams(init.form).toString()
@@ -35,10 +45,10 @@ export function ask(scene: Scene, path: string, init: Asking = {}): Promise<Answ
 				: undefined;
 	return new Promise((resolve, reject) => {
 		const req = request(
-			`${scene.issuer}${path}`,
+			`${at.origin}${path}`,
 			{
 				method: init.method ?? "GET",
-				ca: scene.certificate,
+				ca: at.certificate,
 				headers: {
 					...(type === undefined ? {} : { "content-type": type }),
 					...(init.origin === undefined ? {} : { origin: init.origin }),

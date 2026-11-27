@@ -6,7 +6,7 @@
  */
 import { randomBytes } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { type Answered, ask } from "../../scene/test/ask.ts";
+import { type Answered, ask, atIssuer } from "../../scene/test/ask.ts";
 import { type Scene, startScene } from "../../scene/test/scene.ts";
 import { readingOf, type Word, words } from "../../words/words.ts";
 import { type JarChange, type Provider, relyingParty, screenKeys, send } from "./rp.ts";
@@ -43,7 +43,7 @@ const plain = (answer: Answered): Driven => ({ answer, dpopHeader: false, starte
 /** Asks the scene named. */
 const at = (scene: Scene | undefined) => {
 	const reached = started(scene);
-	return (path: string, init: Parameters<typeof ask>[2]) => ask(reached, path, init);
+	return (path: string, init: Parameters<typeof ask>[2]) => ask(atIssuer(reached), path, init);
 };
 
 /** A JAR changed as `change` says (made when sent, so its times are of then), pushed, proved where `proved`, more fields where given. */

@@ -18,7 +18,7 @@ Internal module of `attack-harness`: the harness's Core in the test's own proces
 ## Invariants
 - A port's answer is in its words: a record placed or the log's refusal by its word; a reset placed or refused; a continuation opened or `unopened`.
 - The test's clock is the real time moved on by what the test advanced, the Core's and the roles' alike.
-- Its files are tests' (`test/`), typed by the root's `tsconfig.attacks.json`.
+- Its files are tests' (`test/`), typed by the root's `tsconfig.sdk-tests.json`.
 
 ## Depends on
 - The package's `pattern`, `world`, `roles` (a clock's type) and `relay` (a Front's type); `transparency`, `keys`, `passkeys`, `passkey-reset`, `continuation-wire`, `sdk-core-wire`, `promises` (the contracts and words its ports read).

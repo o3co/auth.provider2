@@ -3,7 +3,7 @@
 Internal module of `interop-oidf`: the harness's relying party, for its tests alone.
 
 ## Responsibilities
-- Plays a conforming client of nextgen, and a login's start as a screen sends it (its request's shape and two made-up keys, held here until the screen role holds them): a private_key_jwt key of its own, a DPoP key of each authorization's own, JARs as nextgen asks them (`response_mode=form_post`, `jti`, `nbf`, a short `exp`, `dpop_jkt`), pushed by PAR, codes exchanged with PKCE and DPoP.
+- Plays a conforming client of nextgen, and a login's start sent with two made-up screen keys (by value, by a `request_uri` or with neither: what the word table's tests send, which call up refusals no screen of the screen role's pages would send): a private_key_jwt key of its own, a DPoP key of each authorization's own, JARs as nextgen asks them (`response_mode=form_post`, `jti`, `nbf`, a short `exp`, `dpop_jkt`), pushed by PAR, codes exchanged with PKCE and DPoP.
 - Makes the record the operator registers for it: its keys, redirect URI and grants by their owners' `./testing`, and `sender-binding`'s one setting written as the operator writes it.
 
 ## Not here
