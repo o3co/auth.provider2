@@ -27,6 +27,7 @@ Internal module of `outbound`: name lookups run as the system runs them, in a he
 - After a fault, it is started again after a backoff from 100 ms, doubling to 5 seconds, and back to 100 ms once one answers; past 30 such starts in 60 seconds, its lookups fail at once (`refusing`) until the window frees.
 - The first start's failure is final: `start` rejects and nothing is started again. `stop` may be called any number of times, even while starting or waiting to start again: it ends the helper, holding the parent until its end is seen, and waits for it.
 - Its numbers (ready within 5 seconds, 64 addresses, the restart windows and backoffs, the 30-second warning) are fixed, not settings: margins of supervising the helper, which no answer a deployment chooses depends on; a helper slower than 5 seconds to start is a fault either way.
+- Under Node's permission model the helper is never told in either mode: what the parent loads to tell the model's events does not reach it. Under enforce (Node 24.4 and later) it is held by the parent's grants, which Node passes on in its environment: a refused lookup fails as `not-found`, a refused start as a fault. Under audit its accesses go through. So it is shown held by an enforced run whose lookup answers, never by an audit's zero.
 - It logs `outbound.resolver_fault` (pool, reason), `outbound.resolver_recovered`, `outbound.resolver_restarts` (pool, restarts) and `outbound.resolver_stuck` (pool), never a name or an address.
 
 ## Depends on
