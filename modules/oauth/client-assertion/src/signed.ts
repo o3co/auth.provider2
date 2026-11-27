@@ -1,6 +1,6 @@
 import type { Algorithm, ExternalJwt } from "@mod/external-jwt";
 import { Unavailable } from "@mod/kernel";
-import { said } from "./check.ts";
+import { told } from "./check.ts";
 import type { ClientAssertion } from "./contract.ts";
 import { keysFor } from "./keys/keys.ts";
 import { verifiedOf } from "./proof.ts";
@@ -26,7 +26,7 @@ export function signedBy(p: {
 			if (verified.kind === "unavailable") throw new Unavailable("client keys");
 			return verified.kind === "valid"
 				? { kind: "signed", claims: verified.claims }
-				: { kind: "refused", reason: said[verified.reason] };
+				: { kind: "refused", reason: told[verified.reason] };
 		},
 	};
 }

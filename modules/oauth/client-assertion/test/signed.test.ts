@@ -69,6 +69,8 @@ async function boot() {
 			...clientsConfig([
 				keyed("app", clientKeysFor([jwk(ec.publicKey, { kid: "ec" }), jwk(rsa.publicKey)])),
 				keyed("far", { "client-assertion": { "jwks-uri": "https://keys.example/jwks" } }),
+				// Two keys a JWT naming no kid fits alike.
+				keyed("twin", clientKeysFor([jwk(ec.publicKey), jwk(other.publicKey)])),
 				// An RSA key that names RS256: never read under PS256, the default.
 				keyed("rs", clientKeysFor([jwk(rsa.publicKey, { alg: "RS256" })])),
 			]),
@@ -95,7 +97,7 @@ describe("a JWT a client signed", () => {
 		const jwt = await signed(ec.privateKey, "jwt");
 		expect(await checks.verifySignedBy(fetched, jwt, "jwt")).toEqual({
 			kind: "refused",
-			reason: "no key fits",
+			reason: "not signed by the client",
 		});
 	});
 
@@ -117,10 +119,23 @@ describe("a JWT a client signed", () => {
 			kind: "refused",
 			reason: "not of the typ asked",
 		});
+		// A signature by another key, and a key the client does not hold: one answer, as the sender may be anyone.
 		const foreign = await signed(other.privateKey, "jwt");
-		expect(await checks.verifySignedBy(app, foreign, "jwt")).toEqual({
+		const unheld = await new SignJWT({ exp: Math.floor(now / 1000) + 60 })
+			.setProtectedHeader({ alg: "ES256", typ: "jwt", kid: "not-the-clients" })
+			.sign(ec.privateKey);
+		for (const jwt of [foreign, unheld])
+			expect(await checks.verifySignedBy(app, jwt, "jwt")).toEqual({
+				kind: "refused",
+				reason: "not signed by the client",
+			});
+		// Two keys that fit: the same answer, so how many keys fit is not told either.
+		const unnamed = await new SignJWT({ exp: Math.floor(now / 1000) + 60 })
+			.setProtectedHeader({ alg: "ES256", typ: "jwt" })
+			.sign(ec.privateKey);
+		expect(await checks.verifySignedBy(await client("twin"), unnamed, "jwt")).toEqual({
 			kind: "refused",
-			reason: "signature",
+			reason: "not signed by the client",
 		});
 		const lasting = await signed(ec.privateKey, "jwt", { exp: undefined });
 		expect(await checks.verifySignedBy(app, lasting, "jwt")).toEqual({
@@ -167,7 +182,7 @@ describe("a request object's algorithm, by default FAPI 2.0's", () => {
 		const rs = await client("rs");
 		expect(await checks.verifySignedBy(rs, await by(rsa.privateKey, "PS256"), typ)).toEqual({
 			kind: "refused",
-			reason: "no key fits",
+			reason: "not signed by the client",
 		});
 	});
 });
