@@ -5,7 +5,7 @@
   - The import and dependency rules (G1–G4, G8, G10, G14, G16, G22, G24, G25, G28–G32, G34): `guard-imports`', run beside these.
   - G5: a package exports `.`, `./testing`, `./module` and `./audit-events` (its events, as `audit` declares them) only; a further entry is allowed only where the package's own `takenBy` keeps it for named takers (guard-imports' `takenEntries`, G31). guard gives guard-imports these entries (`Rules.standardEntries`).
   - G6: the bottom level (common, protocol) holds no name another package's contract owns, in its contract or its imports.
-  - G7: the budget, measured by the internal module `budget`.
+  - G7: the budget, measured by the internal module `budget`; the sdk's packages' cards too, by the card rules alone.
   - G9: types in public signatures are exported.
   - G11: no line numbers in comments and documents.
   - G12: no document points at a file in another directory.
@@ -44,7 +44,7 @@
 ## Data
 - The configuration: the budget numbers.
 - The kinds' roles (common, protocol, wiring, capability, verification, product, adapter, feature, the wider surface, taking the runtime from `kernel`), in the kind words `kinds` gives; their order and the kinds never depending on a capability are `kinds`'s.
-- Nothing is written; the workspace is read on each run.
+- Nothing is written; the workspaces are read on each run: the provider's, and the sdk's, the one place named (`sdk/`, its `pnpm-workspace.yaml`), whose packages are those under its own `packages` directory by real path, held to the card rules alone. No sdk workspace there refuses the run by name.
 
 ## Depends on
 - `guard-imports` (the workspace as read, the scope, and the import and dependency rules), `typescript`, `kinds` (the kind words, their order, and the capability-blind kinds).

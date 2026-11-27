@@ -184,15 +184,58 @@ export function budgetMeasures(
 	});
 }
 
+/** Each card item held to its bytes (named by its opening), and G17's plan phrases: both rules' share. */
+function itemAndPhraseRules(s: Scope, where: string, card: string) {
+	for (const line of cardItems(card)) {
+		const opening = line.replace(/^\s*- /, "").slice(0, 12);
+		const bytes = Buffer.byteLength(line);
+		if (bytes > s.budget.cardItemBytes)
+			s.report(
+				"G7 budget",
+				where,
+				`card item bytes ${bytes} > ${s.budget.cardItemBytes} (${opening}…)`,
+			);
+	}
+	for (const phrase of planPhrases) {
+		if (card.includes(phrase))
+			s.report("G17 a card holds only the current contract", where, phrase);
+	}
+}
+
+/**
+ * G7's card rules, with G17, alone over a package of the sdk's workspace (the receivers' parts): its
+ * card and each internal module's, held to the card lines, bytes and item bytes, as the provider's
+ * are. Its dependencies and references are the sdk's guard's; no kind, contract, source or test lines
+ * are held here (login-screen's tests, about 3,900 lines in one directory, would exceed `testLines`).
+ */
+export function sdkCardRules(s: Scope, p: Pkg) {
+	const { budget, report } = s;
+	const { cardDirs, cardOf, whereOf } = unitsOf(p);
+	for (const unit of ["", ...cardDirs]) {
+		const where = whereOf(unit);
+		const over = (what: string, value: number, limit: number) => {
+			if (value > limit) report("G7 budget", where, `${what} ${value} > ${limit}`);
+		};
+		const card = cardOf(unit);
+		if (card === undefined) {
+			report("G7 budget", where, "no card");
+			continue;
+		}
+		over("card lines", card.split("\n").length, budget.cardLines);
+		over("card bytes", Buffer.byteLength(card), budget.cardBytes);
+		itemAndPhraseRules(s, where, card);
+	}
+}
+
 /** G7, with G9 and G17 on what it measures: the package and each internal module on its own. */
 export function budgetRules(s: Scope, p: Pkg, surfaces: ReadonlyMap<string, Surface>) {
-	const { budget, report } = s;
+	const { report } = s;
 	const { cardDirs, cardOf, whereOf } = unitsOf(p);
 	const byWhere = Map.groupBy(budgetMeasures(s, p, surfaces), (m) => m.where);
 	for (const unit of ["", ...cardDirs]) {
 		const where = whereOf(unit);
-		const over = (what: string, value: number, limit: number, note = "") => {
-			if (value > limit) report("G7 budget", where, `${what} ${value} > ${limit}${note}`);
+		const over = (what: string, value: number, limit: number) => {
+			if (value > limit) report("G7 budget", where, `${what} ${value} > ${limit}`);
 		};
 		for (const m of byWhere.get(where) ?? []) {
 			// Each item is reported by its own opening, below.
@@ -208,13 +251,6 @@ export function budgetRules(s: Scope, p: Pkg, surfaces: ReadonlyMap<string, Surf
 			report("G7 budget", where, "no card");
 			continue;
 		}
-		for (const line of cardItems(card)) {
-			const opening = line.replace(/^\s*- /, "").slice(0, 12);
-			over("card item bytes", Buffer.byteLength(line), budget.cardItemBytes, ` (${opening}…)`);
-		}
-		for (const phrase of planPhrases) {
-			if (card.includes(phrase))
-				report("G17 a card holds only the current contract", where, phrase);
-		}
+		itemAndPhraseRules(s, where, card);
 	}
 }

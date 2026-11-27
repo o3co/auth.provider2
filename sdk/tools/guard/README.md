@@ -7,7 +7,7 @@
   - S3: the sdk's pnpm pin and supply settings are the provider's: every top-level setting of the provider's `pnpm-workspace.yaml` but its packages is the same here, a block of entries (such as `overrides`) holding a subset.
 
 ## Not here
-- The provider's workspace rules (kinds, budgets, cards): the provider's own guard, which reads its workspace alone.
+- The provider's workspace rules (kinds, budgets): the provider's own guard. The cards of the packages here are measured by it too, by its card rules alone (G7).
 - A specifier named at run time (a template, a variable): not read; review's.
 
 ## Offers

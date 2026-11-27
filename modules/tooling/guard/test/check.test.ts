@@ -1,10 +1,12 @@
-import { mkdirSync } from "node:fs";
+import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type Pkg, surfacesOf } from "@mod/guard-imports";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { branchingImports, dependencyCards, heavyDependencyCards } from "../src/budget/budget.ts";
 import { check } from "../src/check.ts";
 import { measures } from "../src/contract.ts";
+import { readSdkPackages } from "../src/workspace.ts";
 import { budget, pkg, root } from "./workspace.ts";
 
 // A fixture with exports has its contract surface built by the type checker, which is slow when the machine is busy.
@@ -461,6 +463,83 @@ describe("guard", () => {
 		expect(
 			check([p], { ...budget, cardItemBytes: 40 }).map((v) => `${v.where} ${v.detail}`),
 		).toEqual(["@t/items/src/inner card item bytes 44 > 40 (yyyyyyyyyyyy…)"]);
+	});
+
+	it("holds an sdk package's cards alone to the card budget: bytes, lines and each item, its internal modules' too", () => {
+		const big = "x".repeat(40);
+		const sdk = pkg("@sdk/screen", {
+			"README.md": `# screen\n- ${big}\n`,
+			"src/contract.ts": "export const n = 1;\n".repeat(30),
+			"src/inner/README.md": `# inner\n- ${big}\n${"- a\n".repeat(5)}`,
+			"src/inner/x.ts": "export const m = 1;\n",
+			"test/x.test.ts": "it();\n".repeat(30),
+		});
+		const sdkCard = { ...sdk, card: `# screen\n- ${big}\n${"\n".repeat(4)}` };
+		const tight = {
+			...budget,
+			cardItemBytes: 40,
+			cardLines: 6,
+			cardBytes: 60,
+			sourceLines: 5,
+			testLines: 5,
+		};
+		expect(
+			check([], tight, [], [sdkCard])
+				.map((v) => `${v.where} ${v.detail}`)
+				.sort(),
+		).toEqual([
+			"@sdk/screen card item bytes 42 > 40 (xxxxxxxxxxxx…)",
+			"@sdk/screen card lines 7 > 6",
+			"@sdk/screen/src/inner card bytes 71 > 60",
+			"@sdk/screen/src/inner card item bytes 42 > 40 (xxxxxxxxxxxx…)",
+			"@sdk/screen/src/inner card lines 8 > 6",
+		]);
+		// Source and test lines, kinds and contracts are not an sdk package's to be held to here.
+		expect(check([], budget, [], [sdkCard])).toEqual([]);
+		// A plan phrase on an sdk card is G17's, as on the provider's.
+		const planned = { ...sdkCard, card: "# screen\n- Not yet built: a step\n" };
+		expect(check([], budget, [], [planned]).map((v) => v.rule)).toEqual([
+			"G17 a card holds only the current contract",
+		]);
+	});
+
+	it("reads the sdk's packages under its own packages directory alone, wherever the checkout lies", () => {
+		// The checkout itself under a directory named sdk/packages, and the sdk's tools beside its packages.
+		const repo = mkdtempSync(join(tmpdir(), "guard-sdk-"));
+		const checkout = join(repo, "sdk", "packages", "checkout");
+		const write = (file: string, text: string) => {
+			mkdirSync(join(checkout, file, ".."), { recursive: true });
+			writeFileSync(join(checkout, file), text);
+		};
+		write("sdk/pnpm-workspace.yaml", 'packages:\n  - "packages/*"\n  - "tools/*"\n');
+		write("sdk/packages/screen/package.json", '{"name":"@sdk/screen"}');
+		write("sdk/packages/screen/README.md", "# screen\n");
+		write("sdk/tools/guard/package.json", '{"name":"@sdk/guard"}');
+		expect(readSdkPackages(checkout).map((p) => p.name)).toEqual(["@sdk/screen"]);
+		// Its packages directory a symlink elsewhere: read by its real path, the package kept.
+		const elsewhere = mkdtempSync(join(tmpdir(), "guard-sdk-packages-"));
+		mkdirSync(join(elsewhere, "screen"), { recursive: true });
+		writeFileSync(join(elsewhere, "screen", "package.json"), '{"name":"@sdk/screen"}');
+		const linked = mkdtempSync(join(tmpdir(), "guard-sdk-linked-"));
+		mkdirSync(join(linked, "sdk"));
+		writeFileSync(join(linked, "sdk", "pnpm-workspace.yaml"), 'packages:\n  - "packages/*"\n');
+		symlinkSync(elsewhere, join(linked, "sdk", "packages"));
+		expect(readSdkPackages(linked).map((p) => p.name)).toEqual(["@sdk/screen"]);
+		// A workspace whose packages directory holds none refuses too, never measures nothing.
+		write("sdk/pnpm-workspace.yaml", 'packages:\n  - "tools/*"\n');
+		expect(() => readSdkPackages(checkout)).toThrow(/no sdk package under/);
+		// No sdk workspace is a refusal by name, never no package measured.
+		expect(() => readSdkPackages(repo)).toThrow(/no sdk workspace/);
+	});
+
+	it("names an sdk package that has no card", () => {
+		const bare = {
+			...pkg("@sdk/bare", { "src/contract.ts": "export const n = 1;\n" }),
+			card: undefined,
+		};
+		expect(check([], budget, [], [bare]).map((v) => `${v.where} ${v.detail}`)).toEqual([
+			"@sdk/bare no card",
+		]);
 	});
 
 	it("counts comment lines from the syntax tree, ignoring // inside strings, against a share or a floor", () => {

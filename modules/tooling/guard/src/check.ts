@@ -8,7 +8,7 @@ import {
 	surfacesOf,
 	type Violation,
 } from "@mod/guard-imports";
-import { budgetRules } from "./budget/budget.ts";
+import { budgetRules, sdkCardRules } from "./budget/budget.ts";
 import type { Budget } from "./contract.ts";
 import { laidOut } from "./documents.ts";
 import { filesRules } from "./files/files.ts";
@@ -109,11 +109,12 @@ function documentRules(s: Scope, documents: readonly Doc[]) {
 	}
 }
 
-/** Every rule over the workspace's packages and documents, as their findings. */
+/** Every rule over the workspace's packages and documents, and the sdk's packages' cards, as their findings. */
 export function check(
 	packages: readonly Pkg[],
 	budget: Budget,
 	documents: readonly Doc[] = [],
+	sdkPackages: readonly Pkg[] = [],
 ): Violation[] {
 	const violations: Violation[] = [];
 	const s = scopeOf(
@@ -133,5 +134,6 @@ export function check(
 		budgetRules(s, p, surfaces);
 	}
 	documentRules(s, documents);
+	for (const p of sdkPackages) sdkCardRules(s, p);
 	return violations;
 }

@@ -4,14 +4,14 @@ import { readWorkspace } from "@mod/guard-imports";
 import { branchingImports, heavyDependencyCards } from "./budget/budget.ts";
 import { budgetOf, check } from "./check.ts";
 import { unlistedExports } from "./offers/offers.ts";
-import { readDocuments } from "./workspace.ts";
+import { readDocuments, readSdkPackages } from "./workspace.ts";
 
 const root = process.env.INIT_CWD ?? process.cwd();
 const budget = budgetOf(
 	JSON.parse(readFileSync(join(import.meta.dirname, "..", "budget.json"), "utf8")),
 );
 const packages = readWorkspace(root);
-const violations = check(packages, budget, readDocuments(root));
+const violations = check(packages, budget, readDocuments(root), readSdkPackages(root));
 // Reported, not refused: an internal module pulling in what the rest of its package does not.
 for (const { where, packages: alone } of branchingImports(packages, budget)) {
 	process.stdout.write(`measure  dependency branch  ${where}  ${alone.join(", ")}\n`);
