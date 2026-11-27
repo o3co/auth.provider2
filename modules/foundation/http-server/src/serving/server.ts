@@ -75,7 +75,7 @@ function frozenHead(message: IncomingMessage, proxies: TrustedProxies): Head | u
 	});
 }
 
-/** A JSON answer holding members whose value is null: their key paths, never their values. */
+/** A JSON answer holding a null, an object's member or an array's element: their paths, never their values. */
 class NullMembers extends Error {
 	readonly paths: readonly string[];
 	constructor(paths: readonly string[]) {
@@ -84,10 +84,14 @@ class NullMembers extends Error {
 	}
 }
 
-/** The key paths of the members whose value is null, in objects at any depth, arrays' among them. */
+/** The paths of the nulls inside a value at any depth: an object's member or an array's element. */
 function nullMembers(value: unknown, at = "", found: string[] = []): string[] {
 	if (Array.isArray(value)) {
-		for (const [i, item] of value.entries()) nullMembers(item, `${at}[${i}]`, found);
+		for (const [i, item] of value.entries()) {
+			// An element that is null is refused as an object's member is (keys' null claims alike).
+			if (item === null) found.push(`${at}[${i}]`);
+			else nullMembers(item, `${at}[${i}]`, found);
+		}
 	} else if (typeof value === "object" && value !== null) {
 		for (const [key, member] of Object.entries(value)) {
 			const path = at ? `${at}.${key}` : key;

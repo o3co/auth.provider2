@@ -844,7 +844,7 @@ it("answers 500 for an answer whose headers cannot be written, a value it receiv
 	expect((await fetch(`${base}/ok`)).status).toBe(204);
 });
 
-it("answers 500 for a JSON answer holding a member whose value is null, at any depth, logging the members' paths and never their values [oidc-core-13.3-a]", async () => {
+it("answers 500 for a JSON answer holding a null at any depth, an object's member or an array's element, logging their paths and never their values [oidc-core-13.3-a]", async () => {
 	const recorded = recordingLog();
 	const runtime = quietRuntime({ ...quiet, log: recorded.log });
 	const base = await serveWith(
@@ -862,8 +862,8 @@ it("answers 500 for a JSON answer holding a member whose value is null, at any d
 			},
 			{
 				method: "GET",
-				path: "/written-null",
-				handle: () => jsonAnswer(200, { expires_in: Math.ceil(Number.NaN), list: [undefined] }),
+				path: "/not-a-number",
+				handle: () => jsonAnswer(200, { expires_in: Math.ceil(Number.NaN) }),
 			},
 			{ method: "GET", path: "/none", handle: () => jsonAnswer(200, { kept: "v", list: [1] }) },
 		]),
@@ -876,14 +876,41 @@ it("answers 500 for a JSON answer holding a member whose value is null, at any d
 		{
 			level: "error",
 			event: "http.failed",
-			fields: { kind: "null_member", members: "top address.region list[0].item" },
+			fields: { kind: "null_member", members: "top address.region list[0].item list[1]" },
 		},
 	]);
 	expect(JSON.stringify(recorded.lines())).not.toContain("secret-value");
-	// What JSON writes as null is refused alike: a number that is not one, and undefined in a list.
-	expect((await fetch(`${base}/written-null`)).status).toBe(500);
+	// What JSON writes as null is refused alike: a number that is not one.
+	expect((await fetch(`${base}/not-a-number`)).status).toBe(500);
+	expect(
+		recorded
+			.lines()
+			.filter((line) => line.level === "error")
+			.at(-1)?.fields,
+	).toEqual({ kind: "null_member", members: "expires_in" });
 	expect((await fetch(`${base}/none`)).status).toBe(200);
 });
+
+it.each([
+	["undefined in a list, which JSON writes as null", { list: [undefined] }, "list[0]"],
+	["an array's element at any depth", { deep: { list: ["x", [null]] } }, "deep.list[1][0]"],
+	["a top-level list's element, by its index", ["x", null], "[1]"],
+])(
+	"answers 500 for a JSON answer holding a null as %s, logging its path [oidc-core-13.3-a]",
+	async (_, json, path) => {
+		const recorded = recordingLog();
+		const runtime = quietRuntime({ ...quiet, log: recorded.log });
+		const base = await serveWith(
+			handlers([{ method: "GET", path: "/null", handle: () => jsonAnswer(200, json as never) }]),
+			{},
+			runtime,
+		);
+		expect((await fetch(`${base}/null`)).status).toBe(500);
+		expect(recorded.lines().filter((line) => line.level === "error")).toEqual([
+			{ level: "error", event: "http.failed", fields: { kind: "null_member", members: path } },
+		]);
+	},
+);
 
 it("warns, at most once a minute, when a peer it does not trust sends forwarded headers", async () => {
 	let at = 0;
