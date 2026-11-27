@@ -5,7 +5,8 @@
 	"type": "module",
 	"kind": "verification",
 	"scripts": {
-		"deviations": "node src/deviations/main.ts"
+		"deviations": "node src/deviations/main.ts",
+		"run:a": "vitest run src/harness/test/run-a.integration.test.ts"
 	},
 	"dependencies": {
 		"@mod/docker-client": "workspace:*"
@@ -33,7 +34,10 @@
 		"@mod/mail-smtp": "workspace:*",
 		"@mod/par": "workspace:*",
 		"@mod/redirect-uris": "workspace:*",
+		"@mod/redis": "workspace:*",
 		"@mod/sdk-core-wire": "workspace:*",
+		"@mod/sender-binding": "workspace:*",
+		"@mod/store": "workspace:*",
 		"@mod/tokens": "workspace:*",
 		"@mod/webauthn": "workspace:*",
 		"@sdk/login-screen": "link:../../../sdk/packages/login-screen",

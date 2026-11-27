@@ -6,7 +6,8 @@
 	"kind": "feature",
 	"exports": {
 		".": "./src/contract.ts",
-		"./module": "./src/module.ts"
+		"./module": "./src/module.ts",
+		"./testing": "./src/testing.ts"
 	},
 	"dependencies": {
 		"@mod/clients": "workspace:*",

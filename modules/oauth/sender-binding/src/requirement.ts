@@ -7,7 +7,8 @@ export interface BindingRequirement {
 	readonly kinds?: readonly string[] | undefined;
 }
 
-const requirementSection: Section<BindingRequirement> = {
+/** A client's section: whether its tokens are bound to their sender, and by which kinds. */
+export const requirementSection: Section<BindingRequirement> = {
 	name: "sender-binding",
 	schema: z.strictObject({
 		required: z

@@ -1,8 +1,8 @@
 /**
  * The provider as the OIDF run meets it: the generated `nextgen-core` and `nextgen-front`, each run
  * as its operator runs it in a process of its own, over fakes of the outside systems the Core
- * reaches (KMS, SMTP, the signed registry) and the memory store on the store axis (redis's fake
- * boots the module and no more); and an https front at the issuer's origin, the deployment's edge, answering what the
+ * reaches (KMS, SMTP, the signed registry), and Redis where the harness runs one, else the memory store
+ * (`differences`); and an https front at the issuer's origin, the deployment's edge, answering what the
  * operator publishes (the Core app's own entries wrote it) as the publisher would, and passing
  * everything else to the Front. The publisher is the operator's and trusted; the harness plays it.
  */
@@ -38,6 +38,7 @@ import { parConfig } from "@mod/par/testing";
 import { tokensConfig } from "@mod/tokens/testing";
 import { webauthnConfig } from "@mod/webauthn/testing";
 import { stopAll } from "../../lifecycle/lifecycle.ts";
+import { type RedisServer, storeOf } from "./differences.ts";
 
 /** How long an app may take to listen once run. */
 const bootMs = 20_000;
@@ -58,6 +59,8 @@ export interface SceneSpec {
 	readonly parJarMaxLifetime?: string;
 	/** Whether a JAR by value is taken at a login's start too (`par`'s `pushed-only` false): pushed alone, as generated, unless a test says. */
 	readonly byValue?: true;
+	/** The Redis server the Core's store is, as generated, where the harness runs one: the memory store unless given. */
+	readonly redis?: RedisServer;
 }
 
 /** The scene started: the issuer's origin, the certificate its front answers with, and its stop. */
@@ -99,11 +102,7 @@ const publishedFiles = [
 	"/core-keys.json",
 ];
 
-/**
- * Starts the scene; a start that fails stops what it started. The pattern's differences: the spec's
- * (its clients, its screen, PAR's `jar-max-lifetime` where given), `sign-up` added, the memory store, and one
- * sender for every request.
- */
+/** Starts the scene; a start that fails stops what it started. Its differences from the pattern: `differencesOf`. */
 export async function startScene(spec: SceneSpec): Promise<Scene> {
 	const stops: (() => Promise<unknown>)[] = [];
 	const runs: { readonly name: string; readonly run: Running }[] = [];
@@ -224,7 +223,7 @@ export async function startScene(spec: SceneSpec): Promise<Scene> {
 					{ kid: "seal-test", "key-id": arn("sealing") },
 				],
 			},
-			store: { "accept-volatile": true, "accept-unauthenticated": true },
+			...storeOf(spec).section,
 			"mail-smtp": {
 				host: "127.0.0.1",
 				port: relay.port,
@@ -257,7 +256,7 @@ export async function startScene(spec: SceneSpec): Promise<Scene> {
 		const coreApp = await generated({
 			pattern: "nextgen-core",
 			add: ["@mod/sign-up"],
-			axes: { "@mod/store": "@mod/store" },
+			axes: storeOf(spec).axes,
 		});
 		stops.push(async () => coreApp.remove());
 		const coreRun = await run("nextgen-core", coreApp.dir, { script: "start" }, core, aws);
@@ -267,7 +266,13 @@ export async function startScene(spec: SceneSpec): Promise<Scene> {
 		// What the operator publishes, written by the Core app's own entries.
 		for (const entry of ["src/discovery-publish.ts", "src/keys-publish.ts"]) {
 			const wrote = await run(entry, coreApp.dir, { file: entry }, core, aws, [docs]);
-			if ((await wrote.exited) !== 0) throw new Error(`${entry} failed:\n${output()}`);
+			const ended = await Promise.race([
+				wrote.exited,
+				new Promise<"late">((done) => setTimeout(() => done("late"), bootMs).unref()),
+			]);
+			if (ended === "late") await wrote.stop();
+			if (ended !== 0)
+				throw new Error(`${entry} ${ended === "late" ? "did not end" : "failed"}:\n${output()}`);
 		}
 
 		const frontApp = await generated({ pattern: "nextgen-front" });

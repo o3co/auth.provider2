@@ -3535,9 +3535,18 @@ importers:
       '@mod/redirect-uris':
         specifier: workspace:*
         version: link:../../oauth/redirect-uris
+      '@mod/redis':
+        specifier: workspace:*
+        version: link:../../store-redis/redis
       '@mod/sdk-core-wire':
         specifier: workspace:*
         version: link:../../wire/sdk-core-wire
+      '@mod/sender-binding':
+        specifier: workspace:*
+        version: link:../../oauth/sender-binding
+      '@mod/store':
+        specifier: workspace:*
+        version: link:../../foundation/store
       '@mod/tokens':
         specifier: workspace:*
         version: link:../../oauth/tokens

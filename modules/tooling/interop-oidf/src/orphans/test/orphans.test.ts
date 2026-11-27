@@ -45,6 +45,25 @@ describe("the suites a run left behind", () => {
 		for (const c of calls) expect(c.within).toBeGreaterThan(0);
 	});
 
+	it("takes down a container of no suite's whose owner is gone, as the harness's Redis, touching no suite's network", async () => {
+		const { docker, calls } = dockers((args) => {
+			if (args[0] === "ps")
+				return [
+					"r1\t222\t\tinterop-oidf-redis-ab12",
+					"s1\t111\to3co-oidf-live\tlive-server-1",
+				].join("\n");
+			if (args[0] === "network" && args[1] === "ls")
+				return args.includes("label=com.docker.compose.project=") ? "" : "n-live";
+			return "";
+		});
+		const reclaimed = await reclaimOrphans(docker, undefined, (pid) => pid === 111);
+		expect(reclaimed).toEqual([""]);
+		expect(calls.filter((c) => c.args[0] === "rm").map((c) => c.args)).toEqual([
+			["rm", "--force", "--volumes", "r1"],
+		]);
+		expect(calls.some((c) => c.args[0] === "network" && c.args[1] === "rm")).toBe(false);
+	});
+
 	it("keeps what each container wrote to either stream, asking the client for both", async () => {
 		const logs = await mkdtemp(join(tmpdir(), "reclaimed-"));
 		const { docker, calls } = dockers((args) => {

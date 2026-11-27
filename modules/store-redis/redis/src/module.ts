@@ -254,6 +254,9 @@ const opened = contract<{
 
 const takes = [spaces, tlsOptions] as const;
 
+/** The section's settings, as an operator writes them: `./testing`'s `redisConfig` takes them. */
+export type RedisSettings = z.input<typeof section>;
+
 // Safe on many instances: it is the shared store, given the same `url` and `prefix` on each
 // (deployment-guarantees, Several instances).
 export default defineModule(

@@ -3,14 +3,14 @@
 Internal module of `interop-oidf`: the suites a run killed before its stops leaves, found and taken down.
 
 ## Responsibilities
-- Finds the suites whose owner no longer runs, by the label each container carries, and takes them down: they hold the suite's fixed ports.
+- Finds the suites whose owner no longer runs, by the label each container carries, and takes them down: they hold the suite's fixed ports. A container of no suite carrying the label (the harness's Redis) is taken down the same way.
 
 ## Not here
 - Starting and stopping a suite its owner runs: `suite`.
 
 ## Offers
-- `ownerLabel`: the label each container of a suite carries, the process that started it.
-- `reclaimOrphans`: takes down the suites whose owner no longer runs: each container's log, what it wrote to either stream, kept where a directory is given, then the containers, their volumes and their networks removed; answers the projects taken down.
+- `ownerLabel`: the label each container of a suite, or of the harness, carries: the process that started it.
+- `reclaimOrphans`: takes down the suites whose owner no longer runs: each container's log, what it wrote to either stream, kept where a directory is given, then the containers, their volumes and their networks removed; answers the projects taken down (`""` for containers of no suite).
 
 ## Invariants
 - A suite whose owner runs is never touched.

@@ -6,6 +6,7 @@
 - A module's review: the pages its REVIEW stands on, kept, and the harness's verdict of each, never the suite's (internal module `review`).
 - A run's results: each module's run judged against its entry, the keys observed and computed, the run passed or why not (internal module `results`, for tests).
 - A run's report: its results as tables in the ledger's keys and words, what the run cannot show, and the harness's own tests beside (internal module `report`, for tests).
+- A recorded run: what the suite is given, its clients and the plan's configuration, and run A recorded, judged and reported (internal module `harness`, for tests).
 - A run's expected results, module by module, in the ledger's keys, and the package's file of run A's (`expected/a.json`, internal module `expected`).
 - The provider as the run meets it (internal module `scene`, for tests): the generated `nextgen-core` and `nextgen-front` run as operators run them behind an https front at the issuer's origin.
 - The harness's relying party (internal module `rp`, for tests): a conforming client of nextgen, its JARs, PAR, assertions and DPoP proofs.
@@ -22,6 +23,7 @@
 - `pnpm --filter @mod/interop-oidf run deviations`: writes `docs/compliance/deviations.md` from `docs/compliance/deviations.json`.
 - `suite-pin.json`: the suite's release tag, the commit the tag must name, and the Python packages its scripts run on, each at one version.
 - `src/suite/test/suite.integration.test.ts`, run by hand from this package's directory (`npx vitest run <file>`: the workspace's configuration leaves integration tests out): the suite at the pin, up and answering with the harness's certificate alone, and nothing left once stopped (Docker, `git`, `openssl` and Python 3 on the path, and the network).
+- `src/harness/test/run-a.integration.test.ts`, run by hand (`pnpm --filter @mod/interop-oidf run run:a`, its record in `<OIDF_RUN_DIR>/a`, never in a git work tree nor over a record, else under a new directory in the system's temporary one): run A, every module of the plan against the scene on Redis, judged and reported; it fails where the run does not pass, its report written either way. Docker, `git`, `openssl` and Python 3 on the path, and the network.
 
 ## Invariants
 - No package depends on this one: it is verification, unpublished.

@@ -1,4 +1,11 @@
 import { createServer, type Server, type Socket } from "node:net";
+import type { RedisSettings } from "./module.ts";
+
+/**
+ * The redis part of a test's configuration: a server's URL and what its operator states. The card has
+ * no room left under G7 to name it (6497 of 6500 bytes): whoever next deepens redis names it there.
+ */
+export const redisConfig = (settings: RedisSettings) => ({ redis: settings });
 
 /** One command from the start of `buffer`, and the bytes it took; none until it is whole. */
 function commandOf(buffer: Buffer): { args: string[]; used: number } | undefined {

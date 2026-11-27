@@ -4,6 +4,7 @@ import { quietRuntime, recordingLog } from "@mod/kernel/testing";
 import { tlsOptionsForTests } from "@mod/tls-options/testing";
 import { afterEach, beforeAll, expect, it, vi } from "vitest";
 import redisModule from "../src/module.ts";
+import { redisConfig } from "../src/testing.ts";
 
 /** A port no test takes: `listen(0)` picks from the ephemeral range, never port 1. */
 const refusedPort = 1;
@@ -201,4 +202,20 @@ it("refuses boot without telling the URL's password, in the refusal or in a warn
 	expect(JSON.stringify(refused.refusals)).not.toContain("s3cr3t");
 	expect(String(refused)).not.toContain("s3cr3t");
 	expect(JSON.stringify(warned)).not.toContain("s3cr3t");
+});
+
+it("takes a test's configuration from redisConfig as the section it reads, its statements past the schema to the server", async () => {
+	const url = `redis://:s3cr3t-pass@127.0.0.1:${refusedPort}`;
+	const settings = {
+		url,
+		replication: "none",
+		authentication: "none",
+		"connect-timeout": "100ms",
+	} as const;
+	const config = redisConfig(settings);
+	expect(config).toEqual({ redis: settings });
+	const { refused } = await refusalOf(config.redis);
+	// Past the schema: refused only where the server cannot be reached.
+	expect((refused as BootRefused).refusals?.map((r) => r.where)).toEqual(["redis.url"]);
+	expect(JSON.stringify((refused as BootRefused).refusals)).not.toContain("s3cr3t");
 });
