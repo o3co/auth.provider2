@@ -209,11 +209,11 @@
 	{
 		"key": "authorization-items-closed",
 		"kind": "deviation",
-		"standard": "RFC 6749 §3.1; OpenID Connect Core 1.0 §15.1",
-		"text": "The authorization server MUST ignore unrecognized request parameters; every OP MUST support enforcing `max_age`, and `display`, `ui_locales`, `claims_locales` and `acr_values` must at least not result in an error",
-		"behaviour": "A JAR naming any item outside the login's closed set is refused (`unknown_item`, `invalid_request_object`): `max_age`, `display`, `ui_locales`, `claims_locales`, `acr_values`, `login_hint` and `id_token_hint` among them, until a decision adds one",
+		"standard": "RFC 6749 §3.1",
+		"text": "The authorization server MUST ignore unrecognized request parameters",
+		"behaviour": "A JAR naming a claim outside the login's items, its envelope and the claims below is refused (`unknown_item`, `invalid_request_object`). `display`, `ui_locales`, `claims_locales`, `login_hint`, `max_age` (whole seconds, met by every login's fresh tap) and `acr_values` are taken and never put in T; `id_token_hint` is verified and honoured (T holds its subject)",
 		"why": "The statement T the person approves is signed whole and compared exactly, its items one closed set; an item the screen neither checks nor shows could be added or changed by a compromised Front, so none is carried that is not named",
-		"decision": "A26"
+		"decision": "A26, V29"
 	},
 	{
 		"key": "scope-not-understood-refused",
