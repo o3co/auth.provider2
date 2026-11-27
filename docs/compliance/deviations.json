@@ -133,5 +133,68 @@
 		"behaviour": "A `state` or `nonce` longer than 512 bytes of UTF-8 is refused with 400 `invalid_request`, at PAR and at /login/start",
 		"why": "T, the statement the person approves, carries both and must fit its route to the screen (4096 characters); 512 each leaves room for a long client, redirect URI, scope and `claims`. The OIDF suite's 1000-character `state` is refused, which it marks a warning",
 		"decision": "V28"
+	},
+	{
+		"key": "id-token-rs256-unsupported",
+		"kind": "deviation",
+		"standard": "OpenID Connect Core 1.0 §15.1; OpenID Connect Discovery 1.0 §3 (`id_token_signing_alg_values_supported`)",
+		"text": "OPs MUST support signing ID tokens with RS256, unless they return ID tokens from the token endpoint alone and let clients register only `none`; `id_token_signing_alg_values_supported` MUST include RS256",
+		"behaviour": "The ID token is signed by the authority ring's one algorithm, and the metadata names that algorithm alone. nextgen's configuration signs ES256, so RS256 is neither offered nor listed. A ring under RS256 boots, warned of at every start as deprecated",
+		"why": "FAPI 2.0 Security Profile §5.4.1 allows PS256, ES256 and EdDSA alone, and nextgen takes FAPI 2.0 with ES256 signing. Serving both would need a key per algorithm and a choice of algorithm per client (Q42)",
+		"decision": "F4"
+	},
+	{
+		"key": "rs256-not-accepted",
+		"kind": "strict",
+		"standard": "OpenID Connect Discovery 1.0 §3 (`token_endpoint_auth_signing_alg_values_supported`, `request_object_signing_alg_values_supported`)",
+		"text": "Servers should support RS256 for client assertions at the token endpoint, and `none` and RS256 for request objects",
+		"behaviour": "Client assertions and request objects are taken under ES256, PS256 and EdDSA by default; RS256 only where the operator names it, warned of at every start. `none` is never taken, and an unsigned request is refused (`jar-required`)",
+		"why": "FAPI 2.0 Security Profile §5.4.1 allows PS256, ES256 and EdDSA alone",
+		"decision": "F4"
+	},
+	{
+		"key": "userinfo-not-offered",
+		"kind": "strict",
+		"standard": "OpenID Connect Discovery 1.0 §3 (`userinfo_endpoint`); OpenID Connect Core 1.0 §5.4",
+		"text": "`userinfo_endpoint` is RECOMMENDED; when an access token is issued, the claims of the `profile`, `email`, `address` and `phone` scopes are returned from the UserInfo endpoint",
+		"behaviour": "The recommended composition offers no UserInfo endpoint (`userinfo` is opt-in), and no token introspection; the claims of the scopes asked are released in the ID token. Composing `userinfo` is a weakening choice: claims 1 and 2 are judged not to hold",
+		"why": "A UserInfo answer is bound to neither the token it was asked with nor the request, so a compromised Front can replay an older answer of wider attributes, or answer any `sub` it likes",
+		"decision": "G1"
+	},
+	{
+		"key": "client-keys-written-only",
+		"kind": "strict",
+		"standard": "RFC 7591 §2 (`jwks_uri`)",
+		"text": "A client's keys may be given by reference at its `jwks_uri`, which is preferred over the inline `jwks` for easier key rotation",
+		"behaviour": "A client's keys are those written in its record alone. A registry record naming a `jwks_uri` has no key, and nothing is fetched for it; a client written in the configuration may name one only as a weakening choice, which the promise judgment reports as breaking claim 2",
+		"why": "Keys fetched from a URL rest on whoever serves it and on the fetch's TLS, not on the publisher's signed registry, so claim 2 would depend on them",
+		"decision": "R8"
+	},
+	{
+		"key": "webauthn-uv-required",
+		"kind": "strict",
+		"standard": "WebAuthn Level 3 §5.5, §5.8.6, §7.2",
+		"text": "`userVerification` defaults to `preferred`: the Relying Party may take a response without the UV flag",
+		"behaviour": "Passkey ceremonies ask `userVerification: \"required\"`, and a response without the UV flag is refused. Any other `passkeys` `user-verification` setting breaks the promise of a new login",
+		"why": "A new login is the person's own approval of the request with their passkey, every time (D6); user verification (fingerprint, face or PIN) makes the tap the person's, not only someone's presence",
+		"decision": "C2"
+	},
+	{
+		"key": "webauthn-rs256-not-offered",
+		"kind": "strict",
+		"standard": "WebAuthn Level 3 §5.4 (`pubKeyCredParams`)",
+		"text": "Relying Parties that wish to support a wide range of authenticators SHOULD include at least -8 (EdDSA), -7 (ES256) and -257 (RS256)",
+		"behaviour": "Creation offers ES256 and EdDSA by default (`webauthn.algorithms`); RS256 only where the operator names it, warned of at every start. An RS256 passkey already registered is still verified",
+		"why": "A 2048-bit RSA key holds about 112-bit security and signs by PKCS#1 v1.5, which FAPI 2.0 §5.4.1 leaves out",
+		"decision": "V22"
+	},
+	{
+		"key": "cc-dpop-client-key",
+		"kind": "strict",
+		"standard": "RFC 9449 §11.11",
+		"text": "DPoP is not client authentication: a proof is tied to the client's authentication only by sharing its TLS connection, and a cryptographic binding is left out of scope",
+		"behaviour": "client_credentials (opt-in, a weakening choice) takes `private_key_jwt` by a key written in the client's registry record alone, and its DPoP proof must be by that same key, the token's `cnf`; a proof by another key is refused `invalid_dpop_proof`",
+		"why": "TLS ends at the Front, so a compromised Front could pass the client's assertion on and swap the proof for one by its own key, getting a token bound to the attacker's key in the client's name (claim 2; Tamarin `CC_PROOF_ANY_REGISTERED`)",
+		"decision": "V21"
 	}
 ]
