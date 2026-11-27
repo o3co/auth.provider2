@@ -8,7 +8,7 @@ import {
 	read,
 	type Sent,
 	sendOrRefuse,
-	unsendable,
+	unsendableOf,
 	type Wire,
 } from "../relay/relay.ts";
 
@@ -63,7 +63,8 @@ export function badFront(wire: Wire, source: string) {
 				message = change ? await change(asRead) : asRead;
 			} catch (error) {
 				// A rewrite's message the frame cannot carry: nothing is sent, as for the request's own.
-				if (error instanceof WireEncodeError) return unsendable;
+				if (error instanceof WireEncodeError)
+					return unsendableOf(error.field, error.code, error.word);
 				throw error;
 			}
 			const reply = await sendOrRefuse(kept, kind, message);

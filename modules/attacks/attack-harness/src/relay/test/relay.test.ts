@@ -101,7 +101,24 @@ describe("the honest relay", () => {
 		const loose = sentOf(token);
 		expect(await front.post({ ...loose, body: { ...loose.body, code: "!" } })).toEqual({
 			status: 400,
-			body: { error: "invalid_request" },
+			body: { error: "invalid_request", error_description: "code: fieldSyntax" },
+		});
+		// The request object the frame cannot carry is its own word, as front-relay answers it.
+		const pushed = (request?: string) => ({
+			path: overHttp.operations.par.path,
+			body: {
+				...(request !== undefined && { request }),
+				client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+				client_assertion: "a.b.c",
+			},
+		});
+		expect(await front.post(pushed("a.b."))).toEqual({
+			status: 400,
+			body: { error: "invalid_request_object", error_description: "request: fieldSyntax" },
+		});
+		expect(await front.post(pushed())).toEqual({
+			status: 400,
+			body: { error: "invalid_request", error_description: "request: fieldLength" },
 		});
 		expect(seen).toHaveLength(1);
 	});

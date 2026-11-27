@@ -94,14 +94,30 @@ export function checkField(spec: FieldSpec, bytes: Uint8Array): WireErrorName | 
 	return bytes.length === 0 ? undefined : syntaxError(spec.type, bytes, spec.values);
 }
 
-/** An honest side's refusal to encode: the field and the code, for its own log alone. */
+/** The OAuth word for a field a request cannot carry. */
+export type RefusalWord = "invalid_request" | "invalid_request_object";
+
+/**
+ * The word for a field a request cannot carry, by the field and the one value read for it: the
+ * request object (`request`, a JAR by value) sent once as a text not empty is `invalid_request_object`
+ * (RFC 9101 §6.2, §7; RFC 9126 §2.3); any other field, and it absent, empty, twice or of no text,
+ * `invalid_request` (RFC 6749 §3.1, §5.2; RFC 9126 §2.3). One rule, for every reader of a request.
+ */
+const wordOf = (field: string, value: unknown): RefusalWord =>
+	field === "request" && typeof value === "string" && value !== ""
+		? "invalid_request_object"
+		: "invalid_request";
+
+/** An honest side's refusal to encode: the field, the code for its own log, and the OAuth word to answer. */
 export class WireEncodeError extends Error {
 	readonly field: string;
 	readonly code: WireErrorName;
-	constructor(field: string, code: WireErrorName) {
+	readonly word: RefusalWord;
+	constructor(field: string, code: WireErrorName, value?: unknown) {
 		super(`wire: ${field} ${code}`);
 		this.field = field;
 		this.code = code;
+		this.word = wordOf(field, value);
 	}
 }
 
@@ -136,10 +152,10 @@ function encodeBody(
 	const parts = fields.map((spec) => {
 		const value = message[spec.name];
 		const given = givenError(spec, value);
-		if (given) throw new WireEncodeError(spec.name, given);
+		if (given) throw new WireEncodeError(spec.name, given, value);
 		const bytes = bytesOf(spec, value);
 		const error = checkField(spec, bytes);
-		if (error) throw new WireEncodeError(spec.name, error);
+		if (error) throw new WireEncodeError(spec.name, error, value);
 		return bytes;
 	});
 	const out = new Uint8Array(parts.reduce((n, p) => n + 2 + p.length, 0));
@@ -319,7 +335,13 @@ export interface Carried {
 /** A message read from HTTP, or the field it cannot carry and the code of why. */
 export type Read<K extends RequestKind> =
 	| { readonly ok: true; readonly message: Message<K> }
-	| { readonly ok: false; readonly field: string; readonly error: WireErrorName };
+	| {
+			readonly ok: false;
+			readonly field: string;
+			readonly error: WireErrorName;
+			/** The OAuth word a reader answers it with (`WireEncodeError`'s rule). */
+			readonly word: RefusalWord;
+	  };
 
 const kinds = Object.keys(requests) as RequestKind[];
 const sideOf = (kind: RequestKind): OverHttp => overHttp.operations[kind];
@@ -386,14 +408,16 @@ export function messageOf<K extends RequestKind>(kind: K, carried: Carried): Rea
 			continue;
 		}
 		const header = side.headerNames?.[spec.name];
-		if (!header && carried.mistyped.has(nameOf(side, spec.name)))
-			return { ok: false, field: spec.name, error: "fieldSyntax" };
+		const refused = (error: WireErrorName, value?: unknown) =>
+			({ ok: false, field: spec.name, error, word: wordOf(spec.name, value) }) as const;
+		// Of no text, or sent twice: no one value was read, so no request object either.
+		if (!header && carried.mistyped.has(nameOf(side, spec.name))) return refused("fieldSyntax");
 		const sent = header
 			? [carried.headers.get(header) ?? ""]
 			: carried.values.get(nameOf(side, spec.name));
-		if (sent && sent.length > 1) return { ok: false, field: spec.name, error: "fieldSyntax" };
+		if (sent && sent.length > 1) return refused("fieldSyntax");
 		const read = fieldValue(spec, side, sent?.[0] ?? "");
-		if ("error" in read) return { ok: false, field: spec.name, error: read.error };
+		if ("error" in read) return refused(read.error, sent?.[0]);
 		message[spec.name] = read.value;
 	}
 	return { ok: true, message: message as Message<K> };
@@ -409,7 +433,7 @@ export function requestOf<K extends RequestKind>(kind: K, carried: Carried): Rea
 	for (const spec of requests[kind].fields as readonly FieldSpec[]) {
 		const value = (read.message as Record<string, unknown>)[spec.name];
 		const error = givenError(spec, value) ?? checkField(spec, bytesOf(spec, value));
-		if (error) return { ok: false, field: spec.name, error };
+		if (error) return { ok: false, field: spec.name, error, word: wordOf(spec.name, value) };
 	}
 	return read;
 }

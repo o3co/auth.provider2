@@ -16,7 +16,7 @@ Internal module of `attack-harness`: the dishonest Front.
 ## Invariants
 - A request's message and its reply are rewritten by one setting, the step's rewrites as they stood when it came.
 - `seen` keeps the frames relayed and its own as their replies come, each with the reply as the wire carried it, before any rewrite; a frame of its own goes unrewritten.
-- A request whose rewrite throws `WireEncodeError` is answered `400` `invalid_request`, nothing sent, as one the frame cannot carry.
+- A request whose rewrite throws `WireEncodeError` is answered as one the frame cannot carry (`unsendableOf`, its refusal's word), nothing sent.
 - A rewrite is typed by its operation's message: it changes what a Front can, never what the frame cannot carry.
 
 ## Depends on

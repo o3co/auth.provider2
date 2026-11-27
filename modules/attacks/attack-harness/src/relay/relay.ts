@@ -2,6 +2,7 @@ import {
 	type Message,
 	messageOf,
 	operationAt,
+	type RefusalWord,
 	WireEncodeError,
 	type WireReply,
 } from "@mod/front-core-codec";
@@ -43,13 +44,19 @@ export type Read = {
 }[RequestKind];
 
 const utf8 = new TextDecoder();
-/** The answer to a request with a field its operation or the frame cannot carry, nothing sent: `400` `invalid_request`. */
-export const unsendable: Answered = { status: 400, body: { error: "invalid_request" } };
+/**
+ * The answer to a field its operation or the frame cannot carry, nothing sent, as front-relay answers
+ * it: `400`, the word its refusal carries (front-core-codec's one rule), the field and its code.
+ */
+export const unsendableOf = (field: string, code: string, word: RefusalWord): Answered => ({
+	status: 400,
+	body: { error: word, error_description: `${field}: ${code}` },
+});
 const seconds = /^[0-9]{1,10}$/;
 
 /**
  * Reads a request as its operation's message: none of an operation is `404`, a body the operation
- * cannot read `400` `invalid_request`, as front-relay answers them. Its body's members are texts alone.
+ * cannot read `400` in its refusal's word (`unsendableOf`), as front-relay answers them. Its body's members are texts alone.
  */
 export function read(sent: Sent, source: string): Read | { readonly answered: Answered } {
 	const values = new Map(Object.entries(sent.body).map(([name, value]) => [name, [value]]));
@@ -59,7 +66,7 @@ export function read(sent: Sent, source: string): Read | { readonly answered: An
 		Object.entries(sent.headers ?? {}).map(([name, value]) => [name.toLowerCase(), value]),
 	);
 	const message = messageOf(kind, { values, headers, source, mistyped: new Set() });
-	if (!message.ok) return { answered: unsendable };
+	if (!message.ok) return { answered: unsendableOf(message.field, message.error, message.word) };
 	return { kind, message: message.message } as Read;
 }
 
@@ -76,7 +83,7 @@ export function carrier(wire: Wire) {
 }
 export type Carrier = ReturnType<typeof carrier>;
 
-/** Sends a frame, a field the frame cannot carry answered `400` `invalid_request`, nothing sent. */
+/** Sends a frame, a field the frame cannot carry answered `400` in its refusal's word (`unsendableOf`), nothing sent. */
 export async function sendOrRefuse<K extends RequestKind>(
 	carry: Carrier,
 	kind: K,
@@ -85,7 +92,8 @@ export async function sendOrRefuse<K extends RequestKind>(
 	try {
 		return await carry.send(kind, message);
 	} catch (error) {
-		if (error instanceof WireEncodeError) return { answered: unsendable };
+		if (error instanceof WireEncodeError)
+			return { answered: unsendableOf(error.field, error.code, error.word) };
 		throw error;
 	}
 }

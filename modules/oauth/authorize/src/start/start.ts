@@ -93,7 +93,12 @@ export function starting(p: StartParts) {
 			headers: new Map(),
 			mistyped: request.mistyped ?? new Set(),
 		});
-		if (!sent.ok) return bad("the start's fields are not front-core-wire's");
+		// In the word the refusal carries, as the Front answers it: the request object's own, any other invalid_request.
+		if (!sent.ok)
+			return answerOf(400, {
+				error: sent.word,
+				description: "the start's fields are not front-core-wire's",
+			});
 		const { message } = sent;
 		// Each field sent, by its name in front-core-wire, as the Front carries it: an empty one is not sent.
 		const fields: StartFields = Object.fromEntries(

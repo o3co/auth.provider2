@@ -151,7 +151,7 @@ describe("the dishonest Front", () => {
 		});
 		expect(await front.post(sentOf(token))).toEqual({
 			status: 400,
-			body: { error: "invalid_request" },
+			body: { error: "invalid_request", error_description: "code: fieldSyntax" },
 		});
 		expect(seen).toHaveLength(0);
 		expect(front.seen()).toEqual([]);

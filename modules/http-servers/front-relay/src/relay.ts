@@ -17,8 +17,9 @@ const corsByPath = new Map<string, CorsRule>(
 
 const notFound: HttpResponse = Object.freeze({ status: 404, headers: noStore });
 const unsupported: HttpResponse = Object.freeze({ status: 415, headers: noStore });
-const refused = (field: string, code: string) =>
-	jsonAnswer(400, { error: "invalid_request", error_description: `${field}: ${code}` });
+/** A field the frame cannot carry: `400`, the word its refusal carries (front-core-codec's one rule), the field and its code. */
+const refused = (field: string, code: string, word: string) =>
+	jsonAnswer(400, { error: word, error_description: `${field}: ${code}` });
 const seconds = /^[0-9]{1,10}$/;
 const codeName = (code: number) =>
 	(Object.keys(wireErrors) as (keyof typeof wireErrors)[]).find((k) => wireErrors[k] === code) ??
@@ -75,11 +76,11 @@ export function relayFallback(link: CoreLink, log: Log): Fallback {
 				...(source.determined && { source: source.address }),
 				mistyped: request.mistyped ?? new Set(),
 			});
-			if (!read.ok) return refused(read.field, read.error);
+			if (!read.ok) return refused(read.field, read.error, read.word);
 			try {
 				return answerOf(kind, await link.send(kind, read.message), log);
 			} catch (error) {
-				if (error instanceof WireEncodeError) return refused(error.field, error.code);
+				if (error instanceof WireEncodeError) return refused(error.field, error.code, error.word);
 				throw error;
 			}
 		},

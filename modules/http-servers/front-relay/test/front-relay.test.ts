@@ -199,6 +199,74 @@ describe("front-relay", () => {
 		expect(core.seen).toEqual([]);
 	});
 
+	it("answers a request object the frame cannot carry as invalid_request_object, at PAR and at a login's start; any other field, and a request object absent, empty, twice or of no text, as invalid_request", async () => {
+		const { url, core } = await front(() => ok({}));
+		const b64 = (text: string) => Buffer.from(text).toString("base64url");
+		const parForm = (request?: string) => ({
+			...(request !== undefined && { request }),
+			client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+			client_assertion: "a.b.c",
+		});
+		const said = async (answer: Response) => [answer.status, await answer.json()];
+		const start = (body: Record<string, unknown>) =>
+			fetch(`${url}/login/start`, {
+				method: "POST",
+				body: JSON.stringify(body),
+				headers: { "content-type": "application/json" },
+			});
+		// RFC 9101 §6.2, §7: the request object is invalid. alg none's JWS has an empty signature.
+		const objects: Record<string, [string, string]> = {
+			"alg none, an empty signature": [
+				`${b64('{"alg":"none"}')}.${b64('{"iss":"c"}')}.`,
+				"fieldSyntax",
+			],
+			malformed: ["not-a-jws", "fieldSyntax"],
+			"too long": [`a.${"b".repeat(8192)}.c`, "fieldLength"],
+		};
+		for (const [what, [request, code]] of Object.entries(objects)) {
+			const object = { error: "invalid_request_object", error_description: `request: ${code}` };
+			expect(await said(await post(`${url}/oauth/par`, parForm(request))), what).toEqual([
+				400,
+				object,
+			]);
+			expect(await said(await start({ clientId: "c", request })), what).toEqual([400, object]);
+		}
+		// RFC 6749 §3.1, §5.2; RFC 9126 §2.3: a request object missing, empty or sent twice is the request's.
+		const request = (code: string) => ({
+			error: "invalid_request",
+			error_description: `request: ${code}`,
+		});
+		expect(await said(await post(`${url}/oauth/par`, parForm()))).toEqual([
+			400,
+			request("fieldLength"),
+		]);
+		expect(await said(await post(`${url}/oauth/par`, parForm("")))).toEqual([
+			400,
+			request("fieldLength"),
+		]);
+		const twice = await fetch(`${url}/oauth/par`, {
+			method: "POST",
+			body: `${new URLSearchParams(parForm("a.b.c"))}&request=a.b.c`,
+			headers: { "content-type": "application/x-www-form-urlencoded" },
+		});
+		expect(await said(twice)).toEqual([400, request("fieldSyntax")]);
+		// A request object of no text carries no JWT: the request's, as any value of the wrong type.
+		expect(await said(await start({ clientId: "c", request: 1 }))).toEqual([
+			400,
+			request("fieldSyntax"),
+		]);
+		// Another field beside a request object well formed: the request's.
+		const assertion = await post(`${url}/oauth/par`, {
+			...parForm("a.b.c"),
+			client_assertion: "x",
+		});
+		expect(await said(assertion)).toEqual([
+			400,
+			{ error: "invalid_request", error_description: "clientAssertion: fieldSyntax" },
+		]);
+		expect(core.seen).toEqual([]);
+	});
+
 	it("refuses, sending nothing, a field outside its spec, a name sent twice and a body of another type", async () => {
 		const { url, core } = await front(() => ok({}));
 		const short = await post(`${url}/oauth/token`, { ...tokenForm, code_verifier: "short" });

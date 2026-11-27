@@ -283,10 +283,19 @@ function reference(request: HttpRequest, reply: WireReply | "unavailable"): Expe
 		mistyped: request.mistyped ?? new Set(),
 		...(request.source.determined ? { source: request.source.address } : {}),
 	};
+	// Written apart from the codec's rule: the request object, sent once as a text not empty, is its own word.
+	const sentObject = request.fields.get("request");
+	const wordOf = (field: string) =>
+		field === "request" &&
+		!(request.mistyped ?? new Set()).has("request") &&
+		sentObject?.length === 1 &&
+		sentObject[0] !== ""
+			? "invalid_request_object"
+			: "invalid_request";
 	const bad = (field: string, code: string, why: string): Expected => ({
 		status: 400,
 		headers: noStore,
-		json: { error: "invalid_request", error_description: `${field}: ${code}` },
+		json: { error: wordOf(field), error_description: `${field}: ${code}` },
 		sent: false,
 		why,
 	});
@@ -369,6 +378,12 @@ describe("the Front's relay of an HTTP request a sender makes", () => {
 				}
 				const got = (await answering) as HttpResponse;
 				seen.set(expected.why, (seen.get(expected.why) ?? 0) + 1);
+				// The Front's own answer in the request object's word is drawn too (a Core's refusal in it is not the Front's).
+				if (
+					expected.sent === false &&
+					(expected.json as { error?: unknown } | undefined)?.error === "invalid_request_object"
+				)
+					seen.set("requestObject", (seen.get("requestObject") ?? 0) + 1);
 				expect(got.status, at).toBe(expected.status);
 				expect(got.headers, at).toEqual(expected.headers);
 				if (expected.json !== undefined) expect(got.body, at).toEqual({ json: expected.json });
@@ -411,6 +426,7 @@ describe("the Front's relay of an HTTP request a sender makes", () => {
 				"created",
 				"rejected",
 				"unavailable",
+				"requestObject",
 				...words.map((w) => `word:${w}`),
 			])
 				expect(seen.get(why) ?? 0, why).toBeGreaterThan(2);

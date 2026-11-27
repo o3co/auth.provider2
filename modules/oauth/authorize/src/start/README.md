@@ -15,7 +15,8 @@ Internal module of `authorize`: the route of a login's start (②).
 
 ## Invariants
 - The JAR's `id_token_hint` is verified before T (the request's `checked`), T holding its subject (`hint_sub`); one refused is `invalid_request`, no T made. A hinted T offers no sign-up (F1): its new subject is never the hint's.
-- A start whose fields `requestOf` refuses (`front-core-wire`'s `loginStart`: missing, repeated, sent as no text, of a size or characters the wire does not give, or bytes not in their one base64url text) is `invalid_request`, before the client is looked up, a source asked or the JAR reserved. Each field the sources are given is one the wire names, as the Front carries it: an empty one is not sent.
+- A start whose fields `requestOf` refuses (`front-core-wire`'s `loginStart`: missing, repeated, sent as no text, of a size or characters the wire does not give, or bytes not in their one base64url text) is refused, before the client is looked up, a source asked or the JAR reserved. Each field the sources are given is one the wire names, as the Front carries it: an empty one is not sent.
+  - In the word its refusal carries (`front-core-codec`'s, as the Front answers): a request object sent as a text, `invalid_request_object`; any other field, `invalid_request`.
 - The screen's encryption key is an uncompressed P-256 point (`0x04` first; its length the wire's); anything else is `invalid_request` before the client is looked up or the JAR reserved.
 - A request source that says it is the `only` one taken is taken alone (`takenOf`): a start by value is then `invalid_request` ("a request by value is not taken"), and `request_parameter_supported`, read from the same sources taken, is `false`; `request_uri_parameter_supported` is whether a source taken `readsRequestUri`. Two such refuse boot.
 - A start naming both a `request` and a `requestUri` is `invalid_request`, before a source is asked, whichever sources are composed.

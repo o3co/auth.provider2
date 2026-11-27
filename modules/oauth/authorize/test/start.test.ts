@@ -317,8 +317,6 @@ describe("a login's start (②)", () => {
 			{ clientId: "c".repeat(65) },
 			{ clientId: "c 1" },
 			{ clientId: "c\ud800" },
-			{ request: "not a jws" },
-			{ request: `a.${"b".repeat(8189)}.c` },
 			{ eSigX: respelled(sent.eSigX) },
 			// A field sent as no text is not carried, never read as no JAR or no request_uri.
 			{ request: 5 },
@@ -326,6 +324,12 @@ describe("a login's start (②)", () => {
 		]) {
 			expect(await h.body({ ...sent, ...off })).toEqual(refused);
 		}
+		// The request object sent as a text and off its spec is its own word, as the Front answers it (RFC 9101 §6.2, §7).
+		for (const request of ["not a jws", `a.${"b".repeat(8189)}.c`, "a.b."])
+			expect(await h.body({ ...sent, request }), request.slice(0, 12)).toEqual({
+				...refused,
+				json: { ...refused.json, error: "invalid_request_object" },
+			});
 		expect(h.sought).toEqual([]);
 		expect(asked).toBe(0);
 		expect(h.asked).toHaveLength(0);

@@ -170,11 +170,13 @@ describe("an operation over HTTP", () => {
 			ok: false,
 			field: "statement",
 			error: "fieldSyntax",
+			word: "invalid_request",
 		});
 		expect(messageOf("firstKeyNonce", carried({ stage: "later" }))).toEqual({
 			ok: false,
 			field: "stage",
 			error: "enumRange",
+			word: "invalid_request",
 		});
 		expect(messageOf("continue", carried({ stage: "rename", seq: "01" }))).toMatchObject({
 			field: "seq",
@@ -223,7 +225,12 @@ describe("an operation over HTTP", () => {
 		] as const) {
 			// messageOf leaves each of these to the encoder; requestOf refuses it, naming the field.
 			expect(messageOf(kind, carried(body)).ok, field).toBe(true);
-			expect(requestOf(kind, carried(body)), field).toEqual({ ok: false, field, error });
+			expect(requestOf(kind, carried(body)), field).toEqual({
+				ok: false,
+				field,
+				error,
+				word: "invalid_request",
+			});
 		}
 	});
 
@@ -238,6 +245,7 @@ describe("an operation over HTTP", () => {
 				ok: false,
 				field: "seq",
 				error: "enumRange",
+				word: "invalid_request",
 			});
 		}
 	});
@@ -253,6 +261,7 @@ describe("an operation over HTTP", () => {
 				ok: false,
 				field: "body",
 				error: "fieldSyntax",
+				word: "invalid_request",
 			});
 		}
 		// A surrogate pair is one character, well formed.
@@ -278,11 +287,13 @@ describe("an operation over HTTP", () => {
 				ok: false,
 				field: name,
 				error: "fieldSyntax",
+				word: "invalid_request",
 			});
 			expect(requestOf("continue", carried), name).toEqual({
 				ok: false,
 				field: name,
 				error: "fieldSyntax",
+				word: "invalid_request",
 			});
 		}
 	});
@@ -295,7 +306,7 @@ describe("an operation over HTTP", () => {
 			const values = new Map(sent.values);
 			values.delete(name);
 			const carried = { ...sent, values, mistyped: new Set([name]) };
-			const refused = { ok: false, field: name, error: "fieldSyntax" };
+			const refused = { ok: false, field: name, error: "fieldSyntax", word: "invalid_request" };
 			expect(messageOf("continue", carried), name).toEqual(refused);
 			expect(requestOf("continue", carried), name).toEqual(refused);
 		}
@@ -476,7 +487,8 @@ describe("an operation over HTTP from a hostile sender", () => {
 	function reference(kind: RequestKind, sent: Carried) {
 		const message: Record<string, unknown> = Object.create(null);
 		for (const f of specs(kind)) {
-			const no = (error: string) => ({ ok: false, field: f.name, error });
+			// Read once, a request object is never refused here (its spec is the encoder's): every word is invalid_request.
+			const no = (error: string) => ({ ok: false, field: f.name, error, word: "invalid_request" });
 			if (f.name === overHttp.declaredSource) {
 				message[f.name] = sent.source ?? "";
 				continue;
@@ -527,7 +539,7 @@ describe("an operation over HTTP from a hostile sender", () => {
 	it(
 		"never throws, takes only what the encoder sends and the Core reads back, refuses by a field it names and a field's code, and the encoder refuses as requestOf does",
 		() => {
-			const seen = { messageOnly: 0, encoderToo: 0, encoderEnum: 0, accepted: 0 };
+			const seen = { messageOnly: 0, encoderToo: 0, encoderEnum: 0, requestObject: 0, accepted: 0 };
 			const codes = new Set<string>();
 			const fieldCodes = ["fieldSyntax", "enumRange", "fieldLength"];
 			for (let i = 0; i < cases * 4; i++) {
@@ -556,7 +568,20 @@ describe("an operation over HTTP from a hostile sender", () => {
 					if (!(error instanceof WireEncodeError)) throw error;
 					seen.encoderToo++;
 					if (error.code === "enumRange") seen.encoderEnum++;
-					expect(held).toEqual({ ok: false, field: error.field, error: error.code });
+					expect(held).toEqual({
+						ok: false,
+						field: error.field,
+						error: error.code,
+						word: error.word,
+					});
+					// The word by the rule, stated apart: the request object, read once as a text not empty.
+					const value = (read.message as Record<string, unknown>)[error.field];
+					expect(error.word).toBe(
+						error.field === "request" && typeof value === "string" && value !== ""
+							? "invalid_request_object"
+							: "invalid_request",
+					);
+					if (error.word === "invalid_request_object") seen.requestObject++;
 					continue;
 				}
 				expect(held).toEqual(read);
@@ -581,6 +606,7 @@ describe("an operation over HTTP from a hostile sender", () => {
 					ok: false,
 					field: f.name,
 					error: "fieldSyntax",
+					word: "invalid_request",
 				});
 				expect(
 					messageOf(kind, { ...base, mistyped: new Set([name]) }),
@@ -589,6 +615,7 @@ describe("an operation over HTTP from a hostile sender", () => {
 					ok: false,
 					field: f.name,
 					error: "fieldSyntax",
+					word: "invalid_request",
 				});
 			}
 			// A header's field, its header absent, is read as empty: never from the body, under any name.
@@ -710,4 +737,100 @@ describe("an operation over HTTP from a hostile sender", () => {
 		},
 		Math.max(5000, cases * 4),
 	);
+});
+
+describe("the OAuth word a refusal carries", () => {
+	const b64 = (text: string) => Buffer.from(text).toString("base64url");
+	const assertion = {
+		client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+		client_assertion: "a.b.c",
+	};
+	const refusedOf = (
+		read:
+			| { readonly ok: true }
+			| {
+					readonly ok: false;
+					readonly field: string;
+					readonly error: string;
+					readonly word: string;
+			  },
+	) => (read.ok ? "taken" : [read.field, read.error, read.word]);
+	/** A valid request of the kind as carried, its request object (and nothing else) replaced. */
+	const withRequest = (kind: "par" | "loginStart", request: string) => {
+		const decoded = decodeRequest(validFrame(kind));
+		if (!decoded.ok) throw new Error("a valid frame");
+		const sent = carriedOf(kind, decoded.value.message as never);
+		return { ...sent, values: new Map(sent.values).set("request", [request]) };
+	};
+
+	it("is invalid_request_object for a request object sent once and failing its spec, at PAR and at a login's start (RFC 9101 §6.2, §7)", () => {
+		const objects: Record<string, [string, string]> = {
+			"alg none, an empty signature": [`${b64('{"alg":"none"}')}.${b64("{}")}.`, "fieldSyntax"],
+			malformed: ["not-a-jws", "fieldSyntax"],
+			"too long": [`a.${"b".repeat(8192)}.c`, "fieldLength"],
+		};
+		for (const [what, [request, error]] of Object.entries(objects)) {
+			expect(refusedOf(requestOf("par", withRequest("par", request))), what).toEqual([
+				"request",
+				error,
+				"invalid_request_object",
+			]);
+			expect(refusedOf(requestOf("loginStart", withRequest("loginStart", request))), what).toEqual([
+				"request",
+				error,
+				"invalid_request_object",
+			]);
+		}
+	});
+
+	it("is invalid_request for the request object absent, empty, twice or of no text, and for any other field (RFC 6749 §3.1, §5.2)", () => {
+		expect(refusedOf(requestOf("par", carried({ ...assertion })))).toEqual([
+			"request",
+			"fieldLength",
+			"invalid_request",
+		]);
+		expect(refusedOf(requestOf("par", carried({ request: "", ...assertion })))).toEqual([
+			"request",
+			"fieldLength",
+			"invalid_request",
+		]);
+		expect(
+			refusedOf(messageOf("par", carried({ request: ["a.b.c", "a.b.c"], ...assertion }))),
+		).toEqual(["request", "fieldSyntax", "invalid_request"]);
+		const mistyped = { ...carried({ ...assertion }), mistyped: new Set(["request"]) };
+		expect(refusedOf(messageOf("par", mistyped))).toEqual([
+			"request",
+			"fieldSyntax",
+			"invalid_request",
+		]);
+		expect(
+			refusedOf(
+				requestOf("par", carried({ request: "a.b.c", ...assertion, client_assertion: "x" })),
+			),
+		).toEqual(["clientAssertion", "fieldSyntax", "invalid_request"]);
+	});
+
+	it("is the encoder's by the same rule, from the value it was given", () => {
+		const read = messageOf("par", carried({ request: "a.b.", ...assertion }));
+		if (!read.ok) throw new Error("read");
+		const encoded = () => encodeRequest("par", 1, read.message);
+		expect(encoded).toThrow(WireEncodeError);
+		try {
+			encoded();
+		} catch (error) {
+			expect([(error as WireEncodeError).field, (error as WireEncodeError).word]).toEqual([
+				"request",
+				"invalid_request_object",
+			]);
+		}
+		const empty = messageOf("par", carried({ ...assertion }));
+		if (!empty.ok) throw new Error("read");
+		try {
+			encodeRequest("par", 1, empty.message);
+			throw new Error("encoded");
+		} catch (error) {
+			expect((error as WireEncodeError).word).toBe("invalid_request");
+		}
+		expect(new WireEncodeError("code", "fieldSyntax").word).toBe("invalid_request");
+	});
 });
