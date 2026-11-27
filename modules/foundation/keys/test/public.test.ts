@@ -117,6 +117,15 @@ describe("whether a key may verify", () => {
 		}
 	});
 
+	it("takes EdDSA by Ed25519 alone, never Ed448 (FAPI 2.0 §5.4.1), with or without its alg named", () => {
+		const ed448 = jwkOf(generateKeyPairSync("ed448").publicKey);
+		expect(ed448).toMatchObject({ kty: "OKP", crv: "Ed448" });
+		expect(verifiesUnder(ed448, "EdDSA")).toBe(false);
+		expect(verifiesUnder({ ...ed448, alg: "EdDSA" }, "EdDSA")).toBe(false);
+		expect(verifiesUnder(ed448)).toBe(false);
+		expect(verifiesUnder(jwkOf(ed.publicKey), "EdDSA")).toBe(true);
+	});
+
 	it("takes, with no algorithm, a key of a kind any algorithm here verifies with", () => {
 		for (const key of [ec.publicKey, ed.publicKey, rsa.publicKey]) {
 			expect(verifiesUnder(jwkOf(key))).toBe(true);

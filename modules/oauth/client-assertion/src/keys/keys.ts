@@ -28,11 +28,11 @@ export const clientKeys: Section<ClientKeys> = {
 				.array(
 					z
 						.record(z.string(), z.unknown())
-						.refine(verifiesSignatures, "a public RSA, EC or OKP key for verifying signatures"),
+						.refine(verifiesSignatures, "a public RSA, EC or Ed25519 key for verifying signatures"),
 				)
 				.prefault([])
 				.describe(
-					"The client's public keys for its assertions, as JWKs: RSA, EC or OKP, with no private member; never beside `jwks-uri`. A registered client's key that none of `client-assertion.algorithms` reads is warned of at every start, by its place; deprecated, a later release refuses boot for it.",
+					"The client's public keys for its assertions, as JWKs: RSA, EC or OKP Ed25519 (never Ed448), with no private member; never beside `jwks-uri`. A registered client's key that none of `client-assertion.algorithms` reads is warned of at every start, by its place; deprecated, a later release refuses boot for it.",
 				),
 			"jwks-uri": urlSetting({ schemes: ["https", "http"] })
 				.optional()

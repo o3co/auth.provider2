@@ -16,7 +16,8 @@ const fits = {
 	ES256: (jwk: Jwk) => jwk.kty === "EC" && jwk.crv === "P-256",
 	ES384: (jwk: Jwk) => jwk.kty === "EC" && jwk.crv === "P-384",
 	ES512: (jwk: Jwk) => jwk.kty === "EC" && jwk.crv === "P-521",
-	EdDSA: (jwk: Jwk) => jwk.kty === "OKP" && (jwk.crv === "Ed25519" || jwk.crv === "Ed448"),
+	// Ed25519 alone: FAPI 2.0 §5.4.1 takes EdDSA by it, and the rings sign by no other curve.
+	EdDSA: (jwk: Jwk) => jwk.kty === "OKP" && jwk.crv === "Ed25519",
 } as const;
 
 /** An asymmetric algorithm a public key may verify under. */

@@ -28,6 +28,21 @@ describe("a JWS verified by the one key given, as the Core's own readers take it
 		},
 	);
 
+	it("verifies EdDSA by an Ed25519 key alone, never Ed448 (FAPI 2.0 §5.4.1), though the platform could", () => {
+		const signed = (key: KeyObject) => {
+			const input = `${b64('{"alg":"EdDSA"}')}.${b64("{}")}`;
+			return `${input}.${sign(null, Buffer.from(input), key).toString("base64url")}`;
+		};
+		for (const [curve, verifies] of [
+			["ed25519", true],
+			["ed448", false],
+		] as const) {
+			const pair = generateKeyPairSync(curve as "ed25519");
+			const key = pair.publicKey.export({ format: "jwk" });
+			expect(verifiedByOne(signed(pair.privateKey), [key]) !== undefined, curve).toBe(verifies);
+		}
+	});
+
 	it("reads a header or payload naming a member twice as JSON reads it, the last", () => {
 		const made = jws("PS256", rsa.privateKey, '{"alg":"PS256"}', '{"iat":1,"iat":2}');
 		expect(verifiedByOne(made, [written])).toMatchObject({ payload: { iat: 2 } });

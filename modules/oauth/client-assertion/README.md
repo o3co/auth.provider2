@@ -12,7 +12,7 @@
 
 ## Offers
 - Composition definition: the method, which names the asymmetric algorithms it takes; how it reads and judges a request: internal module `method`.
-- The client metadata section `client-assertion` (`clientKeys`): `keys`, public RSA, EC or OKP keys as JWKs, default empty; any other key is refused at boot; each is read as internal module `keys`' card says.
+- The client metadata section `client-assertion` (`clientKeys`): `keys`, public RSA, EC or OKP Ed25519 keys as JWKs, default empty; any other key (Ed448 among them) is refused at boot, and a source's client holding one is refused whole; each is read as internal module `keys`' card says.
   - Or `jwks-uri`, a registered client's alone, never beside written keys; and `accept-loose-audience` (default false), for a loose audience, below: each as internal module `keys`' card says.
 - Its stance on `promises`' `front-compromise-client-token` (claim 2): broken where a registered client names a `jwks-uri` or takes a loose audience, by its place and field; held otherwise (internal module `keys`).
 - `clientAssertion`: `verifiedOf` (an authentication's `proof`, its client) → the key its assertion was verified with (`VerifiedKey`: the client, the JWK as its source holds it, its JWK SHA-256 thumbprint, the client's registry version where it has one, and `written` for a key written in its record, never one at its `jwks-uri`); none for anything this module did not make, or another client's.

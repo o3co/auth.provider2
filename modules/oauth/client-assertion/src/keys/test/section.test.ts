@@ -41,8 +41,16 @@ describe("private_key_jwt", () => {
 		});
 		expect(await tried(marked.c)).toBe("app");
 		await expect(
-			boot({ keys: [jwk(generateKeyPairSync("ed448").publicKey)] }),
+			boot({ keys: [jwk(generateKeyPairSync("ed25519").publicKey)] }),
 		).resolves.toBeDefined();
+		// An Ed448 key verifies under no algorithm here (FAPI 2.0 §5.4.1): it refuses boot, at its place.
+		const ed448 = await boot({ keys: [jwk(generateKeyPairSync("ed448").publicKey)] }).catch(
+			(error) => error,
+		);
+		expect(ed448).toBeInstanceOf(BootRefused);
+		expect(ed448.refusals[0]).toMatchObject({
+			where: expect.stringContaining("client-assertion.keys.0"),
+		});
 		const keys = await clientKeys.schema["~standard"].validate({ keys: [], other: 1 });
 		expect(keys.issues).toBeDefined();
 		expect(clientKeysFor([])).toEqual({ "client-assertion": { keys: [] } });
