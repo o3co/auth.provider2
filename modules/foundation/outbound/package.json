@@ -8,6 +8,22 @@
 	"forks": {
 		"src/resolver-process/process.ts": "src/resolver-process/helper.mjs"
 	},
+	"permissions": {
+		"read": {
+			"paths": [
+				{
+					"path": "/etc/hosts",
+					"kind": "file"
+				}
+			]
+		},
+		"child": {
+			"when": {
+				"key": "resolution",
+				"is": "helper"
+			}
+		}
+	},
 	"exports": {
 		".": "./src/contract.ts",
 		"./module": "./src/module.ts"

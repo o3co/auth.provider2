@@ -4,6 +4,7 @@
 	"license": "Apache-2.0",
 	"type": "module",
 	"kind": "foundation",
+	"permissions": {},
 	"exports": {
 		".": "./src/contract.ts"
 	},

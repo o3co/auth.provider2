@@ -18,6 +18,7 @@ import {
 	listening,
 	type Running,
 	running,
+	scripted,
 } from "../src/testing.ts";
 import { coreConfig, devConfig, registryOf } from "./configs.ts";
 
@@ -310,4 +311,75 @@ describe("nextgen-dev", () => {
 		},
 		4 * bootMs + 10_000,
 	);
+});
+
+describe("each pattern started as generated, held by Node's permission model", () => {
+	/** Each pattern's configuration and environment, as its own boot test above gives them. */
+	const configured = async (pattern: string, dir: string, port: number) => {
+		if (pattern === "nextgen-dev") {
+			const issuer = `http://127.0.0.1:${await freePort()}/tenant`;
+			return { config: devConfig({ port, relay: relay.port, registry, issuer }), env: {} };
+		}
+		if (pattern === "nextgen-front") {
+			const config = {
+				...kernelConfig(),
+				...httpConfig({ port, "public-origin": "https://login.example.invalid" }),
+				...frontRelayConfig(certificates, { "core-port": await freePort() }),
+			};
+			return { config, env: {} };
+		}
+		const { env, local } = await asOperator(dir, core(port));
+		return { config: local, env: { ...env, ...awsEnv } };
+	};
+	/** The permission model's events a run wrote, each a JSON line on standard error. */
+	const events = (out: string) =>
+		out.split("\n").filter((line) => line.includes('"app-permissions.event"'));
+
+	for (const pattern of ["nextgen-core", "nextgen-front", "nextgen-dev"]) {
+		it(
+			`${pattern}: audited, boots with no read, process or network beyond its grants; enforced, boots and stops`,
+			async () => {
+				const app = await generated({ pattern });
+				try {
+					const port = await freePort();
+					const { config, env } = await configured(pattern, app.dir, port);
+					for (const mode of ["audit", "enforce"]) {
+						const run = await scripted(app.dir, "start", config, { ...env, APP_PERMISSION: mode });
+						expect(await listening(port, run, bootMs), run.out()).toBe(true);
+						expect(await run.stop(), run.out()).toBe(0);
+						expect(events(run.out()), mode).toEqual([]);
+						// The entry that ran was held so: the preload says how as it loads.
+						expect(run.out()).toContain(`{"event":"app-permissions.held","mode":"${mode}"}`);
+					}
+					// What the start grants, for this configuration, under enforce: no write, and no process but where a package's forks start one.
+					const printed = await scripted(
+						app.dir,
+						"start",
+						config,
+						{ ...env, APP_PERMISSION: "enforce" },
+						["--print"],
+					);
+					expect(await printed.exited, printed.out()).toBe(0);
+					const argv = JSON.parse(printed.out().trim().split("\n").at(-1) ?? "[]") as string[];
+					expect(argv).toContain("--permission");
+					// And unset, audited, until every path an app runs shows no event under it.
+					const byDefault = await scripted(app.dir, "start", config, env, ["--print"]);
+					expect(await byDefault.exited, byDefault.out()).toBe(0);
+					expect(byDefault.out()).toContain("--permission-audit");
+					expect(argv).toEqual(
+						expect.arrayContaining([
+							"--disable-proto=throw",
+							"--disallow-code-generation-from-strings",
+						]),
+					);
+					expect(argv.some((flag) => flag.startsWith("--allow-fs-write"))).toBe(false);
+					// The resolver resolves in the process by default: the Core starts no child process.
+					expect(argv).not.toContain("--allow-child-process");
+				} finally {
+					await app.remove();
+				}
+			},
+			3 * bootMs + 10_000,
+		);
+	}
 });

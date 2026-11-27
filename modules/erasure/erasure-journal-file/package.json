@@ -8,6 +8,16 @@
 	"asks": [
 		"Erasure journal in a file on the one node that runs erasure (`erasure-journal-file.path`)."
 	],
+	"permissions": {
+		"write": {
+			"keys": [
+				"path"
+			],
+			"beside": [
+				"path"
+			]
+		}
+	},
 	"exports": {
 		"./module": "./src/module.ts",
 		"./testing": "./src/testing.ts"

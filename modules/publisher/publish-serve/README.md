@@ -12,6 +12,7 @@
 - `publishServe` (the arguments) → the lines, the exit code and, where it started, the server (`origin`, `close`), for a test or an app's script to run in process.
 
 ## Invariants
+- It runs unheld by Node's permission model in this step: its `permissions` declare none, though it reads the directory it serves; the step that holds the companions declares them.
 - It listens on Node's HTTP server alone (`network`: `serves-http`): the origin is plain `http`, its host loopback by `url-setting`'s `isLoopbackName`. An address is bound as written; a name under `localhost` is bound to `127.0.0.1`, never resolved. Port `0` takes a free one, named in the line it writes.
 - The origin and each reader are origins as written: a path, a query or a trailing `/` refused; `*` is no reader.
 - Each file under the directory is served at its path, with or without a trailing `/`, as `application/json` (its one media type, as the OpenID Connect place has no extension). GET and HEAD only, else `405`.

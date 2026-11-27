@@ -15,6 +15,7 @@
 	"asks": [
 		"`keys-publish <directory>`: writes both rings' public keys for the publisher to serve; for an issuer with a path, the directory is that path under the publisher's, as `jwks_uri` names it. Written again at each key's `expires-at`."
 	],
+	"permissions": {},
 	"exports": {
 		".": "./src/contract.ts",
 		"./testing": "./src/testing.ts",

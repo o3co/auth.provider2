@@ -15,6 +15,7 @@
 - `./testing`, for a test running a generated app as an operator runs it; its configuration is the test's, from each module's `./testing`:
   - `generated` (a `Plan`) → the app in a temporary directory, each dependency linked to the workspace, its manifest (a companion's entry in its `scripts`), its notices, and its removal.
   - `running` (its directory, a file, a configuration, an environment, arguments) → `Running` (its output, its exit, its stop: SIGTERM, SIGKILL past 10 seconds): the configuration in its local layer first (`APP_CONFIG`), one configuration in a directory at a time. `listening`, `freePort`.
+  - `scripted` (its directory, a script, as `running`) → a run of the script by its own command line in the manifest (`node`, its flags, its file).
   - `asOperator`: a configuration split into the environment `.env.example` names and the local layer.
 
 ## Invariants
@@ -26,7 +27,8 @@
 - `promises.required` is the one value a pattern writes; every other value is the operator's, from the modules' fragments.
 - A notice is each `asks` line of a composed adapter declaring `neverDefault`, however it came (an axis or `--add`), written as `notice: <adapter>: <line>`.
 - Departures recorded: `keys-kms` stays the keys axis's default (G25 asks one), where P3 asked none; making keys at each start of a development app is `trial`'s, a later group; the network declaration's extension (purpose, destination kind, caller) comes after `network.json`, before any renderer, where arch-review S3 had it first.
-- It generates into the workspace it lies in, every dependency a `link:` to a workspace package: nothing is published here.
+- Departure recorded: `--frozen-intrinsics` is left out of every entry's `run`, where the proposal asks it beside `--disable-proto=throw`: `reflect-metadata` (through `@simplewebauthn/server` and `@peculiar/x509`) defines a property on a frozen intrinsic as it loads.
+- It generates into the workspace it lies in, every dependency a `link:` to a workspace package: nothing is published here. The start's code roots beyond the app's directory are each workspace package of what it depends on, as far as their dependencies reach, and the workspace's package store, by real path. Its reads reach also every `node_modules` above a root and what a link inside a granted tree names: keep secrets outside them all.
 - A process `./testing` runs takes an environment built whole: of the run's variables, `PATH` alone reaches it, with what the caller gives; `APP_CONFIG` is always its own. Files of the account (an SDK's lookup in the home directory, such as `~/.aws`) are the caller's to shut out, by the variables that name them.
 
 ## Depends on

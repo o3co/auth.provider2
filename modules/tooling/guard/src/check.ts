@@ -11,6 +11,7 @@ import {
 import { budgetRules } from "./budget/budget.ts";
 import type { Budget } from "./contract.ts";
 import { laidOut } from "./documents.ts";
+import { filesRules } from "./files/files.ts";
 import { kindRules } from "./kinds.ts";
 import { helpersOf, networkRules } from "./network/network.ts";
 import { protocolRules } from "./protocol/protocol.ts";
@@ -126,6 +127,7 @@ export function check(
 	for (const p of packages) {
 		sourceRules(s, p);
 		networkRules(s, p);
+		filesRules(s, p);
 		protocolRules(s, p);
 		commonVocabulary(s, p, surfaces);
 		budgetRules(s, p, surfaces);

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, it } from "vitest";
 import { type Declaring, entriesOf } from "../src/contract.ts";
-import type { Shape } from "../src/declared.ts";
+import type { Shape } from "../src/entries/declared.ts";
 import { configFiles, kernel, mainSource } from "../src/start.ts";
 import { declaring } from "./fixtures/declaring.ts";
 

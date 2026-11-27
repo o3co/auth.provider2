@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { type Declaring, entriesOf } from "../src/contract.ts";
-import type { Shape } from "../src/declared.ts";
+import type { Shape } from "../src/entries/declared.ts";
 import { mainSource } from "../src/start.ts";
 import { declaring } from "./fixtures/declaring.ts";
 

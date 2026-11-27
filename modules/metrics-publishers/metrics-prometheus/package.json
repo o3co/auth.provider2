@@ -10,6 +10,24 @@
 		"@mod/http",
 		"@mod/metrics"
 	],
+	"permissions": {
+		"read": {
+			"paths": [
+				{
+					"path": "/proc/self/limits",
+					"kind": "file"
+				},
+				{
+					"path": "/proc/self/status",
+					"kind": "file"
+				},
+				{
+					"path": "/proc/self/fd",
+					"kind": "dir"
+				}
+			]
+		}
+	},
 	"exports": {
 		"./module": "./src/module.ts"
 	},

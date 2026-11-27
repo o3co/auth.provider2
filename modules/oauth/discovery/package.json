@@ -15,6 +15,7 @@
 	"asks": [
 		"`discovery-publish <directory>`: writes the discovery document at both its places under the directory, for the publisher to serve."
 	],
+	"permissions": {},
 	"exports": {
 		".": "./src/contract.ts",
 		"./module": "./src/module.ts"

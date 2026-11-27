@@ -10,6 +10,28 @@
 	],
 	"default": true,
 	"network": "kms",
+	"permissions": {
+		"read": {
+			"env": [
+				{
+					"name": "AWS_CONFIG_FILE",
+					"default": "~/.aws/config",
+					"home": true
+				},
+				{
+					"name": "AWS_SHARED_CREDENTIALS_FILE",
+					"default": "~/.aws/credentials",
+					"home": true
+				},
+				{
+					"name": "AWS_WEB_IDENTITY_TOKEN_FILE"
+				},
+				{
+					"name": "AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE"
+				}
+			]
+		}
+	},
 	"exports": {
 		"./module": "./src/module.ts",
 		"./testing": "./src/testing.ts"

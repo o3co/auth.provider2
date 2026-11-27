@@ -1,5 +1,5 @@
+import { configFiles, filled, type KeysWritten, kernel, refusedPart } from "../start.ts";
 import { type Declared, type Declaring, declaredEntries, type Shape } from "./declared.ts";
-import { configFiles, filled, type KeysWritten, kernel, refusedPart } from "./start.ts";
 
 /** A declared entry as its shape's template fills it. */
 interface Row {

@@ -10,6 +10,15 @@
 	],
 	"default": true,
 	"network": "serves-wire",
+	"permissions": {
+		"read": {
+			"keys": [
+				"certificate-file",
+				"key-file",
+				"front-authority-file"
+			]
+		}
+	},
 	"exports": {
 		"./module": "./src/module.ts",
 		"./testing": "./src/testing.ts"

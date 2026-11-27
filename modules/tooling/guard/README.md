@@ -15,6 +15,7 @@
   - G21: no document copies a list of the configuration.
   - G26: product and companion code reaches the network through `outbound`, or as the words its manifest declares let it (the `network` internal module).
   - G27: a package whose declared `network` word reaches a server the deployment provides (`redis`, `smtp`) states what that server must be in a `## Deployment` section of its card (the `network` internal module).
+  - G35: product and companion code that loads Node's file system declares `permissions` in its manifest, one `app-permissions` takes (the `files` internal module).
   - G33: a protocol package holds a wire's contract alone: it imports `zod` and its own files alone, reaches only the globals that hold no behaviour of the host, and keeps no state nor runs code as it loads (the `protocol` internal module).
 - Measures each package's public surface: its exported values, and the members of its exported interfaces and type aliases.
 - Measures, for each entry point, the exports its package's card does not list, reported and not refused (the `offers` internal module).

@@ -1,5 +1,5 @@
 /** A generated app from a pattern: the selection composed, what it reaches, and the files app-output writes. */
-import { readFileSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import { type Known, writeApp } from "@mod/app-output";
 import { composed, reached, type Selection } from "@mod/combinations";
@@ -56,6 +56,27 @@ export function noticesOf(selection: Selection): string[] {
 	});
 }
 
+/**
+ * Where a linked app's code is read from beyond its own directory, by real path: each workspace
+ * package of what it depends on, as far as their dependencies reach, and the workspace's package store.
+ */
+export function linkedCodeRoots(names: readonly string[]): string[] {
+	const held = new Set<string>();
+	const walk = (name: string) => {
+		const known = workspace().get(name);
+		if (known === undefined || held.has(known.dir)) return;
+		held.add(known.dir);
+		const manifest = known.manifest as Record<string, Record<string, string> | undefined>;
+		for (const field of ["dependencies", "optionalDependencies", "peerDependencies"])
+			for (const dep of Object.keys(manifest[field] ?? {})) walk(dep);
+	};
+	for (const name of names) walk(name);
+	return [
+		...[...held].map((dir) => realpathSync(dir)),
+		realpathSync(join(root, "node_modules", ".pnpm")),
+	];
+}
+
 /** Writes the app the plan names into a missing or empty target; answers the notices to tell. */
 export async function generate(target: string, plan: Plan): Promise<string[]> {
 	const pattern = patternOf(plan);
@@ -68,6 +89,7 @@ export async function generate(target: string, plan: Plan): Promise<string[]> {
 		known: (name) => workspace().get(name),
 		dependency: (known) => `link:${known.dir}`,
 		guide: { title: pattern.name, use: pattern.use, card: pattern.card },
+		codeRoots: linkedCodeRoots,
 	});
 	return noticesOf(selection);
 }

@@ -24,6 +24,7 @@ beforeAll(async () => {
 		"kernel {\n\tdeployment = single\n}\n",
 	);
 	await pkg("@mod/config-files", { kind: "foundation" });
+	await pkg("@mod/app-permissions", { kind: "foundation" });
 	await pkg("@f/lib", { kind: "foundation", network: "outbound" });
 	await pkg(
 		"@f/web",
@@ -77,18 +78,24 @@ describe("writeApp", () => {
 		const { read } = await written();
 		const manifest = JSON.parse(await read("package.json"));
 		expect(manifest.scripts).toEqual({
-			start: "node --env-file-if-exists=.env src/main.ts",
-			"web-publish": "node --env-file-if-exists=.env src/web-publish.ts",
+			start:
+				"node --env-file-if-exists=.env --disable-proto=throw --disallow-code-generation-from-strings src/start.ts",
+			"web-publish":
+				"node --env-file-if-exists=.env --disable-proto=throw --disallow-code-generation-from-strings src/web-publish.ts",
 			"f-serve": "node node_modules/@f/serve/src/main.ts",
 		});
 		expect(Object.keys(manifest.dependencies)).toEqual([
 			"@mod/kernel",
 			"@mod/config-files",
+			"@mod/app-permissions",
 			"@f/web",
 			"@mod/promises",
 			"@f/serve",
 		]);
 		expect(await read("src/main.ts")).toContain('import m0 from "@f/web/module";');
+		// The start, which holds the entry under the permission model, and what it loads ahead of it.
+		expect(await read("src/start.ts")).toContain('from "@mod/app-permissions"');
+		expect(await read("src/permission-lines.ts")).toContain("node:permission-model:");
 		expect(await read("src/web-publish.ts")).toContain("@f/web");
 	});
 
@@ -140,6 +147,66 @@ describe("writeApp", () => {
 		expect(readme).toContain("- `kernel.deployment`: single or several.");
 		expect(readme).toContain("- `store-write`");
 		expect(readme).toContain("The fixture's card.");
+	});
+
+	it("writes permissions.json for the start: its code roots, what its packages declare with their sections, and whether it reaches the network", async () => {
+		await pkg(
+			"@f/files",
+			{ kind: "adapter", permissions: { read: { keys: ["file", "keys.*.file"] } } },
+			"files {\n\tfile = /run/a.pem\n\tkeys = [{ file = /run/k.pem }]\n}\n",
+		);
+		await pkg("@f/forking", { kind: "foundation", forks: { "src/a.ts": "src/a.mjs" } });
+		const { read } = await written({
+			reached: ["@mod/kernel", "@mod/config-files", "@f/files", "@f/forking", "@f/lib"],
+			required: [],
+			codeRoots: (packages) => [`/workspace/${packages.join("+")}`],
+		});
+		expect(JSON.parse(await read("permissions.json"))).toEqual({
+			v: 1,
+			processes: {
+				start: {
+					// Beyond the app's own directory, which the start adds: for the packages the start depends on.
+					code: [
+						"/workspace/@mod/kernel+@mod/config-files+@mod/app-permissions+@f/web+@mod/promises",
+					],
+					declared: [
+						{
+							package: "@f/files",
+							section: "files",
+							permissions: { read: { keys: ["file", "keys.*.file"] } },
+							forks: false,
+						},
+						// It forks and declares nothing: its processes are granted always.
+						{ package: "@f/forking", section: "", permissions: {}, forks: true },
+					],
+					network: true,
+				},
+			},
+		});
+	});
+
+	it("refuses a declaration app-permissions does not take, a file key its fragment lacks, and child with no forks, naming the package", async () => {
+		await pkg("@f/bad", { kind: "adapter", permissions: { files: [] } });
+		await pkg(
+			"@f/unheld",
+			{ kind: "adapter", permissions: { read: { keys: ["path"] } } },
+			"unheld {\n\tother = 1\n}\n",
+		);
+		await pkg(
+			"@f/nofork",
+			{ kind: "adapter", permissions: { child: { when: { key: "a", is: "b" } } } },
+			"nofork {\n\ta = c\n}\n",
+		);
+		for (const [name, why] of [
+			["@f/bad", /@f\/bad: permissions.files is no member/],
+			["@f/unheld", /@f\/unheld: permissions names path, which its config.example does not hold/],
+			["@f/nofork", /@f\/nofork: permissions names child, but it has no forks/],
+		] as const) {
+			const target = await mkdtemp(join(tmpdir(), "app-output-"));
+			await expect(
+				writeApp(target, app({ reached: ["@mod/kernel", name], required: [] })),
+			).rejects.toThrow(why);
+		}
 	});
 
 	it("refuses, writing nothing, a target that holds anything, promises required with none composed, and a companion of no one bin or whose bin is taken", async () => {

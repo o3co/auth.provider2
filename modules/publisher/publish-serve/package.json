@@ -8,6 +8,7 @@
 	"bin": {
 		"publish-serve": "./src/main.ts"
 	},
+	"permissions": {},
 	"exports": {
 		".": "./src/serve.ts"
 	},

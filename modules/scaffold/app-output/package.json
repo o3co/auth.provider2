@@ -9,6 +9,7 @@
 	},
 	"dependencies": {
 		"@mod/app-entries": "workspace:*",
+		"@mod/app-permissions": "workspace:*",
 		"@o3co/ts.hocon": "1.14.3"
 	},
 	"devDependencies": {

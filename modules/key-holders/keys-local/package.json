@@ -8,6 +8,13 @@
 	"asks": [
 		"Keys held in the Core's process, for development and trials: each kid `keys-local.keys` names, a PKCS #8 PEM made by `openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256` (ES256, and the sealing key), or with OpenSSL 3 `openssl genpkey -algorithm ed25519` (EdDSA)."
 	],
+	"permissions": {
+		"read": {
+			"keys": [
+				"keys.*.file"
+			]
+		}
+	},
 	"exports": {
 		"./module": "./src/module.ts"
 	},

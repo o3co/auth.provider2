@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { BootRefused } from "@mod/kernel";
@@ -18,9 +19,42 @@ export interface ConfigSource {
  * substitutions cross files again.
  */
 export async function loadConfig(source: ConfigSource): Promise<unknown> {
-	const [first, ...rest] = await layersOf(source.files, setOf(source.env));
+	return treeOf(await layersOf(source.files, setOf(source.env)));
+}
+
+const treeOf = (layers: readonly Config[]) => {
+	const [first, ...rest] = layers;
 	if (first === undefined) return {};
 	return rest.reduce((acc, layer) => acc.withFallback(layer), first).toObject();
+};
+
+/** The files a load read, and the paths it looked for and found nothing at, each once, in order. */
+export interface ConfigReads {
+	readonly read: readonly string[];
+	readonly probed: readonly string[];
+}
+
+/**
+ * As `loadConfig`, and what it read: every file, its includes among them, and every path an include
+ * looked for and found nothing at (a bare include tries `.properties`, `.json` and `.conf`). A refusal
+ * comes with what was read up to it.
+ */
+export async function loadConfigReading(
+	source: ConfigSource,
+): Promise<
+	| { readonly kind: "loaded"; readonly tree: unknown; readonly reads: ConfigReads }
+	| { readonly kind: "refused"; readonly refusal: BootRefused; readonly reads: ConfigReads }
+> {
+	const read = new Set<string>();
+	const probed = new Set<string>();
+	const reads = () => ({ read: [...read], probed: [...probed].filter((path) => !read.has(path)) });
+	try {
+		const layers = await layersOf(source.files, setOf(source.env), { read, probed });
+		return { kind: "loaded", tree: treeOf(layers), reads: reads() };
+	} catch (error) {
+		if (!BootRefused.is(error)) throw error;
+		return { kind: "refused", refusal: error, reads: reads() };
+	}
 }
 
 /**
@@ -96,10 +130,40 @@ const setOf = (env: ConfigSource["env"]) =>
 		Object.entries(env).filter((entry): entry is [string, string] => entry[1] !== undefined),
 	);
 
-/** Each file read and parsed on its own with `env`; one that cannot be refuses boot. */
-async function layersOf(files: readonly string[], env: Record<string, string>): Promise<Config[]> {
+/** `include package(...)`, refused: its lookups are the library's own, which no reader sees. */
+class PackageInclude extends Error {}
+const noPackageIncludes = () => {
+	throw new PackageInclude("include package(...)");
+};
+/** Whether an error is, or was raised by, a package include refused. */
+const isPackageInclude = (error: unknown): boolean =>
+	error instanceof PackageInclude ||
+	(error instanceof Error && error.cause !== undefined && isPackageInclude(error.cause));
+
+/**
+ * Each file read and parsed on its own with `env`; one that cannot be refuses boot. With `noted`,
+ * each path read (an include's among them) and each looked for and missing is noted.
+ */
+async function layersOf(
+	files: readonly string[],
+	env: Record<string, string>,
+	noted?: { readonly read: Set<string>; readonly probed: Set<string> },
+): Promise<Config[]> {
+	const reading = (path: string) => {
+		try {
+			const text = readFileSync(path, "utf8");
+			noted?.read.add(path);
+			return text;
+		} catch (error) {
+			// Missing, the library tries the next form; anything else is a read it made all the same.
+			if ((error as { code?: unknown }).code === "ENOENT") noted?.probed.add(path);
+			else noted?.read.add(path);
+			throw error;
+		}
+	};
 	const layers: Config[] = [];
 	for (const file of files) {
+		noted?.read.add(file);
 		const text = await readFile(file, "utf8").catch(() => {
 			throw new BootRefused([
 				{
@@ -110,7 +174,14 @@ async function layersOf(files: readonly string[], env: Record<string, string>): 
 			]);
 		});
 		try {
-			layers.push(parse(text, { env, baseDir: dirname(file) }));
+			layers.push(
+				parse(text, {
+					env,
+					baseDir: dirname(file),
+					readFileSync: reading,
+					packageResolver: noPackageIncludes,
+				}),
+			);
 		} catch (error) {
 			throw new BootRefused([refusalOf(file, error)]);
 		}
@@ -120,6 +191,11 @@ async function layersOf(files: readonly string[], env: Record<string, string>): 
 
 /** Where a file fails, at its line and column, and why by the kind of failure; never its text. */
 function refusalOf(file: string, error: unknown) {
+	if (isPackageInclude(error))
+		return {
+			where: file,
+			reason: "include package(...) is not taken: include the file by its path",
+		};
 	if (error instanceof ParseError) {
 		return { where: `${file}:${error.line}:${error.col}`, reason: "not readable as HOCON" };
 	}

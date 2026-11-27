@@ -1,0 +1,95 @@
+// The app's start: Node's permission flags made from permissions.json and the configuration, as
+// APP_PERMISSION says (audit, the default until every path the app runs shows no event under it;
+// enforce; off), and the app's entry started in this process under them. The flags cannot be set
+// once Node runs, so they are made here, before the entry.
+import { realpathSync } from "node:fs";
+import { readFile } from "node:fs/promises";
+import { homedir } from "node:os";
+import { sep } from "node:path";
+import { fileURLToPath } from "node:url";
+import { appPermissionsOf, homeOf, type Mode, modes, nodeSettings } from "{{appPermissions}}";
+import { loadConfigReading } from "{{configFiles}}";
+import { BootRefused } from "{{kernel}}";
+
+{{refused}}
+
+/** The start's own refusal, of what it reads before the entry, written as the entry writes one. */
+const refusedHere = (where: string, reason: string) => refused(new BootRefused([{ where, reason }]));
+
+const entryUrl = new URL("./main.ts", import.meta.url);
+const entry = fileURLToPath(entryUrl);
+const lines = fileURLToPath(new URL("./permission-lines.ts", import.meta.url));
+// The app's own directory where it runs, by its real path, as Node reads its code by it.
+const appRoot = realpathSync(fileURLToPath(new URL("..", import.meta.url)));
+const chosen = process.env.APP_PERMISSION || "audit";
+// Never shown: the variable is named, not its value.
+if (!(modes as readonly string[]).includes(chosen))
+	await refusedHere("APP_PERMISSION", "one of enforce, audit or off");
+const mode = chosen as Mode;
+const printing = process.argv.includes("--print");
+// The flags `run` gave this process (its hardening among them) go on to the entry, and its arguments.
+const argvOf = (flags: readonly string[]) => [
+	process.execPath,
+	...process.execArgv,
+	...flags,
+	entry,
+	...process.argv.slice(2).filter((arg) => arg !== "--print"),
+];
+// No process is started in place on these (process.execve throws there).
+const inPlace = process.platform !== "win32" && process.platform !== "os400";
+
+/** The flags this mode and configuration give the entry: none where it is off. */
+async function flagsOf(): Promise<readonly string[]> {
+	if (mode === "off") return [];
+	if (mode === "audit" && !process.allowedNodeEnvironmentFlags.has("--permission-audit"))
+		await refusedHere("APP_PERMISSION", "this Node takes no audit: set it to enforce or off");
+	const text = await readFile(new URL("../permissions.json", import.meta.url), "utf8").catch(
+		() => undefined,
+	);
+	const read = text === undefined ? { problems: ["it cannot be read"] } : appPermissionsOf(text);
+	if ("problems" in read)
+		await refusedHere("permissions.json", `${read.problems.join("; ")}: generate the app again`);
+	const start = "permissions" in read ? read.permissions.processes.start : undefined;
+	if (start === undefined)
+		return refusedHere("permissions.json", "it holds no start: generate the app again");
+	const files = (process.env.APP_CONFIG ?? "config/application.conf").split(",");
+	const loaded = await loadConfigReading({ files, env: process.env });
+	// The entry would refuse the same configuration: refused here, by the same words, it never starts.
+	if (loaded.kind === "refused") return refused(loaded.refusal);
+	const settings = nodeSettings(start, {
+		mode,
+		tree: loaded.tree,
+		reads: loaded.reads,
+		env: process.env,
+		home: homeOf(process.env, homedir(), sep),
+		cwd: process.cwd(),
+		appRoot,
+		allowsNet: process.allowedNodeEnvironmentFlags.has("--allow-net"),
+	});
+	if ("refused" in settings) return refusedHere(settings.refused.where, settings.refused.reason);
+	if (settings.childFor.length > 0)
+		await written(
+			process.stderr,
+			`warn app-permissions: child processes are allowed, for ${settings.childFor.join(", ")}\n`,
+		);
+	return [...settings.argv, "--import", lines];
+}
+
+if (!inPlace && mode !== "off")
+	await refusedHere("APP_PERMISSION", "this platform starts no entry in place: set it to off");
+const flags = await flagsOf();
+// For an operator whose policy forbids this execve: the command, true for this configuration.
+if (printing) {
+	await written(process.stdout, `${JSON.stringify(argvOf(flags))}\n`);
+	process.exit(0);
+}
+if (!inPlace) {
+	// Off, here: the entry runs in this process, held by nothing.
+	await import(entryUrl.href);
+} else {
+	try {
+		process.execve(process.execPath, argvOf(flags), process.env);
+	} catch {
+		await refusedHere("start", "the entry could not be started in place");
+	}
+}

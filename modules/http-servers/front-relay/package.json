@@ -9,6 +9,15 @@
 		"`front-relay`: the Core's entrance (`core-host`, `core-port`), this Front instance's certificate and key (`certificate-file`, `key-file`) and the authorities the Core's certificate chains to (`core-authority-file`), PEM files read at each connection."
 	],
 	"network": "wire",
+	"permissions": {
+		"read": {
+			"keys": [
+				"certificate-file",
+				"key-file",
+				"core-authority-file"
+			]
+		}
+	},
 	"exports": {
 		"./module": "./src/module.ts",
 		"./testing": "./src/testing.ts"

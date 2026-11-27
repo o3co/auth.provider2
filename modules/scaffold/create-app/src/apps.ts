@@ -51,9 +51,10 @@ export async function running(
 	config: unknown,
 	env: Readonly<Record<string, string>> = {},
 	args: readonly string[] = [],
+	nodeArgs: readonly string[] = [],
 ): Promise<Running> {
 	await writeFile(join(dir, "config", "local.conf"), JSON.stringify(config));
-	const child: ChildProcess = spawn(process.execPath, [file, ...args], {
+	const child: ChildProcess = spawn(process.execPath, [...nodeArgs, file, ...args], {
 		cwd: dir,
 		env: {
 			PATH: process.env.PATH ?? "",
@@ -89,6 +90,25 @@ export async function running(
 			return code;
 		},
 	};
+}
+
+/**
+ * Runs a script of the app as its manifest writes it (`node`, its flags, its file), with the
+ * configuration and environment `running` gives: the app's own command line, its flags among it.
+ */
+export async function scripted(
+	dir: string,
+	script: string,
+	config: unknown,
+	env: Readonly<Record<string, string>> = {},
+	args: readonly string[] = [],
+): Promise<Running> {
+	const manifest = JSON.parse(await readFile(join(dir, "package.json"), "utf8"));
+	const line = String(manifest.scripts?.[script] ?? "");
+	const [node, ...rest] = line.split(" ");
+	const file = rest.at(-1);
+	if (node !== "node" || file === undefined) throw new Error(`${script}: not a node script`);
+	return running(dir, file, config, env, args, rest.slice(0, -1));
 }
 
 /** Whether something listens on the port within the time given; false at once where the run exits. */

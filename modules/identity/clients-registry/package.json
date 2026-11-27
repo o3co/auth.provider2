@@ -8,6 +8,13 @@
 	"asks": [
 		"`clients-registry`: the file holding the version the publisher signed (`file`), the publisher's public key as a JWK (`publisher-key`), and the least version taken (`min-version`): a version the publisher signs with `registry-sign`."
 	],
+	"permissions": {
+		"read": {
+			"keys": [
+				"file"
+			]
+		}
+	},
 	"exports": {
 		"./module": "./src/module.ts",
 		"./testing": "./src/testing.ts"

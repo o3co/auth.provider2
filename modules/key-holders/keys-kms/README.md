@@ -24,6 +24,8 @@
 
 ## Deployment
 - KMS in `region`, reached from the Core's network; its credentials the Core's role, by the SDK's default chain. The Front's role holds no KMS permission.
+- Held by Node's permission model (`enforce`), the chain's providers taken are the environment's credentials, the instance's role, web identity by `AWS_WEB_IDENTITY_TOKEN_FILE`, container credentials by `AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE`, and the shared files by `AWS_CONFIG_FILE` and `AWS_SHARED_CREDENTIALS_FILE` (`~/.aws/*` where unset; a `~/` in either the home directory, as the SDK reads it), as its `permissions` declare.
+- Not taken under `enforce`: a profile's own `web_identity_token_file`, `credential_process` (it starts a program), and SSO or login caches.
 - Where the SDK sends its calls: the region's KMS endpoint, unless `AWS_ENDPOINT_URL_KMS`, `AWS_ENDPOINT_URL` or a shared config's `endpoint_url` names another. Whoever sets them chooses where the signing goes, plain http included.
 - The authority's keys and the Core's ring: `SIGN_VERIFY`, `ECC_NIST_P256` (ES256) or an RSA spec of 2048 bits or more (PS256 or RS256). The sealing key: `KEY_AGREEMENT`, `ECC_NIST_P256`.
 - The Core's role: `kms:GetPublicKey` on every key named; `kms:Sign` only on the authority's signing key and the Core generation's own key; `kms:DeriveSharedSecret` only on the sealing key. A next key and a later generation's key carry no `kms:Sign` until it is to sign.

@@ -14,6 +14,7 @@
 - It writes one line: on success to standard output, `signed version <n> (<count> clients) as <kid> under <alg>`, exit code 0; on a refusal to standard error, what is wrong, exit code 1; wrong arguments, its usage, exit code 64.
 
 ## Invariants
+- It runs unheld by Node's permission model in this step: its `permissions` declare none, though it reads its key and its input and writes its output; the step that holds the companions declares them.
 - The key is a private JWK with a non-empty `kid`: Ed25519 signs under `EdDSA`, P-256 under `ES256`; a key of another kind, or whose own `alg` names another, is refused.
 - A version that does not fit `registryWire.version` is refused, naming where it fails.
 - The signature is checked under the public half the JWK names before anything is written; one that does not verify is refused.

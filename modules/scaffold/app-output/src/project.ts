@@ -1,7 +1,15 @@
 /** A generated app from a composition: its entries, configuration from the fragments, the network declaration and the guide. */
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
-import { configFiles, entriesOf, kernel, mainSource } from "@mod/app-entries";
+import {
+	appPermissions,
+	configFiles,
+	entriesOf,
+	kernel,
+	mainSource,
+	permissionLinesSource,
+	startSource,
+} from "@mod/app-entries";
 import { type Ask, askedOf } from "./asked.ts";
 import {
 	applicationConf,
@@ -12,6 +20,7 @@ import {
 	writtenOf,
 } from "./fragments.ts";
 import { networkJson, type Process, wordsOf } from "./network.ts";
+import { declaredOf, permissionsJson } from "./permissions.ts";
 
 /** A package as the caller read it: its name, its directory and its manifest. */
 export interface Known {
@@ -34,6 +43,11 @@ export interface App {
 	/** What the app's manifest depends on a package as. */
 	readonly dependency: (known: Known) => string;
 	readonly guide: { readonly title: string; readonly use: string; readonly card: string };
+	/**
+	 * Where the start's code is read from beyond the app's own directory (a link install's packages and
+	 * store), by real path, for the packages app-output makes it depend on.
+	 */
+	readonly codeRoots?: (packages: readonly string[]) => readonly string[];
 }
 
 const paths = {
@@ -41,6 +55,8 @@ const paths = {
 	local: "config/local.conf",
 	localExample: "config/local.conf.example",
 	main: "src/main.ts",
+	start: "src/start.ts",
+	permissionLines: "src/permission-lines.ts",
 };
 /** The owner of `promises.required`, the one value the app writes: required promises need it composed. */
 const promisesPackage = "@mod/promises";
@@ -54,7 +70,12 @@ const gitIgnored = [
 	"*.key",
 	"*.jwk",
 ];
-const run = (file: string) => `node --env-file-if-exists=.env ${file}`;
+/**
+ * How an entry is run: its `.env` read where there is one, and Node's two hardening flags, which need no
+ * configuration: no `__proto__` (it throws), and no code made from strings (`eval`, `new Function`).
+ */
+const run = (file: string) =>
+	`node --env-file-if-exists=.env --disable-proto=throw --disallow-code-generation-from-strings ${file}`;
 
 /** A target that is missing or empty; one that holds anything is refused, never overwritten. */
 async function vacant(target: string) {
@@ -125,7 +146,8 @@ export async function appFiles(app: App): Promise<Record<string, string>> {
 	const declaring = reached.map((k) => ({ name: k.name, appEntries: k.manifest.appEntries }));
 	const entries = await entriesOf(app.modules, (name) => name, run, keys, declaring);
 	const companions = companionsOf(app);
-	const scripts: Record<string, string> = { start: run(paths.main) };
+	// The start holds the entry under Node's permission model, then runs it in its own process.
+	const scripts: Record<string, string> = { start: run(paths.start) };
 	for (const [script, line] of [
 		...Object.entries(entries.scripts),
 		...companions.map((c) => [c.script, `node ${c.file}`] as const),
@@ -133,8 +155,8 @@ export async function appFiles(app: App): Promise<Record<string, string>> {
 		if (script in scripts) throw new Error(`two scripts named ${script}`);
 		scripts[script] = line;
 	}
-	const depended = [kernel, configFiles, ...app.modules, ...app.companions].map((n) =>
-		knownOf(app, n),
+	const depended = [kernel, configFiles, appPermissions, ...app.modules, ...app.companions].map(
+		(n) => knownOf(app, n),
 	);
 	const dependencies = Object.fromEntries(depended.map((k) => [k.name, app.dependency(k)]));
 	const processes: Process[] = [
@@ -157,6 +179,14 @@ export async function appFiles(app: App): Promise<Record<string, string>> {
 	const own: Record<string, string> = {
 		"package.json": `${JSON.stringify({ name: "auth-provider-app", private: true, type: "module", scripts, dependencies }, null, "\t")}\n`,
 		[paths.main]: await mainSource(app.modules, (name) => name, keys),
+		[paths.start]: await startSource((name) => name, keys),
+		[paths.permissionLines]: await permissionLinesSource(),
+		"permissions.json": permissionsJson({
+			// The app's own directory is the start's to add, wherever the app runs.
+			code: app.codeRoots?.([kernel, configFiles, appPermissions, ...app.modules]) ?? [],
+			declared: await declaredOf(reached),
+			network: wordsOf(reached).length > 0,
+		}),
 		[paths.application]: applicationConf(fragments, app.required),
 		[paths.localExample]: localConfExample(fragments),
 		".env.example": envExample(settings),

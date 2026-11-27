@@ -10,4 +10,5 @@ export {
 	listening,
 	type Running,
 	running,
+	scripted,
 } from "./apps.ts";

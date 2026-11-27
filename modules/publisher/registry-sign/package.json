@@ -18,5 +18,6 @@
 		"@mod/keys": "workspace:*",
 		"@mod/secret-hash": "workspace:*",
 		"vitest": "5.0.5"
-	}
+	},
+	"permissions": {}
 }

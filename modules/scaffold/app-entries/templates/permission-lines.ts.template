@@ -1,0 +1,45 @@
+// Loaded before the app's entry where the permission model holds it (audit or enforce): a first line
+// naming how the entry is held, then each of the model's events, a read refused or one audit lets
+// through, as a JSON line on standard error. Each is written whole before the event goes on, waiting
+// where the pipe is full, so neither an exit right after it nor a slow reader drops one, and a write
+// that fails otherwise never leaves here to end the app.
+import { subscribe } from "node:diagnostics_channel";
+import { writeSync } from "node:fs";
+
+const waiting = new Int32Array(new SharedArrayBuffer(4));
+const told = (record: Record<string, unknown>) => {
+	// Text process.stderr still holds may end mid-line: the record then starts a line of its own.
+	const fresh = process.stderr.writableLength > 0 ? "\n" : "";
+	const bytes = Buffer.from(`${fresh}${JSON.stringify(record)}\n`);
+	let at = 0;
+	while (at < bytes.length) {
+		try {
+			at += writeSync(2, bytes, at);
+		} catch (error) {
+			// A full pipe (descriptor 2 non-blocking once the process wrote to it): wait a moment, then again.
+			if ((error as { code?: unknown }).code !== "EAGAIN") return;
+			Atomics.wait(waiting, 0, 0, 1);
+		}
+	}
+};
+
+// How the entry is held, as the runtime says: none where no permission model is on.
+told({
+	event: "app-permissions.held",
+	mode:
+		process.permission === undefined
+			? "none"
+			: process.execArgv.includes("--permission-audit")
+				? "audit"
+				: "enforce",
+});
+const kinds = ["addon", "child", "ffi", "fs", "inspector", "net", "openssl-store", "wasi", "worker"];
+for (const kind of kinds) {
+	subscribe(`node:permission-model:${kind}`, (message) => {
+		const fields = Object.entries((message ?? {}) as Record<string, unknown>).map(([key, value]) => [
+			key,
+			typeof value === "object" && value !== null ? String(value) : value,
+		]);
+		told({ event: "app-permissions.event", kind, ...Object.fromEntries(fields) });
+	});
+}
