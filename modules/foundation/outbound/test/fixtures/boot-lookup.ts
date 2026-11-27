@@ -1,5 +1,5 @@
 // Assembles outbound alone and resolves one name, with no other handle open: the lookup's helper
-// must keep this process alive until its answer, as discovery does at boot before anything listens.
+// (chosen here) must keep this process alive until its answer, as discovery does at boot before anything listens.
 import { assemble, kernelConfig } from "@mod/kernel";
 import { tlsOptionsForTests } from "@mod/tls-options/testing";
 import { isOutboundUnavailable, outbound } from "../../src/contract.ts";
@@ -7,7 +7,7 @@ import outboundModule from "../../src/module.ts";
 
 const app = await assemble({
 	modules: [outboundModule, tlsOptionsForTests],
-	config: { ...kernelConfig(), outbound: { "allow-any-public": true } },
+	config: { ...kernelConfig(), outbound: { "allow-any-public": true, resolution: "helper" } },
 });
 const answer = await app
 	.get(outbound)

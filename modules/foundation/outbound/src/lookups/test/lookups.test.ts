@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Job } from "../../resolver-process/contract.ts";
 import {
-	inProcessPool,
+	functionPool,
 	LookupRefused,
 	lookupShares,
 	lookupsOver,
@@ -186,7 +186,7 @@ describe("lookups in this process", () => {
 	it("holds a place until the system's answer, one left by all its waiters still holding it and joined again", async () => {
 		const settles = new Map<string, (addresses: readonly string[]) => void>();
 		const calls: string[] = [];
-		const pool = inProcessPool(1, (name) => {
+		const pool = functionPool(1, (name) => {
 			calls.push(name);
 			return new Promise((done) => settles.set(name, done));
 		});
@@ -210,7 +210,7 @@ describe("lookups in this process", () => {
 
 	it("is unreachable where the resolver throws, at once or later", async () => {
 		const lookups = lookupsOver(
-			inProcessPool(2, (name) => {
+			functionPool(2, (name) => {
 				if (name === "now.test") throw new Error("at once");
 				return Promise.reject(new Error("later"));
 			}),
@@ -221,7 +221,7 @@ describe("lookups in this process", () => {
 	});
 
 	it("never runs more than half the threadpool at once, both pools full together", async () => {
-		const shares = lookupShares({ maxLookups: 4, inProcess: { threadpool: "4" } });
+		const shares = lookupShares({ maxLookups: 4, onThreadpool: { threadpool: "4" } });
 		expect(shares).toEqual({ total: 2, own: 1, outside: 1 });
 		let running = 0;
 		let most = 0;
@@ -230,8 +230,8 @@ describe("lookups in this process", () => {
 			most = Math.max(most, running);
 			return new Promise<readonly string[]>(() => {});
 		};
-		const own = lookupsOver(inProcessPool(shares.own, slow));
-		const outside = lookupsOver(inProcessPool(shares.outside, slow));
+		const own = lookupsOver(functionPool(shares.own, slow));
+		const outside = lookupsOver(functionPool(shares.outside, slow));
 		const live = new AbortController().signal;
 		const asked = ["a", "b", "c"].flatMap((n) => [
 			failureOf(own.resolve(`${n}.own`, undefined, live)),
@@ -255,17 +255,17 @@ describe("the shares of lookups at once", () => {
 	it("gives the outside party half, rounded down, and the deployment's own the rest; in this process, of half the threadpool at most", () => {
 		expect(lookupShares({ maxLookups: 4 })).toEqual({ total: 4, own: 2, outside: 2 });
 		expect(lookupShares({ maxLookups: 1 })).toEqual({ total: 1, own: 1, outside: 0 });
-		expect(lookupShares({ maxLookups: 16, inProcess: { threadpool: "4" } })).toEqual({
+		expect(lookupShares({ maxLookups: 16, onThreadpool: { threadpool: "4" } })).toEqual({
 			total: 2,
 			own: 1,
 			outside: 1,
 		});
-		expect(lookupShares({ maxLookups: 16, inProcess: { threadpool: "2" } })).toEqual({
+		expect(lookupShares({ maxLookups: 16, onThreadpool: { threadpool: "2" } })).toEqual({
 			total: 1,
 			own: 1,
 			outside: 0,
 		});
-		expect(lookupShares({ maxLookups: 1, inProcess: { threadpool: "8" } })).toEqual({
+		expect(lookupShares({ maxLookups: 1, onThreadpool: { threadpool: "8" } })).toEqual({
 			total: 1,
 			own: 1,
 			outside: 0,

@@ -41,7 +41,7 @@ it("holds to the defaults: outbound-policy's for its keys, and outbound's own", 
 		"direct-despite-proxy": false,
 		"direct-hosts": [],
 		"plain-ipv4": [],
-		resolution: "helper",
+		resolution: "in-process",
 		// Its own defaults, as its tests hold them.
 		revocation: revocationSection.parse({}),
 	});
@@ -180,7 +180,7 @@ it("boots with a proxy configured whatever the variables say, and warns what it 
 			.map((line) => line.event)
 			.filter(
 				(event) =>
-					!event.startsWith("outbound.revocation") && event !== "outbound.resolution_in_process",
+					!event.startsWith("outbound.revocation") && event !== "outbound.resolution_helper",
 			);
 	await withProxy({ proxy: "http://127.0.0.1:3128", "proxy-authorization": "Basic dGVzdA==" });
 	expect(warned()).toEqual(["outbound.proxy_checks_addresses"]);
@@ -245,7 +245,7 @@ it("warns at each boot of each loosening set, by its entries' count or a reason,
 		["warn", "outbound.plain_ipv4", { count: 1 }],
 		["warn", "outbound.internal_hosts", { count: 1 }],
 	]);
-	const reasons = (await warned({ "allow-any-public": true, resolution: "in-process" })).map(
+	const reasons = (await warned({ "allow-any-public": true, resolution: "helper" })).map(
 		([, event, fields]) => [event, (fields as { reason: string }).reason],
 	);
 	expect(reasons).toEqual([
@@ -253,7 +253,7 @@ it("warns at each boot of each loosening set, by its entries' count or a reason,
 			"outbound.any_public_host",
 			"any public host is reached by name, not only those outbound.allow lists",
 		],
-		["outbound.resolution_in_process", "names resolve in the app's own process, not in helpers"],
+		["outbound.resolution_helper", expect.stringMatching(/a held process allows child processes/)],
 	]);
 });
 

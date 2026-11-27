@@ -25,7 +25,7 @@ Internal module of `guard`: G26, how product code may reach the network, and G27
   - Loads one of the modules or clients above with `import()` or `require`, as if imported whole, or loads a module named only at run time, by `import()` or a loader's call, either told as `import()`.
 - The words, and what each lets a package reach:
   - `serves-http`: `node:http`'s `createServer` and `Server`.
-  - `outbound`: `node:http`'s and `node:https`'s `request` and `Agent`, `node:net`'s and `node:tls`'s `connect`, and `lookup` from `node:dns` and `node:dns/promises`.
+  - `outbound`: `node:http`'s and `node:https`'s `request` and `Agent`, `node:net`'s and `node:tls`'s `connect`, and `lookup` and `Resolver` from `node:dns` and `node:dns/promises`.
   - `redis`: the `ioredis` client.
   - `smtp`: `node:net`'s and `node:tls`'s `connect`, and `nodemailer`.
   - `kms`: `@aws-sdk/client-kms`.

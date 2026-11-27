@@ -127,6 +127,14 @@ describe("G26 the network is reached through outbound, or as a package declares"
 		expect(
 			said(declaring(pkg("@t/out", files, manifest), "- Reaches out (`network`: `outbound`).")),
 		).toEqual([]);
+		// A resolver of its own, as outbound's in-process lookups make one per lookup.
+		const resolving = {
+			"src/a.ts":
+				'import { Resolver } from "node:dns/promises";\nexport const a = () => new Resolver();\n',
+		};
+		expect(
+			said(declaring(pkg("@t/dns", resolving, manifest), "- (`network`: `outbound`)")),
+		).toEqual([]);
 		expect(said(pkg("@t/unstated", files, manifest))).toEqual([
 			"@t/unstated card states `network`: `outbound`",
 		]);

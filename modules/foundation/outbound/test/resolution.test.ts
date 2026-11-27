@@ -14,7 +14,7 @@ const boot = (settings: Record<string, unknown>) =>
 		config: { ...kernelConfig(), outbound: settings },
 	});
 
-it("resolves in its helper processes by default, a plain-ipv4 pair's name to IPv4 alone", async () => {
+it("resolves in this process by default, the hosts file first, a plain-ipv4 pair's name to IPv4 alone", async () => {
 	const server = createServer((_, res) => res.end("ok"));
 	await new Promise<void>((done) => server.listen(0, "127.0.0.1", done));
 	const { port } = server.address() as { port: number };

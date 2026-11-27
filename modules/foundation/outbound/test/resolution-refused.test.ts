@@ -19,7 +19,7 @@ it("refuses boot where a helper does not start, ending every pool, however often
 	const { default: outboundModule } = await import("../src/module.ts");
 	const refused = await assemble({
 		modules: [outboundModule, tlsOptionsForTests],
-		config: { ...kernelConfig(), outbound: {} },
+		config: { ...kernelConfig(), outbound: { resolution: "helper" } },
 	}).catch((error: unknown) => error);
 	expect(BootRefused.is(refused)).toBe(true);
 	expect((refused as BootRefused).refusals.map((r) => r.where)).toEqual(["outbound.resolution"]);

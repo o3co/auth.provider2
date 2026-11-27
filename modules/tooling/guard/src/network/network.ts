@@ -72,6 +72,8 @@ const words: Readonly<Record<string, readonly string[]>> = {
 		"node:tls connect",
 		"node:dns lookup",
 		"node:dns/promises lookup",
+		"node:dns Resolver",
+		"node:dns/promises Resolver",
 	],
 	redis: ["ioredis"],
 	smtp: ["node:net connect", "node:tls connect", "nodemailer"],

@@ -10,7 +10,7 @@ Internal module of `outbound`: carrying one request, admitted by the policy, to 
 
 ## Offers
 - `send` (the request, the policy's admission and limits, a resolver, a route if a proxy is set, a peer's check, the monotonic time, whether the proxy carries plain http) → the answer, or a refusal or a failure the package throws as unavailable.
-- `Resolver`, `Lookup`, `systemLookup` (the system's lookup in this process), `Route` (the proxy, how its name resolves, its authorization, the hosts left direct), `PeerCheck` (`ways`'), and `decided` (the headers outbound alone sets).
+- `Resolver`, `Lookup`, `systemLookup` (the system's `lookup` in this process, for a test), `Route` (the proxy, how its name resolves, its authorization, the hosts left direct), `PeerCheck` (`ways`'), and `decided` (the headers outbound alone sets).
 
 ## Invariants
 - outbound alone sets `User-Agent` (`auth-provider`), `Accept-Encoding`, `Host` and the headers that frame and carry the message.

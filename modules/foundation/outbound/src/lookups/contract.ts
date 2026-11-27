@@ -1,4 +1,4 @@
-export { inProcessPool } from "./in-process.ts";
+export { functionPool } from "./function-pool.ts";
 export {
 	type LookupFailure,
 	LookupRefused,

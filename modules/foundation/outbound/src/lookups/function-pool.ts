@@ -1,11 +1,11 @@
-/** Lookups in this process, by the system's resolver: as many at once as given, none stopped. */
+/** Lookups over a lookup function (a test's): as many at once as given, none stopped. */
 import type { Job } from "../resolver-process/contract.ts";
 
 /**
  * A pool running at most `size` lookups at once in this process with `resolve`. One left by all
  * waiting on it runs on until it ends, holding its place, and may be waited on again meanwhile.
  */
-export function inProcessPool(
+export function functionPool(
 	size: number,
 	resolve: (name: string, family?: 4) => Promise<readonly string[]>,
 ): { run(name: string, family?: 4): Job | undefined } {

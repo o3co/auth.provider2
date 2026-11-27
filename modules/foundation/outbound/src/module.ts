@@ -1,3 +1,4 @@
+import { Resolver as DnsResolver } from "node:dns/promises";
 import { isLoopbackAddress } from "@mod/address-reach";
 import { hostList } from "@mod/host-entries";
 import { type BuildContext, contract, defineModule } from "@mod/kernel";
@@ -26,7 +27,14 @@ import {
 import { sentRequest } from "./credential/credential.ts";
 import { crlFetchOf } from "./crl-fetch/crl-fetch.ts";
 import {
-	inProcessPool,
+	caresPool,
+	hostsOf,
+	readHostsFile,
+	resolverTimings,
+	unlistedShortNames,
+} from "./dns/contract.ts";
+import {
+	functionPool,
 	LookupRefused,
 	type Lookups,
 	lookupShares,
@@ -45,7 +53,6 @@ import {
 	type Resolver,
 	type Route,
 	send,
-	systemLookup,
 } from "./transport/transport.ts";
 
 export const section = policySettings
@@ -85,9 +92,9 @@ export const section = policySettings
 		"plain-ipv4": plainIpv4Setting,
 		resolution: z
 			.enum(["helper", "in-process"])
-			.prefault("helper")
+			.prefault("in-process")
 			.describe(
-				"Where names are resolved, as the system resolves them: `helper`, in helper processes, one ended once no request waits on its lookups; `in-process`, here, where no deadline stops a lookup.",
+				"Where names are resolved: `in-process`, here, by DNS with the hosts file first, each name queried as written and absolute (no search list), each lookup stopped at its deadline; `helper`, in helper processes the app starts, as the system resolves them (its search list and nsswitch), one ended once no request waits on its lookups.",
 			),
 		"max-lookups": z
 			.number()
@@ -186,7 +193,7 @@ export interface Runtime {
 	readonly stopping?: AbortSignal;
 }
 
-/** The outbound paths over a resolver; the module passes the system's, a test its own. */
+/** The outbound paths over a resolver: the module's pools, or a test's lookup function. */
 /** `deadlineOf` makes a request's one deadline; a test gives one it fires itself. */
 export function outboundOver(
 	settings: z.output<typeof section>,
@@ -195,7 +202,7 @@ export function outboundOver(
 	/** The floor every TLS connection holds to, and a test's authorities. */
 	tls: Tls,
 	deadlineOf: (ms: number) => AbortSignal = AbortSignal.timeout,
-	/** In this process, the lookups at once; else as the settings and the threadpool give. */
+	/** Over a lookup function, the lookups at once; else as the settings and the threadpool give. */
 	lookupsAtOnce?: number,
 	runtime: Runtime = {},
 ): Paths {
@@ -205,9 +212,7 @@ export function outboundOver(
 	if (!isFloor(floor)) throw new NotTheFloor();
 	const checked: Tls = Object.freeze({ floor, ...(ca === undefined ? {} : { ca }) });
 	const pools =
-		typeof lookupsIn === "function"
-			? inProcessPools(settings, lookupsIn, lookupsAtOnce)
-			: lookupsIn;
+		typeof lookupsIn === "function" ? functionPools(settings, lookupsIn, lookupsAtOnce) : lookupsIn;
 	const own = lookupsOver(pools.own);
 	const outside = lookupsOver(pools.outside);
 	const policy = policyOf(settings);
@@ -324,10 +329,10 @@ function peerCheckOf(
 }
 
 /**
- * Lookups in this process with `lookup`: the shares of `lookupsAtOnce` where given, else of
- * `max-lookups` held to half the threadpool.
+ * Lookups over a test's lookup function: the shares of `lookupsAtOnce` where given, else of
+ * `max-lookups` held to half the threadpool, as a function on it would be.
  */
-function inProcessPools(
+function functionPools(
 	settings: z.output<typeof section>,
 	lookup: Lookup,
 	lookupsAtOnce?: number,
@@ -336,12 +341,47 @@ function inProcessPools(
 		lookupsAtOnce === undefined
 			? lookupShares({
 					maxLookups: maxLookupsOf(settings),
-					inProcess: { threadpool: process.env.UV_THREADPOOL_SIZE },
+					onThreadpool: { threadpool: process.env.UV_THREADPOOL_SIZE },
 				})
 			: lookupShares({ maxLookups: lookupsAtOnce });
 	return {
-		own: inProcessPool(shares.own, lookup),
-		outside: shares.outside > 0 ? inProcessPool(shares.outside, lookup) : noPool,
+		own: functionPool(shares.own, lookup),
+		outside: shares.outside > 0 ? functionPool(shares.outside, lookup) : noPool,
+		shares,
+	};
+}
+
+/**
+ * Lookups in this process by DNS, the hosts file first: one resolver per lookup, so each is cancelled
+ * at its deadline. The hosts file is read once, at the start; none there is none listed.
+ */
+async function caresPools(
+	c: BuildContext<z.output<typeof section>>,
+	shares: LookupPools["shares"],
+): Promise<LookupPools> {
+	const read = await readHostsFile();
+	if ("refused" in read) return c.refuse("outbound.resolution", read.refused);
+	const hosts = hostsOf(read.text);
+	// A name of one label resolves from the hosts file alone: by their count, never a name.
+	const { proxy, revocation } = c.section;
+	const short = unlistedShortNames(
+		[
+			...(
+				["allow", "internal-hosts", "direct-hosts", "plain-loopback", "plain-internal"] as const
+			).map((key) => ({
+				entries: c.section[key] as readonly string[],
+				port: key.startsWith("plain-"),
+			})),
+			{ entries: revocation.hosts, port: false },
+			{ entries: proxy === undefined ? [] : [new URL(proxy).hostname], port: false },
+		],
+		hosts,
+	);
+	if (short > 0) c.log.warn("outbound.short_names", { count: short });
+	const parts = { hosts, resolver: () => new DnsResolver(resolverTimings) };
+	return {
+		own: caresPool(shares.own, parts),
+		outside: shares.outside > 0 ? caresPool(shares.outside, parts) : noPool,
 		shares,
 	};
 }
@@ -415,9 +455,10 @@ export default defineModule(
 					reason: "any public host is reached by name, not only those outbound.allow lists",
 				});
 			}
-			if (c.section.resolution === "in-process") {
-				c.log.warn("outbound.resolution_in_process", {
-					reason: "names resolve in the app's own process, not in helpers",
+			if (c.section.resolution === "helper") {
+				c.log.warn("outbound.resolution_helper", {
+					reason:
+						"names resolve in helper processes the app starts, so a held process allows child processes",
 				});
 			}
 			// Neither names the proxy: a log line carries no value.
@@ -439,8 +480,9 @@ export default defineModule(
 					`${present.join(", ")} is set and never read: write outbound.proxy, or declare direct-despite-proxy`,
 				);
 			}
-			if (c.section.resolution === "in-process") return over(systemLookup);
-			return over(await startedPools(c, lookupShares({ maxLookups: maxLookupsOf(c.section) })));
+			const shares = lookupShares({ maxLookups: maxLookupsOf(c.section) });
+			if (c.section.resolution === "in-process") return over(await caresPools(c, shares));
+			return over(await startedPools(c, shares));
 		}),
 		// One set of counts for both paths.
 		m.provide(outbound).by(async (c) => ({ fetch: (await c.get(paths)).fetch })),
