@@ -3,6 +3,7 @@
 ## Responsibilities
 - The ledger of the provider's intended deviations and strict choices (L1), `docs/compliance/deviations.json`, which a conformance run's expected failures name by key, and the public page written from it (internal module `deviations`).
 - The provider's words for those rows, and what a refusal a run saw says of them (internal module `words`).
+- A run's expected results, module by module, in the ledger's keys, and the package's file of run A's (`expected/a.json`, internal module `expected`).
 - The provider as the run meets it (internal module `scene`, for tests): the generated `nextgen-core` and `nextgen-front` run as operators run them behind an https front at the issuer's origin.
 - The harness's relying party (internal module `rp`, for tests): a conforming client of nextgen, its JARs, PAR, assertions and DPoP proofs.
 - The login screen as the suite's browser meets it (internal module `screen`, for tests): the real SDK with a software authenticator, server-side, behind its own https front.

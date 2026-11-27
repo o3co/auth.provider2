@@ -1,8 +1,10 @@
-/** Who answered a refusal a run saw: the Front (the wire's form), the Core, or a role of the harness. */
-export type Refuser = "front" | "core" | "harness";
+/** Who answers a refusal a run sees: the Front (the wire's form), the Core, or a role of the harness. */
+export const refusers = ["front", "core", "harness"] as const;
+export type Refuser = (typeof refusers)[number];
 
-/** Where a refusal was answered. */
-export type Place = "par" | "start" | "token" | "resource";
+/** Where a refusal is answered. */
+export const places = ["par", "start", "token", "resource"] as const;
+export type Place = (typeof places)[number];
 
 /** A refusal the provider answers for one of the ledger's rows, as it is written on the wire. */
 export interface Word {
@@ -200,15 +202,40 @@ const matches = (word: Word, seen: Seen) =>
 	(word.dpopHeader === undefined || word.dpopHeader === seen.dpopHeader) &&
 	(word.startedBefore === undefined || word.startedBefore === seen.startedBefore);
 
+/** Words the provider answers for many causes, none a ledger row: a refusal in them is unconfirmed, of no row. */
+export type ManyCauses = Pick<Word, "refuser" | "place" | "error" | "description">;
+
+/** Words answering many causes no row names: the client's authentication, one for every fault of an assertion. */
+export const manyCauses: readonly ManyCauses[] = (["par", "token"] as const).map((place) => ({
+	refuser: "core",
+	place,
+	error: "invalid_client",
+	description: "the client is not authenticated",
+}));
+
 /**
  * What a refusal seen says: the one row whose words it is where only that row's words fit and they are
- * no other cause's; unconfirmed where they are shared or more than one row's; none where no row's fit.
+ * no other cause's; unconfirmed where they are shared or more than one row's, or words of many causes no
+ * row names (no rows); none where no words fit.
  */
-export function readingOf(seen: Seen, table: readonly Word[] = words): Reading {
+export function readingOf(
+	seen: Seen,
+	table: readonly Word[] = words,
+	apart: readonly ManyCauses[] = manyCauses,
+): Reading {
 	const fit = table.filter((word) => matches(word, seen));
 	const keys = [...new Set(fit.map((word) => word.key))];
 	const [only] = keys;
-	if (only === undefined) return { kind: "none" };
+	if (only === undefined) {
+		const many = apart.some(
+			(w) =>
+				w.refuser === seen.refuser &&
+				w.place === seen.place &&
+				w.error === seen.error &&
+				w.description === seen.description,
+		);
+		return many ? { kind: "unconfirmed", keys: [] } : { kind: "none" };
+	}
 	if (keys.length > 1 || fit.some((word) => word.shared)) return { kind: "unconfirmed", keys };
 	return { kind: "observed", key: only };
 }

@@ -80,6 +80,19 @@ describe("the provider's words for the ledger's rows", () => {
 		});
 	});
 
+	it("leaves unconfirmed, of no row, words that answer many causes no row names (the client's authentication)", () => {
+		const client = { error: "invalid_client", description: "the client is not authenticated" };
+		for (const place of ["par", "token"] as const)
+			expect(readingOf(seen({ place, ...client })), place).toEqual({
+				kind: "unconfirmed",
+				keys: [],
+			});
+		// Elsewhere, or other words, they are no one's.
+		expect(readingOf(seen({ place: "start", ...client }))).toEqual({ kind: "none" });
+		expect(readingOf(seen({ ...client, description: "another" }))).toEqual({ kind: "none" });
+		expect(readingOf(seen({ ...client }), words, [])).toEqual({ kind: "none" });
+	});
+
 	it("leaves unconfirmed the words two rows answer alike, whether or not they say they are shared", () => {
 		for (const table of [
 			[twin("a-row"), twin("b-row")],

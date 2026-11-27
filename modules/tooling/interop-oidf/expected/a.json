@@ -1,0 +1,2063 @@
+[
+	{
+		"test": "fapi2-security-profile-final-discovery-end-point-verification",
+		"variant": {
+			"openid": "openid_connect",
+			"client_auth_type": "private_key_jwt",
+			"fapi_request_method": "signed_non_repudiation",
+			"sender_constrain": "dpop",
+			"fapi_profile": "plain_fapi",
+			"fapi_response_mode": "plain_response"
+		},
+		"result": "PASSED",
+		"reading": "passed",
+		"refusals": []
+	},
+	{
+		"test": "fapi2-security-profile-final-happy-flow",
+		"variant": {
+			"openid": "openid_connect",
+			"client_auth_type": "private_key_jwt",
+			"fapi_request_method": "signed_non_repudiation",
+			"sender_constrain": "dpop",
+			"fapi_profile": "plain_fapi",
+			"fapi_response_mode": "plain_response"
+		},
+		"result": "FAILED",
+		"reading": "explained",
+		"refusals": [
+			{
+				"block": "Make request to PAR endpoint",
+				"refuser": "core",
+				"place": "par",
+				"status": 400,
+				"error": "invalid_request_object",
+				"description": "not of the typ asked",
+				"reading": "observed",
+				"keys": ["jar-typ-required"]
+			}
+		],
+		"failures": [
+			{
+				"src": "CheckPAREndpointResponse201WithNoError",
+				"keys": ["jar-typ-required"]
+			}
+		]
+	},
+	{
+		"test": "fapi2-security-profile-final-user-rejects-authentication",
+		"variant": {
+			"openid": "openid_connect",
+			"client_auth_type": "private_key_jwt",
+			"fapi_request_method": "signed_non_repudiation",
+			"sender_constrain": "dpop",
+			"fapi_profile": "plain_fapi",
+			"fapi_response_mode": "plain_response"
+		},
+		"result": "FAILED",
+		"reading": "explained",
+		"refusals": [
+			{
+				"block": "Make request to PAR endpoint",
+				"refuser": "core",
+				"place": "par",
+				"status": 400,
+				"error": "invalid_request_object",
+				"description": "not of the typ asked",
+				"reading": "observed",
+				"keys": ["jar-typ-required"]
+			}
+		],
+		"failures": [
+			{
+				"src": "CheckPAREndpointResponse201WithNoError",
+				"keys": ["jar-typ-required"]
+			}
+		]
+	},
+	{
+		"test": "fapi2-security-profile-final-ensure-request-object-with-multiple-aud-succeeds",
+		"variant": {
+			"openid": "openid_connect",
+			"client_auth_type": "private_key_jwt",
+			"fapi_request_method": "signed_non_repudiation",
+			"sender_constrain": "dpop",
+			"fapi_profile": "plain_fapi",
+			"fapi_response_mode": "plain_response"
+		},
+		"result": "FAILED",
+		"reading": "explained",
+		"refusals": [
+			{
+				"block": "Make request to PAR endpoint",
+				"refuser": "core",
+				"place": "par",
+				"status": 400,
+				"error": "invalid_request_object",
+				"description": "not of the typ asked",
+				"reading": "observed",
+				"keys": ["jar-typ-required"]
+			}
+		],
+		"failures": [
+			{
+				"src": "CheckPAREndpointResponse201WithNoError",
+				"keys": ["jar-typ-required"]
+			}
+		]
+	},
+	{
+		"test": "fapi2-security-profile-final-ensure-authorization-request-without-state-success",
+		"variant": {
+			"openid": "openid_connect",
+			"client_auth_type": "private_key_jwt",
+			"fapi_request_method": "signed_non_repudiation",
+			"sender_constrain": "dpop",
+			"fapi_profile": "plain_fapi",
+			"fapi_response_mode": "plain_response"
+		},
+		"result": "FAILED",
+		"reading": "explained",
+		"refusals": [
+			{
+				"block": "Make request to PAR endpoint",
+				"refuser": "core",
+				"place": "par",
+				"status": 400,
+				"error": "invalid_request_object",
+				"description": "not of the typ asked",
+				"reading": "observed",
+				"keys": ["jar-typ-required"]
+			}
+		],
+		"failures": [
+			{
+				"src": "CheckPAREndpointResponse201WithNoError",
+				"keys": ["jar-typ-required"]
+			}
+		]
+	},
+	{
+		"test": "fapi2-security-profile-final-ensure-authorization-request-without-nonce-success",
+		"variant": {
+			"openid": "openid_connect",
+			"client_auth_type": "private_key_jwt",
+			"fapi_request_method": "signed_non_repudiation",
+			"sender_constrain": "dpop",
+			"fapi_profile": "plain_fapi",
+			"fapi_response_mode": "plain_response"
+		},
+		"result": "FAILED",
+		"reading": "explained",
+		"refusals": [
+			{
+				"block": "Make request to PAR endpoint",
+				"refuser": "core",
+				"place": "par",
+				"status": 400,
+				"error": "invalid_request_object",
+				"description": "not of the typ asked",
+				"reading": "observed",
+				"keys": ["jar-typ-required"]
+			}
+		],
+		"failures": [
+			{
+				"src": "CheckPAREndpointResponse201WithNoError",
+				"keys": ["jar-typ-required"]
+			}
+		]
+	},
+	{
+		"test": "fapi2-security-profile-final-ensure-authorization-request-with-64-char-nonce-success",
+		"variant": {
+			"openid": "openid_connect",
+			"client_auth_type": "private_key_jwt",
+			"fapi_request_method": "signed_non_repudiation",
+			"sender_constrain": "dpop",
+			"fapi_profile": "plain_fapi",
+			"fapi_response_mode": "plain_response"
+		},
+		"result": "FAILED",
+		"reading": "explained",
+		"refusals": [
+			{
+				"block": "Make request to PAR endpoint",
+				"refuser": "core",
+				"place": "par",
+				"status": 400,
+				"error": "invalid_request_object",
+				"description": "not of the typ asked",
+				"reading": "observed",
+				"keys": ["jar-typ-required"]
+			}
+		],
+		"failures": [
+			{
+				"src": "CheckPAREndpointResponse201WithNoError",
+				"keys": ["jar-typ-required"]
+			}
+		]
+	},
+	{
+		"test": "fapi2-security-profile-final-ensure-other-scope-order-succeeds",
+		"variant": {
+			"openid": "openid_connect",
+			"client_auth_type": "private_key_jwt",
+			"fapi_request_method": "signed_non_repudiation",
+			"sender_constrain": "dpop",
+			"fapi_profile": "plain_fapi",
+			"fapi_response_mode": "plain_response"
+		},
+		"result": "FAILED",
+		"reading": "explained",
+		"refusals": [
+			{
+				"block": "Make request to PAR endpoint",
+				"refuser": "core",
+				"place": "par",
+				"status": 400,
+				"error": "invalid_request_object",
+				"description": "not of the typ asked",
+				"reading": "observed",
+				"keys": ["jar-typ-required"]
+			}
+		],
+		"failures": [
+			{
+				"src": "CheckPAREndpointResponse201WithNoError",
+				"keys": ["jar-typ-required"]
+			}
+		]
+	},
+	{
+		"test": "fapi2-security-profile-final-test-claims-parameter-identity-claims",
+		"variant": {
+			"openid": "openid_connect",
+			"client_auth_type": "private_key_jwt",
+			"fapi_request_method": "signed_non_repudiation",
+			"sender_constrain": "dpop",
+			"fapi_profile": "plain_fapi",
+			"fapi_response_mode": "plain_response"
+		},
+		"result": "FAILED",
+		"reading": "explained",
+		"refusals": [
+			{
+				"block": "Make request to PAR endpoint",
+				"refuser": "core",
+				"place": "par",
+				"status": 400,
+				"error": "invalid_request_object",
+				"description": "not of the typ asked",
+				"reading": "observed",
+				"keys": ["jar-typ-required"]
+			}
+		],
+		"failures": [
+			{
+				"src": "CheckPAREndpointResponse201WithNoError",
+				"keys": ["jar-typ-required"]
+			}
+		]
+	},
+	{
+		"test": "fapi2-security-profile-final-access-token-type-header-case-sensitivity",
+		"variant": {
+			"openid": "openid_connect",
+			"client_auth_type": "private_key_jwt",
+			"fapi_request_method": "signed_non_repudiation",
+			"sender_constrain": "dpop",
+			"fapi_profile": "plain_fapi",
+			"fapi_response_mode": "plain_response"
+		},
+		"result": "FAILED",
+		"reading": "explained",
+		"refusals": [
+			{
+				"block": "Make request to PAR endpoint",
+				"refuser": "core",
+				"place": "par",
+				"status": 400,
+				"error": "invalid_request_object",
+				"description": "not of the typ asked",
+				"reading": "observed",
+				"keys": ["jar-typ-required"]
+			}
+		],
+		"failures": [
+			{
+				"src": "CheckPAREndpointResponse201WithNoError",
+				"keys": ["jar-typ-required"]
+			}
+		]
+	},
+	{
+		"test": "fapi2-security-profile-final-ensure-request-object-with-nbf-8-seconds-in-the-future-is-accepted",
+		"variant": {
+			"openid": "openid_connect",
+			"client_auth_type": "private_key_jwt",
+			"fapi_request_method": "signed_non_repudiation",
+			"sender_constrain": "dpop",
+			"fapi_profile": "plain_fapi",
+			"fapi_response_mode": "plain_response"
+		},
+		"result": "WARNING",
+		"reading": "explained",
+		"refusals": [
+			{
+				"block": "Make request to PAR endpoint",
+				"refuser": "core",
+				"place": "par",
+				"status": 400,
+				"error": "invalid_request_object",
+				"description": "not of the typ asked",
+				"reading": "observed",
+				"keys": ["jar-typ-required"]
+			}
+		],
+		"warnings": [
+			{
+				"src": "CheckPAREndpointResponse201WithNoError",
+				"keys": ["jar-typ-required"]
+			}
+		]
+	},
+	{
+		"test": "fapi2-security-profile-final-check-dpop-proof-nbf-exp",
+		"variant": {
+			"openid": "openid_connect",
+			"client_auth_type": "private_key_jwt",
+			"fapi_request_method": "signed_non_repudiation",
+			"sender_constrain": "dpop",
+			"fapi_profile": "plain_fapi",
+			"fapi_response_mode": "plain_response"
+		},
+		"result": "FAILED",
+		"reading": "explained",
+		"refusals": [
+			{
+				"block": "Make request to PAR endpoint",
+				"refuser": "core",
+				"place": "par",
+				"status": 400,
+				"error": "invalid_request_object",
+				"description": "not of the typ asked",
+				"reading": "observed",
+				"keys": ["jar-typ-required"]
+			}
+		],
+		"failures": [
+			{
+				"src": "CheckPAREndpointResponse201WithNoError",
+				"keys": ["jar-typ-required"]
+			}
+		]
+	},
+	{
+		"test": "fapi2-security-profile-final-ensure-dpopproof-with-iat-10seconds-before-succeeds",
+		"variant": {
+			"openid": "openid_connect",
+			"client_auth_type": "private_key_jwt",
+			"fapi_request_method": "signed_non_repudiation",
+			"sender_constrain": "dpop",
+			"fapi_profile": "plain_fapi",
+			"fapi_response_mode": "plain_response"
+		},
+		"result": "FAILED",
+		"reading": "explained",
+		"refusals": [
+			{
+				"block": "Make request to PAR endpoint",
+				"refuser": "core",
+				"place": "par",
+				"status": 400,
+				"error": "invalid_request_object",
+				"description": "not of the typ asked",
+				"reading": "observed",
+				"keys": ["jar-typ-required"]
+			}
+		],
+		"failures": [
+			{
+				"src": "CheckPAREndpointResponse201WithNoError",
+				"keys": ["jar-typ-required"]
+			}
+		]
+	},
+	{
+		"test": "fapi2-security-profile-final-ensure-dpopproof-with-iat-10seconds-after-succeeds",
+		"variant": {
+			"openid": "openid_connect",
+			"client_auth_type": "private_key_jwt",
+			"fapi_request_method": "signed_non_repudiation",
+			"sender_constrain": "dpop",
+			"fapi_profile": "plain_fapi",
+			"fapi_response_mode": "plain_response"
+		},
+		"result": "FAILED",
+		"reading": "explained",
+		"refusals": [
+			{
+				"block": "Make request to PAR endpoint",
+				"refuser": "core",
+				"place": "par",
+				"status": 400,
+				"error": "invalid_request_object",
+				"description": "not of the typ asked",
+				"reading": "observed",
+				"keys": ["jar-typ-required"]
+			}
+		],
+		"failures": [
+			{
+				"src": "CheckPAREndpointResponse201WithNoError",
+				"keys": ["jar-typ-required"]
+			}
+		]
+	},
+	{
+		"test": "fapi2-security-profile-final-ensure-mismatched-dpop-jkt-fails",
+		"variant": {
+			"openid": "openid_connect",
+			"client_auth_type": "private_key_jwt",
+			"fapi_request_method": "signed_non_repudiation",
+			"sender_constrain": "dpop",
+			"fapi_profile": "plain_fapi",
+			"fapi_response_mode": "plain_response"
+		},
+		"result": "FAILED",
+		"reading": "explained",
+		"refusals": [
+			{
+				"block": "Make request to PAR endpoint",
+				"refuser": "core",
+				"place": "par",
+				"status": 400,
+				"error": "invalid_request_object",
+				"description": "not of the typ asked",
+				"reading": "observed",
+				"keys": ["jar-typ-required"]
+			}
+		],
+		"failures": [
+			{
+				"src": "EnsurePARInvalidRequestOrInvalidDpopProof",
+				"keys": ["jar-typ-required"]
+			}
+		]
+	},
+	{
+		"test": "fapi2-security-profile-final-ensure-token-endpoint-fails-with-mismatched-dpop-proof-jkt",
+		"variant": {
+			"openid": "openid_connect",
+			"client_auth_type": "private_key_jwt",
+			"fapi_request_method": "signed_non_repudiation",
+			"sender_constrain": "dpop",
+			"fapi_profile": "plain_fapi",
+			"fapi_response_mode": "plain_response"
+		},
+		"result": "FAILED",
+		"reading": "explained",
+		"refusals": [
+			{
+				"block": "Make request to PAR endpoint",
+				"refuser": "core",
+				"place": "par",
+				"status": 400,
+				"error": "invalid_request_object",
+				"description": "not of the typ asked",
+				"reading": "observed",
+				"keys": ["jar-typ-required"]
+			}
+		],
+		"failures": [
+			{
+				"src": "CheckPAREndpointResponse201WithNoError",
+				"keys": ["jar-typ-required"]
+			}
+		]
+	},
+	{
+		"test": "fapi2-security-profile-final-ensure-token-endpoint-fails-with-mismatched-dpop-jkt",
+		"variant": {
+			"openid": "openid_connect",
+			"client_auth_type": "private_key_jwt",
+			"fapi_request_method": "signed_non_repudiation",
+			"sender_constrain": "dpop",
+			"fapi_profile": "plain_fapi",
+			"fapi_response_mode": "plain_response"
+		},
+		"result": "FAILED",
+		"reading": "explained",
+		"refusals": [
+			{
+				"block": "Make request to PAR endpoint",
+				"refuser": "core",
+				"place": "par",
+				"status": 400,
+				"error": "invalid_request_object",
+				"description": "not of the typ asked",
+				"reading": "observed",
+				"keys": ["jar-typ-required"]
+			}
+		],
+		"failures": [
+			{
+				"src": "CheckPAREndpointResponse201WithNoError",
+				"keys": ["jar-typ-required"]
+			}
+		]
+	},
+	{
+		"test": "fapi2-security-profile-final-ensure-dpopproof-at-par-endpoint-binding-success",
+		"variant": {
+			"openid": "openid_connect",
+			"client_auth_type": "private_key_jwt",
+			"fapi_request_method": "signed_non_repudiation",
+			"sender_constrain": "dpop",
+			"fapi_profile": "plain_fapi",
+			"fapi_response_mode": "plain_response"
+		},
+		"result": "FAILED",
+		"reading": "explained",
+		"refusals": [
+			{
+				"block": "Make request to PAR endpoint",
+				"refuser": "core",
+				"place": "par",
+				"status": 400,
+				"error": "invalid_request_object",
+				"description": "not of the typ asked",
+				"reading": "observed",
+				"keys": ["jar-typ-required"]
+			}
+		],
+		"failures": [
+			{
+				"src": "CheckPAREndpointResponse201WithNoError",
+				"keys": ["jar-typ-required"]
+			}
+		]
+	},
+	{
+		"test": "fapi2-security-profile-final-ensure-dpop-auth-code-binding-success",
+		"variant": {
+			"openid": "openid_connect",
+			"client_auth_type": "private_key_jwt",
+			"fapi_request_method": "signed_non_repudiation",
+			"sender_constrain": "dpop",
+			"fapi_profile": "plain_fapi",
+			"fapi_response_mode": "plain_response"
+		},
+		"result": "FAILED",
+		"reading": "explained",
+		"refusals": [
+			{
+				"block": "Make request to PAR endpoint",
+				"refuser": "core",
+				"place": "par",
+				"status": 400,
+				"error": "invalid_request_object",
+				"description": "not of the typ asked",
+				"reading": "observed",
+				"keys": ["jar-typ-required"]
+			}
+		],
+		"failures": [
+			{
+				"src": "CheckPAREndpointResponse201WithNoError",
+				"keys": ["jar-typ-required"]
+			}
+		]
+	},
+	{
+		"test": "fapi2-security-profile-final-ensure-different-nonce-inside-and-outside-request-object",
+		"variant": {
+			"openid": "openid_connect",
+			"client_auth_type": "private_key_jwt",
+			"fapi_request_method": "signed_non_repudiation",
+			"sender_constrain": "dpop",
+			"fapi_profile": "plain_fapi",
+			"fapi_response_mode": "plain_response"
+		},
+		"result": "FAILED",
+		"reading": "explained",
+		"refusals": [
+			{
+				"block": "Make request to PAR endpoint",
+				"refuser": "core",
+				"place": "par",
+				"status": 400,
+				"error": "invalid_request_object",
+				"description": "not of the typ asked",
+				"reading": "observed",
+				"keys": ["jar-typ-required"]
+			}
+		],
+		"failures": [
+			{
+				"src": "CheckPAREndpointResponse201WithNoError",
+				"keys": ["jar-typ-required"]
+			}
+		]
+	},
+	{
+		"test": "fapi2-security-profile-final-ensure-different-state-inside-and-outside-request-object",
+		"variant": {
+			"openid": "openid_connect",
+			"client_auth_type": "private_key_jwt",
+			"fapi_request_method": "signed_non_repudiation",
+			"sender_constrain": "dpop",
+			"fapi_profile": "plain_fapi",
+			"fapi_response_mode": "plain_response"
+		},
+		"result": "FAILED",
+		"reading": "explained",
+		"refusals": [
+			{
+				"block": "Make request to PAR endpoint",
+				"refuser": "core",
+				"place": "par",
+				"status": 400,
+				"error": "invalid_request_object",
+				"description": "not of the typ asked",
+				"reading": "observed",
+				"keys": ["jar-typ-required"]
+			}
+		],
+		"failures": [
+			{
+				"src": "CheckPAREndpointResponse201WithNoError",
+				"keys": ["jar-typ-required"]
+			}
+		]
+	},
+	{
+		"test": "fapi2-security-profile-final-ensure-authorization-request-with-long-nonce",
+		"variant": {
+			"openid": "openid_connect",
+			"client_auth_type": "private_key_jwt",
+			"fapi_request_method": "signed_non_repudiation",
+			"sender_constrain": "dpop",
+			"fapi_profile": "plain_fapi",
+			"fapi_response_mode": "plain_response"
+		},
+		"result": "FAILED",
+		"reading": "explained",
+		"refusals": [
+			{
+				"block": "Make request to PAR endpoint",
+				"refuser": "core",
+				"place": "par",
+				"status": 400,
+				"error": "invalid_request_object",
+				"description": "not of the typ asked",
+				"reading": "observed",
+				"keys": ["jar-typ-required"]
+			}
+		],
+		"failures": [
+			{
+				"src": "EnsurePARInvalidRequestError",
+				"keys": ["jar-typ-required"]
+			}
+		]
+	},
+	{
+		"test": "fapi2-security-profile-final-ensure-authorization-request-with-long-state",
+		"variant": {
+			"openid": "openid_connect",
+			"client_auth_type": "private_key_jwt",
+			"fapi_request_method": "signed_non_repudiation",
+			"sender_constrain": "dpop",
+			"fapi_profile": "plain_fapi",
+			"fapi_response_mode": "plain_response"
+		},
+		"result": "FAILED",
+		"reading": "explained",
+		"refusals": [
+			{
+				"block": "Make request to PAR endpoint",
+				"refuser": "core",
+				"place": "par",
+				"status": 400,
+				"error": "invalid_request_object",
+				"description": "not of the typ asked",
+				"reading": "observed",
+				"keys": ["jar-typ-required"]
+			}
+		],
+		"failures": [
+			{
+				"src": "EnsurePARInvalidRequestError",
+				"keys": ["jar-typ-required"]
+			}
+		]
+	},
+	{
+		"test": "fapi2-security-profile-final-ensure-request-object-without-exp-fails",
+		"variant": {
+			"openid": "openid_connect",
+			"client_auth_type": "private_key_jwt",
+			"fapi_request_method": "signed_non_repudiation",
+			"sender_constrain": "dpop",
+			"fapi_profile": "plain_fapi",
+			"fapi_response_mode": "plain_response"
+		},
+		"result": "PASSED",
+		"reading": "before-wall",
+		"refusals": [
+			{
+				"block": "Make request to PAR endpoint",
+				"refuser": "core",
+				"place": "par",
+				"status": 400,
+				"error": "invalid_request_object",
+				"description": "not of the typ asked",
+				"reading": "observed",
+				"keys": ["jar-typ-required"]
+			}
+		]
+	},
+	{
+		"test": "fapi2-security-profile-final-ensure-request-object-without-nbf-fails",
+		"variant": {
+			"openid": "openid_connect",
+			"client_auth_type": "private_key_jwt",
+			"fapi_request_method": "signed_non_repudiation",
+			"sender_constrain": "dpop",
+			"fapi_profile": "plain_fapi",
+			"fapi_response_mode": "plain_response"
+		},
+		"result": "PASSED",
+		"reading": "before-wall",
+		"refusals": [
+			{
+				"block": "Make request to PAR endpoint",
+				"refuser": "core",
+				"place": "par",
+				"status": 400,
+				"error": "invalid_request_object",
+				"description": "not of the typ asked",
+				"reading": "observed",
+				"keys": ["jar-typ-required"]
+			}
+		]
+	},
+	{
+		"test": "fapi2-security-profile-final-state-only-outside-request-object-not-used",
+		"variant": {
+			"openid": "openid_connect",
+			"client_auth_type": "private_key_jwt",
+			"fapi_request_method": "signed_non_repudiation",
+			"sender_constrain": "dpop",
+			"fapi_profile": "plain_fapi",
+			"fapi_response_mode": "plain_response"
+		},
+		"result": "FAILED",
+		"reading": "explained",
+		"refusals": [
+			{
+				"block": "Make request to PAR endpoint",
+				"refuser": "core",
+				"place": "par",
+				"status": 400,
+				"error": "invalid_request_object",
+				"description": "not of the typ asked",
+				"reading": "observed",
+				"keys": ["jar-typ-required"]
+			}
+		],
+		"failures": [
+			{
+				"src": "CheckPAREndpointResponse201WithNoError",
+				"keys": ["jar-typ-required"]
+			}
+		]
+	},
+	{
+		"test": "fapi2-security-profile-final-ensure-request-object-without-redirect-uri-fails",
+		"variant": {
+			"openid": "openid_connect",
+			"client_auth_type": "private_key_jwt",
+			"fapi_request_method": "signed_non_repudiation",
+			"sender_constrain": "dpop",
+			"fapi_profile": "plain_fapi",
+			"fapi_response_mode": "plain_response"
+		},
+		"result": "PASSED",
+		"reading": "before-wall",
+		"refusals": [
+			{
+				"block": "Make request to PAR endpoint",
+				"refuser": "core",
+				"place": "par",
+				"status": 400,
+				"error": "invalid_request_object",
+				"description": "not of the typ asked",
+				"reading": "observed",
+				"keys": ["jar-typ-required"]
+			}
+		]
+	},
+	{
+		"test": "fapi2-security-profile-final-ensure-expired-request-object-fails",
+		"variant": {
+			"openid": "openid_connect",
+			"client_auth_type": "private_key_jwt",
+			"fapi_request_method": "signed_non_repudiation",
+			"sender_constrain": "dpop",
+			"fapi_profile": "plain_fapi",
+			"fapi_response_mode": "plain_response"
+		},
+		"result": "PASSED",
+		"reading": "before-wall",
+		"refusals": [
+			{
+				"block": "Make request to PAR endpoint",
+				"refuser": "core",
+				"place": "par",
+				"status": 400,
+				"error": "invalid_request_object",
+				"description": "not of the typ asked",
+				"reading": "observed",
+				"keys": ["jar-typ-required"]
+			}
+		]
+	},
+	{
+		"test": "fapi2-security-profile-final-ensure-request-object-with-bad-aud-fails",
+		"variant": {
+			"openid": "openid_connect",
+			"client_auth_type": "private_key_jwt",
+			"fapi_request_method": "signed_non_repudiation",
+			"sender_constrain": "dpop",
+			"fapi_profile": "plain_fapi",
+			"fapi_response_mode": "plain_response"
+		},
+		"result": "PASSED",
+		"reading": "before-wall",
+		"refusals": [
+			{
+				"block": "Make request to PAR endpoint",
+				"refuser": "core",
+				"place": "par",
+				"status": 400,
+				"error": "invalid_request_object",
+				"description": "not of the typ asked",
+				"reading": "observed",
+				"keys": ["jar-typ-required"]
+			}
+		]
+	},
+	{
+		"test": "fapi2-security-profile-final-ensure-request-object-with-exp-over-60-fails",
+		"variant": {
+			"openid": "openid_connect",
+			"client_auth_type": "private_key_jwt",
+			"fapi_request_method": "signed_non_repudiation",
+			"sender_constrain": "dpop",
+			"fapi_profile": "plain_fapi",
+			"fapi_response_mode": "plain_response"
+		},
+		"result": "PASSED",
+		"reading": "before-wall",
+		"refusals": [
+			{
+				"block": "Make request to PAR endpoint",
+				"refuser": "core",
+				"place": "par",
+				"status": 400,
+				"error": "invalid_request_object",
+				"description": "not of the typ asked",
+				"reading": "observed",
+				"keys": ["jar-typ-required"]
+			}
+		]
+	},
+	{
+		"test": "fapi2-security-profile-final-ensure-request-object-with-nbf-over-60-fails",
+		"variant": {
+			"openid": "openid_connect",
+			"client_auth_type": "private_key_jwt",
+			"fapi_request_method": "signed_non_repudiation",
+			"sender_constrain": "dpop",
+			"fapi_profile": "plain_fapi",
+			"fapi_response_mode": "plain_response"
+		},
+		"result": "PASSED",
+		"reading": "before-wall",
+		"refusals": [
+			{
+				"block": "Make request to PAR endpoint",
+				"refuser": "core",
+				"place": "par",
+				"status": 400,
+				"error": "invalid_request_object",
+				"description": "not of the typ asked",
+				"reading": "observed",
+				"keys": ["jar-typ-required"]
+			}
+		]
+	},
+	{
+		"test": "fapi2-security-profile-final-ensure-signed-request-object-with-RS256-fails",
+		"variant": {
+			"openid": "openid_connect",
+			"client_auth_type": "private_key_jwt",
+			"fapi_request_method": "signed_non_repudiation",
+			"sender_constrain": "dpop",
+			"fapi_profile": "plain_fapi",
+			"fapi_response_mode": "plain_response"
+		},
+		"result": "SKIPPED",
+		"reading": "skipped",
+		"refusals": []
+	},
+	{
+		"test": "fapi2-security-profile-final-ensure-request-object-signature-algorithm-is-not-none",
+		"variant": {
+			"openid": "openid_connect",
+			"client_auth_type": "private_key_jwt",
+			"fapi_request_method": "signed_non_repudiation",
+			"sender_constrain": "dpop",
+			"fapi_profile": "plain_fapi",
+			"fapi_response_mode": "plain_response"
+		},
+		"result": "PASSED",
+		"reading": "own-condition",
+		"refusals": [
+			{
+				"block": "Make request to PAR endpoint",
+				"refuser": "front",
+				"place": "par",
+				"status": 400,
+				"error": "invalid_request_object",
+				"description": "request: fieldSyntax",
+				"reading": "own"
+			}
+		]
+	},
+	{
+		"test": "fapi2-security-profile-final-ensure-request-object-with-invalid-signature-fails",
+		"variant": {
+			"openid": "openid_connect",
+			"client_auth_type": "private_key_jwt",
+			"fapi_request_method": "signed_non_repudiation",
+			"sender_constrain": "dpop",
+			"fapi_profile": "plain_fapi",
+			"fapi_response_mode": "plain_response"
+		},
+		"result": "PASSED",
+		"reading": "before-wall",
+		"refusals": [
+			{
+				"block": "Make request to PAR endpoint",
+				"refuser": "core",
+				"place": "par",
+				"status": 400,
+				"error": "invalid_request_object",
+				"description": "not of the typ asked",
+				"reading": "observed",
+				"keys": ["jar-typ-required"]
+			}
+		]
+	},
+	{
+		"test": "fapi2-security-profile-final-ensure-matching-key-in-authorization-request",
+		"variant": {
+			"openid": "openid_connect",
+			"client_auth_type": "private_key_jwt",
+			"fapi_request_method": "signed_non_repudiation",
+			"sender_constrain": "dpop",
+			"fapi_profile": "plain_fapi",
+			"fapi_response_mode": "plain_response"
+		},
+		"result": "PASSED",
+		"reading": "before-wall",
+		"refusals": [
+			{
+				"block": "Make request to PAR endpoint",
+				"refuser": "core",
+				"place": "par",
+				"status": 400,
+				"error": "invalid_request_object",
+				"description": "not of the typ asked",
+				"reading": "observed",
+				"keys": ["jar-typ-required"]
+			}
+		]
+	},
+	{
+		"test": "fapi2-security-profile-final-ensure-unsigned-request-at-par-endpoint-fails",
+		"variant": {
+			"openid": "openid_connect",
+			"client_auth_type": "private_key_jwt",
+			"fapi_request_method": "signed_non_repudiation",
+			"sender_constrain": "dpop",
+			"fapi_profile": "plain_fapi",
+			"fapi_response_mode": "plain_response"
+		},
+		"result": "PASSED",
+		"reading": "own-condition",
+		"refusals": [
+			{
+				"block": "Make request to PAR endpoint",
+				"refuser": "front",
+				"place": "par",
+				"status": 400,
+				"error": "invalid_request",
+				"description": "request: fieldLength",
+				"reading": "own"
+			}
+		]
+	},
+	{
+		"test": "fapi2-security-profile-final-plain-fapi-tolerate-unregistered-redirect-uri",
+		"variant": {
+			"openid": "openid_connect",
+			"client_auth_type": "private_key_jwt",
+			"fapi_request_method": "signed_non_repudiation",
+			"sender_constrain": "dpop",
+			"fapi_profile": "plain_fapi",
+			"fapi_response_mode": "plain_response"
+		},
+		"result": "PASSED",
+		"reading": "before-wall",
+		"refusals": [
+			{
+				"block": "Make request to PAR endpoint",
+				"refuser": "core",
+				"place": "par",
+				"status": 400,
+				"error": "invalid_request_object",
+				"description": "not of the typ asked",
+				"reading": "observed",
+				"keys": ["jar-typ-required"]
+			}
+		]
+	},
+	{
+		"test": "fapi2-security-profile-final-ensure-unsigned-authorization-request-without-using-par-fails",
+		"variant": {
+			"openid": "openid_connect",
+			"client_auth_type": "private_key_jwt",
+			"fapi_request_method": "signed_non_repudiation",
+			"sender_constrain": "dpop",
+			"fapi_profile": "plain_fapi",
+			"fapi_response_mode": "plain_response"
+		},
+		"result": "REVIEW",
+		"reading": "unconfirmed",
+		"refusals": [
+			{
+				"block": "Make request to authorization endpoint",
+				"refuser": "core",
+				"place": "start",
+				"status": 400,
+				"error": "invalid_request",
+				"description": "the request is sent by exactly one of its ways",
+				"reading": "unconfirmed",
+				"keys": ["jar-required"]
+			}
+		]
+	},
+	{
+		"test": "fapi2-security-profile-final-ensure-redirect-uri-in-authorization-request",
+		"variant": {
+			"openid": "openid_connect",
+			"client_auth_type": "private_key_jwt",
+			"fapi_request_method": "signed_non_repudiation",
+			"sender_constrain": "dpop",
+			"fapi_profile": "plain_fapi",
+			"fapi_response_mode": "plain_response"
+		},
+		"result": "PASSED",
+		"reading": "before-wall",
+		"refusals": [
+			{
+				"block": "Make request to PAR endpoint",
+				"refuser": "core",
+				"place": "par",
+				"status": 400,
+				"error": "invalid_request_object",
+				"description": "not of the typ asked",
+				"reading": "observed",
+				"keys": ["jar-typ-required"]
+			}
+		]
+	},
+	{
+		"test": "fapi2-security-profile-final-ensure-response-type-code-idtoken-fails",
+		"variant": {
+			"openid": "openid_connect",
+			"client_auth_type": "private_key_jwt",
+			"fapi_request_method": "signed_non_repudiation",
+			"sender_constrain": "dpop",
+			"fapi_profile": "plain_fapi",
+			"fapi_response_mode": "plain_response"
+		},
+		"result": "WARNING",
+		"reading": "explained",
+		"refusals": [
+			{
+				"block": "Make request to PAR endpoint",
+				"refuser": "core",
+				"place": "par",
+				"status": 400,
+				"error": "invalid_request_object",
+				"description": "not of the typ asked",
+				"reading": "observed",
+				"keys": ["jar-typ-required"]
+			}
+		],
+		"warnings": [
+			{
+				"src": "EnsurePARUnsupportedResponseTypeOrInvalidRequestOrUnauthorizedClientError",
+				"keys": ["jar-typ-required"]
+			}
+		]
+	},
+	{
+		"test": "fapi2-security-profile-final-ensure-response-type-token-fails",
+		"variant": {
+			"openid": "openid_connect",
+			"client_auth_type": "private_key_jwt",
+			"fapi_request_method": "signed_non_repudiation",
+			"sender_constrain": "dpop",
+			"fapi_profile": "plain_fapi",
+			"fapi_response_mode": "plain_response"
+		},
+		"result": "WARNING",
+		"reading": "explained",
+		"refusals": [
+			{
+				"block": "Make request to PAR endpoint",
+				"refuser": "core",
+				"place": "par",
+				"status": 400,
+				"error": "invalid_request_object",
+				"description": "not of the typ asked",
+				"reading": "observed",
+				"keys": ["jar-typ-required"]
+			}
+		],
+		"warnings": [
+			{
+				"src": "EnsurePARUnsupportedResponseTypeOrInvalidRequestOrUnauthorizedClientError",
+				"keys": ["jar-typ-required"]
+			}
+		]
+	},
+	{
+		"test": "fapi2-security-profile-final-ensure-client-id-in-token-endpoint",
+		"variant": {
+			"openid": "openid_connect",
+			"client_auth_type": "private_key_jwt",
+			"fapi_request_method": "signed_non_repudiation",
+			"sender_constrain": "dpop",
+			"fapi_profile": "plain_fapi",
+			"fapi_response_mode": "plain_response"
+		},
+		"result": "FAILED",
+		"reading": "explained",
+		"refusals": [
+			{
+				"block": "Make request to PAR endpoint",
+				"refuser": "core",
+				"place": "par",
+				"status": 400,
+				"error": "invalid_request_object",
+				"description": "not of the typ asked",
+				"reading": "observed",
+				"keys": ["jar-typ-required"]
+			}
+		],
+		"failures": [
+			{
+				"src": "CheckPAREndpointResponse201WithNoError",
+				"keys": ["jar-typ-required"]
+			}
+		]
+	},
+	{
+		"test": "fapi2-security-profile-final-ensure-holder-of-key-required",
+		"variant": {
+			"openid": "openid_connect",
+			"client_auth_type": "private_key_jwt",
+			"fapi_request_method": "signed_non_repudiation",
+			"sender_constrain": "dpop",
+			"fapi_profile": "plain_fapi",
+			"fapi_response_mode": "plain_response"
+		},
+		"result": "FAILED",
+		"reading": "explained",
+		"refusals": [
+			{
+				"block": "Make request to PAR endpoint",
+				"refuser": "core",
+				"place": "par",
+				"status": 400,
+				"error": "invalid_request_object",
+				"description": "not of the typ asked",
+				"reading": "observed",
+				"keys": ["jar-typ-required"]
+			}
+		],
+		"failures": [
+			{
+				"src": "CheckPAREndpointResponse201WithNoError",
+				"keys": ["jar-typ-required"]
+			}
+		]
+	},
+	{
+		"test": "fapi2-security-profile-final-ensure-holder-of-key-required-at-non-alias-token-endpoint",
+		"variant": {
+			"openid": "openid_connect",
+			"client_auth_type": "private_key_jwt",
+			"fapi_request_method": "signed_non_repudiation",
+			"sender_constrain": "dpop",
+			"fapi_profile": "plain_fapi",
+			"fapi_response_mode": "plain_response"
+		},
+		"result": "SKIPPED",
+		"reading": "skipped",
+		"refusals": []
+	},
+	{
+		"test": "fapi2-security-profile-final-ensure-authorization-code-is-bound-to-client",
+		"variant": {
+			"openid": "openid_connect",
+			"client_auth_type": "private_key_jwt",
+			"fapi_request_method": "signed_non_repudiation",
+			"sender_constrain": "dpop",
+			"fapi_profile": "plain_fapi",
+			"fapi_response_mode": "plain_response"
+		},
+		"result": "FAILED",
+		"reading": "explained",
+		"refusals": [
+			{
+				"block": "Make request to PAR endpoint",
+				"refuser": "core",
+				"place": "par",
+				"status": 400,
+				"error": "invalid_request_object",
+				"description": "not of the typ asked",
+				"reading": "observed",
+				"keys": ["jar-typ-required"]
+			}
+		],
+		"failures": [
+			{
+				"src": "CheckPAREndpointResponse201WithNoError",
+				"keys": ["jar-typ-required"]
+			}
+		]
+	},
+	{
+		"test": "fapi2-security-profile-final-attempt-reuse-authorization-code-after-one-second",
+		"variant": {
+			"openid": "openid_connect",
+			"client_auth_type": "private_key_jwt",
+			"fapi_request_method": "signed_non_repudiation",
+			"sender_constrain": "dpop",
+			"fapi_profile": "plain_fapi",
+			"fapi_response_mode": "plain_response"
+		},
+		"result": "FAILED",
+		"reading": "explained",
+		"refusals": [
+			{
+				"block": "Make request to PAR endpoint",
+				"refuser": "core",
+				"place": "par",
+				"status": 400,
+				"error": "invalid_request_object",
+				"description": "not of the typ asked",
+				"reading": "observed",
+				"keys": ["jar-typ-required"]
+			}
+		],
+		"failures": [
+			{
+				"src": "CheckPAREndpointResponse201WithNoError",
+				"keys": ["jar-typ-required"]
+			}
+		]
+	},
+	{
+		"test": "fapi2-security-profile-final-ensure-token-endpoint-fails-with-expired-auth-code",
+		"variant": {
+			"openid": "openid_connect",
+			"client_auth_type": "private_key_jwt",
+			"fapi_request_method": "signed_non_repudiation",
+			"sender_constrain": "dpop",
+			"fapi_profile": "plain_fapi",
+			"fapi_response_mode": "plain_response"
+		},
+		"result": "FAILED",
+		"reading": "explained",
+		"refusals": [
+			{
+				"block": "Make request to PAR endpoint",
+				"refuser": "core",
+				"place": "par",
+				"status": 400,
+				"error": "invalid_request_object",
+				"description": "not of the typ asked",
+				"reading": "observed",
+				"keys": ["jar-typ-required"]
+			}
+		],
+		"failures": [
+			{
+				"src": "CheckPAREndpointResponse201WithNoError",
+				"keys": ["jar-typ-required"]
+			}
+		]
+	},
+	{
+		"test": "fapi2-security-profile-final-ensure-signed-client-assertion-with-RS256-fails",
+		"variant": {
+			"openid": "openid_connect",
+			"client_auth_type": "private_key_jwt",
+			"fapi_request_method": "signed_non_repudiation",
+			"sender_constrain": "dpop",
+			"fapi_profile": "plain_fapi",
+			"fapi_response_mode": "plain_response"
+		},
+		"result": "SKIPPED",
+		"reading": "skipped",
+		"refusals": []
+	},
+	{
+		"test": "fapi2-security-profile-final-ensure-client-assertion-in-token-endpoint",
+		"variant": {
+			"openid": "openid_connect",
+			"client_auth_type": "private_key_jwt",
+			"fapi_request_method": "signed_non_repudiation",
+			"sender_constrain": "dpop",
+			"fapi_profile": "plain_fapi",
+			"fapi_response_mode": "plain_response"
+		},
+		"result": "FAILED",
+		"reading": "explained",
+		"refusals": [
+			{
+				"block": "Make request to PAR endpoint",
+				"refuser": "core",
+				"place": "par",
+				"status": 400,
+				"error": "invalid_request_object",
+				"description": "not of the typ asked",
+				"reading": "observed",
+				"keys": ["jar-typ-required"]
+			}
+		],
+		"failures": [
+			{
+				"src": "CheckPAREndpointResponse201WithNoError",
+				"keys": ["jar-typ-required"]
+			}
+		]
+	},
+	{
+		"test": "fapi2-security-profile-final-ensure-client-assertion-with-exp-is-5-minutes-in-past-fails",
+		"variant": {
+			"openid": "openid_connect",
+			"client_auth_type": "private_key_jwt",
+			"fapi_request_method": "signed_non_repudiation",
+			"sender_constrain": "dpop",
+			"fapi_profile": "plain_fapi",
+			"fapi_response_mode": "plain_response"
+		},
+		"result": "FAILED",
+		"reading": "explained",
+		"refusals": [
+			{
+				"block": "Make request to PAR endpoint",
+				"refuser": "core",
+				"place": "par",
+				"status": 400,
+				"error": "invalid_request_object",
+				"description": "not of the typ asked",
+				"reading": "observed",
+				"keys": ["jar-typ-required"]
+			}
+		],
+		"failures": [
+			{
+				"src": "CheckPAREndpointResponse201WithNoError",
+				"keys": ["jar-typ-required"]
+			}
+		]
+	},
+	{
+		"test": "fapi2-security-profile-final-ensure-client-assertion-with-wrong-aud-fails",
+		"variant": {
+			"openid": "openid_connect",
+			"client_auth_type": "private_key_jwt",
+			"fapi_request_method": "signed_non_repudiation",
+			"sender_constrain": "dpop",
+			"fapi_profile": "plain_fapi",
+			"fapi_response_mode": "plain_response"
+		},
+		"result": "FAILED",
+		"reading": "explained",
+		"refusals": [
+			{
+				"block": "Make request to PAR endpoint",
+				"refuser": "core",
+				"place": "par",
+				"status": 400,
+				"error": "invalid_request_object",
+				"description": "not of the typ asked",
+				"reading": "observed",
+				"keys": ["jar-typ-required"]
+			}
+		],
+		"failures": [
+			{
+				"src": "CheckPAREndpointResponse201WithNoError",
+				"keys": ["jar-typ-required"]
+			}
+		]
+	},
+	{
+		"test": "fapi2-security-profile-final-ensure-client-assertion-with-no-sub-fails",
+		"variant": {
+			"openid": "openid_connect",
+			"client_auth_type": "private_key_jwt",
+			"fapi_request_method": "signed_non_repudiation",
+			"sender_constrain": "dpop",
+			"fapi_profile": "plain_fapi",
+			"fapi_response_mode": "plain_response"
+		},
+		"result": "FAILED",
+		"reading": "explained",
+		"refusals": [
+			{
+				"block": "Make request to PAR endpoint",
+				"refuser": "core",
+				"place": "par",
+				"status": 400,
+				"error": "invalid_request_object",
+				"description": "not of the typ asked",
+				"reading": "observed",
+				"keys": ["jar-typ-required"]
+			}
+		],
+		"failures": [
+			{
+				"src": "CheckPAREndpointResponse201WithNoError",
+				"keys": ["jar-typ-required"]
+			}
+		]
+	},
+	{
+		"test": "fapi2-security-profile-final-ensure-invalid-client-assertions-fail",
+		"variant": {
+			"openid": "openid_connect",
+			"client_auth_type": "private_key_jwt",
+			"fapi_request_method": "signed_non_repudiation",
+			"sender_constrain": "dpop",
+			"fapi_profile": "plain_fapi",
+			"fapi_response_mode": "plain_response"
+		},
+		"result": "FAILED",
+		"reading": "explained",
+		"refusals": [
+			{
+				"block": "No client assertion",
+				"refuser": "front",
+				"place": "par",
+				"status": 400,
+				"error": "invalid_request",
+				"description": "clientAssertion: fieldLength",
+				"reading": "own"
+			},
+			{
+				"block": "client_assertion_type missing",
+				"refuser": "core",
+				"place": "par",
+				"status": 401,
+				"error": "invalid_client",
+				"description": "the client is not authenticated",
+				"reading": "unconfirmed"
+			},
+			{
+				"block": "client_assertion_type wrong",
+				"refuser": "core",
+				"place": "par",
+				"status": 401,
+				"error": "invalid_client",
+				"description": "the client is not authenticated",
+				"reading": "unconfirmed"
+			},
+			{
+				"block": "Client assertion without sub",
+				"refuser": "core",
+				"place": "par",
+				"status": 401,
+				"error": "invalid_client",
+				"description": "the client is not authenticated",
+				"reading": "unconfirmed"
+			},
+			{
+				"block": "Client assertion with wrong sub",
+				"refuser": "core",
+				"place": "par",
+				"status": 401,
+				"error": "invalid_client",
+				"description": "the client is not authenticated",
+				"reading": "unconfirmed"
+			},
+			{
+				"block": "Client assertion without iss",
+				"refuser": "core",
+				"place": "par",
+				"status": 401,
+				"error": "invalid_client",
+				"description": "the client is not authenticated",
+				"reading": "unconfirmed"
+			},
+			{
+				"block": "Client assertion with wrong iss",
+				"refuser": "core",
+				"place": "par",
+				"status": 401,
+				"error": "invalid_client",
+				"description": "the client is not authenticated",
+				"reading": "unconfirmed"
+			},
+			{
+				"block": "Client assertion without aud",
+				"refuser": "core",
+				"place": "par",
+				"status": 401,
+				"error": "invalid_client",
+				"description": "the client is not authenticated",
+				"reading": "unconfirmed"
+			},
+			{
+				"block": "Client assertion with unrelated aud",
+				"refuser": "core",
+				"place": "par",
+				"status": 401,
+				"error": "invalid_client",
+				"description": "the client is not authenticated",
+				"reading": "unconfirmed"
+			},
+			{
+				"block": "Client assertion with PAR endpoint as aud",
+				"refuser": "core",
+				"place": "par",
+				"status": 401,
+				"error": "invalid_client",
+				"description": "the client is not authenticated",
+				"reading": "unconfirmed"
+			},
+			{
+				"block": "Client assertion with token endpoint as aud",
+				"refuser": "core",
+				"place": "par",
+				"status": 401,
+				"error": "invalid_client",
+				"description": "the client is not authenticated",
+				"reading": "unconfirmed"
+			},
+			{
+				"block": "Client assertion with array as aud",
+				"refuser": "core",
+				"place": "par",
+				"status": 401,
+				"error": "invalid_client",
+				"description": "the client is not authenticated",
+				"reading": "unconfirmed"
+			},
+			{
+				"block": "Client assertion with exp in the past",
+				"refuser": "core",
+				"place": "par",
+				"status": 401,
+				"error": "invalid_client",
+				"description": "the client is not authenticated",
+				"reading": "unconfirmed"
+			},
+			{
+				"block": "Client assertion with iat and nbf over 60 seconds in the future",
+				"refuser": "core",
+				"place": "par",
+				"status": 401,
+				"error": "invalid_client",
+				"description": "the client is not authenticated",
+				"reading": "unconfirmed"
+			},
+			{
+				"block": "Client assertion with alg none",
+				"refuser": "front",
+				"place": "par",
+				"status": 400,
+				"error": "invalid_request",
+				"description": "clientAssertion: fieldSyntax",
+				"reading": "own"
+			},
+			{
+				"block": "Client assertion with invalid signature",
+				"refuser": "core",
+				"place": "par",
+				"status": 401,
+				"error": "invalid_client",
+				"description": "the client is not authenticated",
+				"reading": "unconfirmed"
+			},
+			{
+				"block": "Client assertion with iat and nbf 8 seconds in the future",
+				"refuser": "core",
+				"place": "par",
+				"status": 400,
+				"error": "invalid_request_object",
+				"description": "not of the typ asked",
+				"reading": "observed",
+				"keys": ["jar-typ-required"]
+			},
+			{
+				"block": "Valid client assertion",
+				"refuser": "core",
+				"place": "par",
+				"status": 400,
+				"error": "invalid_request_object",
+				"description": "not of the typ asked",
+				"reading": "observed",
+				"keys": ["jar-typ-required"]
+			}
+		],
+		"failures": [
+			{
+				"src": "CheckPAREndpointResponse201WithNoError",
+				"keys": ["jar-typ-required"]
+			}
+		],
+		"warnings": [
+			{
+				"src": "CheckPAREndpointResponse201WithNoError",
+				"keys": ["jar-typ-required"]
+			}
+		]
+	},
+	{
+		"test": "fapi2-security-profile-final-dpop-negative-tests",
+		"variant": {
+			"openid": "openid_connect",
+			"client_auth_type": "private_key_jwt",
+			"fapi_request_method": "signed_non_repudiation",
+			"sender_constrain": "dpop",
+			"fapi_profile": "plain_fapi",
+			"fapi_response_mode": "plain_response"
+		},
+		"result": "FAILED",
+		"reading": "explained",
+		"refusals": [
+			{
+				"block": "Make request to PAR endpoint",
+				"refuser": "core",
+				"place": "par",
+				"status": 400,
+				"error": "invalid_request_object",
+				"description": "not of the typ asked",
+				"reading": "observed",
+				"keys": ["jar-typ-required"]
+			}
+		],
+		"failures": [
+			{
+				"src": "CheckPAREndpointResponse201WithNoError",
+				"keys": ["jar-typ-required"]
+			}
+		]
+	},
+	{
+		"test": "fapi2-security-profile-final-refresh-token",
+		"variant": {
+			"openid": "openid_connect",
+			"client_auth_type": "private_key_jwt",
+			"fapi_request_method": "signed_non_repudiation",
+			"sender_constrain": "dpop",
+			"fapi_profile": "plain_fapi",
+			"fapi_response_mode": "plain_response"
+		},
+		"result": "FAILED",
+		"reading": "explained",
+		"refusals": [
+			{
+				"block": "Make request to PAR endpoint",
+				"refuser": "core",
+				"place": "par",
+				"status": 400,
+				"error": "invalid_request_object",
+				"description": "not of the typ asked",
+				"reading": "observed",
+				"keys": ["jar-typ-required"]
+			}
+		],
+		"failures": [
+			{
+				"src": "CheckPAREndpointResponse201WithNoError",
+				"keys": ["jar-typ-required"]
+			}
+		]
+	},
+	{
+		"test": "fapi2-security-profile-final-par-ensure-reused-request-uri-prior-to-auth-completion-succeeds",
+		"variant": {
+			"openid": "openid_connect",
+			"client_auth_type": "private_key_jwt",
+			"fapi_request_method": "signed_non_repudiation",
+			"sender_constrain": "dpop",
+			"fapi_profile": "plain_fapi",
+			"fapi_response_mode": "plain_response"
+		},
+		"result": "FAILED",
+		"reading": "explained",
+		"refusals": [
+			{
+				"block": "Make request to PAR endpoint",
+				"refuser": "core",
+				"place": "par",
+				"status": 400,
+				"error": "invalid_request_object",
+				"description": "not of the typ asked",
+				"reading": "observed",
+				"keys": ["jar-typ-required"]
+			}
+		],
+		"failures": [
+			{
+				"src": "CheckPAREndpointResponse201WithNoError",
+				"keys": ["jar-typ-required"]
+			}
+		]
+	},
+	{
+		"test": "fapi2-security-profile-final-par-attempt-reuse-request_uri",
+		"variant": {
+			"openid": "openid_connect",
+			"client_auth_type": "private_key_jwt",
+			"fapi_request_method": "signed_non_repudiation",
+			"sender_constrain": "dpop",
+			"fapi_profile": "plain_fapi",
+			"fapi_response_mode": "plain_response"
+		},
+		"result": "FAILED",
+		"reading": "explained",
+		"refusals": [
+			{
+				"block": "Make request to PAR endpoint",
+				"refuser": "core",
+				"place": "par",
+				"status": 400,
+				"error": "invalid_request_object",
+				"description": "not of the typ asked",
+				"reading": "observed",
+				"keys": ["jar-typ-required"]
+			}
+		],
+		"failures": [
+			{
+				"src": "CheckPAREndpointResponse201WithNoError",
+				"keys": ["jar-typ-required"]
+			}
+		]
+	},
+	{
+		"test": "fapi2-security-profile-final-par-attempt-to-use-expired-request_uri",
+		"variant": {
+			"openid": "openid_connect",
+			"client_auth_type": "private_key_jwt",
+			"fapi_request_method": "signed_non_repudiation",
+			"sender_constrain": "dpop",
+			"fapi_profile": "plain_fapi",
+			"fapi_response_mode": "plain_response"
+		},
+		"result": "FAILED",
+		"reading": "explained",
+		"refusals": [
+			{
+				"block": "Make request to PAR endpoint",
+				"refuser": "core",
+				"place": "par",
+				"status": 400,
+				"error": "invalid_request_object",
+				"description": "not of the typ asked",
+				"reading": "observed",
+				"keys": ["jar-typ-required"]
+			}
+		],
+		"failures": [
+			{
+				"src": "CheckPAREndpointResponse201WithNoError",
+				"keys": ["jar-typ-required"]
+			}
+		]
+	},
+	{
+		"test": "fapi2-security-profile-final-par-attempt-to-use-request_uri-for-different-client",
+		"variant": {
+			"openid": "openid_connect",
+			"client_auth_type": "private_key_jwt",
+			"fapi_request_method": "signed_non_repudiation",
+			"sender_constrain": "dpop",
+			"fapi_profile": "plain_fapi",
+			"fapi_response_mode": "plain_response"
+		},
+		"result": "FAILED",
+		"reading": "explained",
+		"refusals": [
+			{
+				"block": "Make request to PAR endpoint",
+				"refuser": "core",
+				"place": "par",
+				"status": 400,
+				"error": "invalid_request_object",
+				"description": "not of the typ asked",
+				"reading": "observed",
+				"keys": ["jar-typ-required"]
+			}
+		],
+		"failures": [
+			{
+				"src": "CheckPAREndpointResponse201WithNoError",
+				"keys": ["jar-typ-required"]
+			}
+		]
+	},
+	{
+		"test": "fapi2-security-profile-final-par-authorization-request-containing-request_uri-form-param",
+		"variant": {
+			"openid": "openid_connect",
+			"client_auth_type": "private_key_jwt",
+			"fapi_request_method": "signed_non_repudiation",
+			"sender_constrain": "dpop",
+			"fapi_profile": "plain_fapi",
+			"fapi_response_mode": "plain_response"
+		},
+		"result": "PASSED",
+		"reading": "own-condition",
+		"refusals": [
+			{
+				"block": "Make request to PAR endpoint",
+				"refuser": "core",
+				"place": "par",
+				"status": 400,
+				"error": "invalid_request",
+				"description": "a pushed request names no request_uri",
+				"reading": "own"
+			}
+		]
+	},
+	{
+		"test": "fapi2-security-profile-final-par-attempt-invalid-http-method",
+		"variant": {
+			"openid": "openid_connect",
+			"client_auth_type": "private_key_jwt",
+			"fapi_request_method": "signed_non_repudiation",
+			"sender_constrain": "dpop",
+			"fapi_profile": "plain_fapi",
+			"fapi_response_mode": "plain_response"
+		},
+		"result": "PASSED",
+		"reading": "own-condition",
+		"refusals": [
+			{
+				"block": "Make request to PAR endpoint",
+				"refuser": "front",
+				"place": "par",
+				"status": 404,
+				"reading": "own"
+			}
+		]
+	},
+	{
+		"test": "fapi2-security-profile-final-par-ensure-pkce-required",
+		"variant": {
+			"openid": "openid_connect",
+			"client_auth_type": "private_key_jwt",
+			"fapi_request_method": "signed_non_repudiation",
+			"sender_constrain": "dpop",
+			"fapi_profile": "plain_fapi",
+			"fapi_response_mode": "plain_response"
+		},
+		"result": "FAILED",
+		"reading": "explained",
+		"refusals": [
+			{
+				"block": "Make request to PAR endpoint",
+				"refuser": "core",
+				"place": "par",
+				"status": 400,
+				"error": "invalid_request_object",
+				"description": "not of the typ asked",
+				"reading": "observed",
+				"keys": ["jar-typ-required"]
+			}
+		],
+		"failures": [
+			{
+				"src": "EnsurePARInvalidRequestError",
+				"keys": ["jar-typ-required"]
+			}
+		]
+	},
+	{
+		"test": "fapi2-security-profile-final-ensure-pkce-code-verifier-required",
+		"variant": {
+			"openid": "openid_connect",
+			"client_auth_type": "private_key_jwt",
+			"fapi_request_method": "signed_non_repudiation",
+			"sender_constrain": "dpop",
+			"fapi_profile": "plain_fapi",
+			"fapi_response_mode": "plain_response"
+		},
+		"result": "FAILED",
+		"reading": "explained",
+		"refusals": [
+			{
+				"block": "Make request to PAR endpoint",
+				"refuser": "core",
+				"place": "par",
+				"status": 400,
+				"error": "invalid_request_object",
+				"description": "not of the typ asked",
+				"reading": "observed",
+				"keys": ["jar-typ-required"]
+			}
+		],
+		"failures": [
+			{
+				"src": "CheckPAREndpointResponse201WithNoError",
+				"keys": ["jar-typ-required"]
+			}
+		]
+	},
+	{
+		"test": "fapi2-security-profile-final-incorrect-pkce-code-verifier-rejected",
+		"variant": {
+			"openid": "openid_connect",
+			"client_auth_type": "private_key_jwt",
+			"fapi_request_method": "signed_non_repudiation",
+			"sender_constrain": "dpop",
+			"fapi_profile": "plain_fapi",
+			"fapi_response_mode": "plain_response"
+		},
+		"result": "FAILED",
+		"reading": "explained",
+		"refusals": [
+			{
+				"block": "Make request to PAR endpoint",
+				"refuser": "core",
+				"place": "par",
+				"status": 400,
+				"error": "invalid_request_object",
+				"description": "not of the typ asked",
+				"reading": "observed",
+				"keys": ["jar-typ-required"]
+			}
+		],
+		"failures": [
+			{
+				"src": "CheckPAREndpointResponse201WithNoError",
+				"keys": ["jar-typ-required"]
+			}
+		]
+	},
+	{
+		"test": "fapi2-security-profile-final-par-plain-pkce-rejected",
+		"variant": {
+			"openid": "openid_connect",
+			"client_auth_type": "private_key_jwt",
+			"fapi_request_method": "signed_non_repudiation",
+			"sender_constrain": "dpop",
+			"fapi_profile": "plain_fapi",
+			"fapi_response_mode": "plain_response"
+		},
+		"result": "FAILED",
+		"reading": "explained",
+		"refusals": [
+			{
+				"block": "Make request to PAR endpoint",
+				"refuser": "core",
+				"place": "par",
+				"status": 400,
+				"error": "invalid_request_object",
+				"description": "not of the typ asked",
+				"reading": "observed",
+				"keys": ["jar-typ-required"]
+			}
+		],
+		"failures": [
+			{
+				"src": "EnsurePARInvalidRequestError",
+				"keys": ["jar-typ-required"]
+			}
+		]
+	},
+	{
+		"test": "fapi2-security-profile-final-par-authorization-request-containing-request_uri",
+		"variant": {
+			"openid": "openid_connect",
+			"client_auth_type": "private_key_jwt",
+			"fapi_request_method": "signed_non_repudiation",
+			"sender_constrain": "dpop",
+			"fapi_profile": "plain_fapi",
+			"fapi_response_mode": "plain_response"
+		},
+		"result": "PASSED",
+		"reading": "before-wall",
+		"refusals": [
+			{
+				"block": "Make request to PAR endpoint",
+				"refuser": "core",
+				"place": "par",
+				"status": 400,
+				"error": "invalid_request_object",
+				"description": "not of the typ asked",
+				"reading": "observed",
+				"keys": ["jar-typ-required"]
+			}
+		]
+	},
+	{
+		"test": "fapi2-security-profile-final-par-without-duplicate-parameters",
+		"variant": {
+			"openid": "openid_connect",
+			"client_auth_type": "private_key_jwt",
+			"fapi_request_method": "signed_non_repudiation",
+			"sender_constrain": "dpop",
+			"fapi_profile": "plain_fapi",
+			"fapi_response_mode": "plain_response"
+		},
+		"result": "FAILED",
+		"reading": "explained",
+		"refusals": [
+			{
+				"block": "Make request to PAR endpoint",
+				"refuser": "core",
+				"place": "par",
+				"status": 400,
+				"error": "invalid_request_object",
+				"description": "not of the typ asked",
+				"reading": "observed",
+				"keys": ["jar-typ-required"]
+			}
+		],
+		"failures": [
+			{
+				"src": "CheckPAREndpointResponse201WithNoError",
+				"keys": ["jar-typ-required"]
+			}
+		]
+	}
+]
