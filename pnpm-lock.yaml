@@ -2851,6 +2851,9 @@ importers:
       '@mod/webauthn':
         specifier: workspace:*
         version: link:../../passkey/webauthn
+      '@mod/x509-path':
+        specifier: workspace:*
+        version: link:../../foundation/x509-path
       '@o3co/ts.hocon':
         specifier: 1.14.3
         version: 1.14.3(yaml@2.9.1)(zod@4.6.7)

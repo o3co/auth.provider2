@@ -39,6 +39,7 @@
 		"@mod/references": "workspace:*",
 		"@mod/tokens": "workspace:*",
 		"@mod/webauthn": "workspace:*",
+		"@mod/x509-path": "workspace:*",
 		"@o3co/ts.hocon": "1.14.3",
 		"vitest": "5.0.5"
 	}
