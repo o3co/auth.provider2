@@ -49,13 +49,26 @@ export interface RunRefusal {
 /** A module's class: `crossed` (to its end, or on its own condition), `before-wall` (no evidence), `explained`, `unconfirmed`, `skipped`, or `failed` (the run fails). */
 export type Class = "crossed" | "before-wall" | "explained" | "unconfirmed" | "skipped" | "failed";
 
-/** A module judged: its class, the keys observed and computed, what failed it, the unconfirmed, the reviews. */
+/** A FAILURE or WARNING a module met: its condition, where it was logged, whether its entry names it, the keys it gives, and those of them no refusal of its block shows. */
+export interface MetCondition {
+	readonly kind: "FAILURE" | "WARNING";
+	readonly src: string;
+	readonly block: string;
+	readonly blockId: string;
+	readonly named: boolean;
+	readonly keys: readonly string[];
+	readonly unshown: readonly string[];
+}
+
+/** A module judged: its class, its blocks in the log's order, the refusals and conditions met, the keys observed and computed, what failed it, the unconfirmed, the reviews. */
 export interface Judged {
 	readonly test: string;
 	readonly variant: Readonly<Record<string, string>>;
 	readonly result: string | undefined;
 	readonly class: Class;
+	readonly blocks: readonly { readonly id: string; readonly message: string }[];
 	readonly refusals: readonly RunRefusal[];
+	readonly conditions: readonly MetCondition[];
 	readonly observed: readonly string[];
 	readonly computed: readonly string[];
 	readonly problems: readonly string[];
@@ -104,6 +117,8 @@ function exchangesOf(log: readonly unknown[]) {
 	return out;
 }
 
+/** Where a condition outside every block was logged; a refusal there has no block's message, so no entry names it. */
+const noBlock = "no block";
 const blocksOf = (log: readonly unknown[]) =>
 	new Map(
 		log
@@ -400,6 +415,7 @@ export function judged(
 	}
 	// A condition is explained only by a key a refusal of its own block (by id) shows observed (decision 12).
 	const blocks = blocksOf(run.log);
+	const conditions: MetCondition[] = [];
 	for (const [kind, named] of [
 		["FAILURE", entry?.failures],
 		["WARNING", entry?.warnings],
@@ -408,18 +424,18 @@ export function judged(
 		const wrote = named ?? [];
 		for (const c of ran) {
 			const e = wrote.find((w) => w.src === c.src);
-			if (e === undefined) {
-				problems.push(`a ${kind} no entry names: ${c.src}`);
-				continue;
-			}
+			const block = blocks.get(c.blockId) ?? noBlock;
 			const shown = met.refusals.flatMap((r) =>
 				r.blockId === c.blockId && r.reading.kind === "observed" ? [r.reading.key] : [],
 			);
-			for (const key of e.keys ?? [])
-				if (!shown.includes(key))
-					problems.push(
-						`${c.src} in ${blocks.get(c.blockId) ?? "no block"} is explained by ${key}, which no refusal of its block shows`,
-					);
+			const keys = e?.keys ?? [];
+			const unshown = keys.filter((key) => !shown.includes(key));
+			conditions.push({ kind, ...c, block, named: e !== undefined, keys, unshown });
+			if (e === undefined) problems.push(`a ${kind} no entry names: ${c.src}`);
+			for (const key of unshown)
+				problems.push(
+					`${c.src} in ${block} is explained by ${key}, which no refusal of its block shows`,
+				);
 		}
 		for (const w of wrote)
 			if (!ran.some((c) => c.src === w.src))
@@ -455,7 +471,9 @@ export function judged(
 		variant: run.variant,
 		result: run.result,
 		class: problems.length > 0 ? "failed" : classed,
+		blocks: [...blocks].map(([id, message]) => ({ id, message })),
 		refusals: met.refusals,
+		conditions,
 		observed,
 		computed: computedOf(run, at),
 		problems,

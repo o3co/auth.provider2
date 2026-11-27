@@ -7,6 +7,7 @@ import {
 	refuserOf,
 	type Seen,
 	type Word,
+	wordName,
 	words,
 	wordsProblems,
 } from "../words.ts";
@@ -41,6 +42,14 @@ describe("the provider's words for the ledger's rows", () => {
 				ledger().map((row) => row.key),
 			),
 		).toEqual([]);
+	});
+
+	it("names each word apart, by its row and place and what tells it from the row's others there", () => {
+		const names = words.map(wordName);
+		expect(new Set(names).size).toBe(names.length);
+		expect(names).toContain("jar-typ-required/par");
+		expect(names).toContain("rar-refused/par/claim");
+		expect(names.every((n, i) => n.startsWith(`${words[i]?.key}/${words[i]?.place}`))).toBe(true);
 	});
 
 	it("tells the row a refusal answers for, by every part of it", () => {

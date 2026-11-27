@@ -14,6 +14,7 @@ Internal module of `interop-oidf`: the provider's words for the ledger's rows, a
 ## Offers
 - `refusers` and `places` (`Refuser`, `Place`): who answers a refusal and where, the lists a reader of refusals holds others to.
 - `words`: the table (`Word`: the row's key, `refuser`, `place`, `error`, `description`; `dpopHeader` or `startedBefore` where a feature tells the row apart; `shared` where the words answer other causes too).
+- `wordName` (a `Word`) → its name: the row's key and place, and what tells it from the row's other words there.
 - `refuserOf` (a refusal's description) → `front` or `core`, by the words' shape: front-relay's `<field>: <code>`, which no Core word has.
 - `manyCauses`: the words that answer many causes no row names (the client's authentication), each `ManyCauses`.
 - `readingOf` (a refusal `Seen`, a table, the words of many causes) → `Reading`: `observed` (one row), `unconfirmed` (rows, or none where words of many causes), or `none`.

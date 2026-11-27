@@ -172,8 +172,7 @@ export const words: readonly Word[] = [
 		// Also another JAR under the same `jti`: only a start of a `request_uri` started before is this row's.
 		startedBefore: true,
 	},
-	// No source answered the start: one carrying neither `request` nor `request_uri`, or a `request_uri`
-	// where no `par` is composed.
+	// No source answered the start: neither `request` nor `request_uri`, or no `par` composed for one.
 	{
 		key: "jar-required",
 		refuser: "core",
@@ -208,6 +207,17 @@ const matches = (word: Word, seen: Seen) =>
 	word.description === seen.description &&
 	(word.dpopHeader === undefined || word.dpopHeader === seen.dpopHeader) &&
 	(word.startedBefore === undefined || word.startedBefore === seen.startedBefore);
+
+/** A word's name: its row and place, and what tells it from another of its row's at that place. */
+export function wordName(word: Word): string {
+	const place = `${word.key}/${word.place}`;
+	if (word.key === "state-nonce-bound") return `${place}/${word.description.split(" ")[0]}`;
+	if (word.key === "rar-refused" && word.description.startsWith("refused_item"))
+		return `${place}/claim`;
+	if (word.key === "jar-required")
+		return `${place}/${word.description.includes("by value") ? "by-value" : "neither"}`;
+	return place;
+}
 
 /** Words the provider answers for many causes, none a ledger row: a refusal in them is unconfirmed, of no row. */
 export type ManyCauses = Pick<Word, "refuser" | "place" | "error" | "description">;

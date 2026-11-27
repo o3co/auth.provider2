@@ -132,6 +132,45 @@ describe("a module's run, judged against its entry", () => {
 			["jar-typ-required"],
 			["jar-typ-required"],
 		]);
+		const where = { block: "Make request to PAR endpoint", blockId: "b1" };
+		const named = { named: true, unshown: [] };
+		expect(j.conditions).toEqual([{ kind: "FAILURE", ...failure, ...where, ...named }]);
+		expect(j.blocks).toEqual([{ id: "b1", message: "Make request to PAR endpoint" }]);
+		// One its entry does not name is met all the same, unnamed with no keys (and fails the module);
+		// a key its block does not show is told, outside every block too.
+		const log = [
+			{ result: "WARNING", src: "Early", blockId: "b0" },
+			{ startBlock: true, blockId: "b0", msg: "Early block" },
+			...typLog,
+			{ result: "WARNING", src: "Other", blockId: "b1" },
+			{ result: "FAILURE", src: "Loose" },
+		];
+		const failures = [failure, { src: "Loose", keys: ["jar-typ-required"] }];
+		const met = judged(entry({ failures, warnings: [{ src: "Early" }] }), run({ log }), at, []);
+		expect(met.blocks.map((b) => b.id)).toEqual(["b0", "b1"]);
+		expect(met.conditions).toEqual(
+			expect.arrayContaining([
+				{
+					kind: "WARNING",
+					src: "Early",
+					block: "Early block",
+					blockId: "b0",
+					named: true,
+					keys: [],
+					unshown: [],
+				},
+				{ kind: "WARNING", src: "Other", ...where, named: false, keys: [], unshown: [] },
+				{
+					kind: "FAILURE",
+					src: "Loose",
+					block: "no block",
+					blockId: "undefined",
+					named: true,
+					keys: ["jar-typ-required"],
+					unshown: ["jar-typ-required"],
+				},
+			]),
+		);
 	});
 
 	it("classes a run before the wall, past it, and skipped as its entry reads", () => {
@@ -203,6 +242,20 @@ describe("a module's run, judged against its entry", () => {
 		expect(problems(entry({ refusals: [{ ...typ, refuser: "front" }] }), run())).toContain(
 			"refusal is unused",
 		);
+	});
+
+	it("lets no entry meet a refusal outside every block, though it names the block `no block`", () => {
+		// The same refusal and condition, logged with no block started: the condition reads `no block`,
+		// and an entry naming that for the refusal still leaves it unmet and unnamed.
+		const loose = typLog
+			.filter((e) => e.src !== "-START-BLOCK-")
+			.map((e) => (e.blockId === "b1" ? { ...e, blockId: "b9" } : e));
+		const named = entry({ refusals: [{ ...typ, block: "no block" }] });
+		const j = judged(named, run({ log: loose }), at, []);
+		expect(j.class).toBe("failed");
+		expect(j.problems.join("\n")).toContain("its entry's refusal is unused: no block");
+		expect(j.problems.join("\n")).toContain("a refusal no entry names");
+		expect(j.conditions[0]?.block).toBe("no block");
 	});
 
 	it("explains a condition only by a key a refusal of its own block shows (decision 12)", () => {

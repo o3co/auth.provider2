@@ -8,7 +8,7 @@ import { randomBytes } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { type Answered, ask, atIssuer } from "../../scene/test/ask.ts";
 import { type Scene, startScene } from "../../scene/test/scene.ts";
-import { readingOf, refuserOf, type Word, words } from "../../words/words.ts";
+import { readingOf, refuserOf, wordName, words } from "../../words/words.ts";
 import { type JarChange, type Provider, relyingParty, screenKeys, send } from "./rp.ts";
 
 const screen = "https://login.example.invalid";
@@ -146,17 +146,6 @@ const driven: Readonly<Record<string, () => Promise<Driven>>> = {
 	},
 };
 
-/** A word's name in this file: its row and place, and what tells it from another of the row's at that place. */
-function nameOf(word: Word): string {
-	const place = `${word.key}/${word.place}`;
-	if (word.key === "state-nonce-bound") return `${place}/${word.description.split(" ")[0]}`;
-	if (word.key === "rar-refused" && word.description.startsWith("refused_item"))
-		return `${place}/claim`;
-	if (word.key === "jar-required")
-		return `${place}/${word.description.includes("by value") ? "by-value" : "neither"}`;
-	return place;
-}
-
 const spec = { host: "localhost", listen: "127.0.0.1", screen } as const;
 
 // One after the other, each held once started, so a start that fails leaves the other to stop.
@@ -171,15 +160,15 @@ afterAll(async () => {
 
 describe("the word table, held to the provider's answers", () => {
 	it("has a request for every word, and no name twice", () => {
-		const names = words.map(nameOf);
+		const names = words.map(wordName);
 		expect(new Set(names).size).toBe(names.length);
 		expect([...names].sort()).toEqual(Object.keys(driven).sort());
 	});
 
 	for (const word of words) {
-		it(`answers ${nameOf(word)} in the table's words, read as its row`, async () => {
-			const drive = driven[nameOf(word)];
-			if (drive === undefined) throw new Error(`no request for ${nameOf(word)}`);
+		it(`answers ${wordName(word)} in the table's words, read as its row`, async () => {
+			const drive = driven[wordName(word)];
+			if (drive === undefined) throw new Error(`no request for ${wordName(word)}`);
 			const { answer, dpopHeader, startedBefore } = await drive();
 			const said = `${answer.status} ${answer.text}`;
 			expect(

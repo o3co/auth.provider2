@@ -5,6 +5,7 @@
 - The provider's words for those rows, and what a refusal a run saw says of them (internal module `words`).
 - A module's review: the pages its REVIEW stands on, kept, and the harness's verdict of each, never the suite's (internal module `review`).
 - A run's results: each module's run judged against its entry, the keys observed and computed, the run passed or why not (internal module `results`, for tests).
+- A run's report: its results as tables in the ledger's keys and words, what the run cannot show, and the harness's own tests beside (internal module `report`, for tests).
 - A run's expected results, module by module, in the ledger's keys, and the package's file of run A's (`expected/a.json`, internal module `expected`).
 - The provider as the run meets it (internal module `scene`, for tests): the generated `nextgen-core` and `nextgen-front` run as operators run them behind an https front at the issuer's origin.
 - The harness's relying party (internal module `rp`, for tests): a conforming client of nextgen, its JARs, PAR, assertions and DPoP proofs.
