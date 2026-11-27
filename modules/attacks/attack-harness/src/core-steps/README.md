@@ -11,6 +11,9 @@ Internal module of `attack-harness`: the compromised Core's steps, K-1 to K-17, 
 - The Core and its ports: the package's internal module `in-process`. The roles and the world: `roles`, `world`.
 - A defense checked alone, where a step's refusal rests on two: its owner's test, named in the group's card.
 - The dishonest Front: never read here.
+- The approving key (V30, FIX_ADD_PARENT): no step, as no end-to-end run here has a compromised Core answer the screen; its rules alone, in their owners' tests:
+  - authority-rules' chain: "is refused unless the creation names the record's parent as its approving key (V30, FIX_ADD_PARENT: add_key_under_own_parent)", "is refused where the creation names another screen's keys than its passkey-add (P 355: the E keys the same)";
+  - login-screen's management: "refuses a creation naming another key than the one its own assertion verifies under, before create()"; its assertion: "verifies under its own key, P-256's and Ed25519's", "is unverified under another key, of its type or the other".
 
 ## Offers
 - Nothing to import: its tests are the steps.
