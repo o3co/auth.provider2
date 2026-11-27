@@ -1,5 +1,5 @@
 import { continuations } from "@mod/continuation-wire";
-import { canonicalText, hpke, payloads, purposes, typs } from "@mod/sdk-core-wire";
+import { canonicalText, hpke, purposes, typs } from "@mod/sdk-core-wire";
 import { describe, expect, it, vi } from "vitest";
 import { base64url, digest, utf8 } from "../src/bytes.ts";
 import { challengeOf } from "../src/challenge.ts";
@@ -370,16 +370,11 @@ describe("management.finish", () => {
 		});
 	});
 
-	it("refuses a creation naming no key: here while sdk-core-wire takes one, by its schema once it requires it", async () => {
+	it("refuses a creation naming no key: sdk-core-wire takes none such, so it does not read", async () => {
 		const w = await world("passkey-add");
-		const keyed = await creationFor(w);
-		const without = await creationFor(w, { approver_key: undefined });
-		const payload = (jws: string) =>
-			JSON.parse(Buffer.from(jws.split(".")[1] ?? "", "base64url").toString());
-		// The probe holds the complete creation first, then the one without its key.
-		expect(payloads.creation.safeParse(payload(keyed)).success).toBe(true);
-		const taken = payloads.creation.safeParse(payload(without)).success;
-		expect(await finished(w, without)).toEqual({ error: taken ? "approver" : "creation" });
+		expect(await finished(w, await creationFor(w, { approver_key: undefined }))).toEqual({
+			error: "creation",
+		});
 	});
 
 	it("tells a key this browser cannot verify from another key", async () => {

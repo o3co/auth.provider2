@@ -137,6 +137,7 @@ async function finish(
 	if (creation.statement.creation.evidence !== h) return { error: "evidence" };
 	// The key it goes on from (V30): the screen's own, as its own assertion verifies under the key named.
 	const approver = creation.statement.creation.approver_key;
+	// sdk-core-wire takes no passkey-add's creation without its key; this narrows the type alone.
 	if (approver === undefined) return { error: "approver" };
 	const challenge = base64url(await challengeOf(manage.compact, "get"));
 	const verified = await verifiedUnder(options.assertion, approver, challenge);
