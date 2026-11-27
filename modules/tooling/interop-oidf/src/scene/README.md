@@ -12,8 +12,8 @@ Internal module of `interop-oidf`: the provider as the OIDF run meets it, for it
 - The configuration of each module: each module's configuration builder, which the scene composes.
 
 ## Offers
-- `startScene` (`SceneSpec`: the host the front is named by and the address it listens on, as `hostForSuite` gives them; the screen's origin; the registry's clients; PAR's `jar-max-lifetime` where a run sets one) → `Scene`: the issuer's origin, the certificate its front answers with, every app's output so far, and its stop.
-- `sender`: the one address the apps are told of for every request.
+- `startScene` (`SceneSpec`: the host the front is named by and the address it listens on, as `hostForSuite` gives them; the screen's origin; the registry's clients; PAR's `jar-max-lifetime` where a run sets one; `byValue`, a login's start taking a JAR by value too, for a test of the words only that start answers) → `Scene`: the issuer's origin, the certificate its front answers with, every app's output so far, and its stop.
+- `sender`: the one address the apps are told of for every request. `ask`: a request at the issuer (a form or JSON), trusting the front's certificate alone.
 
 ## Invariants
 - The pattern's differences are these alone, each named for a run's report: the spec's, `sign-up` added, the memory store (`accept-volatile` and `accept-unauthenticated`: redis's fake boots the module and serves no request), one sender (RFC 5737's `192.0.2.10`: every client reaches the front from loopback, which the Front takes for its trusted proxy), and the harness answering the published files (the publisher is the operator's and trusted).

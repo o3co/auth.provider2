@@ -4,6 +4,7 @@
 - The ledger of the provider's intended deviations and strict choices (L1), `docs/compliance/deviations.json`, which a conformance run's expected failures name by key, and the public page written from it (internal module `deviations`).
 - The provider's words for those rows, and what a refusal a run saw says of them (internal module `words`).
 - The provider as the run meets it (internal module `scene`, for tests): the generated `nextgen-core` and `nextgen-front` run as operators run them behind an https front at the issuer's origin.
+- The harness's relying party (internal module `rp`, for tests): a conforming client of nextgen, its JARs, PAR, assertions and DPoP proofs.
 - The OpenID Foundation's conformance suite at a pinned version, started and stopped on this machine: `suite` starts and stops it, `api` reaches its API trusting its certificate alone, `compose` composes its containers, `orphans` takes down a suite a killed run left, `commands` holds each program other than docker to its time, `lifecycle` holds what every plan run has (its directories, its stops).
 
 ## Not here
@@ -22,4 +23,4 @@
 - The suite takes fixed ports, so one runs at a time: its containers carry the process that owns them, and a suite whose owner is gone is taken down at the next start.
 
 ## Depends on
-- `docker-client` (every docker command). Its tests: `conformance-front`, `create-app` (`./testing`), and the modules the scene composes, each by its configuration builder.
+- `docker-client` (every docker command). Its tests: `conformance-front`, `create-app` (`./testing`), and the modules the scene and the relying party compose, each by its configuration builder (`client-assertion`, `client-allowance` and `redirect-uris` by `./testing`, `sdk-core-wire`'s `typs`).

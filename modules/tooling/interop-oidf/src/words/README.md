@@ -9,7 +9,7 @@ Internal module of `interop-oidf`: the provider's words for the ledger's rows, a
 ## Not here
 - Seeing a refusal and the request's features: whoever records the run's requests and answers.
 - Judging a run's results by it.
-- The words themselves: each product module's; the table copies them as they are answered today.
+- The words themselves: each product module's; the table copies them as they are answered today, and `rp`'s test holds every word to a scene's answer.
 
 ## Offers
 - `words`: the table (`Word`: the row's key, `refuser`, `place`, `error`, `description`; `dpopHeader` or `startedBefore` where a feature tells the row apart; `shared` where the words answer other causes too).

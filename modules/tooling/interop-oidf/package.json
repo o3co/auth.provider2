@@ -14,6 +14,8 @@
 		"@mod/audit": "workspace:*",
 		"@mod/audit-http": "workspace:*",
 		"@mod/authorize": "workspace:*",
+		"@mod/client-allowance": "workspace:*",
+		"@mod/client-assertion": "workspace:*",
 		"@mod/clients-registry": "workspace:*",
 		"@mod/conformance-front": "workspace:*",
 		"@mod/core-wire": "workspace:*",
@@ -28,6 +30,8 @@
 		"@mod/keys-kms": "workspace:*",
 		"@mod/mail-smtp": "workspace:*",
 		"@mod/par": "workspace:*",
+		"@mod/redirect-uris": "workspace:*",
+		"@mod/sdk-core-wire": "workspace:*",
 		"@mod/tokens": "workspace:*",
 		"@mod/webauthn": "workspace:*",
 		"vitest": "5.0.5"

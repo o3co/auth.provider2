@@ -1,59 +1,10 @@
 import { createPublicKey } from "node:crypto";
-import { request } from "node:https";
 import { connect } from "node:tls";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { ask } from "./ask.ts";
 import { type Scene, startScene } from "./scene.ts";
 
 const screen = "https://login.example.invalid";
-
-/** A request at the scene's issuer, trusting its front's certificate alone: its status, headers and JSON body. */
-function ask(
-	scene: Scene,
-	path: string,
-	init: {
-		readonly method?: string;
-		readonly form?: Record<string, string>;
-		readonly origin?: string;
-	} = {},
-) {
-	const body = init.form === undefined ? undefined : new URLSearchParams(init.form).toString();
-	return new Promise<{
-		status: number;
-		type: string;
-		headers: Record<string, unknown>;
-		text: string;
-		json: Record<string, unknown>;
-	}>((resolve, reject) => {
-		const req = request(
-			`${scene.issuer}${path}`,
-			{
-				method: init.method ?? "GET",
-				ca: scene.certificate,
-				headers: {
-					...(body === undefined ? {} : { "content-type": "application/x-www-form-urlencoded" }),
-					...(init.origin === undefined ? {} : { origin: init.origin }),
-				},
-			},
-			(res) => {
-				let text = "";
-				res.on("data", (chunk) => {
-					text += chunk;
-				});
-				res.on("end", () =>
-					resolve({
-						status: res.statusCode ?? 0,
-						type: String(res.headers["content-type"] ?? ""),
-						headers: res.headers,
-						text,
-						json: text === "" ? {} : JSON.parse(text),
-					}),
-				);
-			},
-		);
-		req.on("error", reject);
-		req.end(body);
-	});
-}
 
 let scene: Scene;
 

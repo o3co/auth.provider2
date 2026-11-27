@@ -3460,6 +3460,12 @@ importers:
       '@mod/authorize':
         specifier: workspace:*
         version: link:../../oauth/authorize
+      '@mod/client-allowance':
+        specifier: workspace:*
+        version: link:../../oauth/client-allowance
+      '@mod/client-assertion':
+        specifier: workspace:*
+        version: link:../../oauth/client-assertion
       '@mod/clients-registry':
         specifier: workspace:*
         version: link:../../identity/clients-registry
@@ -3502,6 +3508,12 @@ importers:
       '@mod/par':
         specifier: workspace:*
         version: link:../../oauth/par
+      '@mod/redirect-uris':
+        specifier: workspace:*
+        version: link:../../oauth/redirect-uris
+      '@mod/sdk-core-wire':
+        specifier: workspace:*
+        version: link:../../wire/sdk-core-wire
       '@mod/tokens':
         specifier: workspace:*
         version: link:../../oauth/tokens

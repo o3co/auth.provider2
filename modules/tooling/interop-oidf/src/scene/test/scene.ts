@@ -55,6 +55,8 @@ export interface SceneSpec {
 	readonly clients: readonly RegistryClient[];
 	/** PAR's `jar-max-lifetime` where a run sets one (B's 360 seconds), the module's default unless given. */
 	readonly parJarMaxLifetime?: string;
+	/** Whether a JAR by value is taken at a login's start too (`par`'s `pushed-only` false): pushed alone, as generated, unless a test says. */
+	readonly byValue?: true;
 }
 
 /** The scene started: the issuer's origin, the certificate its front answers with, and its stop. */
@@ -227,9 +229,14 @@ export async function startScene(spec: SceneSpec): Promise<Scene> {
 			...firstKeyConfig({ "mail-link": `${spec.screen}/first-key` }),
 			...tokensConfig({ revocation: "denylist" }, { subjects: "checked" }),
 			...dpopConfig({ nonce: { ...dpopConfig().dpop.nonce, required: "as" } }),
-			...(spec.parJarMaxLifetime === undefined
+			...(spec.parJarMaxLifetime === undefined && spec.byValue === undefined
 				? {}
-				: parConfig({ "jar-max-lifetime": spec.parJarMaxLifetime })),
+				: parConfig({
+						...(spec.parJarMaxLifetime === undefined
+							? {}
+							: { "jar-max-lifetime": spec.parJarMaxLifetime }),
+						...(spec.byValue ? { "pushed-only": false } : {}),
+					})),
 			"users-local": { "password-work": "scrypt:10,8,1,32,16" },
 			"transparency-local": { origin: spec.screen },
 			...httpConfig({ port: corePort, "public-origin": issuer, "trusted-proxies": ["127.0.0.1"] }),
