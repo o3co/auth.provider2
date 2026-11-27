@@ -11,7 +11,25 @@
 		"@mod/docker-client": "workspace:*"
 	},
 	"devDependencies": {
+		"@mod/audit": "workspace:*",
+		"@mod/audit-http": "workspace:*",
+		"@mod/authorize": "workspace:*",
+		"@mod/clients-registry": "workspace:*",
 		"@mod/conformance-front": "workspace:*",
+		"@mod/core-wire": "workspace:*",
+		"@mod/create-app": "workspace:*",
+		"@mod/dpop": "workspace:*",
+		"@mod/first-key": "workspace:*",
+		"@mod/front-relay": "workspace:*",
+		"@mod/http": "workspace:*",
+		"@mod/issuer": "workspace:*",
+		"@mod/kernel": "workspace:*",
+		"@mod/keys": "workspace:*",
+		"@mod/keys-kms": "workspace:*",
+		"@mod/mail-smtp": "workspace:*",
+		"@mod/par": "workspace:*",
+		"@mod/tokens": "workspace:*",
+		"@mod/webauthn": "workspace:*",
 		"vitest": "5.0.5"
 	}
 }

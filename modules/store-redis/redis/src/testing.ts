@@ -26,7 +26,9 @@ function commandOf(buffer: Buffer): { args: string[]; used: number } | undefined
 const bulk = (text: string) => `$${text.length}\r\n${text}\r\n`;
 
 /**
- * Just enough of a Redis 7 primary to boot the module, counting PINGs per socket. Its role and
+ * Just enough of a Redis 7 primary to boot the module, counting PINGs per socket, and no more: a Core
+ * serving requests over it cannot count its rate limits, so a test serving requests takes a real
+ * server or the memory store. Its role and
  * settings may change, one not in `settings` answered empty as a server not showing it; a command named in `refused` is refused for want of permission. The check's
  * script answers as the real one reports: each command in `scripts.refused` refused in the words of
  * `scripts.wording`'s Redis, each in `scripts.keysRefusedIn` refused its key in those words, and

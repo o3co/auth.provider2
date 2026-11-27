@@ -3448,9 +3448,63 @@ importers:
         specifier: workspace:*
         version: link:../docker-client
     devDependencies:
+      '@mod/audit':
+        specifier: workspace:*
+        version: link:../../foundation/audit
+      '@mod/audit-http':
+        specifier: workspace:*
+        version: link:../../audit-receivers/audit-http
+      '@mod/authorize':
+        specifier: workspace:*
+        version: link:../../oauth/authorize
+      '@mod/clients-registry':
+        specifier: workspace:*
+        version: link:../../identity/clients-registry
       '@mod/conformance-front':
         specifier: workspace:*
         version: link:../conformance-front
+      '@mod/core-wire':
+        specifier: workspace:*
+        version: link:../../http-servers/core-wire
+      '@mod/create-app':
+        specifier: workspace:*
+        version: link:../../scaffold/create-app
+      '@mod/dpop':
+        specifier: workspace:*
+        version: link:../../oauth/dpop
+      '@mod/first-key':
+        specifier: workspace:*
+        version: link:../../passkey/first-key
+      '@mod/front-relay':
+        specifier: workspace:*
+        version: link:../../http-servers/front-relay
+      '@mod/http':
+        specifier: workspace:*
+        version: link:../../foundation/http
+      '@mod/issuer':
+        specifier: workspace:*
+        version: link:../../oauth/issuer
+      '@mod/kernel':
+        specifier: workspace:*
+        version: link:../../foundation/kernel
+      '@mod/keys':
+        specifier: workspace:*
+        version: link:../../foundation/keys
+      '@mod/keys-kms':
+        specifier: workspace:*
+        version: link:../../key-holders/keys-kms
+      '@mod/mail-smtp':
+        specifier: workspace:*
+        version: link:../../smtp/mail-smtp
+      '@mod/par':
+        specifier: workspace:*
+        version: link:../../oauth/par
+      '@mod/tokens':
+        specifier: workspace:*
+        version: link:../../oauth/tokens
+      '@mod/webauthn':
+        specifier: workspace:*
+        version: link:../../passkey/webauthn
       vitest:
         specifier: 5.0.5
         version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(vite@8.3.3(@types/node@26.6.5)(yaml@2.9.1))

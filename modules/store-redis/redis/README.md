@@ -12,7 +12,7 @@
 ## Offers
 - Composition definition only; with the store, `storeControl` and `storeUpkeep` (internal module `upkeep`).
 - The probe `redis` at `kernel`'s `probes` (internal module `probe`), checking again what boot checked.
-- `./testing`: `fakeRedis`, a loopback server enough to boot the module.
+- `./testing`: `fakeRedis`, a loopback server enough only to boot the module.
 - Operator section:
   - `url` (`redis` or `rediss`, with no query), `accept-plaintext` (false), `address-family` (`ipv4`, `ipv6`, or either unset), `prefix` (lower-case letters, digits and `-`; default `store`).
   - `connect-timeout` (default `2s`), `command-timeout` (default `1s`), `replication-timeout` (default `1s`); times written with their unit, a bare number refused.
