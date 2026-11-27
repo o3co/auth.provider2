@@ -307,12 +307,17 @@ describe("the items T approves, from a JAR", () => {
 			if (!("items" in read)) throw new Error(`${name}: ${read.error}`);
 			expect(canonicalText(read.items), name).toBe(canonicalText(plain.items));
 		}
-		// An item it must carry sent as null is missing; a known item refused is refused whatever its value.
+		// An item it must carry sent as null is missing; request and request_uri are refused even so
+		// (RFC 9101 §4: not in a request object at all); authorization_details of null is not sent, as
+		// at the token endpoint (A25 holds: no details are taken).
 		expect(itemsFromJar({ ...jar, nonce: null }, "h")).toEqual({ error: "missing_item:nonce" });
-		for (const name of ["request", "request_uri", "authorization_details"])
+		for (const name of ["request", "request_uri"])
 			expect(itemsFromJar({ ...jar, [name]: null }, "h"), name).toEqual({
 				error: `refused_item:${name}`,
 			});
+		const details = itemsFromJar({ ...jar, authorization_details: null }, "h");
+		if (!("items" in details)) throw new Error(details.error);
+		expect(canonicalText(details.items)).toBe(canonicalText(plain.items));
 		// An empty text is a value, judged by its item's rule; a null inside claims keeps its rule (V26).
 		expect(itemsFromJar({ ...jar, resource: "" }, "h")).toEqual({ error: "item:resource" });
 		expect(itemsFromJar({ ...jar, claims: "" }, "h")).toEqual({ error: "item:claims" });
@@ -323,7 +328,7 @@ describe("the items T approves, from a JAR", () => {
 
 	it("refuses the known items refused, each by its rule: request and request_uri (RFC 9101 §4), authorization_details (A25)", () => {
 		for (const name of ["request", "request_uri", "authorization_details"])
-			for (const value of ["x", [], {}, null])
+			for (const value of ["x", [], {}, ...(name === "authorization_details" ? [] : [null])])
 				expect(itemsFromJar({ ...jar, [name]: value }, "h"), name).toEqual({
 					error: `refused_item:${name}`,
 				});

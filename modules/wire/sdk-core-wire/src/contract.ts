@@ -354,7 +354,7 @@ function askedInDefault(claims: unknown): unknown {
 /**
  * The items T approves, from a JAR's payload and its hash, by the one rule both sides run and compare
  * exactly: an error names the claim refused or missing, or the value that is not allowed. A top-level
- * null is not sent (RFC 6749 §3.1), a refused item's aside.
+ * null is not sent (RFC 6749 §3.1), but `request`'s and `request_uri`'s (RFC 9101 §4).
  * Under PAR, `requestUri` is the `request_uri` the start named, an item beside the JAR's; by value
  * none is given, and T holds none.
  */
@@ -364,8 +364,9 @@ export function itemsFromJar(
 	requestUri?: string,
 ): { readonly items: AuthorizationItems } | { readonly error: string } {
 	const refusedNames: readonly string[] = refusedItems;
+	const inNoObject: readonly string[] = ["request", "request_uri"];
 	const payload: Readonly<Record<string, unknown>> = Object.fromEntries(
-		Object.entries(given).filter(([key, value]) => value !== null || refusedNames.includes(key)),
+		Object.entries(given).filter(([key, value]) => value !== null || inNoObject.includes(key)),
 	);
 	for (const key of Object.keys(payload))
 		if (refusedNames.includes(key)) return { error: `refused_item:${key}` };

@@ -42,11 +42,9 @@ const shapeOrder = Object.keys(approval.shape) as (keyof typeof approval.shape)[
 
 /** The reference's reading of a JAR, written apart from `itemsFromJar`: its precedence, its projection. */
 function reference(given: Record<string, unknown>, hash: string) {
-	// A top-level null is not sent, but where the item is a refused one.
+	// A top-level null is not sent, but request's and request_uri's (in no request object at all).
 	const payload = Object.fromEntries(
-		Object.entries(given).filter(
-			([k, v]) => v !== null || ["request", "request_uri", "authorization_details"].includes(k),
-		),
+		Object.entries(given).filter(([k, v]) => v !== null || ["request", "request_uri"].includes(k)),
 	);
 	// The known items refused, spelled here apart from the wire's list; any other claim no rule names is taken.
 	const refused = ["request", "request_uri", "authorization_details"];
