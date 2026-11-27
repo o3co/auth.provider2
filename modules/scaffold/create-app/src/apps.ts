@@ -71,8 +71,9 @@ export async function running(
 		out += c;
 	});
 	// A process that cannot start ends the run, its error in the output, never an unhandled event.
+	// It has ended once its output is read whole too (`close`), so `out` then holds all it wrote.
 	const exited = new Promise<number | null>((done) => {
-		child.on("exit", (code) => done(code));
+		child.on("close", (code) => done(code));
 		child.on("error", (error) => {
 			out += `${String(error)}\n`;
 			done(null);
