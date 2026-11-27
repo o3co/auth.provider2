@@ -1,14 +1,14 @@
 import { credentialsOf } from "@mod/flow-state-wire";
 import { hpke, payloads } from "@mod/sdk-core-wire";
 import { type Receipt, type SignerSet, schemas } from "@mod/transparency-wire";
-import { digest, utf8 } from "./bytes.ts";
-import { openCompletion } from "./completion.ts";
-import { creationOfPossession, type ReadPossession } from "./first-key.ts";
-import type { Sealed } from "./hpke.ts";
-import { type Jwk, keyIdentity } from "./jws.ts";
-import type { ScreenKeys } from "./keys.ts";
-import { type Continued, wasSent } from "./management.ts";
-import { readLogReceipt } from "./receipt.ts";
+import { digest, utf8 } from "../bytes.ts";
+import { openCompletion } from "../completion.ts";
+import { creationOfPossession, type ReadPossession } from "../first-key/first-key.ts";
+import type { Sealed } from "../hpke.ts";
+import { type Jwk, keyIdentity } from "../jws.ts";
+import type { ScreenKeys } from "../keys.ts";
+import { type Continued, wasSent } from "../management/management.ts";
+import { readLogReceipt } from "../receipt.ts";
 import { readSet, readSetSigned, setIdentities } from "./signed-set.ts";
 
 type KeyChange = ReturnType<typeof payloads.completions.keyChange.parse>;

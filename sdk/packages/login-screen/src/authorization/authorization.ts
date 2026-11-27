@@ -1,13 +1,13 @@
 import { canonicalText, itemsFromJar, type StatementPayload } from "@mod/sdk-core-wire";
 import { schemas as logSchemas, logTyps, type RecordRef } from "@mod/transparency-wire";
-import { base64url, deepFreeze, digest, fromBase64url, textOf, utf8 } from "./bytes.ts";
-import { challengeOf } from "./challenge.ts";
-import { type CompletionError, type CompletionOptions, readCompletion } from "./completion.ts";
-import type { Sealed } from "./hpke.ts";
-import { type Jwk, keyIdentity } from "./jws.ts";
-import { namesKeys, type ScreenKeys } from "./keys.ts";
-import { readApprovalReceipt } from "./receipt.ts";
-import { readStatement, type StatementError, type StatementOptions } from "./statement.ts";
+import { base64url, deepFreeze, digest, fromBase64url, textOf, utf8 } from "../bytes.ts";
+import { challengeOf } from "../challenge.ts";
+import { type CompletionError, type CompletionOptions, readCompletion } from "../completion.ts";
+import type { Sealed } from "../hpke.ts";
+import { type Jwk, keyIdentity } from "../jws.ts";
+import { namesKeys, type ScreenKeys } from "../keys.ts";
+import { readApprovalReceipt } from "../receipt.ts";
+import { readStatement, type StatementError, type StatementOptions } from "../statement.ts";
 
 /** The claims of a JAR's payload, read without its signature (the Core verifies that), or none. */
 function jarClaims(jar: string): Record<string, unknown> | undefined {

@@ -3,12 +3,12 @@ import { hpke, purposes, typs } from "@mod/sdk-core-wire";
 import { logTyps } from "@mod/transparency-wire";
 import { describe, expect, it, vi } from "vitest";
 import { digest, utf8 } from "../src/bytes.ts";
-import { firstKey } from "../src/first-key.ts";
+import { firstKey } from "../src/first-key/first-key.ts";
 import { sealTo } from "../src/hpke.ts";
-import { type KeyChangeChecks, keyChanges } from "../src/key-changes.ts";
+import { type KeyChangeChecks, keyChanges } from "../src/key-changes/key-changes.ts";
 import { screenKeys } from "../src/keys.ts";
-import { management } from "../src/management.ts";
-import { signUp } from "../src/sign-up.ts";
+import { management } from "../src/management/management.ts";
+import { signUp } from "../src/sign-up/sign-up.ts";
 import { readT, signCompact, signingKey } from "./fixtures.ts";
 
 const issuer = "https://id.example";

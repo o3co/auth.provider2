@@ -1,10 +1,10 @@
 import { continuations } from "@mod/continuation-wire";
-import { type ReadT, wasDenied, wasRead } from "./authorization.ts";
-import { base64url, digest, utf8 } from "./bytes.ts";
-import { creationOf, type ReadCreation } from "./first-key.ts";
-import type { Jwk } from "./jws.ts";
-import { namesKeys, type ScreenKeys } from "./keys.ts";
-import { readStatement, type StatementError } from "./statement.ts";
+import { type ReadT, wasDenied, wasRead } from "../authorization/authorization.ts";
+import { base64url, digest, utf8 } from "../bytes.ts";
+import { creationOf, type ReadCreation } from "../first-key/first-key.ts";
+import type { Jwk } from "../jws.ts";
+import { namesKeys, type ScreenKeys } from "../keys.ts";
+import { readStatement, type StatementError } from "../statement.ts";
 
 /** What F1's continuation sends on `continue`: its stage and sequence, its body's text, and E_sig's signature. */
 export interface SignUpContinuation {

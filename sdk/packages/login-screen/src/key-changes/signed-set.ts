@@ -1,6 +1,6 @@
 import { logTyps, type ReceiverKey, type SignerSet, schemas } from "@mod/transparency-wire";
-import { fromBase64url, textOf } from "./bytes.ts";
-import { type Jwk, keyIdentity, verifyCompact } from "./jws.ts";
+import { fromBase64url, textOf } from "../bytes.ts";
+import { type Jwk, keyIdentity, verifyCompact } from "../jws.ts";
 
 /** The objects a signer set signs that the screen reads: a status and a stateOf. */
 export type SetPurpose = "status" | "stateOf";

@@ -2,9 +2,9 @@ import { continuations } from "@mod/continuation-wire";
 import { purposes, typs } from "@mod/sdk-core-wire";
 import { describe, expect, it } from "vitest";
 import { digest, utf8 } from "../src/bytes.ts";
-import { firstKey } from "../src/first-key.ts";
+import { firstKey } from "../src/first-key/first-key.ts";
 import { screenKeys } from "../src/keys.ts";
-import { signUp } from "../src/sign-up.ts";
+import { signUp } from "../src/sign-up/sign-up.ts";
 import { readPushedT, readT, signCompact, signingKey } from "./fixtures.ts";
 
 const issuer = "https://id.example";

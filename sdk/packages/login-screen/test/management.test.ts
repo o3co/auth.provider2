@@ -2,10 +2,10 @@ import { continuations } from "@mod/continuation-wire";
 import { canonicalText, hpke, purposes, typs } from "@mod/sdk-core-wire";
 import { describe, expect, it } from "vitest";
 import { digest, utf8 } from "../src/bytes.ts";
-import { firstKey } from "../src/first-key.ts";
+import { firstKey } from "../src/first-key/first-key.ts";
 import { openSealed, sealTo } from "../src/hpke.ts";
 import { screenKeys } from "../src/keys.ts";
-import { management } from "../src/management.ts";
+import { management } from "../src/management/management.ts";
 import { signCompact, signingKey } from "./fixtures.ts";
 
 const issuer = "https://id.example";

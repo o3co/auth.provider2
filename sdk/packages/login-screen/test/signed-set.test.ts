@@ -1,6 +1,6 @@
 import { logTyps } from "@mod/transparency-wire";
 import { describe, expect, it } from "vitest";
-import { readSet, readSetSigned } from "../src/signed-set.ts";
+import { readSet, readSetSigned } from "../src/key-changes/signed-set.ts";
 
 /** The set read as the screen reads it, then the object by it; a set that does not read gives none. */
 const readBy = async (text: string, signers: unknown, purpose: "status" | "stateOf") => {

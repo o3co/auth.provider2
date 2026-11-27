@@ -1,12 +1,12 @@
 import { continuations as continued } from "@mod/continuation-wire";
 import { hpke, type payloads, payloads as schemas } from "@mod/sdk-core-wire";
-import { base64url, deepFreeze, digest, utf8 } from "./bytes.ts";
-import { openCompletion } from "./completion.ts";
-import { creationOf, type ReadCreation } from "./first-key.ts";
-import { type Sealed, sealTo } from "./hpke.ts";
-import type { Jwk } from "./jws.ts";
-import { namesKeys, type ScreenKeys } from "./keys.ts";
-import { readStatement, type StatementError } from "./statement.ts";
+import { base64url, deepFreeze, digest, utf8 } from "../bytes.ts";
+import { openCompletion } from "../completion.ts";
+import { creationOf, type ReadCreation } from "../first-key/first-key.ts";
+import { type Sealed, sealTo } from "../hpke.ts";
+import type { Jwk } from "../jws.ts";
+import { namesKeys, type ScreenKeys } from "../keys.ts";
+import { readStatement, type StatementError } from "../statement.ts";
 
 type ManageStatement = ReturnType<typeof payloads.passkeyManage.parse>;
 type AddStatement = ReturnType<typeof payloads.passkeyAdd.parse>;

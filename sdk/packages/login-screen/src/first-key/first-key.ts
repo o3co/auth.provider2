@@ -7,12 +7,12 @@ import {
 	payloads,
 	firstKey as words,
 } from "@mod/sdk-core-wire";
-import { base64url, concat, deepFreeze, digest, fromBase64url, textOf, utf8 } from "./bytes.ts";
-import { challengeOf } from "./challenge.ts";
-import { openSealed, type Sealed, sealTo } from "./hpke.ts";
-import type { Jwk } from "./jws.ts";
-import { namesKeys, type ScreenKeys } from "./keys.ts";
-import { readStatement, type StatementError } from "./statement.ts";
+import { base64url, concat, deepFreeze, digest, fromBase64url, textOf, utf8 } from "../bytes.ts";
+import { challengeOf } from "../challenge.ts";
+import { openSealed, type Sealed, sealTo } from "../hpke.ts";
+import type { Jwk } from "../jws.ts";
+import { namesKeys, type ScreenKeys } from "../keys.ts";
+import { readStatement, type StatementError } from "../statement.ts";
 
 /** What the screen holds through the first key's path: the Core's ring and sealing key, its own keys, the issuer. */
 export interface FirstKeyOptions {

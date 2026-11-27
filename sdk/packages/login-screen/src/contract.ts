@@ -14,7 +14,7 @@ export {
 	type PushedAuthorizationError,
 	type ReadT,
 	type Refused,
-} from "./authorization.ts";
+} from "./authorization/authorization.ts";
 export { challengeOf } from "./challenge.ts";
 export type { CompletionError, CompletionOptions } from "./completion.ts";
 export {
@@ -23,7 +23,7 @@ export {
 	type Mail,
 	type ReadCreation,
 	type ReadPossession,
-} from "./first-key.ts";
+} from "./first-key/first-key.ts";
 export type { Sealed } from "./hpke.ts";
 export type { Jwk } from "./jws.ts";
 export {
@@ -33,7 +33,7 @@ export {
 	type KeyChangeRetry,
 	type KeyChangeSource,
 	keyChanges,
-} from "./key-changes.ts";
+} from "./key-changes/key-changes.ts";
 export { type ScreenKeys, screenKeys } from "./keys.ts";
 export {
 	type Continued,
@@ -41,8 +41,8 @@ export {
 	type ManagementPurpose,
 	management,
 	type ReadManage,
-} from "./management.ts";
-export { type SignUpContinuation, signUp } from "./sign-up.ts";
+} from "./management/management.ts";
+export { type SignUpContinuation, signUp } from "./sign-up/sign-up.ts";
 export {
 	type Purpose,
 	readStatement,

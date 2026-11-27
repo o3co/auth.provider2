@@ -1,11 +1,11 @@
 import { hpke, purposes, typs } from "@mod/sdk-core-wire";
 import { schemas as logSchemas, logTyps, tokens } from "@mod/transparency-wire";
 import { describe, expect, it } from "vitest";
-import { authorization } from "../src/authorization.ts";
+import { authorization } from "../src/authorization/authorization.ts";
 import { digest, utf8 } from "../src/bytes.ts";
 import { sealTo } from "../src/hpke.ts";
 import { screenKeys } from "../src/keys.ts";
-import { signUp } from "../src/sign-up.ts";
+import { signUp } from "../src/sign-up/sign-up.ts";
 import { signCompact, signingKey } from "./fixtures.ts";
 
 const issuer = "https://id.example";

@@ -1,5 +1,5 @@
 import { purposes, typs } from "@mod/sdk-core-wire";
-import { authorization } from "../src/authorization.ts";
+import { authorization } from "../src/authorization/authorization.ts";
 import { digest } from "../src/bytes.ts";
 import type { Jwk } from "../src/jws.ts";
 import type { ScreenKeys } from "../src/keys.ts";
