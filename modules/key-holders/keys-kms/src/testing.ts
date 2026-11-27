@@ -219,11 +219,12 @@ const wireBlob = (value: unknown) =>
  * A KMS client's calls answered as KMS answers them on the wire (JSON 1.1 by `X-Amz-Target`, blobs
  * in base64), on loopback: the SDK reaches it by its endpoint setting, such as
  * `AWS_ENDPOINT_URL_KMS`, and no request's signature is checked. A call failing answers the error's
- * name as its type.
+ * name as its type. `callers` is each call's access key id, as its signature names it (`Credential=`).
  */
 export async function kmsServer(
 	kms: Kms,
-): Promise<{ readonly url: string; close(): Promise<void> }> {
+): Promise<{ readonly url: string; readonly callers: readonly string[]; close(): Promise<void> }> {
+	const callers: string[] = [];
 	/** The call's answer from the fake; a body that does not read as JSON is refused as KMS refuses one. */
 	const answered = async (call: string, body: string) => {
 		const parsed = (() => {
@@ -263,6 +264,7 @@ export async function kmsServer(
 	// Every failure is held here: a request cut off while read, or a response closed before written, is dropped.
 	const server = createServer((request, response) => {
 		const call = String(request.headers["x-amz-target"] ?? "").replace(/^TrentService\./, "");
+		callers.push(/Credential=([^/,\s]+)\//.exec(request.headers.authorization ?? "")?.[1] ?? "");
 		const chunks: Buffer[] = [];
 		request.on("data", (chunk: Buffer) => chunks.push(chunk));
 		request.on("error", () => response.destroy());
@@ -283,6 +285,7 @@ export async function kmsServer(
 	const { port } = server.address() as AddressInfo;
 	return {
 		url: `http://127.0.0.1:${port}`,
+		callers,
 		close: () =>
 			new Promise<void>((closed) => {
 				server.closeAllConnections();

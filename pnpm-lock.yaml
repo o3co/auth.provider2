@@ -1161,6 +1161,9 @@ importers:
         specifier: 4.6.7
         version: 4.6.7
     devDependencies:
+      '@mod/app-permissions':
+        specifier: workspace:*
+        version: link:../../foundation/app-permissions
       '@mod/sdk-core-wire':
         specifier: workspace:*
         version: link:../../wire/sdk-core-wire

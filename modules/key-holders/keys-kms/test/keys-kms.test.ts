@@ -1,6 +1,6 @@
 import { createHash, generateKeyPairSync, type KeyObject } from "node:crypto";
 import { assemble, BootRefused, isUnavailable, kernelConfig } from "@mod/kernel";
-import { quietRuntime } from "@mod/kernel/testing";
+import { quietRuntime, recordingLog } from "@mod/kernel/testing";
 import { keys, type Signed } from "@mod/keys";
 import keysModule from "@mod/keys/module";
 import { keysConfig } from "@mod/keys/testing";
@@ -150,6 +150,12 @@ describe("keys-kms", () => {
 			serviceError("KMSInternalException", "server"),
 			serviceError("ThrottlingException"),
 			Object.assign(new Error("connect ECONNREFUSED"), { code: "ECONNREFUSED" }),
+			// The permission model's refusal after boot (a credential's file, at a refresh): failing closed.
+			Object.assign(new Error("Access to this API has been restricted."), {
+				code: "ERR_ACCESS_DENIED",
+				permission: "FileSystemRead",
+				resource: "/run/secrets/token",
+			}),
 		]) {
 			fake.fail("*", error);
 			const thrown = await k
@@ -228,6 +234,70 @@ describe("keys-kms", () => {
 			where: "keys-kms.keys.0.key-id",
 			reason: "KMS gave no answer for the key's public half",
 		});
+	});
+
+	it("refuses boot naming the permission model's refusal by its code and kind, and warns of the read with its permission and resource alone", async () => {
+		const token = "/run/secrets/token";
+		// Node's own error, as the SDK lets it through: told by its fields, never its message.
+		const model = Object.assign(new Error("Access to this API has been restricted."), {
+			code: "ERR_ACCESS_DENIED",
+			permission: "FileSystemRead",
+			resource: token,
+		});
+		const fake = fakeKms(fakeKeys());
+		fake.fail("GetPublicKey", model);
+		const recorded = recordingLog();
+		const refused = await assemble({
+			modules: [keysModule, keysKms(() => fake.kms)],
+			config: {
+				...kernelConfig(),
+				...keysConfig(),
+				"keys-kms": { region: "eu-west-1", keys: entries() },
+			},
+			runtime: quietRuntime({ log: recorded.log }),
+		}).catch((error: unknown) => error);
+		if (!BootRefused.is(refused)) throw new Error("expected a refusal");
+		expect((refused as BootRefused).refusals).toEqual(
+			entries().map((_, at) => ({
+				where: `keys-kms.keys.${at}.key-id`,
+				reason:
+					"an access for the call is outside what the Core is granted (ERR_ACCESS_DENIED, FileSystemRead)",
+			})),
+		);
+		// One line for the one read, its fields those two alone.
+		expect(
+			recorded.lines().filter((line) => line.event === "keys-kms.credentials_refused"),
+		).toEqual([
+			{
+				level: "warn",
+				event: "keys-kms.credentials_refused",
+				fields: { permission: "FileSystemRead", resource: token },
+			},
+		]);
+		// The words alone are not the model's refusal: no code, no kind named, no line.
+		// Nor the code without a permission's kind, nor a service's answer whose body carries the three.
+		for (const lookalike of [
+			Object.assign(new Error("Access to this API has been restricted."), {
+				code: "ERR_ACCESS_DENIED",
+			}),
+			Object.assign(serviceError("ValidationException"), {
+				code: "ERR_ACCESS_DENIED",
+				permission: "FileSystemRead",
+				resource: "an endpoint's own words",
+			}),
+		]) {
+			const like = fakeKms(fakeKeys());
+			like.fail("GetPublicKey", lookalike);
+			expect((await refusalsOf(like))[0]?.reason).not.toMatch(/ERR_ACCESS_DENIED/);
+		}
+		const worded = fakeKms(fakeKeys());
+		worded.fail(
+			"GetPublicKey",
+			new Error("ERR_ACCESS_DENIED: Access to this API has been restricted."),
+		);
+		expect((await refusalsOf(worded))[0]?.reason).toBe(
+			"KMS gave no answer for the key's public half",
+		);
 	});
 
 	it("holds an Ed25519 key or an agreement key as one keys cannot sign with, and a signing key as none it agrees with", async () => {

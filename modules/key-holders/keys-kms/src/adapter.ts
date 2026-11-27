@@ -12,7 +12,13 @@ export function keysKms(kmsFor: (s: Section) => Kms) {
 			const kms = kmsFor(c.section);
 			c.onStop(() => kms.destroy());
 			const holder = await kmsHolder(c.section, kms);
-			if ("refused" in holder) return c.refuseAll(holder.refused);
+			if ("refused" in holder) {
+				// Which file or variable the model kept from the SDK: its path is the operator's own setting.
+				for (const { permission, resource } of holder.denied) {
+					c.log.warn("keys-kms.credentials_refused", { permission, resource });
+				}
+				return c.refuseAll(holder.refused);
+			}
 			return holder;
 		}),
 	]);

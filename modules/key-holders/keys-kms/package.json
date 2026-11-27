@@ -43,6 +43,7 @@
 		"zod": "4.6.7"
 	},
 	"devDependencies": {
+		"@mod/app-permissions": "workspace:*",
 		"@mod/sdk-core-wire": "workspace:*",
 		"jose": "6.2.15",
 		"vitest": "5.0.5"

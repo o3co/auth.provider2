@@ -61,8 +61,25 @@ function rawOf(der: Uint8Array): Uint8Array {
 	return new Uint8Array(raw);
 }
 
-/** Why a key's public half cannot be read, as a refusal says it. */
+/**
+ * An access Node's permission model refused on the way to a call (its `ERR_ACCESS_DENIED`), told by the
+ * error's own fields, never its message: the permission's kind and the resource it names. A service's
+ * answer is none, whatever members its body carries: Node's error names no `$fault`.
+ */
+function modelRefusal(error: unknown): { permission: string; resource: string } | undefined {
+	const { code, permission, resource, $fault } = (error ?? {}) as Record<string, unknown>;
+	if (code !== "ERR_ACCESS_DENIED" || typeof permission !== "string" || $fault !== undefined) {
+		return undefined;
+	}
+	return { permission, resource: typeof resource === "string" ? resource : "" };
+}
+
+/** Why a key's public half cannot be read, as a refusal says it: never a value. */
 function unread(error: unknown): string {
+	const refused = modelRefusal(error);
+	if (refused !== undefined) {
+		return `an access for the call is outside what the Core is granted (ERR_ACCESS_DENIED, ${refused.permission})`;
+	}
 	const { name } = (error ?? {}) as { name?: string };
 	if (name === "NotFoundException") return "no such key in KMS";
 	if (name === "AccessDeniedException") {
@@ -73,15 +90,27 @@ function unread(error: unknown): string {
 		: "KMS refused to give the key's public half";
 }
 
-/** Reads each key's public half from KMS at boot into a holder whose operations are KMS's, or why boot is refused. */
+/**
+ * Reads each key's public half from KMS at boot into a holder whose operations are KMS's, or why boot
+ * is refused, with each read the permission model refused on the way (`denied`).
+ */
 export async function kmsHolder(
 	s: Section,
 	kms: Kms,
-): Promise<KeyHolder | { readonly refused: Refusal[] }> {
+): Promise<
+	| KeyHolder
+	| {
+			readonly refused: Refusal[];
+			readonly denied: readonly { permission: string; resource: string }[];
+	  }
+> {
 	const refused: Refusal[] = [];
+	const denied = new Map<string, { permission: string; resource: string }>();
 	const held = new Map<string, Held & { readonly keyId: string }>();
 	for (const [i, entry] of s.keys.entries()) {
 		const read = await kms.getPublicKey({ KeyId: entry["key-id"] }).catch((error: unknown) => {
+			const model = modelRefusal(error);
+			if (model) denied.set(`${model.permission}\u0000${model.resource}`, model);
 			refused.push({ where: `keys-kms.keys.${i}.key-id`, reason: unread(error) });
 			return undefined;
 		});
@@ -109,7 +138,7 @@ export async function kmsHolder(
 				(read.KeyAgreementAlgorithms ?? []).includes("ECDH"),
 		});
 	}
-	if (refused.length > 0) return { refused };
+	if (refused.length > 0) return { refused, denied: [...denied.values()] };
 	const keyIdOf = (kid: string) => {
 		const key = held.get(kid);
 		if (key === undefined) throw new TypeError(`keys-kms: no key of kid ${kid}`);
